@@ -1,0 +1,13 @@
+[project]
+name = "mcp-fuzzer"
+version = "0.1.0"
+description = "MCP server fuzzer client and utilities"
+requires-python = ">=3.8"
+dependencies = [
+    "httpx",
+    "hypothesis",
+    "rich"
+]
+
+[project.scripts]
+mcp-fuzzer-client = "mcp_fuzzer_client:main" 
