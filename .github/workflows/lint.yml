@@ -20,7 +20,7 @@ jobs:
           pip install ruff isort
       - name: Run ruff
         run: |
-          ruff .
+          ruff check .
       - name: Run isort
         run: |
           isort --check --diff . 
