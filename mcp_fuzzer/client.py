@@ -48,7 +48,10 @@ def jsonrpc_request(
         if "error" in data:
             logging.error("Server returned error: %s", data["error"])
             raise Exception(f"Server error: {data['error']}")
-        return data.get("result")
+        # If the payload is a full JSON-RPC envelope keep existing behaviour,
+        # otherwise fall back to the raw object (covers SSE streams that send
+        # only the result).
+        return data.get("result", data)
     except httpx.HTTPError:
         logging.error("HTTP error during request")
         raise
