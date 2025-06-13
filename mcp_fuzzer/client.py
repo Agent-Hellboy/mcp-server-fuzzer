@@ -72,24 +72,19 @@ def get_tools_from_server(url: str) -> List[Dict[str, Any]]:
             )
             return []
 
-        if "result" not in response:
+        if "tools" not in response:
             logging.warning(
-                "Server response missing 'result' key. Keys present: %s",
+                "Server response missing 'tools' key. Keys present: %s",
                 list(response.keys()),
             )
             return []
 
-        if "tools" not in response["result"]:
-            logging.warning(
-                "Server response missing 'tools' key in result. Result keys: %s",
-                list(response["result"].keys()),
-            )
-            return []
-
-        tools = response["result"]["tools"]
+        tools = response["tools"]
         logging.info("Found %d tools from server", len(tools))
         return tools
 
     except Exception as e:
+        logging.exception("Failed to fetch tools from server: %s", e)
+        return []
         logging.warning("Error fetching tools list: %s", str(e))
         return []
