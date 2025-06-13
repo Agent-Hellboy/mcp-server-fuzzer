@@ -38,10 +38,8 @@ def jsonrpc_request(
                     try:
                         data = json.loads(line[len("data:") :].strip())
                         break
-                    except json.JSONDecodeError as e:
-                        logging.error(
-                            "Failed to parse SSE data line as JSON: %s", str(e)
-                        )
+                    except json.JSONDecodeError:
+                        logging.error("Failed to parse SSE data line as JSON")
                         raise
             else:
                 logging.error("No valid data: line found in SSE response")
@@ -51,10 +49,10 @@ def jsonrpc_request(
             logging.error("Server returned error: %s", data["error"])
             raise Exception(f"Server error: {data['error']}")
         return data.get("result")
-    except httpx.HTTPError as e:
-        logging.error("HTTP error during request: %s", str(e))
+    except httpx.HTTPError:
+        logging.error("HTTP error during request")
         raise
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         logging.error("Raw response: %s", response.text)
         raise
 
