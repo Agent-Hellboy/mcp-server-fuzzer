@@ -47,7 +47,10 @@ async def fuzz_tool(url: str, tool, runs: int = 10):
                             result = json.loads(data_json)
                             break
                     else:
-                        raise
+                        logging.warning(
+                            "Server returned a non-JSON (or SSE) response for tool call. Appending dummy result."
+                        )
+                        result = {"error": "Non-JSON response"}
             results.append({"args": args, "result": result})
         except Exception as e:
             results.append(
@@ -69,6 +72,10 @@ async def main():
     args = parser.parse_args()
 
     tools = get_tools_from_server(args.url)
+    if not tools:
+        logging.warning("Server returned an empty list of tools. Exiting.")
+        return
+
     summary = {}
     for tool in tools:
         logging.info(f"Fuzzing tool: {tool['name']}")
