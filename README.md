@@ -1,8 +1,8 @@
 # MCP Fuzzer
 
 [![CI](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml/badge.svg)](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml)
-[![PyPI - Version](https://img.shields.io/pypi/v/mcp-server-fuzzer.svg)](https://pypi.org/project/mcp-server-fuzzer/)
-[![PyPI Downloads](https://static.pepy.tech/badge/mcp-server-fuzzer)](https://pepy.tech/projects/mcp-server-fuzzer)
+[![PyPI - Version](https://img.shields.io/pypi/v/mcp-fuzzer.svg)](https://pypi.org/project/mcp-fuzzer/)
+[![PyPI Downloads](https://static.pepy.tech/badge/mcp-fuzzer)](https://pepy.tech/projects/mcp-fuzzer)
 
 A CLI tool for fuzzing MCP server tools using JSON-RPC 2.0, with pretty output using [rich](https://github.com/Textualize/rich).
 
