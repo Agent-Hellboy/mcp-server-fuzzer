@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from mcp_fuzzer.strategies import make_fuzz_strategy_from_jsonschema
-from mcp_fuzzer.utils import get_tools_from_server
+from mcp_fuzzer.client import get_tools_from_server
 
 logging.basicConfig(level=logging.INFO)
 
