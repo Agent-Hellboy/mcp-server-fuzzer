@@ -1,8 +1,30 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "mcp-fuzzer"
 version = "0.1.0"
 description = "MCP server fuzzer client and utilities"
-requires-python = ">=3.8"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["mcp", "fuzzing", "testing", "json-rpc"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 dependencies = [
     "httpx",
     "hypothesis",
@@ -10,4 +32,9 @@ dependencies = [
 ]
 
 [project.scripts]
-mcp-fuzzer-client = "mcp_fuzzer_client:main" 
+mcp-fuzzer-client = "mcp_fuzzer_client:main"
+
+[project.urls]
+Homepage = "https://github.com/agent-hellboy/mcp-server-fuzzer"
+Repository = "https://github.com/agent-hellboy/mcp-server-fuzzer"
+Issues = "https://github.com/agent-hellboy/mcp-server-fuzzer/issues"

@@ -9,10 +9,9 @@ A CLI tool for fuzzing MCP server tools using JSON-RPC 2.0, with pretty output u
 
 ## Installation
 
-Install dependencies using [uv](https://github.com/astral-sh/uv):
 
 ```bash
-uv pip install -e .
+pip install -e .
 ```
 
 ## Usage
