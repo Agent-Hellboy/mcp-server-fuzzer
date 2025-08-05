@@ -4,7 +4,6 @@ Entry point for running mcp_fuzzer as a module.
 """
 
 import asyncio
-import sys
 from .client import main
 
 
@@ -14,4 +13,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run() 
+    run()

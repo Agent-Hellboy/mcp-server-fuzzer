@@ -9,8 +9,8 @@ from .strategies import make_fuzz_strategy_from_jsonschema
 __version__ = "0.1.0"
 __all__ = [
     "fuzz_tool",
-    "main", 
+    "main",
     "create_transport",
     "TransportProtocol",
-    "make_fuzz_strategy_from_jsonschema"
-] 
+    "make_fuzz_strategy_from_jsonschema",
+]

@@ -18,26 +18,28 @@ from .transport import create_transport
 logging.basicConfig(level=logging.INFO)
 
 
-async def fuzz_tool(transport, tool: Dict[str, Any], runs: int = 10) -> List[Dict[str, Any]]:
+async def fuzz_tool(
+    transport, tool: Dict[str, Any], runs: int = 10
+) -> List[Dict[str, Any]]:
     """Fuzz a tool by calling it with random/edge-case arguments."""
     results = []
     schema = tool.get("inputSchema", {})
     strategy = make_fuzz_strategy_from_jsonschema(schema)
-    
+
     for i in range(runs):
         args = strategy.example()
         try:
-            logging.info(f"Fuzzing {tool['name']} (run {i+1}/{runs}) with args: {args}")
+            logging.info(
+                f"Fuzzing {tool['name']} (run {i + 1}/{runs}) with args: {args}"
+            )
             result = await transport.call_tool(tool["name"], args)
             results.append({"args": args, "result": result})
         except Exception as e:
             logging.warning(f"Exception during fuzzing {tool['name']}: {e}")
-            results.append({
-                "args": args, 
-                "exception": str(e), 
-                "traceback": traceback.format_exc()
-            })
-    
+            results.append(
+                {"args": args, "exception": str(e), "traceback": traceback.format_exc()}
+            )
+
     return results
 
 
@@ -47,48 +49,39 @@ async def main():
         "--protocol",
         choices=["http", "sse", "stdio", "websocket"],
         default="http",
-        help="Transport protocol to use (default: http)"
+        help="Transport protocol to use (default: http)",
     )
     parser.add_argument(
         "--endpoint",
         required=True,
-        help="Server endpoint (URL for http/sse/websocket, command for stdio)"
+        help="Server endpoint (URL for http/sse/websocket, command for stdio)",
     )
     parser.add_argument(
-        "--runs", 
-        type=int, 
-        default=10, 
-        help="Number of fuzzing runs per tool"
+        "--runs", type=int, default=10, help="Number of fuzzing runs per tool"
     )
     parser.add_argument(
         "--timeout",
         type=float,
         default=30.0,
-        help="Request timeout in seconds (default: 30.0)"
+        help="Request timeout in seconds (default: 30.0)",
     )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging"
-    )
-    
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+
     args = parser.parse_args()
-    
+
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
-    
+
     # Create transport
     try:
         transport = create_transport(
-            protocol=args.protocol,
-            endpoint=args.endpoint,
-            timeout=args.timeout
+            protocol=args.protocol, endpoint=args.endpoint, timeout=args.timeout
         )
         logging.info(f"Created {args.protocol} transport for endpoint: {args.endpoint}")
     except Exception as e:
         logging.error(f"Failed to create transport: {e}")
         return
-    
+
     # Get tools from server
     try:
         tools = await transport.get_tools()
@@ -99,30 +92,32 @@ async def main():
     except Exception as e:
         logging.error(f"Failed to get tools from server: {e}")
         return
-    
+
     # Fuzz each tool
     summary = {}
     for tool in tools:
         tool_name = tool.get("name", "unknown")
         logging.info(f"Starting to fuzz tool: {tool_name}")
-        
+
         try:
             results = await fuzz_tool(transport, tool, args.runs)
             exceptions = [r for r in results if "exception" in r]
-            
+
             summary[tool_name] = {
                 "total_runs": args.runs,
                 "exceptions": len(exceptions),
                 "success_rate": ((args.runs - len(exceptions)) / args.runs) * 100,
                 "example_exception": exceptions[0] if exceptions else None,
             }
-            
-            logging.info(f"Completed fuzzing {tool_name}: {len(exceptions)} exceptions out of {args.runs} runs")
-            
+
+            logging.info(
+                f"Completed fuzzing {tool_name}: {len(exceptions)} exceptions out of {args.runs} runs"
+            )
+
         except Exception as e:
             logging.error(f"Failed to fuzz tool {tool_name}: {e}")
             summary[tool_name] = {"error": str(e)}
-    
+
     # Print summary
     console = Console()
     table = Table(title=f"Fuzzing Summary - {args.protocol.upper()} Protocol")
@@ -137,21 +132,31 @@ async def main():
         error = result.get("error", "")
         total_runs = str(result.get("total_runs", ""))
         exceptions = str(result.get("exceptions", ""))
-        success_rate = f"{result.get('success_rate', 0):.1f}%" if "success_rate" in result else ""
+        success_rate = (
+            f"{result.get('success_rate', 0):.1f}%" if "success_rate" in result else ""
+        )
         example_exception = ""
         if result.get("example_exception"):
             ex = result["example_exception"]
-            example_exception = ex.get("exception", "")[:50] + "..." if len(ex.get("exception", "")) > 50 else ex.get("exception", "")
-        
-        table.add_row(tool, total_runs, exceptions, success_rate, example_exception, error)
+            example_exception = (
+                ex.get("exception", "")[:50] + "..."
+                if len(ex.get("exception", "")) > 50
+                else ex.get("exception", "")
+            )
+
+        table.add_row(
+            tool, total_runs, exceptions, success_rate, example_exception, error
+        )
 
     console.print(table)
-    
+
     # Print overall statistics
     total_tools = len(summary)
     tools_with_errors = len([r for r in summary.values() if "error" in r])
-    tools_with_exceptions = len([r for r in summary.values() if r.get("exceptions", 0) > 0])
-    
+    tools_with_exceptions = len(
+        [r for r in summary.values() if r.get("exceptions", 0) > 0]
+    )
+
     console.print("\n[bold]Overall Statistics:[/bold]")
     console.print(f"Total tools tested: {total_tools}")
     console.print(f"Tools with errors: {tools_with_errors}")

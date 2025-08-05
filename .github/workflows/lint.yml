@@ -23,4 +23,4 @@ jobs:
           ruff check .
       - name: Run isort
         run: |
-          isort --check --diff . 
+          isort --check --diff .
