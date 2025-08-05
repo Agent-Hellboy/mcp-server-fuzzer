@@ -5,6 +5,7 @@ Transport layer for MCP fuzzer supporting multiple protocols.
 import asyncio
 import json
 import logging
+import shlex
 import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
@@ -21,15 +22,32 @@ class TransportProtocol(ABC):
         """Send a JSON-RPC request and return the response."""
         pass
     
-    @abstractmethod
     async def get_tools(self) -> List[Dict[str, Any]]:
         """Get the list of tools from the server."""
-        pass
+        try:
+            response = await self.send_request("tools/list")
+            logging.info("Raw server response: %s", response)
+            
+            if not isinstance(response, dict):
+                logging.warning("Server response is not a dictionary. Got type: %s", type(response))
+                return []
+            
+            if "tools" not in response:
+                logging.warning("Server response missing 'tools' key. Keys present: %s", list(response.keys()))
+                return []
+            
+            tools = response["tools"]
+            logging.info("Found %d tools from server", len(tools))
+            return tools
+            
+        except Exception as e:
+            logging.exception("Failed to fetch tools from server: %s", e)
+            return []
     
-    @abstractmethod
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         """Call a specific tool with arguments."""
-        pass
+        params = {"name": tool_name, "arguments": arguments}
+        return await self.send_request("tools/call", params)
 
 
 class HTTPTransport(TransportProtocol):
@@ -80,33 +98,6 @@ class HTTPTransport(TransportProtocol):
                 raise Exception(f"Server error: {data['error']}")
             
             return data.get("result", data)
-    
-    async def get_tools(self) -> List[Dict[str, Any]]:
-        """Get the list of tools from the server."""
-        try:
-            response = await self.send_request("tools/list")
-            logging.info("Raw server response: %s", response)
-            
-            if not isinstance(response, dict):
-                logging.warning("Server response is not a dictionary. Got type: %s", type(response))
-                return []
-            
-            if "tools" not in response:
-                logging.warning("Server response missing 'tools' key. Keys present: %s", list(response.keys()))
-                return []
-            
-            tools = response["tools"]
-            logging.info("Found %d tools from server", len(tools))
-            return tools
-            
-        except Exception as e:
-            logging.exception("Failed to fetch tools from server: %s", e)
-            return []
-    
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
-        """Call a specific tool with arguments."""
-        params = {"name": tool_name, "arguments": arguments}
-        return await self.send_request("tools/call", params)
 
 
 class SSETransport(TransportProtocol):
@@ -148,33 +139,6 @@ class SSETransport(TransportProtocol):
                         continue
             
             raise Exception("No valid SSE response received")
-    
-    async def get_tools(self) -> List[Dict[str, Any]]:
-        """Get the list of tools from the server."""
-        try:
-            response = await self.send_request("tools/list")
-            logging.info("Raw server response: %s", response)
-            
-            if not isinstance(response, dict):
-                logging.warning("Server response is not a dictionary. Got type: %s", type(response))
-                return []
-            
-            if "tools" not in response:
-                logging.warning("Server response missing 'tools' key. Keys present: %s", list(response.keys()))
-                return []
-            
-            tools = response["tools"]
-            logging.info("Found %d tools from server", len(tools))
-            return tools
-            
-        except Exception as e:
-            logging.exception("Failed to fetch tools from server: %s", e)
-            return []
-    
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
-        """Call a specific tool with arguments."""
-        params = {"name": tool_name, "arguments": arguments}
-        return await self.send_request("tools/call", params)
 
 
 class StdioTransport(TransportProtocol):
@@ -196,7 +160,7 @@ class StdioTransport(TransportProtocol):
         
         # Run the command with the request as stdin
         process = await asyncio.create_subprocess_exec(
-            *self.command.split(),
+            *shlex.split(self.command),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
@@ -229,33 +193,6 @@ class StdioTransport(TransportProtocol):
             logging.error("Failed to parse response as JSON: %s", stdout_text)
             logging.error("Process stderr: %s", stderr_text)
             raise Exception("Invalid JSON response")
-    
-    async def get_tools(self) -> List[Dict[str, Any]]:
-        """Get the list of tools from the server."""
-        try:
-            response = await self.send_request("tools/list")
-            logging.info("Raw server response: %s", response)
-            
-            if not isinstance(response, dict):
-                logging.warning("Server response is not a dictionary. Got type: %s", type(response))
-                return []
-            
-            if "tools" not in response:
-                logging.warning("Server response missing 'tools' key. Keys present: %s", list(response.keys()))
-                return []
-            
-            tools = response["tools"]
-            logging.info("Found %d tools from server", len(tools))
-            return tools
-            
-        except Exception as e:
-            logging.exception("Failed to fetch tools from server: %s", e)
-            return []
-    
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
-        """Call a specific tool with arguments."""
-        params = {"name": tool_name, "arguments": arguments}
-        return await self.send_request("tools/call", params)
 
 
 class WebSocketTransport(TransportProtocol):
@@ -289,33 +226,6 @@ class WebSocketTransport(TransportProtocol):
                 return data.get("result", data)
             except asyncio.TimeoutError:
                 raise Exception("WebSocket request timed out")
-    
-    async def get_tools(self) -> List[Dict[str, Any]]:
-        """Get the list of tools from the server."""
-        try:
-            response = await self.send_request("tools/list")
-            logging.info("Raw server response: %s", response)
-            
-            if not isinstance(response, dict):
-                logging.warning("Server response is not a dictionary. Got type: %s", type(response))
-                return []
-            
-            if "tools" not in response:
-                logging.warning("Server response missing 'tools' key. Keys present: %s", list(response.keys()))
-                return []
-            
-            tools = response["tools"]
-            logging.info("Found %d tools from server", len(tools))
-            return tools
-            
-        except Exception as e:
-            logging.exception("Failed to fetch tools from server: %s", e)
-            return []
-    
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
-        """Call a specific tool with arguments."""
-        params = {"name": tool_name, "arguments": arguments}
-        return await self.send_request("tools/call", params)
 
 
 def create_transport(protocol: str, endpoint: str, **kwargs) -> TransportProtocol:
