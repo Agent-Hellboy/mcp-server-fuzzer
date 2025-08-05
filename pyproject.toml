@@ -7,7 +7,7 @@ exclude = ["servers*", "examples*"]
 
 [project]
 name = "mcp-fuzzer"
-version = "0.1.1"
+version = "0.1.2"
 description = "MCP server fuzzer client and utilities"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.scripts]
-mcp-fuzzer-client = "mcp_fuzzer_client:main"
+mcp-fuzzer = "mcp_fuzzer.__main__:run"
 
 [project.urls]
 Homepage = "https://github.com/agent-hellboy/mcp-server-fuzzer"

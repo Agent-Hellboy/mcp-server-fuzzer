@@ -18,56 +18,60 @@ A CLI tool for fuzzing MCP server tools using multiple transport protocols, with
 
 The MCP Fuzzer uses a transport abstraction layer to support multiple protocols. Here's how it works:
 
-![mcp_fuzzer_arch](./mcp_fuzzer_arch.png)
+![mcp_fuzzer_arch](./images/mcp_fuzzer_arch.png)
 
 ## Installation
 
-
 ```bash
 pip install mcp-fuzzer
+```
+
+## Usage
+
+You can run the fuzzer in several ways:
+
+### As a CLI tool (recommended)
+```bash
+mcp-fuzzer --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+```
+
+### As a Python module
+```bash
+python -m mcp_fuzzer --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+```
+
+### As a Python script
+```bash
+python -m mcp_fuzzer.client --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
 ```
 
 ## Supported Protocols
 
 ### HTTP Transport
 ```bash
-python mcp_fuzzer_client.py --protocol http --endpoint http://localhost:8080/rpc --runs 20
+mcp-fuzzer --protocol http --endpoint http://localhost:8080/rpc --runs 20
 ```
 
 ### SSE Transport
 ```bash
-python mcp_fuzzer_client.py --protocol sse --endpoint http://localhost:8080/sse --runs 15
+mcp-fuzzer --protocol sse --endpoint http://localhost:8080/sse --runs 15
 ```
 
 ### Stdio Transport
 ```bash
 # Binary executables
-python mcp_fuzzer_client.py --protocol stdio --endpoint "./bin/mcp-shell" --runs 10
+mcp-fuzzer --protocol stdio --endpoint "./bin/mcp-shell" --runs 10
 
 # Python scripts
-python mcp_fuzzer_client.py --protocol stdio --endpoint "python3 ./my-mcp-server.py" --runs 10
+mcp-fuzzer --protocol stdio --endpoint "python3 ./my-mcp-server.py" --runs 10
 
 # Python scripts with spaces in path
-python mcp_fuzzer_client.py --protocol stdio --endpoint '"./My Server/mcp-server.py"' --runs 10
+mcp-fuzzer --protocol stdio --endpoint '"./My Server/mcp-server.py"' --runs 10
 ```
 
 ### WebSocket Transport
 ```bash
-python mcp_fuzzer_client.py --protocol websocket --endpoint ws://localhost:8080/ws --runs 25
-```
-
-## Usage
-
-You can run the fuzzer as a CLI tool after install:
-
-```bash
-mcp-fuzzer-client --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
-```
-
-Or directly with Python:
-
-```bash
-python mcp_fuzzer_client.py --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+mcp-fuzzer --protocol websocket --endpoint ws://localhost:8080/ws --runs 25
 ```
 
 ### Arguments
@@ -91,4 +95,4 @@ Results are shown in a colorized table with detailed statistics:
 
 Test result of  fuzz testing of https://github.com/modelcontextprotocol/python-sdk/tree/main/examples/servers/simple-streamablehttp-stateless
 
-![fuzzer](./fuzzer.png)
+![fuzzer](./images/fuzzer.png)

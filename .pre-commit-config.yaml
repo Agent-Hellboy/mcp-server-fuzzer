@@ -1,0 +1,25 @@
+repos:
+  # Ruff for fast Python linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.7
+    hooks:
+      - id: ruff
+        args: [--fix]
+        exclude: ^(.tox/|.venv/|venv/|.git/|mcp_fuzzer.egg-info/|examples/|servers/)
+      - id: ruff-format
+        exclude: ^(.tox/|.venv/|venv/|.git/|mcp_fuzzer.egg-info/|examples/|servers/)
+
+  # Check for merge conflicts
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-docstring-first
+      - id: check-json
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: debug-statements
