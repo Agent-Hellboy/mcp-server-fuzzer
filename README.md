@@ -35,7 +35,14 @@ python mcp_fuzzer_client.py --protocol sse --endpoint http://localhost:8080/sse 
 
 ### Stdio Transport
 ```bash
+# Binary executables
 python mcp_fuzzer_client.py --protocol stdio --endpoint "./bin/mcp-shell" --runs 10
+
+# Python scripts
+python mcp_fuzzer_client.py --protocol stdio --endpoint "python3 ./my-mcp-server.py" --runs 10
+
+# Python scripts with spaces in path
+python mcp_fuzzer_client.py --protocol stdio --endpoint '"./My Server/mcp-server.py"' --runs 10
 ```
 
 ### WebSocket Transport
