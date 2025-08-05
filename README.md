@@ -24,7 +24,7 @@ The MCP Fuzzer uses a transport abstraction layer to support multiple protocols.
 
 
 ```bash
-pip install -e .
+pip install mcp-fuzzer
 ```
 
 ## Supported Protocols
