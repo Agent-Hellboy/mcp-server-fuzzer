@@ -3,10 +3,10 @@ MCP Fuzzer - A CLI tool for fuzzing MCP server tools using multiple transport pr
 """
 
 from .client import fuzz_tool, main
-from .transport import create_transport, TransportProtocol
 from .strategies import make_fuzz_strategy_from_jsonschema
+from .transport import TransportProtocol, create_transport
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 __all__ = [
     "fuzz_tool",
     "main",
