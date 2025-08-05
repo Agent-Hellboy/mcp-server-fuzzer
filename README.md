@@ -14,6 +14,12 @@ A CLI tool for fuzzing MCP server tools using multiple transport protocols, with
 - **Rich Reporting**: Beautiful terminal tables with detailed statistics
 - **Protocol Flexibility**: Easy to add new transport protocols
 
+## Architecture
+
+The MCP Fuzzer uses a transport abstraction layer to support multiple protocols. Here's how it works:
+
+![mcp_fuzzer_arch](./mcp_fuzzer_arch.png)
+
 ## Installation
 
 
