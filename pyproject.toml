@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.scripts]
-mcp-fuzzer-client = "mcp_fuzzer_client:main"
+mcp-fuzzer = "mcp_fuzzer.__main__:run"
 
 [project.urls]
 Homepage = "https://github.com/agent-hellboy/mcp-server-fuzzer"
