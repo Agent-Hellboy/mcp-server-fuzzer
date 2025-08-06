@@ -1,6 +1,6 @@
 # MCP Fuzzer
 
-A CLI tool for fuzzing MCP server tools using multiple transport protocols, with pretty output using [rich](https://github.com/Textualize/rich).
+A CLI tool for fuzzing MCP server using multiple transport protocols, with pretty output using [rich](https://github.com/Textualize/rich).
 
 The most important thing I'm aiming to ensure here is:
 If your server conforms to the [2024-11-05 MCP schema](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/schema/2024-11-05/schema.ts), this tool will be able to fuzz it effectively.
