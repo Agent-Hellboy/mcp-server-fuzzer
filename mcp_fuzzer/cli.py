@@ -8,7 +8,7 @@ This module handles command-line argument parsing and CLI logic for the MCP fuzz
 import argparse
 import logging
 import sys
-from typing import Dict, Any
+from typing import Any, Dict
 
 from rich.console import Console
 
@@ -181,8 +181,9 @@ def run_cli() -> None:
         print_startup_info(args)
 
         # Import here to avoid circular imports
-        from .client import main as unified_client_main
         import asyncio
+
+        from .client import main as unified_client_main
 
         asyncio.run(unified_client_main())
 

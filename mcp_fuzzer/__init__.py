@@ -4,9 +4,9 @@ MCP Fuzzer - Comprehensive fuzzing for MCP servers
 This package provides tools for fuzzing MCP servers using multiple transport protocols.
 """
 
+from .cli import create_argument_parser, get_cli_config, run_cli
 from .client import UnifiedMCPFuzzerClient
 from .client import main as unified_client_main
-from .cli import run_cli, get_cli_config, create_argument_parser
 from .fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzzer.tool_fuzzer import ToolFuzzer
 from .strategy.protocol_strategies import ProtocolStrategies
