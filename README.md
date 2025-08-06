@@ -43,7 +43,7 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Client CLI    │───▶│  Transport      │───▶│  MCP Server     │
-│   (__main__.py) │    │  Layer          │    │                 │
+│                 │       Layer          │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │
          ▼                       ▼
