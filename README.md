@@ -352,5 +352,6 @@ To add a new transport protocol:
 
 **Project dependencies are managed via `pyproject.toml`.**
 
-Example response from a server using examples/test_server.py -> It's easy to break man, it might be easy to crash some servers.
-[fuzz_resp](./images/fuzz_resp.png)
+Example response from a server using examples/test_server.py -> It's easy to break man if schema validation is not there in the implementation, it might be easy to crash some servers.
+
+![fuzz_resp](./images/fuzz_resp.png)
