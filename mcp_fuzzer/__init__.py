@@ -1,16 +1,26 @@
 """
-MCP Fuzzer - A CLI tool for fuzzing MCP server tools using multiple transport protocols.
+MCP Fuzzer - Comprehensive fuzzing for MCP servers
+
+This package provides tools for fuzzing MCP servers using multiple transport protocols.
 """
 
-from .client import fuzz_tool, main
-from .strategies import make_fuzz_strategy_from_jsonschema
-from .transport import TransportProtocol, create_transport
+from .cli import create_argument_parser, get_cli_config, run_cli
+from .client import UnifiedMCPFuzzerClient
+from .client import main as unified_client_main
+from .fuzzer.protocol_fuzzer import ProtocolFuzzer
+from .fuzzer.tool_fuzzer import ToolFuzzer
+from .strategy.protocol_strategies import ProtocolStrategies
+from .strategy.tool_strategies import ToolStrategies
 
-__version__ = "0.1.2"
+__version__ = "0.1.4"
 __all__ = [
-    "fuzz_tool",
-    "main",
-    "create_transport",
-    "TransportProtocol",
-    "make_fuzz_strategy_from_jsonschema",
+    "ToolFuzzer",
+    "ProtocolFuzzer",
+    "ToolStrategies",
+    "ProtocolStrategies",
+    "UnifiedMCPFuzzerClient",
+    "unified_client_main",
+    "run_cli",
+    "get_cli_config",
+    "create_argument_parser",
 ]

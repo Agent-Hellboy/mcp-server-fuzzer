@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Entry point for running mcp_fuzzer as a module.
+MCP Fuzzer - Main Entry Point
+
+This module provides the main entry point for the MCP fuzzer, delegating to the CLI module.
 """
 
-import asyncio
-
-from .client import main
+from .cli import run_cli
 
 
-def run():
-    """Entry point for the mcp-fuzzer command."""
-    asyncio.run(main())
+def main():
+    """Main entry point for the MCP fuzzer."""
+    run_cli()
 
 
 if __name__ == "__main__":
-    run()
+    main()
