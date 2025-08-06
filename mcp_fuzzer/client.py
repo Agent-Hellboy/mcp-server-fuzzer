@@ -16,8 +16,8 @@ from typing import Any, Dict, List
 from rich.console import Console
 from rich.table import Table
 
-from .fuzzer.tool_fuzzer import ToolFuzzer
 from .fuzzer.protocol_fuzzer import ProtocolFuzzer
+from .fuzzer.tool_fuzzer import ToolFuzzer
 from .transport import create_transport
 
 logging.basicConfig(level=logging.INFO)
