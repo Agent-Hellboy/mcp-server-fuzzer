@@ -11,7 +11,7 @@ If your server conforms to the [2024-11-05 MCP schema](https://github.com/modelc
 
 ## Features
 
-### Tool Fuzzer (Original)
+### Tool Fuzzer
 - **Multi-Protocol Support**: HTTP, SSE, Stdio, and WebSocket transports
 - **Tool Discovery**: Automatically discovers available tools from MCP servers
 - **Intelligent Fuzzing**: Uses Hypothesis to generate random/edge-case arguments
@@ -71,7 +71,7 @@ pip install mcp-fuzzer
 
 ## Usage
 
-### Tool Fuzzer (Original Functionality)
+### Tool Fuzzer
 
 Fuzz tool arguments and parameters:
 
@@ -82,8 +82,6 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --
 # With verbose output
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --verbose
 ```
-
-### Protocol Fuzzer (New Functionality)
 
 Fuzz MCP protocol types and messages:
 
