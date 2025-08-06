@@ -7,8 +7,8 @@ sample fuzz cases and showing how they would be used.
 """
 
 import json
-import sys
 import os
+import sys
 
 # Add the parent directory to the path so we can import mcp_fuzzer
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -161,7 +161,7 @@ def test_modular_structure():
 
     try:
         # Test imports
-        from mcp_fuzzer.fuzzer import ToolFuzzer, ProtocolFuzzer
+        from mcp_fuzzer.fuzzer import ProtocolFuzzer, ToolFuzzer
 
         print("✓ All imports successful")
 
