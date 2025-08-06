@@ -7,13 +7,13 @@ exclude = ["servers*", "examples*"]
 
 [project]
 name = "mcp-fuzzer"
-version = "0.1.2"
+version = "0.1.3"
 description = "MCP server fuzzer client and utilities"
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.9"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Prince Roshan", email = "princekrroshan01@gmail.com"}
 ]
 keywords = ["mcp", "fuzzing", "testing", "json-rpc"]
 classifiers = [
