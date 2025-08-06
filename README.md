@@ -14,8 +14,6 @@ A comprehensive CLI tool for fuzzing MCP servers using multiple transport protoc
 - **Intelligent Fuzzing**: Uses Hypothesis to generate random/edge-case arguments
 - **Rich Reporting**: Beautiful terminal tables with detailed statistics
 - **Protocol Flexibility**: Easy to add new transport protocols
-
-### Protocol Fuzzer (New)
 - **Comprehensive Protocol Coverage**: Fuzzes all MCP protocol types
 - **Edge Case Generation**: Tests malformed requests, invalid parameters, and boundary conditions
 - **Protocol-Specific Strategies**: Tailored fuzzing for each MCP message type
@@ -24,7 +22,41 @@ A comprehensive CLI tool for fuzzing MCP servers using multiple transport protoc
 
 ## Architecture
 
-The MCP Fuzzer uses a transport abstraction layer to support multiple protocols. Here's how it works:
+The MCP Fuzzer uses a modular architecture with clear separation of concerns:
+
+### Core Components
+
+- **`client.py`**: Unified client that orchestrates both tool and protocol fuzzing
+- **`transport.py`**: Abstract transport layer supporting HTTP, SSE, Stdio, WebSocket, and custom protocols
+- **`fuzzer/`**: Orchestration logic for different fuzzing types
+  - `tool_fuzzer.py`: Tool argument fuzzing orchestration
+  - `protocol_fuzzer.py`: Protocol type fuzzing orchestration
+- **`strategy/`**: Hypothesis-based data generation strategies
+  - `tool_strategies.py`: Strategies for generating tool arguments
+  - `protocol_strategies.py`: Strategies for generating protocol messages
+
+### Architecture Flow
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Client CLI    │───▶│  Transport      │───▶│  MCP Server     │
+│   (__main__.py) │    │  Layer          │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │
+         ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐
+│   Fuzzer        │    │   Strategy      │
+│   Orchestration │    │   Data Gen      │
+│   (fuzzer/)     │    │   (strategy/)   │
+└─────────────────┘    └─────────────────┘
+```
+
+### Key Benefits
+
+- **Modular Design**: Clear separation between orchestration and data generation
+- **Transport Agnostic**: Fuzzer logic independent of communication protocol
+- **Extensible**: Easy to add new transport protocols and fuzzing strategies
+- **Testable**: Each component can be tested independently
 
 ![mcp_fuzzer_arch](./images/mcp_fuzzer_arch.png)
 
@@ -98,9 +130,62 @@ The protocol fuzzer covers all major MCP protocol types:
 ### Generic JSON-RPC
 - **GenericJSONRPCRequest**: Tests malformed JSON-RPC messages, missing fields, and invalid versions
 
-## Supported Protocols
+## Custom Transport Protocols
 
-### HTTP Transport
+The MCP Fuzzer uses a transport abstraction layer that makes it easy to implement custom transport protocols. You can create your own transport by inheriting from `TransportProtocol`:
+
+### Creating Custom Transports
+
+```python
+from mcp_fuzzer.transport import TransportProtocol
+
+class YourCustomTransport(TransportProtocol):
+    def __init__(self, your_config):
+        # Your initialization
+        pass
+
+    async def send_request(self, method: str, params=None) -> Any:
+        # Your custom implementation
+        return your_response
+```
+
+### Example Custom Transports
+
+The project includes examples of custom transport implementations:
+
+- **gRPC Transport**: High-performance RPC communication
+- **Redis Transport**: Pub/sub messaging via Redis
+- **Webhook Transport**: HTTP webhook-based communication
+
+See `examples/custom_transport_example.py` for complete implementation examples.
+
+### Integration Options
+
+**Option 1: Extend the factory function**
+```python
+def create_custom_transport(protocol, endpoint, **kwargs):
+    if protocol == "your-protocol":
+        return YourCustomTransport(endpoint, **kwargs)
+    else:
+        return create_transport(protocol, endpoint, **kwargs)
+```
+
+**Option 2: Direct usage**
+```python
+from your_module import YourCustomTransport
+
+transport = YourCustomTransport("your-endpoint")
+client = UnifiedMCPFuzzerClient(transport)
+```
+
+### Benefits of Custom Transports
+
+- **✅ Plug-and-play**: Just implement the interface
+- **✅ Zero fuzzer changes**: Fuzzer doesn't know about transport
+- **✅ Protocol agnostic**: Works with any transport
+- **✅ Easy testing**: Mock transports for testing
+
+## Supported Protocols
 ```bash
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8080/rpc --runs 20
 mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8080/rpc --runs-per-type 10
@@ -235,6 +320,9 @@ mcp-fuzzer --mode protocol --protocol-type SetLevelRequest --protocol http --end
 # Test the protocol fuzzer
 python examples/test_protocol_fuzzer.py
 
+# Test custom transport examples
+python examples/custom_transport_example.py
+
 # Run the full test suite
 python -m pytest tests/
 ```
@@ -243,15 +331,20 @@ python -m pytest tests/
 
 To add fuzzing for a new MCP protocol type:
 
-1. Add a new method to `MCPProtocolFuzzer` in `protocol_fuzzer.py`
-2. Add the protocol type to the mapping in `protocol_client.py`
-3. Add the send method in `protocol_client.py`
-4. Update the protocol types list in `fuzz_all_protocol_types()`
+1. Add a new method to `ProtocolStrategies` in `strategy/protocol_strategies.py`
+2. Add the protocol type to the mapping in `ProtocolStrategies.get_protocol_fuzzer_method()`
+3. Add the send method in `client.py` (in the `_send_protocol_request` method)
+4. Update the protocol types list in `ProtocolFuzzer.fuzz_all_protocol_types()`
+
+### Adding New Transport Protocols
+
+To add a new transport protocol:
+
+1. Create a new class inheriting from `TransportProtocol` in `transport.py`
+2. Implement the `send_request()` method
+3. Add the protocol to the `create_transport()` factory function
+4. Update the CLI argument parser in `__main__.py` if needed
 
 ---
 
 **Project dependencies are managed via `pyproject.toml`.**
-
-Test result of fuzz testing of https://github.com/modelcontextprotocol/python-sdk/tree/main/examples/servers/simple-streamablehttp-stateless
-
-![fuzzer](./images/fuzzer.png)
