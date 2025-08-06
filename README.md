@@ -61,7 +61,7 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 - **Extensible**: Easy to add new transport protocols and fuzzing strategies
 - **Testable**: Each component can be tested independently
 
-![mcp_fuzzer_arch](./images/mcp_fuzzer_arch.png)
+See architecture diagrams in the docs folder
 
 ## Installation
 
@@ -352,6 +352,6 @@ To add a new transport protocol:
 
 **Project dependencies are managed via `pyproject.toml`.**
 
-Example response from a server using examples/test_server.py -> It's easy to break man if schema validation is not there in the implementation, it might be easy to crash some servers.
+Example response from a server using examples/test_server.py → **Warning**: If schema validation is not implemented in your server, it may be vulnerable to crashes or unexpected behavior when receiving malformed requests.
 
 ![fuzz_resp](./images/fuzz_resp.png)
