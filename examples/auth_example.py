@@ -113,19 +113,19 @@ async def demonstrate_auth_usage():
     auth_manager.add_auth_provider("demo", create_api_key_auth("demo-key"))
     auth_manager.map_tool_to_auth("demo_tool", "demo")
 
-    transport = create_transport("http", "http://localhost:8000")
-    client = UnifiedMCPFuzzerClient(transport, auth_manager)
+    # transport = create_transport("http", "http://localhost:8000")  # Unused in this example
+    # client = UnifiedMCPFuzzerClient(transport, auth_manager)  # Unused in this example
 
     # Simulate a tool that would be fuzzed
-    demo_tool = {
-        "name": "demo_tool",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "message": {"type": "string"}
-            }
-        }
-    }
+    # demo_tool = {  # Unused in this example
+    #     "name": "demo_tool",
+    #     "inputSchema": {
+    #         "type": "object",
+    #         "properties": {
+    #             "message": {"type": "string"}
+    #         }
+    #     }
+    # }
 
     print("When fuzzing 'demo_tool', the fuzzer will:")
     print("1. Generate random arguments based on the schema")
