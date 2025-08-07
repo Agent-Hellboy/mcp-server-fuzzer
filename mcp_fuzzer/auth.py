@@ -6,11 +6,11 @@ This module handles authentication for tools that require it, supporting various
 auth methods like API keys, OAuth tokens, basic auth, etc.
 """
 
-import os
-from typing import Any, Dict, Optional
-from abc import ABC, abstractmethod
 import base64
 import json
+import os
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
 
 
 class AuthProvider(ABC):

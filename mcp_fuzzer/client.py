@@ -16,10 +16,10 @@ from typing import Any, Dict, List, Optional
 from rich.console import Console
 from rich.table import Table
 
+from .auth import AuthManager, load_auth_config, setup_auth_from_env
 from .fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzzer.tool_fuzzer import ToolFuzzer
 from .transport import create_transport
-from .auth import AuthManager, setup_auth_from_env, load_auth_config
 
 logging.basicConfig(level=logging.INFO)
 

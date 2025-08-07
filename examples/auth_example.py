@@ -8,17 +8,13 @@ for tools that require authentication.
 
 import asyncio
 import os
-from mcp_fuzzer.auth import (
-    AuthManager,
-    create_api_key_auth,
-    create_basic_auth,
-    create_oauth_auth,
-    create_custom_header_auth,
-    setup_auth_from_env,
-    load_auth_config,
-)
-from mcp_fuzzer.transport import create_transport
+
+from mcp_fuzzer.auth import (AuthManager, create_api_key_auth,
+                             create_basic_auth, create_custom_header_auth,
+                             create_oauth_auth, load_auth_config,
+                             setup_auth_from_env)
 from mcp_fuzzer.client import UnifiedMCPFuzzerClient
+from mcp_fuzzer.transport import create_transport
 
 
 async def example_with_manual_auth():
