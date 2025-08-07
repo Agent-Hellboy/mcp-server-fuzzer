@@ -85,6 +85,17 @@ Examples:
         help="Fuzz only a specific protocol type (when mode is protocol)",
     )
 
+    # Authentication arguments
+    parser.add_argument(
+        "--auth-config",
+        help="Path to authentication configuration file (JSON format)",
+    )
+    parser.add_argument(
+        "--auth-env",
+        action="store_true",
+        help="Load authentication from environment variables",
+    )
+
     return parser
 
 

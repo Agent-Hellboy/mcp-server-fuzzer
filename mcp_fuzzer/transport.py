@@ -60,13 +60,21 @@ class TransportProtocol(ABC):
 class HTTPTransport(TransportProtocol):
     """HTTP-based transport for MCP servers."""
 
-    def __init__(self, url: str, timeout: float = 30.0):
+    def __init__(
+        self,
+        url: str,
+        timeout: float = 30.0,
+        auth_headers: Optional[Dict[str, str]] = None,
+    ):
         self.url = url
         self.timeout = timeout
         self.headers = {
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
         }
+        # Add authentication headers if provided
+        if auth_headers:
+            self.headers.update(auth_headers)
 
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None

@@ -1,0 +1,39 @@
+{
+  "providers": {
+    "openai_api": {
+      "type": "api_key",
+      "api_key": "sk-your-openai-api-key-here",
+      "header_name": "Authorization"
+    },
+    "github_api": {
+      "type": "api_key",
+      "api_key": "ghp-your-github-token-here",
+      "header_name": "Authorization"
+    },
+    "basic_auth": {
+      "type": "basic",
+      "username": "user",
+      "password": "password"
+    },
+    "oauth_token": {
+      "type": "oauth",
+      "token": "your-oauth-token-here",
+      "token_type": "Bearer"
+    },
+    "custom_headers": {
+      "type": "custom",
+      "headers": {
+        "X-API-Key": "your-custom-api-key",
+        "X-Client-ID": "your-client-id",
+        "X-Secret": "your-secret"
+      }
+    }
+  },
+  "tool_mappings": {
+    "openai_chat": "openai_api",
+    "github_search": "github_api",
+    "secure_tool": "basic_auth",
+    "oauth_tool": "oauth_token",
+    "custom_tool": "custom_headers"
+  }
+}

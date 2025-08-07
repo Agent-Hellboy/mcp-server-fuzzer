@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import traceback
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -19,6 +19,7 @@ from rich.table import Table
 from .fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzzer.tool_fuzzer import ToolFuzzer
 from .transport import create_transport
+from .auth import AuthManager, setup_auth_from_env, load_auth_config
 
 logging.basicConfig(level=logging.INFO)
 
@@ -26,11 +27,12 @@ logging.basicConfig(level=logging.INFO)
 class UnifiedMCPFuzzerClient:
     """Unified client for fuzzing MCP tools and protocol types."""
 
-    def __init__(self, transport):
+    def __init__(self, transport, auth_manager: Optional[AuthManager] = None):
         self.transport = transport
         self.tool_fuzzer = ToolFuzzer()
         self.protocol_fuzzer = ProtocolFuzzer()
         self.console = Console()
+        self.auth_manager = auth_manager or AuthManager()
 
     # ============================================================================
     # TOOL FUZZING METHODS
@@ -50,9 +52,20 @@ class UnifiedMCPFuzzerClient:
                 ]  # Get single result
                 args = fuzz_result["args"]
 
+                # Get authentication for this tool
+                auth_headers = self.auth_manager.get_auth_headers_for_tool(tool["name"])
+                auth_params = self.auth_manager.get_auth_params_for_tool(tool["name"])
+
+                # Merge auth params with tool arguments if needed
+                if auth_params:
+                    args.update(auth_params)
+
                 logging.info(
                     f"Fuzzing {tool['name']} (run {i + 1}/{runs}) with args: {args}"
                 )
+                if auth_headers:
+                    logging.info(f"Using auth headers: {list(auth_headers.keys())}")
+
                 result = await self.transport.call_tool(tool["name"], args)
                 results.append({"args": args, "result": result})
             except Exception as e:
@@ -534,8 +547,17 @@ Examples:
         logging.error(f"Failed to create transport: {e}")
         return
 
+    # Set up authentication if requested
+    auth_manager = None
+    if hasattr(args, "auth_config") and args.auth_config:
+        auth_manager = load_auth_config(args.auth_config)
+        logging.info(f"Loaded auth config from: {args.auth_config}")
+    elif hasattr(args, "auth_env") and args.auth_env:
+        auth_manager = setup_auth_from_env()
+        logging.info("Loaded auth from environment variables")
+
     # Create unified client
-    client = UnifiedMCPFuzzerClient(transport)
+    client = UnifiedMCPFuzzerClient(transport, auth_manager)
 
     # Run fuzzing based on mode
     if args.mode == "tools":

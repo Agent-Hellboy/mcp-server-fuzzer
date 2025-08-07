@@ -15,6 +15,7 @@ If your server conforms to the [2024-11-05 MCP schema](https://github.com/modelc
 - **Multi-Protocol Support**: HTTP, SSE, Stdio, and WebSocket transports
 - **Tool Discovery**: Automatically discovers available tools from MCP servers
 - **Intelligent Fuzzing**: Uses Hypothesis to generate random/edge-case arguments
+- **Authentication Support**: Handle API keys, OAuth tokens, basic auth, and custom headers
 - **Rich Reporting**: Beautiful terminal tables with detailed statistics
 - **Protocol Flexibility**: Easy to add new transport protocols
 - **Comprehensive Protocol Coverage**: Fuzzes all MCP protocol types
@@ -97,6 +98,69 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --e
 # Fuzz with verbose output
 mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000/mcp/ --verbose
 ```
+
+### Authentication Support
+
+The fuzzer supports authentication for tools that require it:
+
+```bash
+# Using authentication configuration file
+mcp-fuzzer --mode tools --auth-config examples/auth_config.json --endpoint http://localhost:8000
+
+# Using environment variables
+mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
+```
+
+#### Authentication Configuration
+
+Create a JSON configuration file (`auth_config.json`):
+
+```json
+{
+  "providers": {
+    "openai_api": {
+      "type": "api_key",
+      "api_key": "sk-your-openai-api-key",
+      "header_name": "Authorization"
+    },
+    "github_api": {
+      "type": "api_key",
+      "api_key": "ghp-your-github-token",
+      "header_name": "Authorization"
+    },
+    "basic_auth": {
+      "type": "basic",
+      "username": "user",
+      "password": "password"
+    }
+  },
+  "tool_mappings": {
+    "openai_chat": "openai_api",
+    "github_search": "github_api",
+    "secure_tool": "basic_auth"
+  }
+}
+```
+
+#### Environment Variables
+
+Set authentication via environment variables:
+
+```bash
+export MCP_API_KEY="sk-your-api-key"
+export MCP_USERNAME="user"
+export MCP_PASSWORD="password"
+export MCP_OAUTH_TOKEN="your-oauth-token"
+
+mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
+```
+
+#### Supported Authentication Types
+
+- **API Key**: Bearer token authentication
+- **Basic Auth**: Username/password authentication
+- **OAuth Token**: OAuth token authentication
+- **Custom Headers**: Custom authentication headers
 
 ## Supported Protocol Types
 
