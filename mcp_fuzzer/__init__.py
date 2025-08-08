@@ -11,7 +11,7 @@ from .fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzzer.tool_fuzzer import ToolFuzzer
 from .strategy import ProtocolStrategies, ToolStrategies
 
-__version__ = "0.1.4"
+__version__ = "0.1.6"
 __all__ = [
     "ToolFuzzer",
     "ProtocolFuzzer",
