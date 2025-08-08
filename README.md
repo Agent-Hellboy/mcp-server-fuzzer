@@ -32,7 +32,7 @@ MCP Fuzzer uses a sophisticated **two-phase approach** for comprehensive testing
 - **Multi-Protocol Support**: HTTP, SSE, Stdio, and WebSocket transports
 - **Tool Discovery**: Automatically discovers available tools from MCP servers
 - **Intelligent Fuzzing**: Uses Hypothesis + custom strategies for realistic and aggressive data
-- **Authentication Support**: Handle API keys, OAuth tokens, basic auth, and custom headers
+- **Authentication Support**: Handle API keys, OAuth tokens, basic auth, and custom headers for tool calls which require authNZ
 - **Rich Reporting**: Beautiful terminal tables with separate phase statistics
 - **Protocol Flexibility**: Easy to add new transport protocols
 - **Comprehensive Protocol Coverage**: Fuzzes all MCP protocol types in both phases
