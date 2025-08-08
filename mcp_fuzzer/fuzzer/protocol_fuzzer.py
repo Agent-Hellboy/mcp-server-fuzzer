@@ -42,8 +42,13 @@ class ProtocolFuzzer:
                 # Generate fuzz data using the strategy
                 fuzz_data = fuzzer_method()
 
+                preview = json.dumps(fuzz_data, indent=2)[:200]
                 logging.info(
-                    f"Fuzzing {protocol_type} (run {i + 1}/{runs}) with data: {json.dumps(fuzz_data, indent=2)[:200]}..."
+                    "Fuzzing %s (run %d/%d) with data: %s...",
+                    protocol_type,
+                    i + 1,
+                    runs,
+                    preview,
                 )
 
                 results.append(
@@ -104,7 +109,11 @@ class ProtocolFuzzer:
                 exceptions = len([r for r in results if not r.get("success", False)])
 
                 logging.info(
-                    f"Completed fuzzing {protocol_type}: {successful} successful, {exceptions} exceptions out of {runs_per_type} runs"
+                    "Completed fuzzing %s: %d successful, %d exceptions out of %d runs",
+                    protocol_type,
+                    successful,
+                    exceptions,
+                    runs_per_type,
                 )
 
             except Exception as e:

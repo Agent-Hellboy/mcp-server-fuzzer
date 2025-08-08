@@ -2,8 +2,8 @@
 """
 Unified MCP Fuzzer Client
 
-This module provides a comprehensive client for fuzzing both MCP tools and protocol types
-using the modular fuzzer structure.
+This module provides a comprehensive client for fuzzing both MCP tools and
+protocol types using the modular fuzzer structure.
 """
 
 import argparse
@@ -109,7 +109,10 @@ class UnifiedMCPFuzzerClient:
                 exceptions = [r for r in results if "exception" in r]
 
                 logging.info(
-                    f"Completed fuzzing {tool_name}: {len(exceptions)} exceptions out of {runs_per_tool} runs"
+                    "Completed fuzzing %s: %d exceptions out of %d runs",
+                    tool_name,
+                    len(exceptions),
+                    runs_per_tool,
                 )
 
             except Exception as e:
@@ -134,8 +137,13 @@ class UnifiedMCPFuzzerClient:
                 fuzz_results = self.protocol_fuzzer.fuzz_protocol_type(protocol_type, 1)
                 fuzz_data = fuzz_results[0]["fuzz_data"]
 
+                preview = json.dumps(fuzz_data, indent=2)[:200]
                 logging.info(
-                    f"Fuzzing {protocol_type} (run {i + 1}/{runs}) with data: {json.dumps(fuzz_data, indent=2)[:200]}..."
+                    "Fuzzing %s (run %d/%d) with data: %s...",
+                    protocol_type,
+                    i + 1,
+                    runs,
+                    preview,
                 )
 
                 # Send the fuzz data through transport
@@ -273,46 +281,18 @@ class UnifiedMCPFuzzerClient:
     async def fuzz_all_protocol_types(
         self, runs_per_type: int = 5
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """Fuzz all protocol types."""
-        protocol_types = [
-            "InitializeRequest",
-            "ProgressNotification",
-            "CancelNotification",
-            "ListResourcesRequest",
-            "ReadResourceRequest",
-            "SetLevelRequest",
-            "GenericJSONRPCRequest",
-            "CreateMessageRequest",
-            "ListPromptsRequest",
-            "GetPromptRequest",
-            "ListRootsRequest",
-            "SubscribeRequest",
-            "UnsubscribeRequest",
-            "CompleteRequest",
-        ]
+        """Fuzz all protocol types using the ProtocolFuzzer and group results."""
+        try:
+            raw_results = self.protocol_fuzzer.fuzz_all_protocol_types(runs_per_type)
+        except Exception as e:
+            logging.error(f"Failed to fuzz all protocol types: {e}")
+            return {}
 
-        all_results = {}
-
-        for protocol_type in protocol_types:
-            logging.info(f"Starting to fuzz protocol type: {protocol_type}")
-
-            try:
-                results = await self.fuzz_protocol_type(protocol_type, runs_per_type)
-                all_results[protocol_type] = results
-
-                # Calculate statistics
-                successful = len([r for r in results if r.get("success", False)])
-                exceptions = len([r for r in results if not r.get("success", False)])
-
-                logging.info(
-                    f"Completed fuzzing {protocol_type}: {successful} successful, {exceptions} exceptions out of {runs_per_type} runs"
-                )
-
-            except Exception as e:
-                logging.error(f"Failed to fuzz protocol type {protocol_type}: {e}")
-                all_results[protocol_type] = [{"error": str(e)}]
-
-        return all_results
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for item in raw_results or []:
+            protocol_type = item.get("protocol_type", "Unknown")
+            grouped.setdefault(protocol_type, []).append(item)
+        return grouped
 
     # ============================================================================
     # SUMMARY METHODS
@@ -341,9 +321,11 @@ class UnifiedMCPFuzzerClient:
                     "0",
                     "0%",
                     "",
-                    tool_results[0]["error"][:50] + "..."
-                    if len(tool_results[0]["error"]) > 50
-                    else tool_results[0]["error"],
+                    (
+                        tool_results[0]["error"][:50] + "..."
+                        if len(tool_results[0]["error"]) > 50
+                        else tool_results[0]["error"]
+                    ),
                 )
                 continue
 
@@ -396,9 +378,11 @@ class UnifiedMCPFuzzerClient:
                     "0",
                     "0%",
                     "",
-                    protocol_results[0]["error"][:50] + "..."
-                    if len(protocol_results[0]["error"]) > 50
-                    else protocol_results[0]["error"],
+                    (
+                        protocol_results[0]["error"][:50] + "..."
+                        if len(protocol_results[0]["error"]) > 50
+                        else protocol_results[0]["error"]
+                    ),
                 )
                 continue
 
@@ -478,16 +462,21 @@ async def main():
         epilog="""
 Examples:
   # Fuzz tools only
-  python -m mcp_fuzzer.unified_client --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+  python -m mcp_fuzzer.unified_client --mode tools --protocol http \
+    --endpoint http://localhost:8000/mcp/ --runs 10
 
   # Fuzz protocol types only
-  python -m mcp_fuzzer.unified_client --mode protocol --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 5
+  python -m mcp_fuzzer.unified_client --mode protocol --protocol http \
+    --endpoint http://localhost:8000/mcp/ --runs-per-type 5
 
   # Fuzz both tools and protocols
-  python -m mcp_fuzzer.unified_client --mode both --protocol http --endpoint http://localhost:8000/mcp/ --runs 10 --runs-per-type 5
+  python -m mcp_fuzzer.unified_client --mode both --protocol http \
+    --endpoint http://localhost:8000/mcp/ --runs 10 --runs-per-type 5
 
   # Fuzz specific protocol type
-  python -m mcp_fuzzer.unified_client --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000/mcp/
+  python -m mcp_fuzzer.unified_client --mode protocol \
+    --protocol-type InitializeRequest --protocol http \
+    --endpoint http://localhost:8000/mcp/
         """,
     )
 
@@ -495,7 +484,10 @@ Examples:
         "--mode",
         choices=["tools", "protocol", "both"],
         default="both",
-        help="Fuzzing mode: 'tools' for tool fuzzing, 'protocol' for protocol fuzzing, 'both' for both (default: both)",
+        help=(
+            "Fuzzing mode: 'tools' for tool fuzzing, 'protocol' for protocol fuzzing, "
+            "'both' for both (default: both)"
+        ),
     )
     parser.add_argument(
         "--protocol",

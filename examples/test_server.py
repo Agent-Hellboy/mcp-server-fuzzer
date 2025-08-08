@@ -8,10 +8,32 @@ This server provides basic MCP functionality for testing the fuzzer CLI.
 import asyncio
 import json
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+REQUIRED_AUTH_SCHEME = "Bearer"
+REQUIRED_TOKEN = "secret123"
+
+
+def parse_http_request(raw: str) -> Tuple[Dict[str, str], str]:
+    """Parse minimal HTTP request headers and body from raw request text."""
+    header_section, _, body = raw.partition("\r\n\r\n")
+    if not body:
+        header_section, _, body = raw.partition("\n\n")
+
+    header_lines = header_section.splitlines()
+    headers: Dict[str, str] = {}
+    # Skip request line
+    for line in header_lines[1:]:
+        if not line.strip():
+            continue
+        if ":" in line:
+            name, value = line.split(":", 1)
+            headers[name.strip()] = value.strip()
+    return headers, body
 
 
 class SimpleMCPServer:
@@ -39,10 +61,30 @@ class SimpleMCPServer:
                         "text": {"type": "string"}
                     }
                 }
+            },
+            {
+                "name": "secure_tool",
+                "description": "Requires Authorization header",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"msg": {"type": "string"}},
+                },
             }
         ]
 
-    async def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def _is_authorized(self, headers: Dict[str, str]) -> bool:
+        auth = headers.get("Authorization") or headers.get("authorization")
+        if not auth:
+            return False
+        try:
+            scheme, token = auth.split(" ", 1)
+        except ValueError:
+            return False
+        return scheme == REQUIRED_AUTH_SCHEME and token == REQUIRED_TOKEN
+
+    async def handle_request(
+        self, request: Dict[str, Any], headers: Dict[str, str]
+    ) -> Dict[str, Any]:
         """Handle incoming JSON-RPC requests."""
         method = request.get("method")
         params = request.get("params", {})
@@ -73,7 +115,10 @@ class SimpleMCPServer:
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"Test tool called with message: {message}, count: {count}"
+                                "text": (
+                                    f"Test tool called with message: {message}, "
+                                    f"count: {count}"
+                                ),
                             }
                         ]
                     }
@@ -92,6 +137,24 @@ class SimpleMCPServer:
                             }
                         ]
                     }
+                }
+
+            elif tool_name == "secure_tool":
+                if not self._is_authorized(headers):
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "error": {"code": -32001, "message": "Unauthorized"},
+                    }
+                msg = arguments.get("msg", "")
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "content": [
+                            {"type": "text", "text": f"Secure OK: {msg}"}
+                        ]
+                    },
                 }
 
             else:
@@ -134,25 +197,26 @@ class SimpleMCPServer:
 async def handle_http_request(reader, writer):
     """Handle HTTP requests."""
     try:
-        # Read request
-        data = await reader.read(8192)
-        request_text = data.decode()
+        data = await reader.read(1 << 20)
+        request_text = data.decode(errors="ignore")
+        headers, body = parse_http_request(request_text)
 
-        # Parse JSON-RPC request
-        lines = request_text.split('\n')
-        for line in lines:
-            if line.strip() and not line.startswith('POST') and not line.startswith('GET'):
-                try:
-                    request = json.loads(line)
-                    break
-                except json.JSONDecodeError:
-                    continue
-        else:
+        # Extract JSON payload from body or default to tools/list
+        try:
+            request = (
+                json.loads(body.strip())
+                if body.strip()
+                else {
+                    "method": "tools/list",
+                    "id": 1,
+                }
+            )
+        except json.JSONDecodeError:
             request = {"method": "tools/list", "id": 1}
 
         # Handle request
         server = SimpleMCPServer()
-        response = await server.handle_request(request)
+        response = await server.handle_request(request, headers)
 
         # Send response
         response_text = json.dumps(response)

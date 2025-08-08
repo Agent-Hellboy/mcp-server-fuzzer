@@ -26,13 +26,14 @@ class ToolFuzzer:
                 # Generate fuzz arguments using the strategy
                 args = self.strategies.fuzz_tool_arguments(tool)
 
+                tool_name = tool.get("name", "unknown")
                 logging.info(
-                    f"Fuzzing {tool['name']} (run {i + 1}/{runs}) with args: {args}"
+                    f"Fuzzing {tool_name} (run {i + 1}/{runs}) with args: {args}"
                 )
 
                 results.append(
                     {
-                        "tool_name": tool["name"],
+                        "tool_name": tool_name,
                         "run": i + 1,
                         "args": args,
                         "success": True,
@@ -40,10 +41,11 @@ class ToolFuzzer:
                 )
 
             except Exception as e:
-                logging.warning(f"Exception during fuzzing {tool['name']}: {e}")
+                tool_name = tool.get("name", "unknown")
+                logging.warning(f"Exception during fuzzing {tool_name}: {e}")
                 results.append(
                     {
-                        "tool_name": tool["name"],
+                        "tool_name": tool_name,
                         "run": i + 1,
                         "args": args if "args" in locals() else None,
                         "exception": str(e),
@@ -59,6 +61,9 @@ class ToolFuzzer:
         """Fuzz multiple tools."""
         all_results = {}
 
+        if tools is None:
+            return all_results
+
         for tool in tools:
             tool_name = tool.get("name", "unknown")
             logging.info(f"Starting to fuzz tool: {tool_name}")
@@ -72,7 +77,11 @@ class ToolFuzzer:
                 exceptions = len([r for r in results if not r.get("success", False)])
 
                 logging.info(
-                    f"Completed fuzzing {tool_name}: {successful} successful, {exceptions} exceptions out of {runs_per_tool} runs"
+                    "Completed fuzzing %s: %d successful, %d exceptions out of %d runs",
+                    tool_name,
+                    successful,
+                    exceptions,
+                    runs_per_tool,
                 )
 
             except Exception as e:

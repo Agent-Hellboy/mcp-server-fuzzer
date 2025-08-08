@@ -7,7 +7,7 @@ exclude = ["servers*", "examples*"]
 
 [project]
 name = "mcp-fuzzer"
-version = "0.1.4"
+version = "0.1.5"
 description = "MCP server fuzzer client and utilities"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -42,3 +42,22 @@ mcp-fuzzer = "mcp_fuzzer.__main__:run"
 Homepage = "https://github.com/agent-hellboy/mcp-server-fuzzer"
 Repository = "https://github.com/agent-hellboy/mcp-server-fuzzer"
 Issues = "https://github.com/agent-hellboy/mcp-server-fuzzer/issues"
+
+[tool.ruff]
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["F", "E"]
+per-file-ignores = { "tests/**" = ["F401", "F841"] }
+
+[tool.pytest.ini_options]
+addopts = "-q --maxfail=1 --disable-warnings --cov=mcp_fuzzer --cov-report=term-missing --cov-report=xml"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["mcp_fuzzer"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

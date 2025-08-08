@@ -2,7 +2,8 @@
 """
 MCP Fuzzer - Main Entry Point
 
-This module provides the main entry point for the MCP fuzzer, delegating to the CLI module.
+This module provides the main entry point for the MCP fuzzer,
+delegating to the CLI module.
 """
 
 from .cli import run_cli

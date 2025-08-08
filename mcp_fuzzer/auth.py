@@ -150,20 +150,37 @@ def setup_auth_from_env() -> AuthManager:
     # API Key auth
     api_key = os.getenv("MCP_API_KEY")
     if api_key:
-        auth_manager.add_auth_provider("default_api", create_api_key_auth(api_key))
+        auth_manager.add_auth_provider("api_key", create_api_key_auth(api_key))
 
     # Basic auth
     username = os.getenv("MCP_USERNAME")
     password = os.getenv("MCP_PASSWORD")
     if username and password:
-        auth_manager.add_auth_provider(
-            "default_basic", create_basic_auth(username, password)
-        )
+        auth_manager.add_auth_provider("basic", create_basic_auth(username, password))
 
     # OAuth token
     oauth_token = os.getenv("MCP_OAUTH_TOKEN")
     if oauth_token:
-        auth_manager.add_auth_provider("default_oauth", create_oauth_auth(oauth_token))
+        auth_manager.add_auth_provider("oauth", create_oauth_auth(oauth_token))
+
+    # Custom headers
+    custom_headers = os.getenv("MCP_CUSTOM_HEADERS")
+    if custom_headers:
+        try:
+            headers = json.loads(custom_headers)
+            auth_manager.add_auth_provider("custom", create_custom_header_auth(headers))
+        except json.JSONDecodeError:
+            pass  # Ignore invalid JSON
+
+    # Tool mapping
+    tool_mapping = os.getenv("MCP_TOOL_AUTH_MAPPING")
+    if tool_mapping:
+        try:
+            mapping = json.loads(tool_mapping)
+            for tool_name, auth_provider_name in mapping.items():
+                auth_manager.map_tool_to_auth(tool_name, auth_provider_name)
+        except json.JSONDecodeError:
+            pass  # Ignore invalid JSON
 
     return auth_manager
 
@@ -171,6 +188,9 @@ def setup_auth_from_env() -> AuthManager:
 def load_auth_config(config_file: str) -> AuthManager:
     """Load authentication configuration from a JSON file."""
     auth_manager = AuthManager()
+
+    if not os.path.exists(config_file):
+        raise FileNotFoundError(f"Auth config file {config_file} not found")
 
     try:
         with open(config_file, "r") as f:
@@ -208,17 +228,19 @@ def load_auth_config(config_file: str) -> AuthManager:
                 auth_manager.add_auth_provider(
                     name, create_custom_header_auth(provider_config["headers"])
                 )
+            else:
+                raise ValueError(f"Unknown provider type: {provider_type}")
 
         # Load tool mappings
-        tool_mappings = config.get("tool_mappings", {})
+        tool_mappings = config.get("tool_mapping", {})
         for tool_name, auth_provider_name in tool_mappings.items():
             auth_manager.map_tool_to_auth(tool_name, auth_provider_name)
 
-    except FileNotFoundError:
-        print(f"Auth config file {config_file} not found, using default auth setup")
     except json.JSONDecodeError as e:
-        print(f"Invalid JSON in auth config file: {e}")
+        raise json.JSONDecodeError(
+            f"Invalid JSON in auth config file: {e}", e.doc, e.pos
+        )
     except Exception as e:
-        print(f"Error loading auth config: {e}")
+        raise e
 
     return auth_manager
