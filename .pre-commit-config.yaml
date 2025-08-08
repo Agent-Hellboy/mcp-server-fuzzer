@@ -9,6 +9,14 @@ repos:
       - id: ruff-format
         exclude: ^(.tox/|.venv/|venv/|.git/|mcp_fuzzer.egg-info/|examples/|servers/)
 
+  # isort for import sorting (correct repo)
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ["--profile=black"]
+        exclude: ^(.tox/|.venv/|venv/|.git/|mcp_fuzzer.egg-info/|examples/|servers/)
+
   # Check for merge conflicts
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

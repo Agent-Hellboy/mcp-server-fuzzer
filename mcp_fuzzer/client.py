@@ -2,8 +2,8 @@
 """
 Unified MCP Fuzzer Client
 
-This module provides a comprehensive client for fuzzing both MCP tools and protocol types
-using the modular fuzzer structure.
+This module provides a comprehensive client for fuzzing both MCP tools and
+protocol types using the modular fuzzer structure.
 """
 
 import argparse
@@ -109,7 +109,10 @@ class UnifiedMCPFuzzerClient:
                 exceptions = [r for r in results if "exception" in r]
 
                 logging.info(
-                    f"Completed fuzzing {tool_name}: {len(exceptions)} exceptions out of {runs_per_tool} runs"
+                    "Completed fuzzing %s: %d exceptions out of %d runs",
+                    tool_name,
+                    len(exceptions),
+                    runs_per_tool,
                 )
 
             except Exception as e:
@@ -134,8 +137,13 @@ class UnifiedMCPFuzzerClient:
                 fuzz_results = self.protocol_fuzzer.fuzz_protocol_type(protocol_type, 1)
                 fuzz_data = fuzz_results[0]["fuzz_data"]
 
+                preview = json.dumps(fuzz_data, indent=2)[:200]
                 logging.info(
-                    f"Fuzzing {protocol_type} (run {i + 1}/{runs}) with data: {json.dumps(fuzz_data, indent=2)[:200]}..."
+                    "Fuzzing %s (run %d/%d) with data: %s...",
+                    protocol_type,
+                    i + 1,
+                    runs,
+                    preview,
                 )
 
                 # Send the fuzz data through transport
@@ -305,7 +313,11 @@ class UnifiedMCPFuzzerClient:
                 exceptions = len([r for r in results if not r.get("success", False)])
 
                 logging.info(
-                    f"Completed fuzzing {protocol_type}: {successful} successful, {exceptions} exceptions out of {runs_per_type} runs"
+                    "Completed fuzzing %s: %d successful, %d exceptions out of %d runs",
+                    protocol_type,
+                    successful,
+                    exceptions,
+                    runs_per_type,
                 )
 
             except Exception as e:
@@ -341,9 +353,11 @@ class UnifiedMCPFuzzerClient:
                     "0",
                     "0%",
                     "",
-                    tool_results[0]["error"][:50] + "..."
-                    if len(tool_results[0]["error"]) > 50
-                    else tool_results[0]["error"],
+                    (
+                        tool_results[0]["error"][:50] + "..."
+                        if len(tool_results[0]["error"]) > 50
+                        else tool_results[0]["error"]
+                    ),
                 )
                 continue
 
@@ -396,9 +410,11 @@ class UnifiedMCPFuzzerClient:
                     "0",
                     "0%",
                     "",
-                    protocol_results[0]["error"][:50] + "..."
-                    if len(protocol_results[0]["error"]) > 50
-                    else protocol_results[0]["error"],
+                    (
+                        protocol_results[0]["error"][:50] + "..."
+                        if len(protocol_results[0]["error"]) > 50
+                        else protocol_results[0]["error"]
+                    ),
                 )
                 continue
 
@@ -478,16 +494,21 @@ async def main():
         epilog="""
 Examples:
   # Fuzz tools only
-  python -m mcp_fuzzer.unified_client --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+  python -m mcp_fuzzer.unified_client --mode tools --protocol http \
+    --endpoint http://localhost:8000/mcp/ --runs 10
 
   # Fuzz protocol types only
-  python -m mcp_fuzzer.unified_client --mode protocol --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 5
+  python -m mcp_fuzzer.unified_client --mode protocol --protocol http \
+    --endpoint http://localhost:8000/mcp/ --runs-per-type 5
 
   # Fuzz both tools and protocols
-  python -m mcp_fuzzer.unified_client --mode both --protocol http --endpoint http://localhost:8000/mcp/ --runs 10 --runs-per-type 5
+  python -m mcp_fuzzer.unified_client --mode both --protocol http \
+    --endpoint http://localhost:8000/mcp/ --runs 10 --runs-per-type 5
 
   # Fuzz specific protocol type
-  python -m mcp_fuzzer.unified_client --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000/mcp/
+  python -m mcp_fuzzer.unified_client --mode protocol \
+    --protocol-type InitializeRequest --protocol http \
+    --endpoint http://localhost:8000/mcp/
         """,
     )
 
@@ -495,7 +516,10 @@ Examples:
         "--mode",
         choices=["tools", "protocol", "both"],
         default="both",
-        help="Fuzzing mode: 'tools' for tool fuzzing, 'protocol' for protocol fuzzing, 'both' for both (default: both)",
+        help=(
+            "Fuzzing mode: 'tools' for tool fuzzing, 'protocol' for protocol fuzzing, "
+            "'both' for both (default: both)"
+        ),
     )
     parser.add_argument(
         "--protocol",
