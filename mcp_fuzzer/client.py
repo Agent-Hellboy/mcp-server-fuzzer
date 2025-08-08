@@ -30,7 +30,7 @@ class UnifiedMCPFuzzerClient:
     def __init__(self, transport, auth_manager: Optional[AuthManager] = None):
         self.transport = transport
         self.tool_fuzzer = ToolFuzzer()
-        self.protocol_fuzzer = ProtocolFuzzer()
+        self.protocol_fuzzer = ProtocolFuzzer(transport)  # Pass transport
         self.console = Console()
         self.auth_manager = auth_manager or AuthManager()
 
@@ -184,7 +184,9 @@ class UnifiedMCPFuzzerClient:
         for i in range(runs):
             try:
                 # Generate fuzz data using the fuzzer
-                fuzz_results = self.protocol_fuzzer.fuzz_protocol_type(protocol_type, 1)
+                fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
+                    protocol_type, 1
+                )
                 fuzz_data = fuzz_results[0]["fuzz_data"]
 
                 preview = json.dumps(fuzz_data, indent=2)[:200]
@@ -333,16 +335,11 @@ class UnifiedMCPFuzzerClient:
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Fuzz all protocol types using the ProtocolFuzzer and group results."""
         try:
-            raw_results = self.protocol_fuzzer.fuzz_all_protocol_types(runs_per_type)
+            # The protocol fuzzer now actually sends requests to the server
+            return await self.protocol_fuzzer.fuzz_all_protocol_types(runs_per_type)
         except Exception as e:
             logging.error(f"Failed to fuzz all protocol types: {e}")
             return {}
-
-        grouped: Dict[str, List[Dict[str, Any]]] = {}
-        for item in raw_results or []:
-            protocol_type = item.get("protocol_type", "Unknown")
-            grouped.setdefault(protocol_type, []).append(item)
-        return grouped
 
     # ============================================================================
     # SUMMARY METHODS
@@ -409,14 +406,14 @@ class UnifiedMCPFuzzerClient:
         table.add_column("Protocol Type", style="cyan", no_wrap=True)
         table.add_column("Total Runs", justify="right")
         table.add_column("Successful", justify="right")
-        table.add_column("Exceptions", justify="right")
-        table.add_column("Success Rate", justify="right")
-        table.add_column("Example Exception", style="red")
-        table.add_column("Error", style="magenta")
+        table.add_column("Server Errors", justify="right", style="green")
+        table.add_column("Fuzzer Errors", justify="right", style="red")
+        table.add_column("Security Rating", justify="center")
+        table.add_column("Example Server Response", style="blue")
 
         for protocol_type, protocol_results in results.items():
             if not protocol_results:
-                table.add_row(protocol_type, "0", "0", "0", "0%", "", "")
+                table.add_row(protocol_type, "0", "0", "0", "0", "N/A", "")
                 continue
 
             # Check if there's a general error
@@ -426,8 +423,8 @@ class UnifiedMCPFuzzerClient:
                     "0",
                     "0",
                     "0",
-                    "0%",
-                    "",
+                    "1",
+                    "ERROR",
                     (
                         protocol_results[0]["error"][:50] + "..."
                         if len(protocol_results[0]["error"]) > 50
@@ -438,28 +435,57 @@ class UnifiedMCPFuzzerClient:
 
             total_runs = len(protocol_results)
             successful = len([r for r in protocol_results if r.get("success", False)])
-            exceptions = total_runs - successful
-            success_rate = (successful / total_runs * 100) if total_runs > 0 else 0
+            server_rejections = len(
+                [
+                    r
+                    for r in protocol_results
+                    if r.get("server_handled_malicious_input", False)
+                ]
+            )
+            fuzzer_exceptions = len(
+                [r for r in protocol_results if not r.get("success", False)]
+            )
 
-            # Find example exception
-            example_exception = ""
+            # Security rating: Good if server properly rejects malicious inputs
+            if server_rejections > 0:
+                security_rating = "🛡️ GOOD"
+            elif fuzzer_exceptions == 0 and server_rejections == 0:
+                security_rating = "⚠️ WARN"  # Server accepted all malicious inputs
+            else:
+                security_rating = "❌ BAD"
+
+            # Find example server response
+            example_response = ""
             for result in protocol_results:
-                if not result.get("success", False) and "exception" in result:
-                    ex = result["exception"]
-                    example_exception = ex[:50] + "..." if len(ex) > 50 else ex
+                if result.get("server_error"):
+                    example_response = result["server_error"][:40] + "..."
+                    break
+                elif result.get("server_response"):
+                    resp_str = str(result["server_response"])
+                    example_response = resp_str[:40] + "..."
                     break
 
             table.add_row(
                 protocol_type,
                 str(total_runs),
                 str(successful),
-                str(exceptions),
-                f"{success_rate:.1f}%",
-                example_exception,
-                "",
+                str(server_rejections),
+                str(fuzzer_exceptions),
+                security_rating,
+                example_response,
             )
 
         self.console.print(table)
+
+        # Print legend
+        self.console.print("\n[bold]Legend:[/bold]")
+        self.console.print("🛡️ GOOD: Server properly rejects malicious inputs")
+        self.console.print("⚠️ WARN: Server accepts all inputs (may be vulnerable)")
+        self.console.print("❌ BAD: Fuzzer errors (testing issues)")
+        self.console.print(
+            "[green]Server Errors:[/green] Good - server rejected malicious data"
+        )
+        self.console.print("[red]Fuzzer Errors:[/red] Bad - fuzzer had internal issues")
 
     def print_overall_summary(
         self,

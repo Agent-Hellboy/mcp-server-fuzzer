@@ -40,7 +40,7 @@ class TestProtocolFuzzer(unittest.TestCase):
     @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
     def test_fuzz_protocol_type_success(self, mock_logging):
         """Test successful fuzzing of a protocol type."""
-        results = self.fuzzer.fuzz_protocol_type("InitializeRequest", runs=3)
+        results = self.fuzzer.fuzz_protocol_type_sync("InitializeRequest", runs=3)
 
         self.assertEqual(len(results), 3)
 
@@ -60,7 +60,7 @@ class TestProtocolFuzzer(unittest.TestCase):
     def test_fuzz_protocol_type_realistic_vs_aggressive(self, mock_logging):
         """Test that realistic and aggressive phases produce different types of data."""
         # Test realistic phase
-        realistic_results = self.fuzzer.fuzz_protocol_type(
+        realistic_results = self.fuzzer.fuzz_protocol_type_sync(
             "InitializeRequest", runs=2, phase="realistic"
         )
         self.assertEqual(len(realistic_results), 2)
@@ -74,7 +74,7 @@ class TestProtocolFuzzer(unittest.TestCase):
             self.assertEqual(fuzz_data["jsonrpc"], "2.0")
 
         # Test aggressive phase
-        aggressive_results = self.fuzzer.fuzz_protocol_type(
+        aggressive_results = self.fuzzer.fuzz_protocol_type_sync(
             "InitializeRequest", runs=2, phase="aggressive"
         )
         self.assertEqual(len(aggressive_results), 2)
@@ -88,7 +88,7 @@ class TestProtocolFuzzer(unittest.TestCase):
     @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
     def test_fuzz_protocol_type_unknown_type(self, mock_logging):
         """Test fuzzing of unknown protocol type."""
-        results = self.fuzzer.fuzz_protocol_type("UnknownType", runs=3)
+        results = self.fuzzer.fuzz_protocol_type_sync("UnknownType", runs=3)
 
         self.assertEqual(len(results), 0)
         mock_logging.error.assert_called_with("Unknown protocol type: UnknownType")
@@ -104,7 +104,7 @@ class TestProtocolFuzzer(unittest.TestCase):
                 Exception("Test exception")
             )
 
-            results = self.fuzzer.fuzz_protocol_type("InitializeRequest", runs=2)
+            results = self.fuzzer.fuzz_protocol_type_sync("InitializeRequest", runs=2)
 
             self.assertEqual(len(results), 2)
 
@@ -117,7 +117,7 @@ class TestProtocolFuzzer(unittest.TestCase):
     @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
     def test_fuzz_all_protocol_types(self, mock_logging):
         """Test fuzzing all protocol types."""
-        results = self.fuzzer.fuzz_all_protocol_types(runs_per_type=2)
+        results = self.fuzzer.fuzz_all_protocol_types_sync(runs_per_type=2)
 
         # Check that all expected protocol types are present
         expected_types = [
@@ -151,10 +151,10 @@ class TestProtocolFuzzer(unittest.TestCase):
     def test_fuzz_all_protocol_types_with_exception(self, mock_logging):
         """Test fuzzing all protocol types with exception handling."""
         # Mock one of the fuzzer methods to raise an exception
-        with patch.object(self.fuzzer, "fuzz_protocol_type") as mock_fuzz:
+        with patch.object(self.fuzzer, "fuzz_protocol_type_sync") as mock_fuzz:
             mock_fuzz.side_effect = Exception("Test exception")
 
-            results = self.fuzzer.fuzz_all_protocol_types(runs_per_type=1)
+            results = self.fuzzer.fuzz_all_protocol_types_sync(runs_per_type=1)
 
             # Should still return results for all types
             self.assertIn("InitializeRequest", results)
@@ -209,8 +209,8 @@ class TestProtocolFuzzer(unittest.TestCase):
 
     def test_fuzz_protocol_type_different_runs(self):
         """Test that different runs generate different data."""
-        results1 = self.fuzzer.fuzz_protocol_type("InitializeRequest", runs=5)
-        results2 = self.fuzzer.fuzz_protocol_type("ProgressNotification", runs=5)
+        results1 = self.fuzzer.fuzz_protocol_type_sync("InitializeRequest", runs=5)
+        results2 = self.fuzzer.fuzz_protocol_type_sync("ProgressNotification", runs=5)
 
         # Check that we get the expected number of results
         self.assertEqual(len(results1), 5)
@@ -223,17 +223,17 @@ class TestProtocolFuzzer(unittest.TestCase):
 
     def test_fuzz_protocol_type_zero_runs(self):
         """Test fuzzing with zero runs."""
-        results = self.fuzzer.fuzz_protocol_type("InitializeRequest", runs=0)
+        results = self.fuzzer.fuzz_protocol_type_sync("InitializeRequest", runs=0)
         self.assertEqual(len(results), 0)
 
     def test_fuzz_protocol_type_negative_runs(self):
         """Test fuzzing with negative runs."""
-        results = self.fuzzer.fuzz_protocol_type("InitializeRequest", runs=-1)
+        results = self.fuzzer.fuzz_protocol_type_sync("InitializeRequest", runs=-1)
         self.assertEqual(len(results), 0)
 
     def test_fuzz_all_protocol_types_zero_runs(self):
         """Test fuzzing all types with zero runs per type."""
-        results = self.fuzzer.fuzz_all_protocol_types(runs_per_type=0)
+        results = self.fuzzer.fuzz_all_protocol_types_sync(runs_per_type=0)
 
         # Should still return results for all types, but with empty lists
         expected_types = [
@@ -259,7 +259,7 @@ class TestProtocolFuzzer(unittest.TestCase):
 
     def test_fuzz_all_protocol_types_negative_runs(self):
         """Test fuzzing all types with negative runs per type."""
-        results = self.fuzzer.fuzz_all_protocol_types(runs_per_type=-1)
+        results = self.fuzzer.fuzz_all_protocol_types_sync(runs_per_type=-1)
 
         # Should still return results for all types, but with empty lists
         expected_types = [
@@ -304,7 +304,7 @@ class TestProtocolFuzzer(unittest.TestCase):
 
         for protocol_type in protocol_types:
             with self.subTest(protocol_type=protocol_type):
-                results = self.fuzzer.fuzz_protocol_type(protocol_type, runs=1)
+                results = self.fuzzer.fuzz_protocol_type_sync(protocol_type, runs=1)
 
                 # Test BEHAVIOR: fuzzer should return results for all known
                 # protocol types
@@ -330,13 +330,13 @@ class TestProtocolFuzzer(unittest.TestCase):
     def test_logging_integration(self):
         """Test that logging is properly integrated."""
         with patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging") as mock_logging:
-            self.fuzzer.fuzz_protocol_type("InitializeRequest", runs=1)
+            self.fuzzer.fuzz_protocol_type_sync("InitializeRequest", runs=1)
 
-            # Check that logging.info was called
-            mock_logging.info.assert_called()
+            # Check that logging.debug was called (sync version uses debug)
+            mock_logging.debug.assert_called()
 
             # Check that the log message contains expected information
-            call_args = mock_logging.info.call_args_list
+            call_args = mock_logging.debug.call_args_list
             found_initialize = False
             for call_args_tuple in call_args:
                 if "InitializeRequest" in str(call_args_tuple):
@@ -352,7 +352,7 @@ class TestProtocolFuzzer(unittest.TestCase):
         ) as mock_method:
             mock_method.return_value = lambda: {"test": "data"}
 
-            results = self.fuzzer.fuzz_protocol_type("TestType", runs=1)
+            results = self.fuzzer.fuzz_protocol_type_sync("TestType", runs=1)
 
             mock_method.assert_called_with("TestType")
             self.assertEqual(len(results), 1)

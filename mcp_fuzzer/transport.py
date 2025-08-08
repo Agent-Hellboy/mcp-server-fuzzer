@@ -210,7 +210,38 @@ class StdioTransport(TransportProtocol):
         logging.debug("Process stderr: %s", stderr_text)
 
         try:
-            data = json.loads(stdout_text)
+            # Handle multiple JSON objects in the response
+            # Split by newlines and try to parse each line as JSON
+            lines = stdout_text.strip().split("\n")
+            main_response = None
+
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    json_obj = json.loads(line)
+
+                    # Skip notification messages
+                    if json_obj.get("method") == "notifications/message":
+                        continue
+
+                    # Look for the main response (has "result" or "error" field)
+                    if "result" in json_obj or "error" in json_obj:
+                        main_response = json_obj
+                        break
+
+                except json.JSONDecodeError:
+                    # Skip lines that aren't valid JSON
+                    continue
+
+            if main_response is None:
+                # If no main response found, try to parse the entire output as one JSON
+                data = json.loads(stdout_text)
+            else:
+                data = main_response
+
             if "error" in data:
                 logging.error("Server returned error: %s", data["error"])
                 raise Exception(f"Server error: {data['error']}")
