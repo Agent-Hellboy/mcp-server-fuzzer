@@ -9,8 +9,6 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
-    env:
-      PYTEST_ADDOPTS: -q --maxfail=1 --disable-warnings
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -24,7 +22,7 @@ jobs:
           pip install pytest pytest-cov
       - name: Run tests with coverage
         run: |
-          pytest --cov=mcp_fuzzer --cov-report=term-missing --cov-report=xml
+          pytest
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:

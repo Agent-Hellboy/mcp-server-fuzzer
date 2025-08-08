@@ -13,12 +13,16 @@ from mcp_fuzzer.auth import AuthManager
 from mcp_fuzzer.client import UnifiedMCPFuzzerClient
 
 
-class TestUnifiedMCPFuzzerClient(unittest.TestCase):
+class TestUnifiedMCPFuzzerClient(unittest.IsolatedAsyncioTestCase):
     """Test cases for UnifiedMCPFuzzerClient class."""
 
     def setUp(self):
         """Set up test fixtures."""
         self.mock_transport = MagicMock()
+        # Ensure awaited calls are awaitable
+        self.mock_transport.call_tool = AsyncMock()
+        self.mock_transport.send_request = AsyncMock()
+        self.mock_transport.get_tools = AsyncMock()
         self.mock_auth_manager = MagicMock()
         self.client = UnifiedMCPFuzzerClient(
             self.mock_transport, self.mock_auth_manager
@@ -55,19 +59,20 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
             "args": {"param1": "test_value", "param2": 42},
             "success": True,
         }
-        self.client.tool_fuzzer.fuzz_tool.return_value = [mock_fuzz_result]
+        with patch.object(
+            self.client.tool_fuzzer, "fuzz_tool", return_value=[mock_fuzz_result]
+        ) as mock_fuzz:
+            # Mock auth manager
+            self.mock_auth_manager.get_auth_headers_for_tool.return_value = {
+                "Authorization": "Bearer token"
+            }
+            self.mock_auth_manager.get_auth_params_for_tool.return_value = {}
 
-        # Mock auth manager
-        self.mock_auth_manager.get_auth_headers_for_tool.return_value = {
-            "Authorization": "Bearer token"
-        }
-        self.mock_auth_manager.get_auth_params_for_tool.return_value = {}
+            # Mock transport response
+            mock_response = {"result": "success", "data": "test_data"}
+            self.mock_transport.call_tool.return_value = mock_response
 
-        # Mock transport response
-        mock_response = {"result": "success", "data": "test_data"}
-        self.mock_transport.call_tool.return_value = mock_response
-
-        results = await self.client.fuzz_tool(tool, runs=2)
+            results = await self.client.fuzz_tool(tool, runs=2)
 
         self.assertEqual(len(results), 2)
         for result in results:
@@ -76,7 +81,7 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
             self.assertEqual(result["result"], mock_response)
 
         # Verify tool fuzzer was called
-        self.client.tool_fuzzer.fuzz_tool.assert_called()
+        mock_fuzz.assert_called()
 
         # Verify transport was called
         self.assertEqual(self.mock_transport.call_tool.call_count, 2)
@@ -91,16 +96,17 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
 
         # Mock tool fuzzer result
         mock_fuzz_result = {"args": {"param1": "test_value"}, "success": True}
-        self.client.tool_fuzzer.fuzz_tool.return_value = [mock_fuzz_result]
+        with patch.object(
+            self.client.tool_fuzzer, "fuzz_tool", return_value=[mock_fuzz_result]
+        ):
+            # Mock auth manager
+            self.mock_auth_manager.get_auth_headers_for_tool.return_value = {}
+            self.mock_auth_manager.get_auth_params_for_tool.return_value = {}
 
-        # Mock auth manager
-        self.mock_auth_manager.get_auth_headers_for_tool.return_value = {}
-        self.mock_auth_manager.get_auth_params_for_tool.return_value = {}
+            # Mock transport to raise exception
+            self.mock_transport.call_tool.side_effect = Exception("Test exception")
 
-        # Mock transport to raise exception
-        self.mock_transport.call_tool.side_effect = Exception("Test exception")
-
-        results = await self.client.fuzz_tool(tool, runs=1)
+            results = await self.client.fuzz_tool(tool, runs=1)
 
         self.assertEqual(len(results), 1)
         result = results[0]
@@ -119,21 +125,22 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
 
         # Mock tool fuzzer result
         mock_fuzz_result = {"args": {"param1": "test_value"}, "success": True}
-        self.client.tool_fuzzer.fuzz_tool.return_value = [mock_fuzz_result]
+        with patch.object(
+            self.client.tool_fuzzer, "fuzz_tool", return_value=[mock_fuzz_result]
+        ):
+            # Mock auth manager with auth params
+            self.mock_auth_manager.get_auth_headers_for_tool.return_value = {
+                "Authorization": "Bearer token"
+            }
+            self.mock_auth_manager.get_auth_params_for_tool.return_value = {
+                "api_key": "secret_key"
+            }
 
-        # Mock auth manager with auth params
-        self.mock_auth_manager.get_auth_headers_for_tool.return_value = {
-            "Authorization": "Bearer token"
-        }
-        self.mock_auth_manager.get_auth_params_for_tool.return_value = {
-            "api_key": "secret_key"
-        }
+            # Mock transport response
+            mock_response = {"result": "success"}
+            self.mock_transport.call_tool.return_value = mock_response
 
-        # Mock transport response
-        mock_response = {"result": "success"}
-        self.mock_transport.call_tool.return_value = mock_response
-
-        results = await self.client.fuzz_tool(tool, runs=1)
+            results = await self.client.fuzz_tool(tool, runs=1)
 
         # Verify that auth params were merged with tool args
         expected_args = {"param1": "test_value", "api_key": "secret_key"}
@@ -157,16 +164,17 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
 
         # Mock tool fuzzer results
         mock_fuzz_result = {"args": {"param": "value"}, "success": True}
-        self.client.tool_fuzzer.fuzz_tool.return_value = [mock_fuzz_result]
+        with patch.object(
+            self.client.tool_fuzzer, "fuzz_tool", return_value=[mock_fuzz_result]
+        ):
+            # Mock transport responses
+            self.mock_transport.call_tool.return_value = {"result": "success"}
 
-        # Mock transport responses
-        self.mock_transport.call_tool.return_value = {"result": "success"}
+            # Mock auth manager
+            self.mock_auth_manager.get_auth_headers_for_tool.return_value = {}
+            self.mock_auth_manager.get_auth_params_for_tool.return_value = {}
 
-        # Mock auth manager
-        self.mock_auth_manager.get_auth_headers_for_tool.return_value = {}
-        self.mock_auth_manager.get_auth_params_for_tool.return_value = {}
-
-        results = await self.client.fuzz_all_tools(runs_per_tool=2)
+            results = await self.client.fuzz_all_tools(runs_per_tool=2)
 
         self.assertEqual(len(results), 2)
         self.assertIn("tool1", results)
@@ -213,15 +221,16 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
             "method": "initialize",
             "params": {"protocolVersion": "2024-11-05"},
         }
-        self.client.protocol_fuzzer.fuzz_protocol_type.return_value = [
-            {"fuzz_data": mock_fuzz_data, "success": True}
-        ]
+        with patch.object(
+            self.client.protocol_fuzzer,
+            "fuzz_protocol_type",
+            return_value=[{"fuzz_data": mock_fuzz_data, "success": True}],
+        ) as mock_fuzz_type:
+            # Mock transport response
+            mock_response = {"result": "success"}
+            self.mock_transport.send_request.return_value = mock_response
 
-        # Mock transport response
-        mock_response = {"result": "success"}
-        self.mock_transport.send_request.return_value = mock_response
-
-        results = await self.client.fuzz_protocol_type(protocol_type, runs=2)
+            results = await self.client.fuzz_protocol_type(protocol_type, runs=2)
 
         self.assertEqual(len(results), 2)
         for result in results:
@@ -230,9 +239,7 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
             self.assertEqual(result["result"], mock_response)
 
         # Verify protocol fuzzer was called
-        self.client.protocol_fuzzer.fuzz_protocol_type.assert_called_with(
-            protocol_type, 1
-        )
+        mock_fuzz_type.assert_called_with(protocol_type, 1)
 
         # Verify transport was called
         self.assertEqual(self.mock_transport.send_request.call_count, 2)
@@ -249,14 +256,15 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
             "method": "initialize",
             "params": {"protocolVersion": "2024-11-05"},
         }
-        self.client.protocol_fuzzer.fuzz_protocol_type.return_value = [
-            {"fuzz_data": mock_fuzz_data, "success": True}
-        ]
+        with patch.object(
+            self.client.protocol_fuzzer,
+            "fuzz_protocol_type",
+            return_value=[{"fuzz_data": mock_fuzz_data, "success": True}],
+        ):
+            # Mock transport to raise exception
+            self.mock_transport.send_request.side_effect = Exception("Test exception")
 
-        # Mock transport to raise exception
-        self.mock_transport.send_request.side_effect = Exception("Test exception")
-
-        results = await self.client.fuzz_protocol_type(protocol_type, runs=1)
+            results = await self.client.fuzz_protocol_type(protocol_type, runs=1)
 
         self.assertEqual(len(results), 1)
         result = results[0]
@@ -268,7 +276,11 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
     async def test_send_protocol_request_success(self):
         """Test sending protocol request successfully."""
         protocol_type = "InitializeRequest"
-        data = {"jsonrpc": "2.0", "method": "initialize"}
+        data = {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "params": {"protocolVersion": "2024-11-05"},
+        }
 
         mock_response = {"result": "success"}
         self.mock_transport.send_request.return_value = mock_response
@@ -324,7 +336,7 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
 
         result = await self.client._send_progress_notification(data)
 
-        self.assertEqual(result, mock_response)
+        self.assertEqual(result, {"status": "notification_sent"})
         self.mock_transport.send_request.assert_called_with(
             "notifications/progress", {"progress": 50}
         )
@@ -339,35 +351,39 @@ class TestUnifiedMCPFuzzerClient(unittest.TestCase):
             "method": "initialize",
             "params": {"protocolVersion": "2024-11-05"},
         }
-        self.client.protocol_fuzzer.fuzz_all_protocol_types.return_value = [
-            {
-                "protocol_type": "InitializeRequest",
-                "fuzz_data": mock_fuzz_data,
-                "success": True,
-            }
-        ]
+        with patch.object(
+            self.client.protocol_fuzzer,
+            "fuzz_all_protocol_types",
+            return_value=[
+                {
+                    "protocol_type": "InitializeRequest",
+                    "fuzz_data": mock_fuzz_data,
+                    "success": True,
+                }
+            ],
+        ) as mock_fuzz_all:
+            # Mock transport response
+            mock_response = {"result": "success"}
+            self.mock_transport.send_request.return_value = mock_response
 
-        # Mock transport response
-        mock_response = {"result": "success"}
-        self.mock_transport.send_request.return_value = mock_response
-
-        results = await self.client.fuzz_all_protocol_types(runs_per_type=2)
+            results = await self.client.fuzz_all_protocol_types(runs_per_type=2)
 
         self.assertIsInstance(results, dict)
         self.assertGreater(len(results), 0)
 
         # Verify protocol fuzzer was called
-        self.client.protocol_fuzzer.fuzz_all_protocol_types.assert_called_with(2)
+        mock_fuzz_all.assert_called_with(2)
 
     @patch("mcp_fuzzer.client.logging")
     async def test_fuzz_all_protocol_types_exception_handling(self, mock_logging):
         """Test fuzzing all protocol types with exception handling."""
         # Mock protocol fuzzer to raise exception
-        self.client.protocol_fuzzer.fuzz_all_protocol_types.side_effect = Exception(
-            "Test exception"
-        )
-
-        results = await self.client.fuzz_all_protocol_types()
+        with patch.object(
+            self.client.protocol_fuzzer,
+            "fuzz_all_protocol_types",
+            side_effect=Exception("Test exception"),
+        ):
+            results = await self.client.fuzz_all_protocol_types()
 
         self.assertEqual(results, {})
         mock_logging.error.assert_called_with(

@@ -281,50 +281,18 @@ class UnifiedMCPFuzzerClient:
     async def fuzz_all_protocol_types(
         self, runs_per_type: int = 5
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """Fuzz all protocol types."""
-        protocol_types = [
-            "InitializeRequest",
-            "ProgressNotification",
-            "CancelNotification",
-            "ListResourcesRequest",
-            "ReadResourceRequest",
-            "SetLevelRequest",
-            "GenericJSONRPCRequest",
-            "CreateMessageRequest",
-            "ListPromptsRequest",
-            "GetPromptRequest",
-            "ListRootsRequest",
-            "SubscribeRequest",
-            "UnsubscribeRequest",
-            "CompleteRequest",
-        ]
+        """Fuzz all protocol types using the ProtocolFuzzer and group results."""
+        try:
+            raw_results = self.protocol_fuzzer.fuzz_all_protocol_types(runs_per_type)
+        except Exception as e:
+            logging.error(f"Failed to fuzz all protocol types: {e}")
+            return {}
 
-        all_results = {}
-
-        for protocol_type in protocol_types:
-            logging.info(f"Starting to fuzz protocol type: {protocol_type}")
-
-            try:
-                results = await self.fuzz_protocol_type(protocol_type, runs_per_type)
-                all_results[protocol_type] = results
-
-                # Calculate statistics
-                successful = len([r for r in results if r.get("success", False)])
-                exceptions = len([r for r in results if not r.get("success", False)])
-
-                logging.info(
-                    "Completed fuzzing %s: %d successful, %d exceptions out of %d runs",
-                    protocol_type,
-                    successful,
-                    exceptions,
-                    runs_per_type,
-                )
-
-            except Exception as e:
-                logging.error(f"Failed to fuzz protocol type {protocol_type}: {e}")
-                all_results[protocol_type] = [{"error": str(e)}]
-
-        return all_results
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for item in raw_results or []:
+            protocol_type = item.get("protocol_type", "Unknown")
+            grouped.setdefault(protocol_type, []).append(item)
+        return grouped
 
     # ============================================================================
     # SUMMARY METHODS

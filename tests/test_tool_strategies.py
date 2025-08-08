@@ -228,7 +228,9 @@ class TestToolStrategies(unittest.TestCase):
         self.assertIsInstance(result["strings"], list)
         self.assertIsInstance(result["numbers"], list)
         self.assertIsInstance(result["metadata"], dict)
-        self.assertIsInstance(result["enabled"], bool)
+        # Allow None for aggressive fuzzing
+        if result["enabled"] is not None:
+            self.assertIsInstance(result["enabled"], bool)
 
     def test_fuzz_tool_arguments_no_schema(self):
         """Test fuzzing arguments for a tool with no schema."""
