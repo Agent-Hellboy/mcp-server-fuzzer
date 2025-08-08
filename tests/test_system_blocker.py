@@ -9,7 +9,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
+import shutil
 
 from mcp_fuzzer.system_blocker import (
     SystemCommandBlocker,
@@ -200,6 +201,197 @@ class TestSystemCommandBlocker(unittest.TestCase):
 
         # Test clearing operations when not started
         self.blocker.clear_blocked_operations()  # Should not raise exception
+
+    def test_block_command_edge_cases(self):
+        """Test block_command with edge cases."""
+        # Test with None
+        self.blocker.block_command(None)
+
+        # Test with empty string
+        self.blocker.block_command("")
+
+        # Test with whitespace
+        self.blocker.block_command("   ")
+
+    def test_is_command_blocked_edge_cases(self):
+        """Test is_command_blocked with edge cases."""
+        # Test with None
+        self.assertFalse(self.blocker.is_command_blocked(None))
+
+        # Test with empty string
+        self.assertFalse(self.blocker.is_command_blocked(""))
+
+        # Test with whitespace
+        self.assertFalse(self.blocker.is_command_blocked("   "))
+
+    def test_create_fake_executable_edge_cases(self):
+        """Test create_fake_executable with edge cases."""
+        # Set up temp directory first
+        self.blocker.temp_dir = Path("/tmp/test")
+
+        with patch("builtins.open", mock_open()) as mock_file:
+            with patch.object(Path, "chmod") as mock_chmod:
+                self.blocker.create_fake_executable("test_command")
+
+                mock_file.assert_called_once()
+                mock_chmod.assert_called_once()
+
+    def test_cleanup_edge_cases(self):
+        """Test cleanup with edge cases."""
+        # Test cleanup when directory doesn't exist
+        self.blocker.cleanup()
+
+        # Test cleanup when directory exists but is empty
+        # Set up a temp_dir for the test
+        self.blocker.temp_dir = Path("/tmp/test")
+        with patch.object(Path, "exists", return_value=True):
+            with patch("os.listdir", return_value=[]):
+                with patch("shutil.rmtree") as mock_rmtree:
+                    self.blocker.cleanup()
+                    mock_rmtree.assert_called_once()
+
+    def test_cleanup_with_files(self):
+        """Test cleanup when directory has files."""
+        # Set up created_files for the test
+        self.blocker.temp_dir = Path("/tmp/test")
+        self.blocker.created_files = [Path("/tmp/test/file1"), Path("/tmp/test/file2")]
+
+        with patch.object(Path, "exists", return_value=True):
+            with patch.object(Path, "unlink") as mock_unlink:
+                with patch("shutil.rmtree") as mock_rmtree:
+                    self.blocker.cleanup()
+
+                    # Should remove files first
+                    self.assertEqual(mock_unlink.call_count, 2)
+                    # Then remove directory
+                    mock_rmtree.assert_called_once()
+
+    def test_cleanup_remove_error(self):
+        """Test cleanup when file removal fails."""
+        # Set up a temp_dir for the test
+        self.blocker.temp_dir = Path("/tmp/test")
+        with patch.object(Path, "exists", return_value=True):
+            with patch("os.listdir", return_value=["file1"]):
+                with patch("os.remove", side_effect=OSError("Permission denied")):
+                    with patch("shutil.rmtree") as mock_rmtree:
+                        # Should continue even if file removal fails
+                        self.blocker.cleanup()
+                        mock_rmtree.assert_called_once()
+
+    def test_cleanup_rmdir_error(self):
+        """Test cleanup when directory removal fails."""
+        # Set up a temp_dir for the test
+        self.blocker.temp_dir = Path("/tmp/test")
+        with patch.object(Path, "exists", return_value=True):
+            with patch("os.listdir", return_value=[]):
+                with patch("shutil.rmtree", side_effect=OSError("Directory not empty")):
+                    # Should not raise exception
+                    self.blocker.cleanup()
+
+    def test_start_blocking_temp_dir_creation_error(self):
+        """Test start_blocking when temp directory creation fails."""
+        with patch("tempfile.mkdtemp", side_effect=OSError("Permission denied")):
+            # Should not raise exception, just log the error
+            self.blocker.start_blocking()
+            # Verify that blocking is not active when setup fails
+            self.assertFalse(self.blocker.is_blocking_active())
+
+    def test_start_blocking_path_modification_error(self):
+        """Test start_blocking when PATH modification fails."""
+        with patch("tempfile.mkdtemp", return_value="/tmp/test"):
+            with patch.object(
+                self.blocker,
+                "_create_fake_executables",
+                side_effect=Exception("PATH error"),
+            ):
+                # Should not raise exception, just log the error
+                self.blocker.start_blocking()
+                # Verify that blocking is not active when setup fails
+                self.assertFalse(self.blocker.is_blocking_active())
+
+    def test_create_fake_executable_error(self):
+        """Test create_fake_executable when file creation fails."""
+        # Set up temp directory first
+        self.blocker.temp_dir = Path("/tmp/test")
+
+        with patch("builtins.open", side_effect=OSError("Permission denied")):
+            # Should not raise exception, just log the error
+            self.blocker.create_fake_executable("test_command")
+
+    def test_create_fake_executable_chmod_error(self):
+        """Test create_fake_executable when chmod fails."""
+        # Set up temp directory first
+        self.blocker.temp_dir = Path("/tmp/test")
+
+        with patch("builtins.open", mock_open()):
+            with patch("os.chmod", side_effect=OSError("Permission denied")):
+                # Should not raise exception, just log the error
+                self.blocker.create_fake_executable("test_command")
+
+    def test_stop_blocking_not_active(self):
+        """Test stop_blocking when blocking is not active."""
+        # Should not raise exception
+        self.blocker.stop_blocking()
+
+    def test_stop_blocking_cleanup_error(self):
+        """Test stop_blocking when cleanup fails."""
+        self.blocker.start_blocking()
+
+        with patch("shutil.rmtree", side_effect=Exception("Cleanup failed")):
+            # Should not raise exception, just log the error
+            self.blocker.stop_blocking()
+            # Verify that blocking is stopped even if cleanup fails
+            self.assertFalse(self.blocker.is_blocking_active())
+
+    def test_get_blocked_operations_log_empty(self):
+        """Test get_blocked_operations_log when log is empty."""
+        log = self.blocker.get_blocked_operations_log()
+        self.assertEqual(log, [])
+
+    def test_get_blocked_operations_log_with_entries(self):
+        """Test get_blocked_operations_log with entries."""
+        # Set up temp directory and create log entries
+        self.blocker.temp_dir = Path("/tmp/test")
+        self.blocker.temp_dir.mkdir(exist_ok=True)
+
+        # Create a log file with some entries
+        log_file = self.blocker.temp_dir / "blocked_operations.log"
+        log_entries = [
+            {"command": "test_command", "args": [], "timestamp": "2023-01-01T00:00:00"},
+            {
+                "command": "another_command",
+                "args": ["arg1"],
+                "timestamp": "2023-01-01T00:01:00",
+            },
+        ]
+
+        with open(log_file, "w") as f:
+            for entry in log_entries:
+                f.write(json.dumps(entry) + "\n")
+
+        log = self.blocker.get_blocked_operations_log()
+        self.assertEqual(len(log), 2)
+        self.assertEqual(log[0]["command"], "test_command")
+        self.assertEqual(log[1]["command"], "another_command")
+
+        # Clean up
+        if log_file.exists():
+            log_file.unlink()
+        if self.blocker.temp_dir.exists():
+            shutil.rmtree(self.blocker.temp_dir)
+
+    def test_is_blocking_active(self):
+        """Test is_blocking_active."""
+        # Initially not active
+        self.assertFalse(self.blocker.is_blocking_active())
+
+        # Start blocking
+        self.blocker.start_blocking()
+        self.assertTrue(self.blocker.is_blocking_active())
+
+        # Stop blocking
+        self.blocker.stop_blocking()
+        self.assertFalse(self.blocker.is_blocking_active())
 
 
 class TestGlobalFunctions(unittest.TestCase):
