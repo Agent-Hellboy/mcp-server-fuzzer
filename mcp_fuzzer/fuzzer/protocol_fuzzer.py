@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from ..strategy.protocol_strategies import ProtocolStrategies
+from ..strategy import ProtocolStrategies
 
 
 class ProtocolFuzzer:
@@ -25,9 +25,9 @@ class ProtocolFuzzer:
         return self.request_id_counter
 
     def fuzz_protocol_type(
-        self, protocol_type: str, runs: int = 10
+        self, protocol_type: str, runs: int = 10, phase: str = "aggressive"
     ) -> List[Dict[str, Any]]:
-        """Fuzz a specific protocol type."""
+        """Fuzz a specific protocol type with specified phase."""
         results = []
 
         # Get the fuzzer method for this protocol type
@@ -39,13 +39,20 @@ class ProtocolFuzzer:
 
         for i in range(runs):
             try:
-                # Generate fuzz data using the strategy
-                fuzz_data = fuzzer_method()
+                # Generate fuzz data using the strategy with phase
+                if (
+                    hasattr(fuzzer_method, "__code__")
+                    and "phase" in fuzzer_method.__code__.co_varnames
+                ):
+                    fuzz_data = fuzzer_method(phase=phase)
+                else:
+                    fuzz_data = fuzzer_method()
 
                 preview = json.dumps(fuzz_data, indent=2)[:200]
                 logging.info(
-                    "Fuzzing %s (run %d/%d) with data: %s...",
+                    "Fuzzing %s (%s phase, run %d/%d) with data: %s...",
                     protocol_type,
+                    phase,
                     i + 1,
                     runs,
                     preview,
@@ -74,8 +81,30 @@ class ProtocolFuzzer:
 
         return results
 
+    def fuzz_protocol_type_both_phases(
+        self, protocol_type: str, runs_per_phase: int = 5
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Fuzz a protocol type in both realistic and aggressive phases."""
+        results = {}
+
+        logging.info(f"Running two-phase fuzzing for {protocol_type}")
+
+        # Phase 1: Realistic fuzzing
+        logging.info(f"Phase 1: Realistic fuzzing for {protocol_type}")
+        results["realistic"] = self.fuzz_protocol_type(
+            protocol_type, runs=runs_per_phase, phase="realistic"
+        )
+
+        # Phase 2: Aggressive fuzzing
+        logging.info(f"Phase 2: Aggressive fuzzing for {protocol_type}")
+        results["aggressive"] = self.fuzz_protocol_type(
+            protocol_type, runs=runs_per_phase, phase="aggressive"
+        )
+
+        return results
+
     def fuzz_all_protocol_types(
-        self, runs_per_type: int = 5
+        self, runs_per_type: int = 5, phase: str = "aggressive"
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Fuzz all protocol types."""
         protocol_types = [
@@ -101,7 +130,7 @@ class ProtocolFuzzer:
             logging.info(f"Starting to fuzz protocol type: {protocol_type}")
 
             try:
-                results = self.fuzz_protocol_type(protocol_type, runs_per_type)
+                results = self.fuzz_protocol_type(protocol_type, runs_per_type, phase)
                 all_results[protocol_type] = results
 
                 # Calculate statistics

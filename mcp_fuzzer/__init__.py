@@ -9,8 +9,7 @@ from .client import UnifiedMCPFuzzerClient
 from .client import main as unified_client_main
 from .fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzzer.tool_fuzzer import ToolFuzzer
-from .strategy.protocol_strategies import ProtocolStrategies
-from .strategy.tool_strategies import ToolStrategies
+from .strategy import ProtocolStrategies, ToolStrategies
 
 __version__ = "0.1.4"
 __all__ = [

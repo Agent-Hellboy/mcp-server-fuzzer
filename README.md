@@ -12,14 +12,30 @@ If your server conforms to the [2024-11-05 MCP schema](https://github.com/modelc
 
 ## Features
 
-### Tool Fuzzer
+### 🎯 Two-Phase Fuzzing Approach
+
+MCP Fuzzer uses a sophisticated **two-phase approach** for comprehensive testing:
+
+#### Phase 1: Realistic Fuzzing
+- **Purpose**: Test server behavior with **valid, realistic data**
+- **Data Types**: Valid Base64 strings, proper UUIDs, ISO-8601 timestamps, semantic versions
+- **Goals**: Verify correct functionality, find logic bugs, test performance with expected inputs
+- **Examples**: `{"version": "2024-11-05", "id": "550e8400-e29b-41d4-a716-446655440000"}`
+
+#### Phase 2: Aggressive Fuzzing
+- **Purpose**: Test server security and robustness with **malicious/malformed data**
+- **Attack Vectors**: SQL injection, XSS, path traversal, buffer overflows, null bytes
+- **Goals**: Find security vulnerabilities, crash conditions, input validation failures
+- **Examples**: `{"version": "' OR 1=1; --", "id": "<script>alert('xss')</script>"}`
+
+### Core Capabilities
 - **Multi-Protocol Support**: HTTP, SSE, Stdio, and WebSocket transports
 - **Tool Discovery**: Automatically discovers available tools from MCP servers
-- **Intelligent Fuzzing**: Uses Hypothesis to generate random/edge-case arguments
+- **Intelligent Fuzzing**: Uses Hypothesis + custom strategies for realistic and aggressive data
 - **Authentication Support**: Handle API keys, OAuth tokens, basic auth, and custom headers
-- **Rich Reporting**: Beautiful terminal tables with detailed statistics
+- **Rich Reporting**: Beautiful terminal tables with separate phase statistics
 - **Protocol Flexibility**: Easy to add new transport protocols
-- **Comprehensive Protocol Coverage**: Fuzzes all MCP protocol types
+- **Comprehensive Protocol Coverage**: Fuzzes all MCP protocol types in both phases
 - **Edge Case Generation**: Tests malformed requests, invalid parameters, and boundary conditions
 - **Protocol-Specific Strategies**: Tailored fuzzing for each MCP message type
 - **State-Aware Testing**: Tests protocol flow and state transitions
@@ -73,23 +89,45 @@ pip install mcp-fuzzer
 
 ## Usage
 
-### Tool Fuzzer
+### 🎯 Two-Phase Fuzzing
 
-Fuzz tool arguments and parameters:
+Choose your fuzzing approach based on what you want to test:
 
 ```bash
-# Basic tool fuzzing
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+# Realistic Phase - Test with valid data (should work)
+mcp-fuzzer --mode both --phase realistic --protocol http --endpoint http://localhost:8000/mcp/
 
-# With verbose output
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --verbose
+# Aggressive Phase - Test with attack data (should be rejected)
+mcp-fuzzer --mode both --phase aggressive --protocol http --endpoint http://localhost:8000/mcp/
+
+# Two-Phase - Run both phases for comprehensive testing
+mcp-fuzzer --mode both --phase both --protocol http --endpoint http://localhost:8000/mcp/
 ```
 
-Fuzz MCP protocol types and messages:
+### Tool Fuzzing
 
 ```bash
-# Fuzz all protocol types
+# Basic tool fuzzing (aggressive by default)
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+
+# Realistic tool fuzzing - test with valid arguments
+mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint http://localhost:8000/mcp/
+
+# Two-phase tool fuzzing
+mcp-fuzzer --mode tools --phase both --protocol http --endpoint http://localhost:8000/mcp/
+```
+
+### Protocol Fuzzing
+
+```bash
+# Basic protocol fuzzing (aggressive by default)
 mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 5
+
+# Realistic protocol fuzzing - test with valid MCP messages
+mcp-fuzzer --mode protocol --phase realistic --protocol http --endpoint http://localhost:8000/mcp/
+
+# Two-phase protocol fuzzing
+mcp-fuzzer --mode protocol --phase both --protocol http --endpoint http://localhost:8000/mcp/
 
 # Fuzz specific protocol type
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000/mcp/

@@ -121,6 +121,56 @@ class UnifiedMCPFuzzerClient:
 
         return all_results
 
+    async def fuzz_all_tools_both_phases(
+        self, runs_per_phase: int = 5
+    ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+        """Fuzz all tools in both realistic and aggressive phases."""
+        self.console.print(
+            "\n[bold blue]🚀 Starting Two-Phase Tool Fuzzing[/bold blue]"
+        )
+
+        try:
+            tools = await self.transport.get_tools()
+            if not tools:
+                self.console.print("[yellow]⚠️  No tools available for fuzzing[/yellow]")
+                return {}
+
+            all_results = {}
+            tool_fuzzer = ToolFuzzer()
+
+            for tool in tools:
+                tool_name = tool.get("name", "unknown")
+                self.console.print(
+                    f"\n[cyan]🔧 Two-phase fuzzing tool: {tool_name}[/cyan]"
+                )
+
+                try:
+                    # Run both phases for this tool
+                    phase_results = tool_fuzzer.fuzz_tool_both_phases(
+                        tool, runs_per_phase
+                    )
+                    all_results[tool_name] = phase_results
+
+                    # Report phase statistics
+                    for phase, results in phase_results.items():
+                        successful = len(
+                            [r for r in results if r.get("success", False)]
+                        )
+                        total = len(results)
+                        self.console.print(
+                            f"  {phase.title()} phase: {successful}/{total} successful"
+                        )
+
+                except Exception as e:
+                    logging.error(f"Error in two-phase fuzzing {tool_name}: {e}")
+                    all_results[tool_name] = {"error": str(e)}
+
+            return all_results
+
+        except Exception as e:
+            logging.error(f"Failed to fuzz all tools (two-phase): {e}")
+            return {}
+
     # ============================================================================
     # PROTOCOL FUZZING METHODS
     # ============================================================================
