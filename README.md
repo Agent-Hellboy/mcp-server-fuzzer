@@ -40,6 +40,8 @@ MCP Fuzzer uses a sophisticated **two-phase approach** for comprehensive testing
 - **Protocol-Specific Strategies**: Tailored fuzzing for each MCP message type
 - **State-Aware Testing**: Tests protocol flow and state transitions
 - **Security Testing**: Path traversal, injection attacks, and malformed data
+- **Safety System (Guaranteed No External Launches)**: Argument-level sanitization blocks URLs and dangerous commands; system-level command blocking prevents opening browsers or launching apps during fuzzing; results include safety metadata and a post-run summary of blocked operations
+
 
 ## Architecture
 
@@ -64,25 +66,29 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 ### Architecture Flow
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Client CLI    │───▶│  Transport      │───▶│  MCP Server     │
-│   (--phase)     │       Layer          │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │
-         ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐
-│   Fuzzer        │    │   Strategy      │
-│   Orchestration │◄───┤   Manager       │
-│   (fuzzer/)     │    │                 │
-└─────────────────┘    └─────────────────┘
-                                │
-                ┌───────────────┴───────────────┐
-                ▼                               ▼
-      ┌─────────────────┐               ┌─────────────────┐
-      │   Realistic     │               │   Aggressive    │
-      │   Strategies    │               │   Strategies    │
-      │   (realistic/)  │               │   (aggressive/) │
-      └─────────────────┘               └─────────────────┘
+┌───────────────────┐     ┌────────────────────┐     ┌────────────────┐
+│      CLI          │ ───▶│  Unified Client    │────▶│  Transport     │
+│  (`mcp_fuzzer/`)  │     │ (`client.py`)      │     │ (HTTP/SSE/WS/  │
+│  - args, auth     │     │  - start/stop      │     │   Stdio)       │
+└───────────────────┘     │    system blocker  │     └───────┬────────┘
+                          │  - tool/protocol    │             │
+                          │    orchestration    │             │ JSON-RPC
+                          └─────────┬───────────┘             │
+                                    │                         ▼
+                         ┌───────────▼──────────┐     ┌─────────────────┐
+                         │  Safety Filter       │     │   MCP Server     │
+                         │ (`safety.py`)        │     │  Under Test      │
+                         │ - block/sanitize     │     └─────────────────┘
+                         │ - add safety _meta   │
+                         └───────────┬──────────┘
+                                     │
+                         ┌───────────▼──────────┐
+                         │ System Command       │
+                         │   Blocker            │
+                         │ (`system_blocker.py`)│
+                         │ - PATH shim + fakes  │
+                         │ - log blocked ops    │
+                         └──────────────────────┘
 ```
 
 ### Key Benefits

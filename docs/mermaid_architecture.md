@@ -4,27 +4,32 @@
 
 ```mermaid
 graph TD
-    A[User CLI<br/>__main__.py] --> B[Unified Client<br/>client.py]
+    A[User CLI<br/>__main__.py / cli.py] --> B[Unified Client<br/>client.py]
     B --> C[Tool Fuzzer<br/>fuzzer/tool_fuzzer.py]
     B --> D[Protocol Fuzzer<br/>fuzzer/protocol_fuzzer.py]
 
-    C --> E[Tool Strategies<br/>strategy/tool_strategies.py]
-    D --> F[Protocol Strategies<br/>strategy/protocol_strategies.py]
+    C --> E[Strategy Manager<br/>strategy/strategy_manager.py]
+    D --> E
 
     E --> G[Transport Layer<br/>transport.py]
-    F --> G
+
+    subgraph Safety
+      SF[Safety Filter<br/>safety.py]
+      SB[System Command Blocker<br/>system_blocker.py]
+    end
+
+    B -. start/stop .-> SB
+    G -. sanitize/block .-> SF
 
     G --> H[HTTP Transport]
     G --> I[SSE Transport]
     G --> J[Stdio Transport]
     G --> K[WebSocket Transport]
-    G --> L[Custom Transport]
 
     H --> M[MCP Server]
     I --> M
     J --> M
     K --> M
-    L --> M
 
     M --> N[Results]
     N --> O[Rich Output Tables]
@@ -34,8 +39,9 @@ graph TD
     style C fill:#e8f5e8
     style D fill:#fff3e0
     style E fill:#e8f5e8
-    style F fill:#fff3e0
     style G fill:#fce4ec
+    style SF fill:#ffe0e0
+    style SB fill:#ffe0e0
     style O fill:#e8f5e8
 ```
 
@@ -44,7 +50,7 @@ graph TD
 ```mermaid
 graph LR
     subgraph "Client Layer"
-        A[__main__.py<br/>CLI Entry Point]
+        A[__main__.py / cli.py<br/>CLI Entry Point]
         B[client.py<br/>Unified Orchestration]
     end
 
@@ -54,8 +60,14 @@ graph LR
     end
 
     subgraph "Strategy Data Generation"
-        E[tool_strategies.py<br/>Tool Argument Generation]
-        F[protocol_strategies.py<br/>Protocol Message Generation]
+        E[strategy_manager.py<br/>Dispatch (realistic/aggressive)]
+        ER[realistic/*]
+        EA[aggressive/*]
+    end
+
+    subgraph "Safety"
+        SF[safety.py<br/>Argument-level safety]
+        SB[system_blocker.py<br/>System-level blocking]
     end
 
     subgraph "Transport Layer"
@@ -64,21 +76,22 @@ graph LR
         I[SSETransport]
         J[StdioTransport]
         K[WebSocketTransport]
-        L[Custom Transports]
     end
 
     A --> B
     B --> C
     B --> D
     C --> E
-    D --> F
+    D --> E
+    E --> ER
+    E --> EA
     E --> G
-    F --> G
+    G --> SF
+    B --> SB
     G --> H
     G --> I
     G --> J
     G --> K
-    G --> L
 ```
 
 ## Data Flow Sequence
@@ -87,44 +100,46 @@ graph LR
 sequenceDiagram
     participant U as User CLI
     participant C as Client
+    participant SB as System Blocker
+    participant SF as Safety Filter
     participant TF as Tool Fuzzer
     participant PF as Protocol Fuzzer
-    participant TS as Tool Strategies
-    participant PS as Protocol Strategies
+    participant SM as Strategy Manager
     participant T as Transport
     participant S as MCP Server
 
     U->>C: Parse args & create transport
-    C->>T: Initialize transport
+    C->>SB: start_system_blocking()
 
     alt Tool Fuzzing Mode
-        C->>T: Get tools list
+        C->>T: tools/list
         T->>S: JSON-RPC request
         S-->>T: Tools list
         T-->>C: Tools list
 
         loop For each tool
-            C->>TF: Fuzz tool
-            TF->>TS: Generate fuzz args
-            TS-->>TF: Random/edge-case args
-            TF->>C: Fuzz data
-            C->>T: Call tool with args
+            C->>TF: fuzz_tool
+            TF->>SM: generate args (phase)
+            SM-->>TF: fuzzed args
+            C->>SF: is_safe_tool_call / sanitize_tool_call
+            SF-->>C: safe args or safety response
+            C->>T: tools/call
             T->>S: JSON-RPC request
             S-->>T: Response
             T-->>C: Response
         end
     else Protocol Fuzzing Mode
-        C->>PF: Fuzz protocol types
-        PF->>PS: Generate protocol messages
-        PS-->>PF: Fuzz data
-        PF->>C: Protocol fuzz data
-        C->>T: Send protocol request
+        C->>PF: fuzz_protocol_types
+        PF->>SM: generate protocol messages (phase)
+        SM-->>PF: fuzz data
+        C->>T: send_request
         T->>S: JSON-RPC request
         S-->>T: Response
         T-->>C: Response
     end
 
-    C->>U: Display rich results table
+    C->>SB: stop_system_blocking()
+    C->>U: Display rich results & blocked-ops summary
 ```
 
 ## Custom Transport Integration
