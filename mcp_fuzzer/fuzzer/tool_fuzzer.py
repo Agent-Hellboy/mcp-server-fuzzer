@@ -8,6 +8,11 @@ This module contains the orchestration logic for fuzzing MCP tools.
 import logging
 from typing import Any, Dict, List
 
+from ..safety import (
+    safety_filter,
+    is_safe_tool_call,
+    sanitize_tool_call,
+)
 from ..strategy import ToolStrategies
 
 
@@ -27,19 +32,43 @@ class ToolFuzzer:
             try:
                 # Generate fuzz arguments using the strategy with phase
                 args = self.strategies.fuzz_tool_arguments(tool, phase=phase)
-
                 tool_name = tool.get("name", "unknown")
+
+                # Apply safety filtering
+                if not is_safe_tool_call(tool_name, args):
+                    safety_filter.log_blocked_operation(
+                        tool_name, args, "Dangerous operation detected"
+                    )
+                    results.append(
+                        {
+                            "tool_name": tool_name,
+                            "run": i + 1,
+                            "args": args,
+                            "success": False,
+                            "safety_blocked": True,
+                            "safety_reason": "Dangerous operation blocked",
+                        }
+                    )
+                    continue
+
+                # Sanitize arguments
+                sanitized_tool_name, sanitized_args = sanitize_tool_call(
+                    tool_name, args
+                )
+
                 logging.info(
                     f"Fuzzing {tool_name} ({phase} phase, run {i + 1}/{runs}) "
-                    f"with args: {args}"
+                    f"with args: {sanitized_args}"
                 )
 
                 results.append(
                     {
                         "tool_name": tool_name,
                         "run": i + 1,
-                        "args": args,
+                        "args": sanitized_args,
+                        "original_args": args if args != sanitized_args else None,
                         "success": True,
+                        "safety_sanitized": args != sanitized_args,
                     }
                 )
 

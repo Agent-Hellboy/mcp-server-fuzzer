@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 import websockets
 
+from .safety import safety_filter, is_safe_tool_call, create_safety_response
+
 
 class TransportProtocol(ABC):
     """Abstract base class for transport protocols."""
@@ -53,6 +55,13 @@ class TransportProtocol(ABC):
 
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         """Call a specific tool with arguments."""
+        # Apply safety filtering
+        if not is_safe_tool_call(tool_name, arguments):
+            safety_filter.log_blocked_operation(
+                tool_name, arguments, "Dangerous tool call blocked in transport"
+            )
+            return create_safety_response(tool_name)
+
         params = {"name": tool_name, "arguments": arguments}
         return await self.send_request("tools/call", params)
 
