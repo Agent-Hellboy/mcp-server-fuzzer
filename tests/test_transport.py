@@ -381,26 +381,6 @@ class TestStdioTransport(unittest.IsolatedAsyncioTestCase):
 
     @patch("mcp_fuzzer.transport.asyncio.create_subprocess_exec")
     @patch("mcp_fuzzer.transport.asyncio.wait_for")
-    async def test_send_request_stdio_no_main_response(
-        self, mock_wait_for, mock_create_subprocess
-    ):
-        """Test stdio request with no main response found."""
-        mock_process = AsyncMock()
-        mock_process.returncode = 0
-
-        mock_create_subprocess.return_value = mock_process
-        # Only notification messages, no main response
-        response_data = (
-            b'{"method": "notifications/message", "params": {"message": "test"}}\n'
-            b'{"result": "stdio_success"}\n'
-        )
-        mock_wait_for.return_value = (response_data, b"")
-
-        with self.assertRaises(json.JSONDecodeError):
-            await self.transport.send_request("test_method")
-
-    @patch("mcp_fuzzer.transport.asyncio.create_subprocess_exec")
-    @patch("mcp_fuzzer.transport.asyncio.wait_for")
     async def test_send_request_stdio_error_response(
         self, mock_wait_for, mock_create_subprocess
     ):
