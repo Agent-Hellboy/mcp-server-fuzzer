@@ -224,6 +224,7 @@ class TestUnifiedMCPFuzzerClient(unittest.IsolatedAsyncioTestCase):
         with patch.object(
             self.client.protocol_fuzzer,
             "fuzz_protocol_type",
+            new_callable=AsyncMock,
             return_value=[{"fuzz_data": mock_fuzz_data, "success": True}],
         ) as mock_fuzz_type:
             # Mock transport response
@@ -259,8 +260,9 @@ class TestUnifiedMCPFuzzerClient(unittest.IsolatedAsyncioTestCase):
         with patch.object(
             self.client.protocol_fuzzer,
             "fuzz_protocol_type",
+            new_callable=AsyncMock,
             return_value=[{"fuzz_data": mock_fuzz_data, "success": True}],
-        ):
+        ) as mock_fuzz:
             # Mock transport to raise exception
             self.mock_transport.send_request.side_effect = Exception("Test exception")
 
@@ -354,13 +356,15 @@ class TestUnifiedMCPFuzzerClient(unittest.IsolatedAsyncioTestCase):
         with patch.object(
             self.client.protocol_fuzzer,
             "fuzz_all_protocol_types",
-            return_value=[
-                {
-                    "protocol_type": "InitializeRequest",
-                    "fuzz_data": mock_fuzz_data,
-                    "success": True,
-                }
-            ],
+            return_value={
+                "InitializeRequest": [
+                    {
+                        "protocol_type": "InitializeRequest",
+                        "fuzz_data": mock_fuzz_data,
+                        "success": True,
+                    }
+                ]
+            },
         ) as mock_fuzz_all:
             # Mock transport response
             mock_response = {"result": "success"}

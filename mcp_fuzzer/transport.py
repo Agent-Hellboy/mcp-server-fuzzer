@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 import websockets
 
+from .safety import safety_filter, is_safe_tool_call, create_safety_response
+
 
 class TransportProtocol(ABC):
     """Abstract base class for transport protocols."""
@@ -53,6 +55,13 @@ class TransportProtocol(ABC):
 
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         """Call a specific tool with arguments."""
+        # Apply safety filtering
+        if not is_safe_tool_call(tool_name, arguments):
+            safety_filter.log_blocked_operation(
+                tool_name, arguments, "Dangerous tool call blocked in transport"
+            )
+            return create_safety_response(tool_name)
+
         params = {"name": tool_name, "arguments": arguments}
         return await self.send_request("tools/call", params)
 
@@ -210,7 +219,38 @@ class StdioTransport(TransportProtocol):
         logging.debug("Process stderr: %s", stderr_text)
 
         try:
-            data = json.loads(stdout_text)
+            # Handle multiple JSON objects in the response
+            # Split by newlines and try to parse each line as JSON
+            lines = stdout_text.strip().split("\n")
+            main_response = None
+
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    json_obj = json.loads(line)
+
+                    # Skip notification messages
+                    if json_obj.get("method") == "notifications/message":
+                        continue
+
+                    # Look for the main response (has "result" or "error" field)
+                    if "result" in json_obj or "error" in json_obj:
+                        main_response = json_obj
+                        break
+
+                except json.JSONDecodeError:
+                    # Skip lines that aren't valid JSON
+                    continue
+
+            if main_response is None:
+                # If no main response found, try to parse the entire output as one JSON
+                data = json.loads(stdout_text)
+            else:
+                data = main_response
+
             if "error" in data:
                 logging.error("Server returned error: %s", data["error"])
                 raise Exception(f"Server error: {data['error']}")

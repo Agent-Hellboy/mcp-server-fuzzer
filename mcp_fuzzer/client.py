@@ -19,6 +19,11 @@ from rich.table import Table
 from .auth import AuthManager, load_auth_config, setup_auth_from_env
 from .fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzzer.tool_fuzzer import ToolFuzzer
+from .system_blocker import (
+    start_system_blocking,
+    stop_system_blocking,
+    get_blocked_operations,
+)
 from .transport import create_transport
 
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +35,7 @@ class UnifiedMCPFuzzerClient:
     def __init__(self, transport, auth_manager: Optional[AuthManager] = None):
         self.transport = transport
         self.tool_fuzzer = ToolFuzzer()
-        self.protocol_fuzzer = ProtocolFuzzer()
+        self.protocol_fuzzer = ProtocolFuzzer(transport)  # Pass transport
         self.console = Console()
         self.auth_manager = auth_manager or AuthManager()
 
@@ -184,7 +189,9 @@ class UnifiedMCPFuzzerClient:
         for i in range(runs):
             try:
                 # Generate fuzz data using the fuzzer
-                fuzz_results = self.protocol_fuzzer.fuzz_protocol_type(protocol_type, 1)
+                fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
+                    protocol_type, 1
+                )
                 fuzz_data = fuzz_results[0]["fuzz_data"]
 
                 preview = json.dumps(fuzz_data, indent=2)[:200]
@@ -333,16 +340,11 @@ class UnifiedMCPFuzzerClient:
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Fuzz all protocol types using the ProtocolFuzzer and group results."""
         try:
-            raw_results = self.protocol_fuzzer.fuzz_all_protocol_types(runs_per_type)
+            # The protocol fuzzer now actually sends requests to the server
+            return await self.protocol_fuzzer.fuzz_all_protocol_types(runs_per_type)
         except Exception as e:
             logging.error(f"Failed to fuzz all protocol types: {e}")
             return {}
-
-        grouped: Dict[str, List[Dict[str, Any]]] = {}
-        for item in raw_results or []:
-            protocol_type = item.get("protocol_type", "Unknown")
-            grouped.setdefault(protocol_type, []).append(item)
-        return grouped
 
     # ============================================================================
     # SUMMARY METHODS
@@ -354,19 +356,21 @@ class UnifiedMCPFuzzerClient:
         table.add_column("Tool", style="cyan", no_wrap=True)
         table.add_column("Total Runs", justify="right")
         table.add_column("Exceptions", justify="right")
+        table.add_column("Safety Blocked", justify="right", style="yellow")
         table.add_column("Success Rate", justify="right")
         table.add_column("Example Exception", style="red")
-        table.add_column("Error", style="magenta")
+        table.add_column("Safety Info", style="yellow")
 
         for tool_name, tool_results in results.items():
             if not tool_results:
-                table.add_row(tool_name, "0", "0", "0%", "", "")
+                table.add_row(tool_name, "0", "0", "0", "0%", "", "")
                 continue
 
             # Check if there's a general error
             if len(tool_results) == 1 and "error" in tool_results[0]:
                 table.add_row(
                     tool_name,
+                    "0",
                     "0",
                     "0",
                     "0%",
@@ -381,6 +385,9 @@ class UnifiedMCPFuzzerClient:
 
             total_runs = len(tool_results)
             exceptions = len([r for r in tool_results if "exception" in r])
+            safety_blocked = len(
+                [r for r in tool_results if r.get("safety_blocked", False)]
+            )
             successful = total_runs - exceptions
             success_rate = (successful / total_runs * 100) if total_runs > 0 else 0
 
@@ -392,13 +399,23 @@ class UnifiedMCPFuzzerClient:
                     example_exception = ex[:50] + "..." if len(ex) > 50 else ex
                     break
 
+            # Safety information
+            safety_info = ""
+            if safety_blocked > 0:
+                safety_info = f"🛡️ Blocked {safety_blocked}"
+            elif any(r.get("safety_sanitized", False) for r in tool_results):
+                safety_info = "⚠️ Sanitized"
+            else:
+                safety_info = "✅ Safe"
+
             table.add_row(
                 tool_name,
                 str(total_runs),
                 str(exceptions),
+                str(safety_blocked),
                 f"{success_rate:.1f}%",
                 example_exception,
-                "",
+                safety_info,
             )
 
         self.console.print(table)
@@ -409,14 +426,14 @@ class UnifiedMCPFuzzerClient:
         table.add_column("Protocol Type", style="cyan", no_wrap=True)
         table.add_column("Total Runs", justify="right")
         table.add_column("Successful", justify="right")
-        table.add_column("Exceptions", justify="right")
-        table.add_column("Success Rate", justify="right")
-        table.add_column("Example Exception", style="red")
-        table.add_column("Error", style="magenta")
+        table.add_column("Server Errors", justify="right", style="green")
+        table.add_column("Fuzzer Errors", justify="right", style="red")
+        table.add_column("Security Rating", justify="center")
+        table.add_column("Example Server Response", style="blue")
 
         for protocol_type, protocol_results in results.items():
             if not protocol_results:
-                table.add_row(protocol_type, "0", "0", "0", "0%", "", "")
+                table.add_row(protocol_type, "0", "0", "0", "0", "N/A", "")
                 continue
 
             # Check if there's a general error
@@ -426,8 +443,8 @@ class UnifiedMCPFuzzerClient:
                     "0",
                     "0",
                     "0",
-                    "0%",
-                    "",
+                    "1",
+                    "ERROR",
                     (
                         protocol_results[0]["error"][:50] + "..."
                         if len(protocol_results[0]["error"]) > 50
@@ -438,28 +455,128 @@ class UnifiedMCPFuzzerClient:
 
             total_runs = len(protocol_results)
             successful = len([r for r in protocol_results if r.get("success", False)])
-            exceptions = total_runs - successful
-            success_rate = (successful / total_runs * 100) if total_runs > 0 else 0
+            server_rejections = len(
+                [
+                    r
+                    for r in protocol_results
+                    if r.get("server_handled_malicious_input", False)
+                ]
+            )
+            fuzzer_exceptions = len(
+                [r for r in protocol_results if not r.get("success", False)]
+            )
 
-            # Find example exception
-            example_exception = ""
+            # Security rating: Good if server properly rejects malicious inputs
+            if server_rejections > 0:
+                security_rating = "🛡️ GOOD"
+            elif fuzzer_exceptions == 0 and server_rejections == 0:
+                security_rating = "⚠️ WARN"  # Server accepted all malicious inputs
+            else:
+                security_rating = "❌ BAD"
+
+            # Find example server response
+            example_response = ""
             for result in protocol_results:
-                if not result.get("success", False) and "exception" in result:
-                    ex = result["exception"]
-                    example_exception = ex[:50] + "..." if len(ex) > 50 else ex
+                if result.get("server_error"):
+                    example_response = result["server_error"][:40] + "..."
+                    break
+                elif result.get("server_response"):
+                    resp_str = str(result["server_response"])
+                    example_response = resp_str[:40] + "..."
                     break
 
             table.add_row(
                 protocol_type,
                 str(total_runs),
                 str(successful),
-                str(exceptions),
-                f"{success_rate:.1f}%",
-                example_exception,
-                "",
+                str(server_rejections),
+                str(fuzzer_exceptions),
+                security_rating,
+                example_response,
             )
 
         self.console.print(table)
+
+        # Print legend
+        self.console.print("\n[bold]Legend:[/bold]")
+        self.console.print("🛡️ GOOD: Server properly rejects malicious inputs")
+        self.console.print("⚠️ WARN: Server accepts all inputs (may be vulnerable)")
+        self.console.print("❌ BAD: Fuzzer errors (testing issues)")
+        self.console.print(
+            "[green]Server Errors:[/green] Good - server rejected malicious data"
+        )
+        self.console.print("[red]Fuzzer Errors:[/red] Bad - fuzzer had internal issues")
+
+    def print_blocked_operations_summary(self):
+        """Print summary of blocked system operations."""
+        console = Console()
+        blocked_ops = get_blocked_operations()
+
+        if not blocked_ops:
+            console.print(
+                "\n[green]🛡️ No dangerous system operations "
+                "detected during fuzzing[/green]"
+            )
+            return
+
+        console.print("\n[bold red]🚫 Blocked System Operations Summary[/bold red]")
+        console.print(
+            f"Prevented {len(blocked_ops)} dangerous operations during fuzzing:\n"
+        )
+
+        # Create table for blocked operations
+        table = Table(title="System Operations Blocked During Fuzzing")
+        table.add_column("Operation", style="red", no_wrap=True)
+        table.add_column("Command", style="yellow")
+        table.add_column("Arguments", style="dim")
+        table.add_column("Time", style="dim")
+
+        for op in blocked_ops:
+            # Extract time (just the time part)
+            timestamp = op.get("timestamp", "")
+            if "T" in timestamp:
+                time_part = timestamp.split("T")[1].split(".")[0]  # HH:MM:SS
+            else:
+                time_part = timestamp
+
+            # Determine operation type
+            command = op.get("command", "unknown")
+            args = op.get("args", "")
+
+            if command in ["xdg-open", "open", "start"]:
+                operation_type = "🌐 Browser/URL Open"
+            elif command in ["firefox", "chrome", "chromium", "safari", "edge"]:
+                operation_type = "🌐 Browser Launch"
+            else:
+                operation_type = "⚠️ System Command"
+
+            table.add_row(
+                operation_type,
+                command,
+                args[:50] + "..." if len(args) > 50 else args,
+                time_part,
+            )
+
+        console.print(table)
+
+        # Summary by operation type
+        browser_opens = sum(
+            1
+            for op in blocked_ops
+            if op.get("command") in ["xdg-open", "open", "start"]
+        )
+        browser_launches = sum(
+            1
+            for op in blocked_ops
+            if op.get("command")
+            in ["firefox", "chrome", "chromium", "safari", "edge", "opera", "brave"]
+        )
+
+        console.print("\n[bold]Breakdown:[/bold]")
+        console.print(f"• Browser/URL opens blocked: {browser_opens}")
+        console.print(f"• Direct browser launches blocked: {browser_launches}")
+        other_commands = len(blocked_ops) - browser_opens - browser_launches
+        console.print(f"• Other system commands blocked: {other_commands}")
 
     def print_overall_summary(
         self,
@@ -601,39 +718,52 @@ Examples:
     # Create unified client
     client = UnifiedMCPFuzzerClient(transport, auth_manager)
 
-    # Run fuzzing based on mode
-    if args.mode == "tools":
-        logging.info("Fuzzing tools only")
-        tool_results = await client.fuzz_all_tools(args.runs)
-        client.print_tool_summary(tool_results)
+    # Start system-level command blocking to prevent dangerous operations
+    start_system_blocking()
 
-    elif args.mode == "protocol":
-        if args.protocol_type:
-            logging.info(f"Fuzzing specific protocol type: {args.protocol_type}")
-            protocol_results = await client.fuzz_protocol_type(
-                args.protocol_type, args.runs_per_type
-            )
-            client.print_protocol_summary({args.protocol_type: protocol_results})
-        else:
-            logging.info("Fuzzing all protocol types")
+    try:
+        # Run fuzzing based on mode
+        if args.mode == "tools":
+            logging.info("Fuzzing tools only")
+            tool_results = await client.fuzz_all_tools(args.runs)
+            client.print_tool_summary(tool_results)
+
+        elif args.mode == "protocol":
+            if args.protocol_type:
+                logging.info(f"Fuzzing specific protocol type: {args.protocol_type}")
+                protocol_results = await client.fuzz_protocol_type(
+                    args.protocol_type, args.runs_per_type
+                )
+                client.print_protocol_summary({args.protocol_type: protocol_results})
+            else:
+                logging.info("Fuzzing all protocol types")
+                protocol_results = await client.fuzz_all_protocol_types(
+                    args.runs_per_type
+                )
+                client.print_protocol_summary(protocol_results)
+
+        elif args.mode == "both":
+            logging.info("Fuzzing both tools and protocols")
+
+            # Fuzz tools
+            logging.info("Starting tool fuzzing...")
+            tool_results = await client.fuzz_all_tools(args.runs)
+            client.print_tool_summary(tool_results)
+
+            # Fuzz protocols
+            logging.info("Starting protocol fuzzing...")
             protocol_results = await client.fuzz_all_protocol_types(args.runs_per_type)
             client.print_protocol_summary(protocol_results)
 
-    elif args.mode == "both":
-        logging.info("Fuzzing both tools and protocols")
+            # Print overall summary
+            client.print_overall_summary(tool_results, protocol_results)
 
-        # Fuzz tools
-        logging.info("Starting tool fuzzing...")
-        tool_results = await client.fuzz_all_tools(args.runs)
-        client.print_tool_summary(tool_results)
+        # Print blocked operations summary
+        client.print_blocked_operations_summary()
 
-        # Fuzz protocols
-        logging.info("Starting protocol fuzzing...")
-        protocol_results = await client.fuzz_all_protocol_types(args.runs_per_type)
-        client.print_protocol_summary(protocol_results)
-
-        # Print overall summary
-        client.print_overall_summary(tool_results, protocol_results)
+    finally:
+        # Always stop system blocking when done
+        stop_system_blocking()
 
 
 if __name__ == "__main__":
