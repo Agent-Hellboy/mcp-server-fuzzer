@@ -299,10 +299,10 @@ client = UnifiedMCPFuzzerClient(transport)
 
 ### Benefits of Custom Transports
 
-- **✅ Plug-and-play**: Just implement the interface
-- **✅ Zero fuzzer changes**: Fuzzer doesn't know about transport
-- **✅ Protocol agnostic**: Works with any transport
-- **✅ Easy testing**: Mock transports for testing
+- **Plug-and-play**: Just implement the interface
+- **Zero fuzzer changes**: Fuzzer doesn't know about transport
+- **Protocol agnostic**: Works with any transport
+- **Easy testing**: Mock transports for testing
 
 ## Supported Protocols
 ```bash
