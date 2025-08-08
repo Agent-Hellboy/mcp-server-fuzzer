@@ -22,7 +22,7 @@ from mcp_fuzzer.transport import (
 )
 
 
-class TestTransportProtocol(unittest.TestCase):
+class TestTransportProtocol(unittest.IsolatedAsyncioTestCase):
     """Test cases for TransportProtocol base class."""
 
     def setUp(self):
@@ -92,7 +92,7 @@ class TestTransportProtocol(unittest.TestCase):
             )
 
 
-class TestHTTPTransport(unittest.TestCase):
+class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
     """Test cases for HTTPTransport class."""
 
     def setUp(self):
@@ -128,7 +128,7 @@ class TestHTTPTransport(unittest.TestCase):
 
         result = await self.transport.send_request("test_method", {"param": "value"})
 
-        self.assertEqual(result, {"result": "success", "id": "test_id"})
+        self.assertEqual(result, "success")
 
         # Verify the request was made correctly
         mock_client.post.assert_called_once()
@@ -158,7 +158,7 @@ class TestHTTPTransport(unittest.TestCase):
         result = await self.transport.send_request("test_method")
 
         # Should return the SSE data
-        self.assertIn("result", result)
+        self.assertEqual(result, "sse_success")
 
     @patch("mcp_fuzzer.transport.httpx.AsyncClient")
     async def test_send_request_http_error(self, mock_client_class):
@@ -281,6 +281,7 @@ class TestWebSocketTransport(unittest.IsolatedAsyncioTestCase):
         mock_websocket.close = AsyncMock()
 
         mock_connect.return_value.__aenter__.return_value = mock_websocket
+        mock_connect.return_value.__aexit__.return_value = None
 
         result = await self.transport.send_request("test_method", {"param": "value"})
 
@@ -351,7 +352,7 @@ class TestCreateTransport(unittest.TestCase):
         self.assertEqual(transport.headers["Authorization"], "Bearer token")
 
 
-class TestTransportIntegration(unittest.TestCase):
+class TestTransportIntegration(unittest.IsolatedAsyncioTestCase):
     """Integration tests for transport modules."""
 
     async def test_transport_protocol_interface(self):

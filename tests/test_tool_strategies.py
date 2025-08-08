@@ -201,7 +201,9 @@ class TestToolStrategies(unittest.TestCase):
         self.assertIn("name", result)
         self.assertIn("count", result)
         self.assertIsInstance(result["name"], str)
-        self.assertIsInstance(result["count"], int)
+        # Allow None for aggressive fuzzing
+        if result["count"] is not None:
+            self.assertIsInstance(result["count"], int)
 
     def test_fuzz_tool_arguments_complex_tool(self):
         """Test fuzzing arguments for a complex tool."""
