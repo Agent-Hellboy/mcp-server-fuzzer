@@ -72,6 +72,9 @@ class SafetyFilter:
             "cmd",
         ]
 
+        # Track blocked operations for testing and analysis
+        self.blocked_operations = []
+
     def contains_dangerous_url(self, value: str) -> bool:
         """Check if a string contains a dangerous URL."""
         if not value:
@@ -173,7 +176,7 @@ class SafetyFilter:
         # Check ALL arguments for dangerous content
         for key, value in arguments.items():
             if isinstance(value, str):
-                # BLOCK any URLs
+                # BLOCK dangerous URLs (specific dangerous ones)
                 if self.contains_dangerous_url(value):
                     logging.warning(
                         f"BLOCKING tool call - dangerous URL in {key}: {value[:50]}..."
@@ -206,13 +209,11 @@ class SafetyFilter:
     def create_safe_mock_response(self, tool_name: str) -> Dict[str, Any]:
         """Create a safe mock response for blocked tool calls."""
         return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"[SAFETY BLOCKED] Operation blocked to prevent opening "
-                    f"browsers/external applications during fuzzing. Tool: {tool_name}",
-                }
-            ],
+            "error": {
+                "code": -32603,
+                "message": f"[SAFETY BLOCKED] Operation blocked to prevent opening "
+                f"browsers/external applications during fuzzing. Tool: {tool_name}",
+            },
             "_meta": {
                 "safety_blocked": True,
                 "tool_name": tool_name,
@@ -235,6 +236,11 @@ class SafetyFilter:
                 else:
                     safe_args[key] = value
             logging.warning(f"  Arguments: {safe_args}")
+
+        # Add to blocked operations list
+        self.blocked_operations.append(
+            {"tool_name": tool_name, "reason": reason, "arguments": arguments}
+        )
 
 
 # Global safety filter instance

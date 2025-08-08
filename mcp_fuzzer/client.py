@@ -72,7 +72,38 @@ class UnifiedMCPFuzzerClient:
                     logging.info(f"Using auth headers: {list(auth_headers.keys())}")
 
                 result = await self.transport.call_tool(tool["name"], args)
-                results.append({"args": args, "result": result})
+
+                # Check for safety information in the result
+                safety_blocked = False
+                safety_sanitized = False
+
+                if isinstance(result, dict):
+                    # Check for safety metadata
+                    if "_meta" in result:
+                        meta = result["_meta"]
+                        safety_blocked = meta.get("safety_blocked", False)
+                        safety_sanitized = meta.get("safety_sanitized", False)
+
+                    # Also check if the result indicates it was blocked
+                    if "content" in result and isinstance(result["content"], list):
+                        for content_item in result["content"]:
+                            if (
+                                isinstance(content_item, dict)
+                                and "text" in content_item
+                            ):
+                                text = content_item["text"]
+                                if "[SAFETY BLOCKED]" in text or "[BLOCKED" in text:
+                                    safety_blocked = True
+                                    break
+
+                results.append(
+                    {
+                        "args": args,
+                        "result": result,
+                        "safety_blocked": safety_blocked,
+                        "safety_sanitized": safety_sanitized,
+                    }
+                )
             except Exception as e:
                 logging.warning(f"Exception during fuzzing {tool['name']}: {e}")
                 results.append(
@@ -80,6 +111,8 @@ class UnifiedMCPFuzzerClient:
                         "args": args,
                         "exception": str(e),
                         "traceback": traceback.format_exc(),
+                        "safety_blocked": False,
+                        "safety_sanitized": False,
                     }
                 )
 

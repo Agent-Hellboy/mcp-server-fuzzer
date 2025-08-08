@@ -187,6 +187,73 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(httpx.ConnectError):
             await self.transport.send_request("test_method")
 
+    @patch("mcp_fuzzer.transport.httpx.AsyncClient")
+    async def test_send_request_json_decode_error(self, mock_client_class):
+        """Test send_request with JSON decode error."""
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+        mock_response.text = 'data: {"result": "success"}\n'
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
+        result = await self.transport.send_request("test_method")
+
+        self.assertEqual(result, "success")
+
+    @patch("mcp_fuzzer.transport.httpx.AsyncClient")
+    async def test_send_request_sse_no_data_line(self, mock_client_class):
+        """Test send_request with SSE response but no data line."""
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+        mock_response.text = "event: message\n\n"  # No data line
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
+        with self.assertRaises(Exception):
+            await self.transport.send_request("test_method")
+
+    @patch("mcp_fuzzer.transport.httpx.AsyncClient")
+    async def test_send_request_sse_invalid_data(self, mock_client_class):
+        """Test send_request with SSE response but invalid data."""
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+        mock_response.text = "data: invalid json\n"
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
+        with self.assertRaises(Exception):
+            await self.transport.send_request("test_method")
+
+    @patch("mcp_fuzzer.transport.httpx.AsyncClient")
+    async def test_send_request_server_error(self, mock_client_class):
+        """Test send_request with server error response."""
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "error": {"code": -32603, "message": "Internal error"}
+        }
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
+        with self.assertRaises(Exception):
+            await self.transport.send_request("test_method")
+
+    @patch("mcp_fuzzer.transport.httpx.AsyncClient")
+    async def test_send_request_no_result_key(self, mock_client_class):
+        """Test send_request with response that has no result key."""
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": "test_data"}
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
+        result = await self.transport.send_request("test_method")
+
+        self.assertEqual(result, {"data": "test_data"})
+
 
 class TestSSETransport(unittest.IsolatedAsyncioTestCase):
     """Test cases for SSETransport class."""
@@ -216,6 +283,42 @@ class TestSSETransport(unittest.IsolatedAsyncioTestCase):
 
         # Should return the result value from SSE data
         self.assertEqual(result, "sse_success")
+
+    @patch("mcp_fuzzer.transport.httpx.AsyncClient")
+    async def test_send_request_sse_error_response(self, mock_client_class):
+        """Test SSE request with error response."""
+        mock_client = AsyncMock()
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+        mock_client_class.return_value.__aexit__.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.text = (
+            'data: {"error": {"code": -32603, "message": "Internal error"}}\n\n'
+        )
+        mock_response.raise_for_status.return_value = None
+        mock_client.post.return_value = mock_response
+
+        with self.assertRaises(Exception) as context:
+            await self.transport.send_request("test_method")
+
+        self.assertIn("Server error", str(context.exception))
+
+    @patch("mcp_fuzzer.transport.httpx.AsyncClient")
+    async def test_send_request_sse_no_valid_response(self, mock_client_class):
+        """Test SSE request with no valid response."""
+        mock_client = AsyncMock()
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+        mock_client_class.return_value.__aexit__.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.text = "event: message\n\n"  # No data line
+        mock_response.raise_for_status.return_value = None
+        mock_client.post.return_value = mock_response
+
+        with self.assertRaises(Exception) as context:
+            await self.transport.send_request("test_method")
+
+        self.assertIn("No valid SSE response", str(context.exception))
 
 
 class TestStdioTransport(unittest.IsolatedAsyncioTestCase):
@@ -258,6 +361,61 @@ class TestStdioTransport(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(asyncio.TimeoutError):
             await self.transport.send_request("test_method")
+
+    @patch("mcp_fuzzer.transport.asyncio.create_subprocess_exec")
+    @patch("mcp_fuzzer.transport.asyncio.wait_for")
+    async def test_send_request_stdio_process_failure(
+        self, mock_wait_for, mock_create_subprocess
+    ):
+        """Test stdio request with process failure."""
+        mock_process = AsyncMock()
+        mock_process.returncode = 1
+
+        mock_create_subprocess.return_value = mock_process
+        mock_wait_for.return_value = (b"", b"Process failed")
+
+        with self.assertRaises(Exception) as context:
+            await self.transport.send_request("test_method")
+
+        self.assertIn("Process failed", str(context.exception))
+
+    @patch("mcp_fuzzer.transport.asyncio.create_subprocess_exec")
+    @patch("mcp_fuzzer.transport.asyncio.wait_for")
+    async def test_send_request_stdio_no_main_response(
+        self, mock_wait_for, mock_create_subprocess
+    ):
+        """Test stdio request with no main response found."""
+        mock_process = AsyncMock()
+        mock_process.returncode = 0
+
+        mock_create_subprocess.return_value = mock_process
+        # Only notification messages, no main response
+        response_data = (
+            b'{"method": "notifications/message", "params": {"message": "test"}}\n'
+            b'{"result": "stdio_success"}\n'
+        )
+        mock_wait_for.return_value = (response_data, b"")
+
+        with self.assertRaises(json.JSONDecodeError):
+            await self.transport.send_request("test_method")
+
+    @patch("mcp_fuzzer.transport.asyncio.create_subprocess_exec")
+    @patch("mcp_fuzzer.transport.asyncio.wait_for")
+    async def test_send_request_stdio_error_response(
+        self, mock_wait_for, mock_create_subprocess
+    ):
+        """Test stdio request with error response."""
+        mock_process = AsyncMock()
+        mock_process.returncode = 0
+
+        mock_create_subprocess.return_value = mock_process
+        response_data = b'{"error": {"code": -32603, "message": "Internal error"}}\n'
+        mock_wait_for.return_value = (response_data, b"")
+
+        with self.assertRaises(Exception) as context:
+            await self.transport.send_request("test_method")
+
+        self.assertIn("Server error", str(context.exception))
 
 
 class TestWebSocketTransport(unittest.IsolatedAsyncioTestCase):

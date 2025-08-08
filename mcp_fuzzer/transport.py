@@ -13,7 +13,12 @@ from typing import Any, Dict, List, Optional
 import httpx
 import websockets
 
-from .safety import safety_filter, is_safe_tool_call, create_safety_response
+from .safety import (
+    safety_filter,
+    is_safe_tool_call,
+    create_safety_response,
+    sanitize_tool_call,
+)
 
 
 class TransportProtocol(ABC):
@@ -62,8 +67,26 @@ class TransportProtocol(ABC):
             )
             return create_safety_response(tool_name)
 
-        params = {"name": tool_name, "arguments": arguments}
-        return await self.send_request("tools/call", params)
+        # Sanitize arguments if needed (even if not completely blocked)
+        sanitized_tool_name, sanitized_arguments = sanitize_tool_call(
+            tool_name, arguments
+        )
+
+        # Check if arguments were sanitized
+        safety_sanitized = sanitized_arguments != arguments
+
+        params = {"name": sanitized_tool_name, "arguments": sanitized_arguments}
+        result = await self.send_request("tools/call", params)
+
+        # Add safety information to the result if it was sanitized
+        if safety_sanitized and isinstance(result, dict):
+            if "_meta" not in result:
+                result["_meta"] = {}
+            result["_meta"]["safety_sanitized"] = True
+            result["_meta"]["original_arguments"] = arguments
+            result["_meta"]["sanitized_arguments"] = sanitized_arguments
+
+        return result
 
 
 class HTTPTransport(TransportProtocol):
@@ -123,6 +146,7 @@ class HTTPTransport(TransportProtocol):
                 logging.error("Server returned error: %s", data["error"])
                 raise Exception(f"Server error: {data['error']}")
 
+            # Return the result if it exists, otherwise return the full data
             return data.get("result", data)
 
 
@@ -246,8 +270,8 @@ class StdioTransport(TransportProtocol):
                     continue
 
             if main_response is None:
-                # If no main response found, try to parse the entire output as one JSON
-                data = json.loads(stdout_text)
+                # If no main response found, raise JSONDecodeError
+                raise json.JSONDecodeError("No main response found", stdout_text, 0)
             else:
                 data = main_response
 
@@ -258,7 +282,7 @@ class StdioTransport(TransportProtocol):
         except json.JSONDecodeError:
             logging.error("Failed to parse response as JSON: %s", stdout_text)
             logging.error("Process stderr: %s", stderr_text)
-            raise Exception("Invalid JSON response")
+            raise
 
 
 class WebSocketTransport(TransportProtocol):

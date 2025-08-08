@@ -59,7 +59,6 @@ class SystemCommandBlocker:
         except Exception as e:
             logging.error(f"Failed to start system command blocking: {e}")
             self.stop_blocking()
-            raise
 
     def stop_blocking(self):
         """Stop blocking and clean up."""
@@ -69,23 +68,8 @@ class SystemCommandBlocker:
                 os.environ["PATH"] = self.original_path
                 self.original_path = None
 
-            # Clean up fake executables
-            for fake_exec in self.created_files:
-                try:
-                    if fake_exec.exists():
-                        fake_exec.unlink()
-                except Exception as e:
-                    logging.warning(f"Failed to remove {fake_exec}: {e}")
-
-            # Remove temp directory
-            if self.temp_dir and self.temp_dir.exists():
-                try:
-                    shutil.rmtree(self.temp_dir)
-                except Exception as e:
-                    logging.warning(f"Failed to remove temp dir {self.temp_dir}: {e}")
-
-            self.created_files.clear()
-            self.temp_dir = None
+            # Clean up using the cleanup method
+            self.cleanup()
 
             logging.info("🔓 System command blocking stopped")
 
@@ -99,7 +83,7 @@ class SystemCommandBlocker:
 
         # Python script content for fake executables
         log_file = self.temp_dir / "blocked_operations.log"
-        fake_script_content = f'''#!/usr/bin/env python3
+        fake_script_content = f"""#!/usr/bin/env python3
 import sys
 import os
 import json
@@ -132,7 +116,7 @@ except Exception:
 
 # Exit successfully to avoid breaking the calling process
 sys.exit(0)
-'''
+"""
 
         for command in self.blocked_commands:
             fake_exec_path = self.temp_dir / command
@@ -163,10 +147,12 @@ sys.exit(0)
     def get_blocked_operations(self) -> List[Dict[str, str]]:
         """Get list of operations that were actually blocked during fuzzing."""
         if not self.temp_dir:
+            logging.debug("No temp directory found, returning empty list")
             return []
 
         log_file = self.temp_dir / "blocked_operations.log"
         if not log_file.exists():
+            logging.debug(f"Log file {log_file} does not exist, returning empty list")
             return []
 
         operations = []
@@ -178,10 +164,12 @@ sys.exit(0)
                         try:
                             operations.append(json.loads(line))
                         except json.JSONDecodeError:
+                            logging.debug(f"Failed to parse JSON line: {line}")
                             continue
         except Exception as e:
             logging.warning(f"Failed to read blocked operations log: {e}")
 
+        logging.debug(f"Retrieved {len(operations)} blocked operations from {log_file}")
         return operations
 
     def clear_blocked_operations(self):
@@ -197,6 +185,102 @@ sys.exit(0)
     def is_blocking_active(self) -> bool:
         """Check if blocking is currently active."""
         return self.temp_dir is not None and self.temp_dir.exists()
+
+    def block_command(self, command: str):
+        """Block a specific command by adding it to the blocked commands list."""
+        if command and command not in self.blocked_commands:
+            self.blocked_commands.append(command)
+            # Create fake executable for the new command if blocking is active
+            if self.is_blocking_active():
+                self._create_fake_executable(command)
+
+    def is_command_blocked(self, command: str) -> bool:
+        """Check if a specific command is being blocked."""
+        if not command:
+            return False
+        return command in self.blocked_commands
+
+    def create_fake_executable(self, command: str):
+        """Create a fake executable for a specific command."""
+        if not self.temp_dir:
+            logging.error("Temp directory not created")
+            return
+
+        fake_exec_path = self.temp_dir / command
+        try:
+            # Create the fake executable script
+            script_content = f"""#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+# Log the blocked operation
+log_file = Path(__file__).parent / "blocked_operations.log"
+blocked_op = {{
+    "command": "{command}",
+    "args": sys.argv[1:],
+    "timestamp": __import__("datetime").datetime.now().isoformat()
+}}
+
+try:
+    with open(log_file, "a") as f:
+        f.write(json.dumps(blocked_op) + "\\n")
+except Exception as e:
+    pass
+
+print(
+    f"[BLOCKED] Command '{{command}}' was blocked by MCP Fuzzer safety system",
+    file=sys.stderr
+)
+sys.exit(1)
+"""
+
+            with open(fake_exec_path, "w") as f:
+                f.write(script_content)
+
+            # Make it executable
+            fake_exec_path.chmod(
+                stat.S_IRUSR
+                | stat.S_IWUSR
+                | stat.S_IXUSR
+                | stat.S_IRGRP
+                | stat.S_IXGRP
+                | stat.S_IROTH
+                | stat.S_IXOTH
+            )
+
+            self.created_files.append(fake_exec_path)
+
+        except Exception as e:
+            logging.error(f"Failed to create fake executable for {command}: {e}")
+
+    def cleanup(self):
+        """Clean up all created files and directories."""
+        try:
+            # Remove all created files
+            for fake_exec in self.created_files:
+                try:
+                    if fake_exec.exists():
+                        fake_exec.unlink()
+                except Exception as e:
+                    logging.warning(f"Failed to remove {fake_exec}: {e}")
+
+            # Remove temp directory
+            if self.temp_dir and self.temp_dir.exists():
+                try:
+                    shutil.rmtree(self.temp_dir)
+                except Exception as e:
+                    logging.warning(f"Failed to remove temp dir {self.temp_dir}: {e}")
+
+            self.created_files.clear()
+            self.temp_dir = None
+
+        except Exception as e:
+            logging.error(f"Error during cleanup: {e}")
+
+    def get_blocked_operations_log(self) -> List[Dict[str, str]]:
+        """Get the log of blocked operations."""
+        return self.get_blocked_operations()
 
 
 # Global blocker instance
@@ -225,7 +309,10 @@ def get_blocked_commands() -> List[str]:
 
 def get_blocked_operations() -> List[Dict[str, str]]:
     """Get list of operations that were actually blocked during fuzzing."""
-    return _system_blocker.get_blocked_operations()
+    logging.debug("Global get_blocked_operations() called")
+    result = _system_blocker.get_blocked_operations()
+    logging.debug(f"Global get_blocked_operations() returning {len(result)} operations")
+    return result
 
 
 def clear_blocked_operations():
