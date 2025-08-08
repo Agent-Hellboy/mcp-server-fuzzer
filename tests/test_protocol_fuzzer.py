@@ -51,13 +51,39 @@ class TestProtocolFuzzer(unittest.TestCase):
             self.assertIn("fuzz_data", result)
             self.assertIsInstance(result["fuzz_data"], dict)
 
-            # Check that fuzz_data has expected structure
+            # Test the BEHAVIOR: fuzzer should return fuzz_data regardless of content
             fuzz_data = result["fuzz_data"]
+            self.assertIsNotNone(fuzz_data, "Fuzzer should always return fuzz_data")
+            self.assertIsInstance(fuzz_data, dict, "Fuzz data should be a dictionary")
+
+    @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
+    def test_fuzz_protocol_type_realistic_vs_aggressive(self, mock_logging):
+        """Test that realistic and aggressive phases produce different types of data."""
+        # Test realistic phase
+        realistic_results = self.fuzzer.fuzz_protocol_type(
+            "InitializeRequest", runs=2, phase="realistic"
+        )
+        self.assertEqual(len(realistic_results), 2)
+
+        for result in realistic_results:
+            fuzz_data = result["fuzz_data"]
+            # Realistic fuzzing should have proper JSON-RPC structure
             self.assertIn("jsonrpc", fuzz_data)
             self.assertIn("method", fuzz_data)
             self.assertIn("params", fuzz_data)
-            # Method can be various values due to aggressive fuzzing
-            self.assertIsInstance(fuzz_data["method"], (str, type(None)))
+            self.assertEqual(fuzz_data["jsonrpc"], "2.0")
+
+        # Test aggressive phase
+        aggressive_results = self.fuzzer.fuzz_protocol_type(
+            "InitializeRequest", runs=2, phase="aggressive"
+        )
+        self.assertEqual(len(aggressive_results), 2)
+
+        for result in aggressive_results:
+            fuzz_data = result["fuzz_data"]
+            # Aggressive fuzzing may have malformed structure
+            self.assertIsInstance(fuzz_data, dict)
+            self.assertGreater(len(fuzz_data), 0)
 
     @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
     def test_fuzz_protocol_type_unknown_type(self, mock_logging):
@@ -258,7 +284,7 @@ class TestProtocolFuzzer(unittest.TestCase):
             self.assertEqual(len(results[protocol_type]), 0)
 
     def test_protocol_type_data_validation(self):
-        """Test that generated protocol data is valid."""
+        """Test that fuzzer generates data for all protocol types (behavior test)."""
         protocol_types = [
             "InitializeRequest",
             "ProgressNotification",
@@ -277,32 +303,29 @@ class TestProtocolFuzzer(unittest.TestCase):
         ]
 
         for protocol_type in protocol_types:
-            results = self.fuzzer.fuzz_protocol_type(protocol_type, runs=1)
+            with self.subTest(protocol_type=protocol_type):
+                results = self.fuzzer.fuzz_protocol_type(protocol_type, runs=1)
 
-            if results:
+                # Test BEHAVIOR: fuzzer should return results for all known
+                # protocol types
+                self.assertGreater(
+                    len(results), 0, f"Fuzzer should generate data for {protocol_type}"
+                )
+
                 result = results[0]
-                if result.get("success", False):
-                    fuzz_data = result["fuzz_data"]
+                # Test BEHAVIOR: result should have expected structure
+                self.assertIn("protocol_type", result)
+                self.assertIn("run", result)
+                self.assertIn("success", result)
+                self.assertIn("fuzz_data", result)
 
-                    # Basic validation
-                    self.assertIsInstance(fuzz_data, dict)
-
-                    # Check for required JSON-RPC fields if present
-                    if "jsonrpc" in fuzz_data:
-                        # Some strategies generate different jsonrpc versions
-                        # for testing
-                        jsonrpc_value = fuzz_data["jsonrpc"]
-                        if jsonrpc_value is not None:
-                            # Allow any string value due to aggressive fuzzing
-                            self.assertIsInstance(jsonrpc_value, str)
-
-                    if "method" in fuzz_data:
-                        # Allow None for aggressive fuzzing
-                        if fuzz_data["method"] is not None:
-                            self.assertIsInstance(fuzz_data["method"], str)
-
-                    if "params" in fuzz_data:
-                        self.assertIsInstance(fuzz_data["params"], dict)
+                # Test BEHAVIOR: fuzz_data should be a dict (content can be anything)
+                self.assertIsInstance(
+                    result["fuzz_data"],
+                    dict,
+                    f"Fuzz data for {protocol_type} should be a dictionary",
+                )
+                self.assertEqual(result["protocol_type"], protocol_type)
 
     def test_logging_integration(self):
         """Test that logging is properly integrated."""

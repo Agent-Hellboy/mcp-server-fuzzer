@@ -12,14 +12,30 @@ If your server conforms to the [2024-11-05 MCP schema](https://github.com/modelc
 
 ## Features
 
-### Tool Fuzzer
+### Two-Phase Fuzzing Approach
+
+MCP Fuzzer uses a sophisticated **two-phase approach** for comprehensive testing:
+
+#### Phase 1: Realistic Fuzzing
+- **Purpose**: Test server behavior with **valid, realistic data**
+- **Data Types**: Valid Base64 strings, proper UUIDs, ISO-8601 timestamps, semantic versions
+- **Goals**: Verify correct functionality, find logic bugs, test performance with expected inputs
+- **Examples**: `{"version": "2024-11-05", "id": "550e8400-e29b-41d4-a716-446655440000"}`
+
+#### Phase 2: Aggressive Fuzzing
+- **Purpose**: Test server security and robustness with **malicious/malformed data**
+- **Attack Vectors**: SQL injection, XSS, path traversal, buffer overflows, null bytes
+- **Goals**: Find security vulnerabilities, crash conditions, input validation failures
+- **Examples**: `{"version": "' OR 1=1; --", "id": "<script>alert('xss')</script>"}`
+
+### Core Capabilities
 - **Multi-Protocol Support**: HTTP, SSE, Stdio, and WebSocket transports
 - **Tool Discovery**: Automatically discovers available tools from MCP servers
-- **Intelligent Fuzzing**: Uses Hypothesis to generate random/edge-case arguments
+- **Intelligent Fuzzing**: Uses Hypothesis + custom strategies for realistic and aggressive data
 - **Authentication Support**: Handle API keys, OAuth tokens, basic auth, and custom headers
-- **Rich Reporting**: Beautiful terminal tables with detailed statistics
+- **Rich Reporting**: Beautiful terminal tables with separate phase statistics
 - **Protocol Flexibility**: Easy to add new transport protocols
-- **Comprehensive Protocol Coverage**: Fuzzes all MCP protocol types
+- **Comprehensive Protocol Coverage**: Fuzzes all MCP protocol types in both phases
 - **Edge Case Generation**: Tests malformed requests, invalid parameters, and boundary conditions
 - **Protocol-Specific Strategies**: Tailored fuzzing for each MCP message type
 - **State-Aware Testing**: Tests protocol flow and state transitions
@@ -36,31 +52,46 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 - **`fuzzer/`**: Orchestration logic for different fuzzing types
   - `tool_fuzzer.py`: Tool argument fuzzing orchestration
   - `protocol_fuzzer.py`: Protocol type fuzzing orchestration
-- **`strategy/`**: Hypothesis-based data generation strategies
-  - `tool_strategies.py`: Strategies for generating tool arguments
-  - `protocol_strategies.py`: Strategies for generating protocol messages
+- **`strategy/`**: Two-phase Hypothesis-based data generation strategies
+  - `strategy_manager.py`: Main interface providing `ProtocolStrategies` and `ToolStrategies`
+  - `realistic/`: Realistic data generation (valid inputs)
+    - `tool_strategy.py`: Realistic tool argument strategies (Base64, UUID, timestamps)
+    - `protocol_type_strategy.py`: Realistic protocol message strategies
+  - `aggressive/`: Aggressive data generation (malicious/malformed inputs)
+    - `tool_strategy.py`: Aggressive tool argument strategies (injections, overflows)
+    - `protocol_type_strategy.py`: Aggressive protocol message strategies
 
 ### Architecture Flow
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Client CLI    │───▶│  Transport      │───▶│  MCP Server     │
-│                 │       Layer          │    │                 │
+│   (--phase)     │       Layer          │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │
          ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐
 │   Fuzzer        │    │   Strategy      │
-│   Orchestration │    │   Data Gen      │
-│   (fuzzer/)     │    │   (strategy/)   │
+│   Orchestration │◄───┤   Manager       │
+│   (fuzzer/)     │    │                 │
 └─────────────────┘    └─────────────────┘
+                                │
+                ┌───────────────┴───────────────┐
+                ▼                               ▼
+      ┌─────────────────┐               ┌─────────────────┐
+      │   Realistic     │               │   Aggressive    │
+      │   Strategies    │               │   Strategies    │
+      │   (realistic/)  │               │   (aggressive/) │
+      └─────────────────┘               └─────────────────┘
 ```
 
 ### Key Benefits
 
 - **Modular Design**: Clear separation between orchestration and data generation
+- **Two-Phase Approach**: Realistic validation testing + aggressive security testing
 - **Transport Agnostic**: Fuzzer logic independent of communication protocol
 - **Extensible**: Easy to add new transport protocols and fuzzing strategies
+- **Phase-Aware**: Strategy selection based on testing goals (realistic vs aggressive)
 - **Testable**: Each component can be tested independently
 
 See architecture diagrams in the docs folder
@@ -73,23 +104,45 @@ pip install mcp-fuzzer
 
 ## Usage
 
-### Tool Fuzzer
+### Two-Phase Fuzzing
 
-Fuzz tool arguments and parameters:
+Choose your fuzzing approach based on what you want to test:
 
 ```bash
-# Basic tool fuzzing
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+# Realistic Phase - Test with valid data (should work)
+mcp-fuzzer --mode both --phase realistic --protocol http --endpoint http://localhost:8000/mcp/
 
-# With verbose output
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --verbose
+# Aggressive Phase - Test with attack data (should be rejected)
+mcp-fuzzer --mode both --phase aggressive --protocol http --endpoint http://localhost:8000/mcp/
+
+# Two-Phase - Run both phases for comprehensive testing
+mcp-fuzzer --mode both --phase both --protocol http --endpoint http://localhost:8000/mcp/
 ```
 
-Fuzz MCP protocol types and messages:
+### Tool Fuzzing
 
 ```bash
-# Fuzz all protocol types
+# Basic tool fuzzing (aggressive by default)
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+
+# Realistic tool fuzzing - test with valid arguments
+mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint http://localhost:8000/mcp/
+
+# Two-phase tool fuzzing
+mcp-fuzzer --mode tools --phase both --protocol http --endpoint http://localhost:8000/mcp/
+```
+
+### Protocol Fuzzing
+
+```bash
+# Basic protocol fuzzing (aggressive by default)
 mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 5
+
+# Realistic protocol fuzzing - test with valid MCP messages
+mcp-fuzzer --mode protocol --phase realistic --protocol http --endpoint http://localhost:8000/mcp/
+
+# Two-phase protocol fuzzing
+mcp-fuzzer --mode protocol --phase both --protocol http --endpoint http://localhost:8000/mcp/
 
 # Fuzz specific protocol type
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000/mcp/
@@ -397,10 +450,11 @@ python -m pytest tests/
 
 To add fuzzing for a new MCP protocol type:
 
-1. Add a new method to `ProtocolStrategies` in `strategy/protocol_strategies.py`
-2. Add the protocol type to the mapping in `ProtocolStrategies.get_protocol_fuzzer_method()`
-3. Add the send method in `client.py` (in the `_send_protocol_request` method)
-4. Update the protocol types list in `ProtocolFuzzer.fuzz_all_protocol_types()`
+1. Add realistic strategy in `strategy/realistic/protocol_type_strategy.py`
+2. Add aggressive strategy in `strategy/aggressive/protocol_type_strategy.py`
+3. Add the protocol type to the mapping in `strategy/aggressive/protocol_type_strategy.py:get_protocol_fuzzer_method()`
+4. Add the send method in `client.py` (in the `_send_protocol_request` method)
+5. Update the protocol types list in `ProtocolFuzzer.fuzz_all_protocol_types()`
 
 ### Adding New Transport Protocols
 

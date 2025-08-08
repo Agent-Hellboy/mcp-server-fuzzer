@@ -57,6 +57,18 @@ Examples:
         ),
     )
 
+    # Phase selection
+    parser.add_argument(
+        "--phase",
+        choices=["realistic", "aggressive", "both"],
+        default="aggressive",
+        help=(
+            "Fuzzing phase: 'realistic' for valid data testing, "
+            "'aggressive' for attack/edge-case testing, "
+            "'both' for two-phase fuzzing (default: aggressive)"
+        ),
+    )
+
     # Common arguments
     parser.add_argument(
         "--protocol",
