@@ -62,6 +62,8 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
   - `aggressive/`: Aggressive data generation (malicious/malformed inputs)
     - `tool_strategy.py`: Aggressive tool argument strategies (injections, overflows)
     - `protocol_type_strategy.py`: Aggressive protocol message strategies
+- **`safety.py`**: Argument-level safety filter (recursive sanitization, URL/command blocking, adds safety metadata via `_meta`)
+- **`system_blocker.py`**: System-level command blocker (PATH shim with fake executables to prevent opening browsers/apps; provides `start_system_blocking()`, `stop_system_blocking()`, and `get_blocked_operations()`)
 
 ### Architecture Flow
 
