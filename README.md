@@ -12,7 +12,7 @@ If your server conforms to the [2024-11-05 MCP schema](https://github.com/modelc
 
 ## Features
 
-### 🎯 Two-Phase Fuzzing Approach
+### Two-Phase Fuzzing Approach
 
 MCP Fuzzer uses a sophisticated **two-phase approach** for comprehensive testing:
 
@@ -52,31 +52,46 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 - **`fuzzer/`**: Orchestration logic for different fuzzing types
   - `tool_fuzzer.py`: Tool argument fuzzing orchestration
   - `protocol_fuzzer.py`: Protocol type fuzzing orchestration
-- **`strategy/`**: Hypothesis-based data generation strategies
-  - `tool_strategies.py`: Strategies for generating tool arguments
-  - `protocol_strategies.py`: Strategies for generating protocol messages
+- **`strategy/`**: Two-phase Hypothesis-based data generation strategies
+  - `strategy_manager.py`: Main interface providing `ProtocolStrategies` and `ToolStrategies`
+  - `realistic/`: Realistic data generation (valid inputs)
+    - `tool_strategy.py`: Realistic tool argument strategies (Base64, UUID, timestamps)
+    - `protocol_type_strategy.py`: Realistic protocol message strategies
+  - `aggressive/`: Aggressive data generation (malicious/malformed inputs)
+    - `tool_strategy.py`: Aggressive tool argument strategies (injections, overflows)
+    - `protocol_type_strategy.py`: Aggressive protocol message strategies
 
 ### Architecture Flow
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Client CLI    │───▶│  Transport      │───▶│  MCP Server     │
-│                 │       Layer          │    │                 │
+│   (--phase)     │       Layer          │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │
          ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐
 │   Fuzzer        │    │   Strategy      │
-│   Orchestration │    │   Data Gen      │
-│   (fuzzer/)     │    │   (strategy/)   │
+│   Orchestration │◄───┤   Manager       │
+│   (fuzzer/)     │    │                 │
 └─────────────────┘    └─────────────────┘
+                                │
+                ┌───────────────┴───────────────┐
+                ▼                               ▼
+      ┌─────────────────┐               ┌─────────────────┐
+      │   Realistic     │               │   Aggressive    │
+      │   Strategies    │               │   Strategies    │
+      │   (realistic/)  │               │   (aggressive/) │
+      └─────────────────┘               └─────────────────┘
 ```
 
 ### Key Benefits
 
 - **Modular Design**: Clear separation between orchestration and data generation
+- **Two-Phase Approach**: Realistic validation testing + aggressive security testing
 - **Transport Agnostic**: Fuzzer logic independent of communication protocol
 - **Extensible**: Easy to add new transport protocols and fuzzing strategies
+- **Phase-Aware**: Strategy selection based on testing goals (realistic vs aggressive)
 - **Testable**: Each component can be tested independently
 
 See architecture diagrams in the docs folder
@@ -89,7 +104,7 @@ pip install mcp-fuzzer
 
 ## Usage
 
-### 🎯 Two-Phase Fuzzing
+### Two-Phase Fuzzing
 
 Choose your fuzzing approach based on what you want to test:
 
@@ -435,10 +450,11 @@ python -m pytest tests/
 
 To add fuzzing for a new MCP protocol type:
 
-1. Add a new method to `ProtocolStrategies` in `strategy/protocol_strategies.py`
-2. Add the protocol type to the mapping in `ProtocolStrategies.get_protocol_fuzzer_method()`
-3. Add the send method in `client.py` (in the `_send_protocol_request` method)
-4. Update the protocol types list in `ProtocolFuzzer.fuzz_all_protocol_types()`
+1. Add realistic strategy in `strategy/realistic/protocol_type_strategy.py`
+2. Add aggressive strategy in `strategy/aggressive/protocol_type_strategy.py`
+3. Add the protocol type to the mapping in `strategy/aggressive/protocol_type_strategy.py:get_protocol_fuzzer_method()`
+4. Add the send method in `client.py` (in the `_send_protocol_request` method)
+5. Update the protocol types list in `ProtocolFuzzer.fuzz_all_protocol_types()`
 
 ### Adding New Transport Protocols
 
