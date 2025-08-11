@@ -97,12 +97,10 @@ The safety system provides multiple layers of protection:
 ```
 
 ### Key Benefits
-
 - **Modular Design**: Clear separation between orchestration and data generation
-- **Two-Phase Approach**: Realistic validation testing + aggressive security testing
 - **Transport Agnostic**: Fuzzer logic independent of communication protocol
 - **Extensible**: Easy to add new transport protocols and fuzzing strategies
-- **Phase-Aware**: Strategy selection based on testing goals (realistic vs aggressive)
+- **Safety First**: Built-in protection against dangerous operations
 - **Testable**: Each component can be tested independently
 
 See architecture diagrams in the docs folder
