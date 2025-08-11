@@ -340,8 +340,28 @@ class TestUnifiedMCPFuzzerClient(unittest.IsolatedAsyncioTestCase):
         result = await self.client._send_progress_notification(data)
 
         self.assertEqual(result, {"status": "notification_sent"})
+        # Ensure request path is not used for notifications
+        self.mock_transport.send_request.assert_not_called()
         self.mock_transport.send_notification.assert_called_with(
             "notifications/progress", {"progress": 50}
+        )
+
+    async def test_send_cancel_notification(self):
+        """Test sending cancel notification."""
+        data = {
+            "jsonrpc": "2.0",
+            "method": "notifications/cancelled",
+            "params": {"requestId": 123},
+        }
+
+        self.mock_transport.send_notification.return_value = None
+
+        result = await self.client._send_cancel_notification(data)
+
+        self.assertEqual(result, {"status": "notification_sent"})
+        self.mock_transport.send_request.assert_not_called()
+        self.mock_transport.send_notification.assert_called_with(
+            "notifications/cancelled", {"requestId": 123}
         )
 
     @patch("mcp_fuzzer.client.logging")

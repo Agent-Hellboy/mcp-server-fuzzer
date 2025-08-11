@@ -253,7 +253,11 @@ class SSETransport(TransportProtocol):
             response.raise_for_status()
             for line in response.text.splitlines():
                 if line.startswith("data:"):
-                    data = json.loads(line[len("data:") :].strip())
+                    try:
+                        data = json.loads(line[len("data:") :].strip())
+                    except json.JSONDecodeError:
+                        logging.error("Failed to parse SSE data line as JSON")
+                        continue
                     if "error" in data:
                         raise Exception(f"Server error: {data['error']}")
                     return data.get("result", data)
@@ -434,7 +438,16 @@ class StdioTransport(TransportProtocol):
             stderr=asyncio.subprocess.PIPE,
         )
         stdin_data = json.dumps(payload).encode() + b"\n"
-        await asyncio.wait_for(process.communicate(stdin_data), timeout=self.timeout)
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(stdin_data), timeout=self.timeout
+        )
+        if process.returncode != 0:
+            logging.error(
+                "Notification subprocess failed with return code %d: %s",
+                process.returncode,
+                (stderr or b"").decode(),
+            )
+            raise Exception(f"Notification process failed: {(stderr or b'').decode()}")
 
 
 class WebSocketTransport(TransportProtocol):

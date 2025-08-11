@@ -96,6 +96,8 @@ class TestProtocolFuzzer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(results), 2)
         for result in results:
             self.assertIn("server_error", result)
+        # Ensure send_raw was attempted for each run
+        self.assertEqual(self.mock_transport.send_raw.await_count, 2)
 
     @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
     async def test_fuzz_all_protocol_types(self, mock_logging):
