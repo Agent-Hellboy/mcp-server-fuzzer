@@ -33,6 +33,12 @@ class TestTransportProtocol(unittest.IsolatedAsyncioTestCase):
             async def send_request(self, method, params=None):
                 return {"result": "test_response"}
 
+            async def send_raw(self, payload):
+                return {"result": "test_response"}
+
+            async def send_notification(self, method, params=None):
+                return None
+
         self.transport = TestTransport()
 
     async def test_get_tools_success(self):

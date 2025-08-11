@@ -31,6 +31,23 @@ class TransportProtocol(ABC):
         """Send a JSON-RPC request and return the response."""
         pass
 
+    @abstractmethod
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+        """
+        Send a raw JSON-RPC payload AS-IS.
+        Do not rewrite jsonrpc/id/method/params.
+        """
+        pass
+
+    @abstractmethod
+    async def send_notification(
+        self, method: str, params: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Send a JSON-RPC notification (no id, no response expected).
+        """
+        pass
+
     async def get_tools(self) -> List[Dict[str, Any]]:
         """Get the list of tools from the server."""
         try:
@@ -149,6 +166,41 @@ class HTTPTransport(TransportProtocol):
             # Return the result if it exists, otherwise return the full data
             return data.get("result", data)
 
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+        """Send a raw JSON-RPC payload via HTTP without altering fields."""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(self.url, json=payload, headers=self.headers)
+            response.raise_for_status()
+            try:
+                data = response.json()
+            except json.JSONDecodeError:
+                # Attempt simple SSE-like parse for data: lines
+                for line in response.text.splitlines():
+                    if line.startswith("data:"):
+                        data = json.loads(line[len("data:") :].strip())
+                        break
+                else:
+                    raise
+            if isinstance(data, dict) and "error" in data:
+                raise Exception(f"Server error: {data['error']}")
+            if isinstance(data, dict):
+                return data.get("result", data)
+            return data
+
+    async def send_notification(
+        self, method: str, params: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Send a JSON-RPC notification (no id) via HTTP."""
+        payload = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+        }
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            # Fire-and-forget semantics; still POST to endpoint
+            response = await client.post(self.url, json=payload, headers=self.headers)
+            response.raise_for_status()
+
 
 class SSETransport(TransportProtocol):
     """Server-Sent Events transport for MCP servers."""
@@ -191,6 +243,45 @@ class SSETransport(TransportProtocol):
                         continue
 
             raise Exception("No valid SSE response received")
+
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+        """
+        Send a raw JSON-RPC payload via SSE endpoint (POST then parse data: lines).
+        """
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(self.url, json=payload, headers=self.headers)
+            response.raise_for_status()
+            for line in response.text.splitlines():
+                if line.startswith("data:"):
+                    try:
+                        data = json.loads(line[len("data:") :].strip())
+                    except json.JSONDecodeError:
+                        logging.error("Failed to parse SSE data line as JSON")
+                        continue
+                    if "error" in data:
+                        raise Exception(f"Server error: {data['error']}")
+                    return data.get("result", data)
+            # Some servers may respond with plain JSON
+            try:
+                data = response.json()
+                if "error" in data:
+                    raise Exception(f"Server error: {data['error']}")
+                return data.get("result", data)
+            except json.JSONDecodeError:
+                pass
+            raise Exception("No valid SSE response received")
+
+    async def send_notification(
+        self, method: str, params: Optional[Dict[str, Any]] = None
+    ) -> None:
+        payload = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+        }
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(self.url, json=payload, headers=self.headers)
+            response.raise_for_status()
 
 
 class StdioTransport(TransportProtocol):
@@ -284,6 +375,80 @@ class StdioTransport(TransportProtocol):
             logging.error("Process stderr: %s", stderr_text)
             raise
 
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+        """Send a raw JSON-RPC payload via stdio."""
+        process = await asyncio.create_subprocess_exec(
+            *shlex.split(self.command),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdin_data = json.dumps(payload).encode() + b"\n"
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(stdin_data), timeout=self.timeout
+        )
+
+        if process.returncode != 0:
+            logging.error(
+                "Process failed with return code %d: %s",
+                process.returncode,
+                stderr.decode(),
+            )
+            raise Exception(f"Process failed: {stderr.decode()}")
+
+        stdout_text = stdout.decode()
+        try:
+            lines = stdout_text.strip().split("\n")
+            main_response = None
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    json_obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(json_obj, dict) and (
+                    "result" in json_obj or "error" in json_obj
+                ):
+                    main_response = json_obj
+                    break
+            if main_response is None:
+                raise json.JSONDecodeError("No main response found", stdout_text, 0)
+            if "error" in main_response:
+                raise Exception(f"Server error: {main_response['error']}")
+            return main_response.get("result", main_response)
+        except json.JSONDecodeError:
+            logging.error("Failed to parse response as JSON: %s", stdout_text)
+            raise
+
+    async def send_notification(
+        self, method: str, params: Optional[Dict[str, Any]] = None
+    ) -> None:
+        payload = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+        }
+        process = await asyncio.create_subprocess_exec(
+            *shlex.split(self.command),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdin_data = json.dumps(payload).encode() + b"\n"
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(stdin_data), timeout=self.timeout
+        )
+        if process.returncode != 0:
+            logging.error(
+                "Notification subprocess failed with return code %d: %s",
+                process.returncode,
+                (stderr or b"").decode(),
+            )
+            raise Exception(f"Notification process failed: {(stderr or b'').decode()}")
+
 
 class WebSocketTransport(TransportProtocol):
     """WebSocket-based transport for MCP servers."""
@@ -320,6 +485,34 @@ class WebSocketTransport(TransportProtocol):
                 return data.get("result", data)
             except asyncio.TimeoutError:
                 raise Exception("WebSocket request timed out")
+
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+        """Send a raw JSON-RPC payload via WebSocket."""
+        async with websockets.connect(self.url) as websocket:
+            await websocket.send(json.dumps(payload))
+            try:
+                response = await asyncio.wait_for(
+                    websocket.recv(), timeout=self.timeout
+                )
+                data = json.loads(response)
+                if isinstance(data, dict) and "error" in data:
+                    raise Exception(f"Server error: {data['error']}")
+                if isinstance(data, dict):
+                    return data.get("result", data)
+                return data
+            except asyncio.TimeoutError:
+                raise Exception("WebSocket request timed out")
+
+    async def send_notification(
+        self, method: str, params: Optional[Dict[str, Any]] = None
+    ) -> None:
+        payload = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+        }
+        async with websockets.connect(self.url) as websocket:
+            await websocket.send(json.dumps(payload))
 
 
 def create_transport(protocol: str, endpoint: str, **kwargs) -> TransportProtocol:
