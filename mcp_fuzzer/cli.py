@@ -370,17 +370,6 @@ def run_cli() -> None:
             try:
                 # If running under pytest, use asyncio.run to satisfy tests
                 if os.environ.get("PYTEST_CURRENT_TEST"):
-                    if getattr(args, "tool_timeout", None) is not None:
-                        try:
-                            from . import client as client_module  # type: ignore
-
-                            setattr(
-                                client_module,
-                                "__TOOL_TIMEOUT__",
-                                float(args.tool_timeout),
-                            )
-                        except Exception:
-                            pass
                     asyncio.run(unified_client_main())
                 else:
                     # Custom loop to inject SIGINT cancellation that
@@ -400,14 +389,7 @@ def run_cli() -> None:
                     try:
                         # Inject tool-timeout to client module for inner
                         # consumption
-                        if getattr(args, "tool_timeout", None) is not None:
-                            try:
-                                from . import client as client_module  # type: ignore
-
-                                _tt = float(args.tool_timeout)
-                                setattr(client_module, "__TOOL_TIMEOUT__", _tt)
-                            except Exception:
-                                pass
+                        # tool-timeout is passed through argv to the inner client
 
                         loop.run_until_complete(unified_client_main())
                     except asyncio.CancelledError:

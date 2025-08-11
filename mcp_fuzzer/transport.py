@@ -3,6 +3,8 @@ Transport layer for MCP fuzzer supporting multiple protocols.
 """
 
 import asyncio
+import sys
+import subprocess
 import os
 import signal as _signal
 import json
@@ -311,7 +313,11 @@ class StdioTransport(TransportProtocol):
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            preexec_fn=os.setsid,
+            # Unix: start a new session; Windows: use CREATE_NEW_PROCESS_GROUP
+            preexec_fn=os.setsid if sys.platform != "win32" else None,
+            creationflags=(
+                subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+            ),
         )
 
         stdin_data = (
@@ -323,9 +329,12 @@ class StdioTransport(TransportProtocol):
             )
         except (KeyboardInterrupt, asyncio.CancelledError):
             try:
-                pgid = os.getpgid(process.pid)
-                os.killpg(pgid, _signal.SIGKILL)
-            except Exception:
+                if sys.platform == "win32":
+                    process.kill()
+                else:
+                    pgid = os.getpgid(process.pid)
+                    os.killpg(pgid, _signal.SIGKILL)
+            except OSError:
                 pass
             try:
                 await process.wait()
@@ -397,7 +406,10 @@ class StdioTransport(TransportProtocol):
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            preexec_fn=os.setsid,
+            preexec_fn=os.setsid if sys.platform != "win32" else None,
+            creationflags=(
+                subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+            ),
         )
 
         stdin_data = json.dumps(payload).encode() + b"\n"
@@ -407,9 +419,12 @@ class StdioTransport(TransportProtocol):
             )
         except (KeyboardInterrupt, asyncio.CancelledError):
             try:
-                pgid = os.getpgid(process.pid)
-                os.killpg(pgid, _signal.SIGKILL)
-            except Exception:
+                if sys.platform == "win32":
+                    process.kill()
+                else:
+                    pgid = os.getpgid(process.pid)
+                    os.killpg(pgid, _signal.SIGKILL)
+            except OSError:
                 pass
             try:
                 await process.wait()
@@ -464,7 +479,10 @@ class StdioTransport(TransportProtocol):
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            preexec_fn=os.setsid,
+            preexec_fn=os.setsid if sys.platform != "win32" else None,
+            creationflags=(
+                subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+            ),
         )
         stdin_data = json.dumps(payload).encode() + b"\n"
         try:
@@ -473,9 +491,12 @@ class StdioTransport(TransportProtocol):
             )
         except (KeyboardInterrupt, asyncio.CancelledError):
             try:
-                pgid = os.getpgid(process.pid)
-                os.killpg(pgid, _signal.SIGKILL)
-            except Exception:
+                if sys.platform == "win32":
+                    process.kill()
+                else:
+                    pgid = os.getpgid(process.pid)
+                    os.killpg(pgid, _signal.SIGKILL)
+            except OSError:
                 pass
             try:
                 await process.wait()

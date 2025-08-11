@@ -28,20 +28,18 @@ from .transport import create_transport
 class UnifiedMCPFuzzerClient:
     """Unified client for fuzzing MCP tools and protocol types."""
 
-    def __init__(self, transport, auth_manager: Optional[AuthManager] = None):
+    def __init__(
+        self,
+        transport,
+        auth_manager: Optional[AuthManager] = None,
+        tool_timeout: Optional[float] = None,
+    ):
         self.transport = transport
         self.tool_fuzzer = ToolFuzzer()
         self.protocol_fuzzer = ProtocolFuzzer(transport)  # Pass transport
         self.console = Console()
         self.auth_manager = auth_manager or AuthManager()
-        # Allow CLI to inject a global default via module-level var
-        try:
-            import mcp_fuzzer.client as client_module  # type: ignore
-
-            if hasattr(client_module, "__TOOL_TIMEOUT__"):
-                self.tool_timeout = float(getattr(client_module, "__TOOL_TIMEOUT__"))
-        except Exception:
-            pass
+        self.tool_timeout = tool_timeout
 
     # ============================================================================
     # TOOL FUZZING METHODS
@@ -774,6 +772,14 @@ Examples:
         help="Request timeout in seconds (default: 30.0)",
     )
     parser.add_argument(
+        "--tool-timeout",
+        type=float,
+        help=(
+            "Per-tool call timeout in seconds. Overrides --timeout for individual "
+            "tool calls when provided."
+        ),
+    )
+    parser.add_argument(
         "--protocol-type",
         help="Fuzz only a specific protocol type (when mode is protocol)",
     )
@@ -802,7 +808,11 @@ Examples:
         logging.info("Loaded auth from environment variables")
 
     # Create unified client
-    client = UnifiedMCPFuzzerClient(transport, auth_manager)
+    client = UnifiedMCPFuzzerClient(
+        transport,
+        auth_manager,
+        tool_timeout=(args.tool_timeout if hasattr(args, "tool_timeout") else None),
+    )
 
     # Run fuzzing based on mode
     if args.mode == "tools":
