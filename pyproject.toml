@@ -32,7 +32,6 @@ dependencies = [
     "httpx",
     "hypothesis",
     "rich",
-    "websockets"
 ]
 
 [project.scripts]

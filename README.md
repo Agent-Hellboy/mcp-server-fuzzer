@@ -29,7 +29,7 @@ MCP Fuzzer uses a sophisticated **two-phase approach** for comprehensive testing
 - **Examples**: `{"version": "' OR 1=1; --", "id": "<script>alert('xss')</script>"}`
 
 ### Core Capabilities
-- **Multi-Protocol Support**: HTTP, SSE, Stdio, and WebSocket transports
+- **Multi-Protocol Support**: HTTP, SSE, and Stdio transports
 - **Tool Discovery**: Automatically discovers available tools from MCP servers
 - **Intelligent Fuzzing**: Uses Hypothesis + custom strategies for realistic and aggressive data
 - **Authentication Support**: Handle API keys, OAuth tokens, basic auth, and custom headers for tool calls which require authNZ
@@ -348,18 +348,12 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python3 ./my-mcp-server.py"
   --runs 10 --retry-with-safety-on-interrupt
 ```
 
-### WebSocket Transport
-```bash
-mcp-fuzzer --mode tools --protocol websocket --endpoint ws://localhost:8080/ws --runs 25
-mcp-fuzzer --mode protocol --protocol websocket --endpoint ws://localhost:8080/ws --runs-per-type 12
-```
-
 ## Arguments
 
 ### Common Arguments
 - `--mode`: Fuzzing mode (`tools` or `protocol`, default: `tools`)
-- `--protocol`: Transport protocol to use (http, sse, stdio, websocket)
-- `--endpoint`: Server endpoint (URL for http/sse/websocket, command for stdio)
+- `--protocol`: Transport protocol to use (http, sse, stdio)
+- `--endpoint`: Server endpoint (URL for http/sse, command for stdio)
 - `--timeout`: Request timeout in seconds (default: 30.0)
 - `--verbose`: Enable verbose logging
 - `--log-level`: Explicit log level override (`CRITICAL|ERROR|WARNING|INFO|DEBUG`). Overrides `--verbose` when provided.
@@ -464,40 +458,5 @@ mcp-fuzzer --mode protocol --protocol-type SetLevelRequest --protocol http --end
 
 ### Running Tests
 
-```bash
-# Test the protocol fuzzer
-python examples/test_protocol_fuzzer.py
-
-# Test custom transport examples
-python examples/custom_transport_example.py
-
-# Run the full test suite
-python -m pytest tests/
 ```
-
-### Adding New Protocol Types
-
-To add fuzzing for a new MCP protocol type:
-
-1. Add realistic strategy in `strategy/realistic/protocol_type_strategy.py`
-2. Add aggressive strategy in `strategy/aggressive/protocol_type_strategy.py`
-3. Add the protocol type to the mapping in `strategy/aggressive/protocol_type_strategy.py:get_protocol_fuzzer_method()`
-4. Add the send method in `client.py` (in the `_send_protocol_request` method)
-5. Update the protocol types list in `ProtocolFuzzer.fuzz_all_protocol_types()`
-
-### Adding New Transport Protocols
-
-To add a new transport protocol:
-
-1. Create a new class inheriting from `TransportProtocol` in `transport.py`
-2. Implement the `send_request()` method
-3. Add the protocol to the `create_transport()` factory function
-4. Update the CLI argument parser in `__main__.py` if needed
-
----
-
-**Project dependencies are managed via `pyproject.toml`.**
-
-Example response from a server using examples/test_server.py → **Warning**: If schema validation is not implemented in your server, it may be vulnerable to crashes or unexpected behavior when receiving malformed requests.
-
-![fuzz_resp](./images/fuzz_resp.png)
+```

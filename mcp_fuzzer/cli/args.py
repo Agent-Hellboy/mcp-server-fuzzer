@@ -62,14 +62,16 @@ Examples:
 
     parser.add_argument(
         "--protocol",
-        choices=["http", "sse", "stdio", "websocket"],
+        type=str,
+        choices=["http", "sse", "stdio"],
         default="http",
-        help="Transport protocol to use (default: http)",
+        help="Transport protocol to use (http, sse, stdio)",
     )
     parser.add_argument(
         "--endpoint",
+        type=str,
         required=True,
-        help="Server endpoint (URL for http/sse/websocket, command for stdio)",
+        help="Server endpoint (URL for http/sse, command for stdio)",
     )
     parser.add_argument(
         "--timeout",

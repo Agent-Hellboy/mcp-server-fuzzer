@@ -2,7 +2,6 @@ from .base import TransportProtocol
 from .http import HTTPTransport
 from .sse import SSETransport
 from .stdio import StdioTransport
-from .websocket import WebSocketTransport
 
 
 def create_transport(protocol: str, endpoint: str, **kwargs) -> TransportProtocol:
@@ -12,9 +11,6 @@ def create_transport(protocol: str, endpoint: str, **kwargs) -> TransportProtoco
         "https": HTTPTransport,
         "sse": SSETransport,
         "stdio": StdioTransport,
-        "websocket": WebSocketTransport,
-        "ws": WebSocketTransport,
-        "wss": WebSocketTransport,
     }
     try:
         transport_cls = mapping[key]
