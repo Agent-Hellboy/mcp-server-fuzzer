@@ -1,0 +1,109 @@
+site_name: MCP Server Fuzzer
+site_description: A comprehensive super aggressive CLI based fuzzing tool for MCP servers using multiple transport protocols
+site_author: Agent-Hellboy
+site_url: https://agent-hellboy.github.io/mcp-server-fuzzer
+
+repo_name: Agent-Hellboy/mcp-server-fuzzer
+repo_url: https://github.com/Agent-Hellboy/mcp-server-fuzzer
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - navigation.instant
+    - navigation.tracking
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+  layout:
+    navigation: left
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Agent-Hellboy/mcp-server-fuzzer
+    - icon: fontawesome/brands/x-twitter
+      link: https://x.com/_agent_hellboy
+  mermaid:
+    version: 10.4.0
+    theme: default
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10.4.0/dist/mermaid.min.js
+  - javascripts/mermaid-init.js
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - codehilite:
+      guess_lang: false
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: pymdownx.slugs.slugify
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture: architecture.md
+  - Examples: examples.md
+  - Reference: reference.md
+  - Safety Guide: safety.md
+  - Contributing: contributing.md

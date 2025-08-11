@@ -5,6 +5,7 @@ __pycache__/
 cleints/
 servers/
 sdks/
+doc_ref/
 # C extensions
 *.so
 servers

@@ -34,6 +34,28 @@ dependencies = [
     "rich",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "black>=23.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.5.0",
+    "tox>=4.0.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocs-minify-plugin>=0.7.0"
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0"
+]
+
 [project.scripts]
 mcp-fuzzer = "mcp_fuzzer.__main__:run"
 
@@ -41,6 +63,7 @@ mcp-fuzzer = "mcp_fuzzer.__main__:run"
 Homepage = "https://github.com/agent-hellboy/mcp-server-fuzzer"
 Repository = "https://github.com/agent-hellboy/mcp-server-fuzzer"
 Issues = "https://github.com/agent-hellboy/mcp-server-fuzzer/issues"
+Documentation = "https://agent-hellboy.github.io/mcp-server-fuzzer"
 
 [tool.ruff]
 target-version = "py39"
