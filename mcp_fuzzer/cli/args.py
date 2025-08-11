@@ -222,12 +222,19 @@ def build_unified_client_args(args: argparse.Namespace) -> Dict[str, Any]:
     plugin = getattr(args, "safety_plugin", None)
     if plugin:
         try:
-            load_safety_plugin(plugin)
+            if cli_module and hasattr(cli_module, "load_safety_plugin"):
+                cli_module.load_safety_plugin(plugin)  # type: ignore[attr-defined]
+            else:
+                load_safety_plugin(plugin)
             logging.info(f"Loaded safety plugin: {plugin}")
         except Exception as e:
             logging.warning(f"Failed to load safety plugin '{plugin}': {e}")
     if getattr(args, "no_safety", False):
-        disable_safety()
+        # Resolve via package for tests to patch
+        if cli_module and hasattr(cli_module, "disable_safety"):
+            cli_module.disable_safety()  # type: ignore[attr-defined]
+        else:
+            disable_safety()
         logging.warning("Safety filtering disabled via --no-safety")
 
     return client_args

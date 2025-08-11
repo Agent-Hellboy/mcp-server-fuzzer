@@ -6,7 +6,6 @@ This module provides a comprehensive client for fuzzing both MCP tools and
 protocol types using the modular fuzzer structure.
 """
 
-import argparse
 import asyncio
 import json
 import logging
@@ -708,84 +707,14 @@ class UnifiedMCPFuzzerClient:
 
 
 async def main():
-    """Main function for the unified MCP fuzzer client."""
-    parser = argparse.ArgumentParser(
-        description="Unified MCP Fuzzer Client",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Fuzz tools only
-  python -m mcp_fuzzer.unified_client --mode tools --protocol http \
-    --endpoint http://localhost:8000/mcp/ --runs 10
+    """Main function for the unified MCP fuzzer client.
 
-  # Fuzz protocol types only
-  python -m mcp_fuzzer.unified_client --mode protocol --protocol http \
-    --endpoint http://localhost:8000/mcp/ --runs-per-type 5
+    Command-line parsing is centralized in mcp_fuzzer.cli.args. We reuse that
+    parser here to interpret any argv passed by the top-level CLI.
+    """
+    from .cli.args import create_argument_parser
 
-  # Fuzz both tools and protocols
-  python -m mcp_fuzzer.unified_client --mode both --protocol http \
-    --endpoint http://localhost:8000/mcp/ --runs 10 --runs-per-type 5
-
-  # Fuzz specific protocol type
-  python -m mcp_fuzzer.unified_client --mode protocol \
-    --protocol-type InitializeRequest --protocol http \
-    --endpoint http://localhost:8000/mcp/
-        """,
-    )
-
-    parser.add_argument(
-        "--mode",
-        choices=["tools", "protocol", "both"],
-        default="both",
-        help=(
-            "Fuzzing mode: 'tools' for tool fuzzing, 'protocol' for protocol fuzzing, "
-            "'both' for both (default: both)"
-        ),
-    )
-    parser.add_argument(
-        "--protocol",
-        choices=["http", "sse", "stdio", "websocket"],
-        default="http",
-        help="Transport protocol to use (default: http)",
-    )
-    parser.add_argument(
-        "--endpoint",
-        required=True,
-        help="Server endpoint (URL for http/sse/websocket, command for stdio)",
-    )
-    parser.add_argument(
-        "--runs",
-        type=int,
-        default=10,
-        help="Number of fuzzing runs per tool (default: 10)",
-    )
-    parser.add_argument(
-        "--runs-per-type",
-        type=int,
-        default=5,
-        help="Number of fuzzing runs per protocol type (default: 5)",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        default=30.0,
-        help="Request timeout in seconds (default: 30.0)",
-    )
-    parser.add_argument(
-        "--tool-timeout",
-        type=float,
-        help=(
-            "Per-tool call timeout in seconds. Overrides --timeout for individual "
-            "tool calls when provided."
-        ),
-    )
-    parser.add_argument(
-        "--protocol-type",
-        help="Fuzz only a specific protocol type (when mode is protocol)",
-    )
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-
-    # Parse known args; top-level CLI may pass additional flags
+    parser = create_argument_parser()
     args, _unknown = parser.parse_known_args()
 
     # Create transport
