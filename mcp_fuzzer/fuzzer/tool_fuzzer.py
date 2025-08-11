@@ -8,7 +8,7 @@ This module contains the orchestration logic for fuzzing MCP tools.
 import logging
 from typing import Any, Dict, List
 
-from ..safety import (
+from ..safety_system.safety import (
     safety_filter,
     is_safe_tool_call,
     sanitize_tool_call,
@@ -27,12 +27,14 @@ class ToolFuzzer:
     ) -> List[Dict[str, Any]]:
         """Fuzz a tool by calling it with arguments based on the specified phase."""
         results = []
+        tool_name = tool.get("name", "unknown")
+        # Minimal INFO-level signal for tests and user feedback
+        logging.info(f"Starting fuzzing for tool: {tool_name}")
 
         for i in range(runs):
             try:
                 # Generate fuzz arguments using the strategy with phase
                 args = self.strategies.fuzz_tool_arguments(tool, phase=phase)
-                tool_name = tool.get("name", "unknown")
 
                 # Apply safety filtering
                 if not is_safe_tool_call(tool_name, args):
@@ -56,7 +58,8 @@ class ToolFuzzer:
                     tool_name, args
                 )
 
-                logging.info(
+                # Keep high-level progress at DEBUG to avoid noisy INFO
+                logging.debug(
                     f"Fuzzing {tool_name} ({phase} phase, run {i + 1}/{runs}) "
                     f"with args: {sanitized_args}"
                 )

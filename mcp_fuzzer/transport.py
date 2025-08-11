@@ -3,6 +3,8 @@ Transport layer for MCP fuzzer supporting multiple protocols.
 """
 
 import asyncio
+import os
+import signal as _signal
 import json
 import logging
 import shlex
@@ -13,7 +15,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 import websockets
 
-from .safety import (
+from .safety_system.safety import (
     safety_filter,
     is_safe_tool_call,
     create_safety_response,
@@ -52,7 +54,7 @@ class TransportProtocol(ABC):
         """Get the list of tools from the server."""
         try:
             response = await self.send_request("tools/list")
-            logging.info("Raw server response: %s", response)
+            logging.debug("Raw server response: %s", response)
 
             if not isinstance(response, dict):
                 logging.warning(
@@ -309,14 +311,27 @@ class StdioTransport(TransportProtocol):
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=os.setsid,
         )
 
         stdin_data = (
             json.dumps(payload).encode() + b"\n"
         )  # Add newline to ensure input is sent
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(stdin_data), timeout=self.timeout
-        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(stdin_data), timeout=self.timeout
+            )
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            try:
+                pgid = os.getpgid(process.pid)
+                os.killpg(pgid, _signal.SIGKILL)
+            except Exception:
+                pass
+            try:
+                await process.wait()
+            except Exception:
+                pass
+            raise
 
         if process.returncode != 0:
             logging.error(
@@ -382,12 +397,25 @@ class StdioTransport(TransportProtocol):
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=os.setsid,
         )
 
         stdin_data = json.dumps(payload).encode() + b"\n"
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(stdin_data), timeout=self.timeout
-        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(stdin_data), timeout=self.timeout
+            )
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            try:
+                pgid = os.getpgid(process.pid)
+                os.killpg(pgid, _signal.SIGKILL)
+            except Exception:
+                pass
+            try:
+                await process.wait()
+            except Exception:
+                pass
+            raise
 
         if process.returncode != 0:
             logging.error(
@@ -436,11 +464,24 @@ class StdioTransport(TransportProtocol):
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=os.setsid,
         )
         stdin_data = json.dumps(payload).encode() + b"\n"
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(stdin_data), timeout=self.timeout
-        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(stdin_data), timeout=self.timeout
+            )
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            try:
+                pgid = os.getpgid(process.pid)
+                os.killpg(pgid, _signal.SIGKILL)
+            except Exception:
+                pass
+            try:
+                await process.wait()
+            except Exception:
+                pass
+            raise
         if process.returncode != 0:
             logging.error(
                 "Notification subprocess failed with return code %d: %s",

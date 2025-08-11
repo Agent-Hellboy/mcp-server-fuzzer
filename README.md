@@ -40,7 +40,8 @@ MCP Fuzzer uses a sophisticated **two-phase approach** for comprehensive testing
 - **Protocol-Specific Strategies**: Tailored fuzzing for each MCP message type
 - **State-Aware Testing**: Tests protocol flow and state transitions
 - **Security Testing**: Path traversal, injection attacks, and malformed data
-- **Safety System (Guaranteed No External Launches)**: Argument-level sanitization blocks URLs and dangerous commands; system-level command blocking prevents opening browsers or launching apps during fuzzing; results include safety metadata and a post-run summary of blocked operations
+- **Safety System (Guaranteed No External Launches)**: Argument-level sanitization blocks URLs and dangerous commands; system-level command blocking prevents opening browsers or launching apps during fuzzing; results include safety metadata and a post-run summary of blocked operations.
+[Note] The safety system is still maturing and may not capture all unintended external operations (e.g., absolute-path executables, unusual spawn mechanisms). Use `--enable-safety-system` to activate and share feedback to improve coverage.
 
 
 ## Architecture
@@ -62,8 +63,8 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
   - `aggressive/`: Aggressive data generation (malicious/malformed inputs)
     - `tool_strategy.py`: Aggressive tool argument strategies (injections, overflows)
     - `protocol_type_strategy.py`: Aggressive protocol message strategies
-- **`safety.py`**: Argument-level safety filter (recursive sanitization, URL/command blocking, adds safety metadata via `_meta`)
-- **`system_blocker.py`**: System-level command blocker (PATH shim with fake executables to prevent opening browsers/apps; provides `start_system_blocking()`, `stop_system_blocking()`, and `get_blocked_operations()`)
+- **`safety_system/safety.py`**: Argument-level safety filter (recursive sanitization, URL/command blocking, adds safety metadata via `_meta`)
+- **`safety_system/system_blocker.py`**: System-level command blocker (PATH shim with fake executables to prevent opening browsers/apps; provides `start_system_blocking()`, `stop_system_blocking()`, and `get_blocked_operations()`)
 
 ### Architecture Flow
 
@@ -333,6 +334,18 @@ mcp-fuzzer --mode protocol --protocol stdio --endpoint "./bin/mcp-shell" --runs-
 # Python scripts
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python3 ./my-mcp-server.py" --runs 10
 mcp-fuzzer --mode protocol --protocol stdio --endpoint "python3 ./my-mcp-server.py" --runs-per-type 5
+
+# With safety system enabled (blocks external app launches)
+mcp-fuzzer --mode tools --protocol stdio --enable-safety-system \
+  --endpoint "python3 ./my-mcp-server.py" --runs 10
+
+# Control logging verbosity
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python3 ./my-mcp-server.py" \
+  --runs 10 --log-level INFO
+
+# Retry once with safety on Ctrl-C (helpful if a tool run hangs)
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python3 ./my-mcp-server.py" \
+  --runs 10 --retry-with-safety-on-interrupt
 ```
 
 ### WebSocket Transport
@@ -349,6 +362,14 @@ mcp-fuzzer --mode protocol --protocol websocket --endpoint ws://localhost:8080/w
 - `--endpoint`: Server endpoint (URL for http/sse/websocket, command for stdio)
 - `--timeout`: Request timeout in seconds (default: 30.0)
 - `--verbose`: Enable verbose logging
+- `--log-level`: Explicit log level override (`CRITICAL|ERROR|WARNING|INFO|DEBUG`). Overrides `--verbose` when provided.
+- `--phase`: realistic | aggressive | both (controls data generation phase)
+- `--fs-root`: sandbox directory for any file operations originating from tool calls (default: `~/.mcp_fuzzer`)
+- `--enable-safety-system`: enable PATH shim to block external commands during fuzzing
+- `--safety-plugin`: dotted path for a custom safety provider (must expose `get_safety()` or `safety` object)
+- `--no-safety`: disable argument-level safety filtering (not recommended)
+- `--retry-with-safety-on-interrupt`: on Ctrl-C, retry once with safety system enabled if it wasn’t already
+- `--tool-timeout`: per-tool call timeout in seconds (overrides `--timeout` for each tool invocation)
 
 ### Tool Fuzzer Arguments
 - `--runs`: Number of fuzzing runs per tool (default: 10)

@@ -6,7 +6,7 @@ Unit tests for Safety module
 import unittest
 from unittest.mock import patch, MagicMock
 
-from mcp_fuzzer.safety import (
+from mcp_fuzzer.safety_system.safety import (
     SafetyFilter,
     is_safe_tool_call,
     sanitize_tool_call,
@@ -256,7 +256,7 @@ class TestSafetyFilter(unittest.TestCase):
 
     def test_log_blocked_operation(self):
         """Test log_blocked_operation."""
-        with patch("mcp_fuzzer.safety.logging") as mock_logging:
+        with patch("mcp_fuzzer.safety_system.safety.logging") as mock_logging:
             self.filter.log_blocked_operation(
                 "test_tool", {"arg": "value"}, "Test reason"
             )
