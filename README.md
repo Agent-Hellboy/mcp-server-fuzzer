@@ -1,4 +1,4 @@
-# MCP Fuzzer
+# MCP Server Fuzzer
 
 A comprehensive super aggressive CLI based fuzzing tool for MCP servers using multiple transport protocols, with support for both **tool argument fuzzing** and **protocol type fuzzing**. Features pretty output using [rich](https://github.com/Textualize/rich).
 
@@ -32,39 +32,60 @@ MCP Fuzzer uses a sophisticated **two-phase approach** for comprehensive testing
 - **Multi-Protocol Support**: HTTP, SSE, and Stdio transports
 - **Tool Discovery**: Automatically discovers available tools from MCP servers
 - **Intelligent Fuzzing**: Uses Hypothesis + custom strategies for realistic and aggressive data
-- **Authentication Support**: Handle API keys, OAuth tokens, basic auth, and custom headers for tool calls which require authNZ
-- **Rich Reporting**: Beautiful terminal tables with separate phase statistics
-- **Protocol Flexibility**: Easy to add new transport protocols
-- **Comprehensive Protocol Coverage**: Fuzzes all MCP protocol types in both phases
-- **Edge Case Generation**: Tests malformed requests, invalid parameters, and boundary conditions
-- **Protocol-Specific Strategies**: Tailored fuzzing for each MCP message type
-- **State-Aware Testing**: Tests protocol flow and state transitions
-- **Security Testing**: Path traversal, injection attacks, and malformed data
-- **Safety System (Guaranteed No External Launches)**: Argument-level sanitization blocks URLs and dangerous commands; system-level command blocking prevents opening browsers or launching apps during fuzzing; results include safety metadata and a post-run summary of blocked operations.
-[Note] The safety system is still maturing and may not capture all unintended external operations (e.g., absolute-path executables, unusual spawn mechanisms). Use `--enable-safety-system` to activate and share feedback to improve coverage.
+- **Safety System**: Built-in protection against dangerous operations with configurable safety levels
+- **Comprehensive Testing**: Tests both individual tools and protocol-level operations
+- **Detailed Reporting**: Rich output with exception tracking and safety summaries
 
+### Safety Features
+- **System Command Blocking**: Prevents execution of dangerous system commands
+- **Filesystem Sandboxing**: Confines file operations to specified directories
+- **Process Isolation**: Safe subprocess handling with timeouts
+- **Environment Detection**: Automatically detects production systems and applies safety rules
+- **Configurable Safety Levels**: Enable/disable safety features as needed
 
-## Architecture
+### Transport Protocols
+- **HTTP/HTTPS**: Standard HTTP transport with authentication support
+- **Server-Sent Events (SSE)**: Real-time streaming support
+- **Stdio**: Command-line interface for local testing
 
-The MCP Fuzzer uses a modular architecture with clear separation of concerns:
+## 🏗️ Architecture
 
 ### Core Components
+```
+mcp_fuzzer/
+├── cli/                    # Command-line interface
+│   ├── args.py            # Argument parsing and validation
+│   ├── main.py            # Main CLI entry point
+│   └── runner.py          # CLI execution logic
+├── transport/              # Transport layer implementations
+│   ├── base.py            # Abstract transport protocol
+│   ├── factory.py         # Transport factory
+│   ├── http.py            # HTTP/HTTPS transport
+│   ├── sse.py             # Server-Sent Events transport
+│   └── stdio.py           # Standard I/O transport
+├── fuzzer/                 # Fuzzing engine
+│   ├── tool_fuzzer.py     # Tool-level fuzzing
+│   └── protocol_fuzzer.py # Protocol-level fuzzing
+├── strategy/               # Fuzzing strategies
+│   ├── realistic/         # Realistic data generation
+│   └── aggressive/        # Aggressive attack vectors
+├── safety_system/          # Safety and protection
+│   ├── safety.py          # Core safety logic
+│   └── system_blocker.py  # System command blocking
+└── auth/                   # Authentication providers
+    ├── providers.py        # Auth provider implementations
+    ├── manager.py          # Auth management
+    └── loaders.py          # Configuration loading
+```
 
-- **`client.py`**: Unified client that orchestrates both tool and protocol fuzzing
-- **`transport.py`**: Abstract transport layer supporting HTTP, SSE, Stdio, WebSocket, and custom protocols
-- **`fuzzer/`**: Orchestration logic for different fuzzing types
-  - `tool_fuzzer.py`: Tool argument fuzzing orchestration
-  - `protocol_fuzzer.py`: Protocol type fuzzing orchestration
-- **`strategy/`**: Two-phase Hypothesis-based data generation strategies
-  - `strategy_manager.py`: Main interface providing `ProtocolStrategies` and `ToolStrategies`
-  - `realistic/`: Realistic data generation (valid inputs)
-    - `tool_strategy.py`: Realistic tool argument strategies (Base64, UUID, timestamps)
-    - `protocol_type_strategy.py`: Realistic protocol message strategies
-  - `aggressive/`: Aggressive data generation (malicious/malformed inputs)
-    - `tool_strategy.py`: Aggressive tool argument strategies (injections, overflows)
-    - `protocol_type_strategy.py`: Aggressive protocol message strategies
-- **`safety_system/safety.py`**: Argument-level safety filter (recursive sanitization, URL/command blocking, adds safety metadata via `_meta`)
-- **`safety_system/system_blocker.py`**: System-level command blocker (PATH shim with fake executables to prevent opening browsers/apps; provides `start_system_blocking()`, `stop_system_blocking()`, and `get_blocked_operations()`)
+### Safety System Architecture
+The safety system provides multiple layers of protection:
+
+1. **Environment Detection**: Automatically detects production systems
+2. **Test Isolation**: Dangerous tests are automatically skipped
+3. **System Blocking**: Prevents execution of dangerous commands
+4. **Filesystem Sandboxing**: Confines file operations
+5. **Process Isolation**: Safe subprocess handling with timeouts
 
 ### Architecture Flow
 
@@ -105,28 +126,45 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 
 See architecture diagrams in the docs folder
 
-## Installation
+## 📦 Installation
 
+### From PyPI
 ```bash
 pip install mcp-fuzzer
 ```
 
-## Usage
-
-### Two-Phase Fuzzing
-
-Choose your fuzzing approach based on what you want to test:
-
+### From Source
 ```bash
-# Realistic Phase - Test with valid data (should work)
-mcp-fuzzer --mode both --phase realistic --protocol http --endpoint http://localhost:8000/mcp/
-
-# Aggressive Phase - Test with attack data (should be rejected)
-mcp-fuzzer --mode both --phase aggressive --protocol http --endpoint http://localhost:8000/mcp/
-
-# Two-Phase - Run both phases for comprehensive testing
-mcp-fuzzer --mode both --phase both --protocol http --endpoint http://localhost:8000/mcp/
+git clone https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
+cd mcp-server-fuzzer
+pip install -e .
 ```
+
+## 🚀 Quick Start
+
+### Basic Usage
+```bash
+# Fuzz tools on an HTTP server
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
+
+# Fuzz protocol types on an SSE server
+mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 5
+
+# Fuzz with safety system enabled
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 5 --enable-safety-system
+```
+
+### Common Arguments
+- `--mode`: Fuzzing mode (`tools` or `protocol`, default: `tools`)
+- `--protocol`: Transport protocol to use (http, sse, stdio)
+- `--endpoint`: Server endpoint (URL for http/sse, command for stdio)
+- `--timeout`: Request timeout in seconds (default: 30.0)
+- `--verbose`: Enable verbose logging
+- `--runs`: Number of fuzzing runs per tool (default: 3)
+- `--runs-per-type`: Number of runs per protocol type (default: 3)
+- `--enable-safety-system`: Enable system-level safety features
+- `--fs-root`: Restrict filesystem operations to specified directory
+- `--tool-timeout`: Timeout for individual tool calls (default: 30.0)
 
 ### Tool Fuzzing
 
@@ -426,37 +464,115 @@ The protocol fuzzer generates comprehensive edge cases including:
 - Deeply nested parameters
 - Malformed JSON-RPC structures
 
-## Examples
+### Examples
 
-### Testing a Simple MCP Server
-
+#### HTTP Transport
 ```bash
-# Start your MCP server
-python my-mcp-server.py
+# Fuzz tools on HTTP server
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 25
 
-# In another terminal, fuzz the tools
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 20
+# Fuzz protocol types on HTTP server
+mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --runs-per-type 12
 
-# Fuzz the protocol types
-mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 10
+# With authentication
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --auth-config auth.json
 ```
 
-### Testing Specific Protocol Vulnerabilities
-
+#### SSE Transport
 ```bash
-# Test initialization edge cases
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 20
+# Fuzz tools on SSE server
+mcp-fuzzer --mode tools --protocol sse --endpoint http://localhost:8000/sse --runs 25
 
-# Test resource reading with path traversal
-mcp-fuzzer --mode protocol --protocol-type ReadResourceRequest --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 15
-
-# Test logging level boundary conditions
-mcp-fuzzer --mode protocol --protocol-type SetLevelRequest --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 10
+# Fuzz protocol types on SSE server
+mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 12
 ```
+
+#### Stdio Transport
+```bash
+# Fuzz tools on local stdio server
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10
+
+# With safety system enabled
+mcp-fuzzer --mode tools --protocol stdio --endpoint "node server.js" --runs 5 --enable-safety-system
+
+# With filesystem sandboxing
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10 --fs-root /tmp/safe_dir
+```
+
+## Testing
+
+### Running Tests
+```bash
+# Run all tests
+pytest
+
+# Run specific test modules
+pytest tests/test_transport.py
+pytest tests/test_cli.py
+
+# Run with coverage
+pytest --cov=mcp_fuzzer
+
+# Run with verbose output
+pytest -v -s
+```
+
+### Test Safety Features
+The test suite includes built-in safety measures:
+- **Environment Detection**: Automatically detects production systems
+- **Dangerous Test Skipping**: Subprocess and system-level tests are automatically skipped on production
+- **Safe Mocking**: All tests use proper mocking without real system calls
+- **Isolation**: Tests are isolated and won't affect system stability
+
+### Test Coverage
+- **Transport Layer**: HTTP, SSE, and Stdio transport implementations
+- **CLI Interface**: Command-line argument parsing and execution
+- **Safety System**: Safety features and protection mechanisms
+- **Fuzzing Engine**: Tool and protocol fuzzing logic
+- **Authentication**: Various authentication provider implementations
 
 ## Development
 
-### Running Tests
+### Project Structure
+The project follows a modular architecture with clear separation of concerns:
+- **`cli/`**: Command-line interface and argument handling
+- **`transport/`**: Transport protocol implementations
+- **`fuzzer/`**: Core fuzzing engine
+- **`strategy/`**: Data generation strategies
+- **`safety_system/`**: Safety and protection mechanisms
+- **`auth/`**: Authentication provider implementations
 
-```
-```
+### Adding New Features
+1. **New Transport Protocols**: Implement `TransportProtocol` interface
+2. **New Fuzzing Strategies**: Add strategies to `strategy/` directory
+3. **New Safety Features**: Extend `safety_system/` modules
+4. **New Authentication**: Implement auth provider interface
+
+### Code Quality
+- **Linting**: Uses `ruff` for code quality checks
+- **Testing**: Comprehensive test suite with safety measures
+- **Type Hints**: Full type annotation support
+- **Documentation**: Inline documentation and examples
+
+## Documentation
+
+- **Architecture**: See `docs/mermaid_architecture.md` for detailed diagrams
+- **API Reference**: Inline documentation in source code
+- **Examples**: Working examples in `examples/` directory
+- **Safety Guide**: Safety system configuration and usage
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with proper tests
+4. Ensure all tests pass and safety measures work
+5. Submit a pull request
+
+##  License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+##  Disclaimer
+
+This tool is designed for testing and security research. Always use in controlled environments and ensure you have permission to test the target systems. The safety system provides protection but should not be relied upon as the sole security measure.
