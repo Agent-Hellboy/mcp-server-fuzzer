@@ -2,19 +2,37 @@
 """
 Safety Module for MCP Fuzzer
 
-This module provides argument-based safety filtering for fuzzing.
-It sanitizes dangerous URLs and commands found in tool arguments.
+- Default implementation: argument-based safety filtering.
+- Pluggable: you can replace the active safety provider at runtime or via CLI.
 
-Note: System-level blocking (preventing actual browser/app launches)
+System-level blocking (preventing actual browser/app launches)
 is handled by the system_blocker module.
 """
 
 import logging
 import re
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, Protocol, runtime_checkable
 
 
-class SafetyFilter:
+@runtime_checkable
+class SafetyProvider(Protocol):
+    """Protocol for pluggable safety providers."""
+
+    def set_fs_root(self, root: str | Path) -> None: ...
+    def sanitize_tool_arguments(
+        self, tool_name: str, arguments: Dict[str, Any]
+    ) -> Dict[str, Any]: ...
+    def should_skip_tool_call(
+        self, tool_name: str, arguments: Dict[str, Any]
+    ) -> bool: ...
+    def create_safe_mock_response(self, tool_name: str) -> Dict[str, Any]: ...
+    def log_blocked_operation(
+        self, tool_name: str, arguments: Dict[str, Any], reason: str
+    ) -> None: ...
+
+
+class SafetyFilter(SafetyProvider):
     """Filters and suppresses dangerous operations during fuzzing."""
 
     def __init__(self):
@@ -243,24 +261,80 @@ class SafetyFilter:
         )
 
 
-# Global safety filter instance
-safety_filter = SafetyFilter()
+_current_safety: SafetyProvider = SafetyFilter()
 
 
+def set_safety_provider(provider: SafetyProvider) -> None:
+    """Replace the active safety provider at runtime."""
+    global _current_safety
+    if not isinstance(provider, SafetyProvider):
+        raise TypeError("provider must implement SafetyProvider protocol")
+    _current_safety = provider
+
+
+def load_safety_plugin(dotted_path: str) -> None:
+    """
+    Load a safety provider from a module path.
+    The module may expose either `get_safety()` -> SafetyProvider or `safety` object.
+    """
+    import importlib
+
+    module = importlib.import_module(dotted_path)
+    provider: SafetyProvider | None = None
+    if hasattr(module, "get_safety"):
+        provider = getattr(module, "get_safety")()
+    elif hasattr(module, "safety"):
+        provider = getattr(module, "safety")
+    if provider is None:
+        raise ImportError(
+            f"Safety plugin '{dotted_path}' did not expose get_safety() or safety"
+        )
+    set_safety_provider(provider)
+
+
+def disable_safety() -> None:
+    """Disable safety by installing a no-op provider."""
+
+    class _NoopSafety(SafetyProvider):
+        def set_fs_root(self, root: str | Path) -> None:  # noqa: ARG002
+            return
+
+        def sanitize_tool_arguments(
+            self, tool_name: str, arguments: Dict[str, Any]
+        ) -> Dict[str, Any]:  # noqa: ARG002
+            return arguments
+
+        def should_skip_tool_call(
+            self, tool_name: str, arguments: Dict[str, Any]
+        ) -> bool:  # noqa: ARG002
+            return False
+
+        def create_safe_mock_response(self, tool_name: str) -> Dict[str, Any]:  # noqa: ARG002
+            return {"result": {"content": [{"text": "[SAFETY DISABLED]"}]}}
+
+        def log_blocked_operation(
+            self, tool_name: str, arguments: Dict[str, Any], reason: str
+        ) -> None:  # noqa: ARG002
+            logging.warning("SAFETY DISABLED: %s", reason)
+
+    set_safety_provider(_NoopSafety())
+
+
+# Backwards-compatible helpers
 def is_safe_tool_call(tool_name: str, arguments: Dict[str, Any]) -> bool:
-    """Check if a tool call is safe to execute."""
-    return not safety_filter.should_skip_tool_call(tool_name, arguments)
+    return not _current_safety.should_skip_tool_call(tool_name, arguments)
 
 
 def sanitize_tool_call(
     tool_name: str, arguments: Dict[str, Any]
 ) -> tuple[str, Dict[str, Any]]:
-    """Sanitize a tool call to make it safer by cleaning dangerous content."""
-    # Always sanitize arguments (nested sanitization will clean dangerous content)
-    sanitized_args = safety_filter.sanitize_tool_arguments(tool_name, arguments)
+    sanitized_args = _current_safety.sanitize_tool_arguments(tool_name, arguments)
     return tool_name, sanitized_args
 
 
 def create_safety_response(tool_name: str) -> Dict[str, Any]:
-    """Create a safety response for blocked operations."""
-    return safety_filter.create_safe_mock_response(tool_name)
+    return _current_safety.create_safe_mock_response(tool_name)
+
+
+# Expose a name for direct use where needed
+safety_filter: SafetyProvider = _current_safety

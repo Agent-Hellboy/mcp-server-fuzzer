@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 System-Level Command Blocker for MCP Fuzzer
 

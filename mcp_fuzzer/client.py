@@ -6,7 +6,6 @@ This module provides a comprehensive client for fuzzing both MCP tools and
 protocol types using the modular fuzzer structure.
 """
 
-import argparse
 import asyncio
 import json
 import logging
@@ -19,25 +18,27 @@ from rich.table import Table
 from .auth import AuthManager, load_auth_config, setup_auth_from_env
 from .fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzzer.tool_fuzzer import ToolFuzzer
-from .system_blocker import (
-    start_system_blocking,
-    stop_system_blocking,
-    get_blocked_operations,
-)
+from .safety_system import get_blocked_operations, is_system_blocking_active
 from .transport import create_transport
 
-logging.basicConfig(level=logging.INFO)
+# Logging is configured by the top-level CLI; do not override here.
 
 
 class UnifiedMCPFuzzerClient:
     """Unified client for fuzzing MCP tools and protocol types."""
 
-    def __init__(self, transport, auth_manager: Optional[AuthManager] = None):
+    def __init__(
+        self,
+        transport,
+        auth_manager: Optional[AuthManager] = None,
+        tool_timeout: Optional[float] = None,
+    ):
         self.transport = transport
         self.tool_fuzzer = ToolFuzzer()
         self.protocol_fuzzer = ProtocolFuzzer(transport)  # Pass transport
         self.console = Console()
         self.auth_manager = auth_manager or AuthManager()
+        self.tool_timeout = tool_timeout
 
     # ============================================================================
     # TOOL FUZZING METHODS
@@ -65,13 +66,42 @@ class UnifiedMCPFuzzerClient:
                 if auth_params:
                     args.update(auth_params)
 
-                logging.info(
+                # High-level run progress at INFO without arguments
+                logging.info(f"Fuzzing {tool['name']} (run {i + 1}/{runs})")
+                # Detailed arguments and headers at DEBUG only
+                logging.debug(
                     f"Fuzzing {tool['name']} (run {i + 1}/{runs}) with args: {args}"
                 )
                 if auth_headers:
-                    logging.info(f"Using auth headers: {list(auth_headers.keys())}")
+                    logging.debug(f"Using auth headers: {list(auth_headers.keys())}")
 
-                result = await self.transport.call_tool(tool["name"], args)
+                # Enforce per-call timeout and allow immediate Ctrl-C
+                try:
+                    # Prefer explicit tool-timeout passed via CLI; fall back to
+                    # transport.timeout or 30s
+                    tool_timeout = 30.0
+                    if hasattr(self.transport, "timeout") and self.transport.timeout:
+                        tool_timeout = float(self.transport.timeout)
+                    if hasattr(self, "tool_timeout") and self.tool_timeout:
+                        tool_timeout = float(self.tool_timeout)
+
+                    result = await asyncio.wait_for(
+                        self.transport.call_tool(tool["name"], args),
+                        timeout=tool_timeout,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except asyncio.TimeoutError:
+                    results.append(
+                        {
+                            "args": args,
+                            "exception": "timeout",
+                            "timed_out": True,
+                            "safety_blocked": False,
+                            "safety_sanitized": False,
+                        }
+                    )
+                    continue
 
                 # Check for safety information in the result
                 safety_blocked = False
@@ -549,11 +579,29 @@ class UnifiedMCPFuzzerClient:
         console = Console()
         blocked_ops = get_blocked_operations()
 
+        # Status line about system-level safety
+        try:
+            if is_system_blocking_active():
+                console.print("\n[green]🛡️ System-level safety system enabled[/green]")
+        except Exception:
+            pass
+
         if not blocked_ops:
-            console.print(
-                "\n[green]🛡️ No dangerous system operations "
-                "detected during fuzzing[/green]"
-            )
+            # If system safety is disabled, clarify that nothing was monitored
+            try:
+                safety_active = is_system_blocking_active()
+            except Exception:
+                safety_active = True
+            if not safety_active:
+                console.print(
+                    "\n[yellow]🛡️ System-level safety system disabled; no system "
+                    "operations were monitored[/yellow]"
+                )
+            else:
+                console.print(
+                    "\n[green]🛡️ No dangerous system operations detected during "
+                    "fuzzing[/green]"
+                )
             return
 
         console.print("\n[bold red]🚫 Blocked System Operations Summary[/bold red]")
@@ -659,79 +707,15 @@ class UnifiedMCPFuzzerClient:
 
 
 async def main():
-    """Main function for the unified MCP fuzzer client."""
-    parser = argparse.ArgumentParser(
-        description="Unified MCP Fuzzer Client",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Fuzz tools only
-  python -m mcp_fuzzer.unified_client --mode tools --protocol http \
-    --endpoint http://localhost:8000/mcp/ --runs 10
+    """Main function for the unified MCP fuzzer client.
 
-  # Fuzz protocol types only
-  python -m mcp_fuzzer.unified_client --mode protocol --protocol http \
-    --endpoint http://localhost:8000/mcp/ --runs-per-type 5
+    Command-line parsing is centralized in mcp_fuzzer.cli.args. We reuse that
+    parser here to interpret any argv passed by the top-level CLI.
+    """
+    from .cli.args import create_argument_parser
 
-  # Fuzz both tools and protocols
-  python -m mcp_fuzzer.unified_client --mode both --protocol http \
-    --endpoint http://localhost:8000/mcp/ --runs 10 --runs-per-type 5
-
-  # Fuzz specific protocol type
-  python -m mcp_fuzzer.unified_client --mode protocol \
-    --protocol-type InitializeRequest --protocol http \
-    --endpoint http://localhost:8000/mcp/
-        """,
-    )
-
-    parser.add_argument(
-        "--mode",
-        choices=["tools", "protocol", "both"],
-        default="both",
-        help=(
-            "Fuzzing mode: 'tools' for tool fuzzing, 'protocol' for protocol fuzzing, "
-            "'both' for both (default: both)"
-        ),
-    )
-    parser.add_argument(
-        "--protocol",
-        choices=["http", "sse", "stdio", "websocket"],
-        default="http",
-        help="Transport protocol to use (default: http)",
-    )
-    parser.add_argument(
-        "--endpoint",
-        required=True,
-        help="Server endpoint (URL for http/sse/websocket, command for stdio)",
-    )
-    parser.add_argument(
-        "--runs",
-        type=int,
-        default=10,
-        help="Number of fuzzing runs per tool (default: 10)",
-    )
-    parser.add_argument(
-        "--runs-per-type",
-        type=int,
-        default=5,
-        help="Number of fuzzing runs per protocol type (default: 5)",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        default=30.0,
-        help="Request timeout in seconds (default: 30.0)",
-    )
-    parser.add_argument(
-        "--protocol-type",
-        help="Fuzz only a specific protocol type (when mode is protocol)",
-    )
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-
-    args = parser.parse_args()
-
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    parser = create_argument_parser()
+    args, _unknown = parser.parse_known_args()
 
     # Create transport
     try:
@@ -753,54 +737,48 @@ Examples:
         logging.info("Loaded auth from environment variables")
 
     # Create unified client
-    client = UnifiedMCPFuzzerClient(transport, auth_manager)
+    client = UnifiedMCPFuzzerClient(
+        transport,
+        auth_manager,
+        tool_timeout=(args.tool_timeout if hasattr(args, "tool_timeout") else None),
+    )
 
-    # Start system-level command blocking to prevent dangerous operations
-    start_system_blocking()
+    # Run fuzzing based on mode
+    if args.mode == "tools":
+        logging.info("Fuzzing tools only")
+        tool_results = await client.fuzz_all_tools(args.runs)
+        client.print_tool_summary(tool_results)
 
-    try:
-        # Run fuzzing based on mode
-        if args.mode == "tools":
-            logging.info("Fuzzing tools only")
-            tool_results = await client.fuzz_all_tools(args.runs)
-            client.print_tool_summary(tool_results)
-
-        elif args.mode == "protocol":
-            if args.protocol_type:
-                logging.info(f"Fuzzing specific protocol type: {args.protocol_type}")
-                protocol_results = await client.fuzz_protocol_type(
-                    args.protocol_type, args.runs_per_type
-                )
-                client.print_protocol_summary({args.protocol_type: protocol_results})
-            else:
-                logging.info("Fuzzing all protocol types")
-                protocol_results = await client.fuzz_all_protocol_types(
-                    args.runs_per_type
-                )
-                client.print_protocol_summary(protocol_results)
-
-        elif args.mode == "both":
-            logging.info("Fuzzing both tools and protocols")
-
-            # Fuzz tools
-            logging.info("Starting tool fuzzing...")
-            tool_results = await client.fuzz_all_tools(args.runs)
-            client.print_tool_summary(tool_results)
-
-            # Fuzz protocols
-            logging.info("Starting protocol fuzzing...")
+    elif args.mode == "protocol":
+        if args.protocol_type:
+            logging.info(f"Fuzzing specific protocol type: {args.protocol_type}")
+            protocol_results = await client.fuzz_protocol_type(
+                args.protocol_type, args.runs_per_type
+            )
+            client.print_protocol_summary({args.protocol_type: protocol_results})
+        else:
+            logging.info("Fuzzing all protocol types")
             protocol_results = await client.fuzz_all_protocol_types(args.runs_per_type)
             client.print_protocol_summary(protocol_results)
 
-            # Print overall summary
-            client.print_overall_summary(tool_results, protocol_results)
+    elif args.mode == "both":
+        logging.info("Fuzzing both tools and protocols")
 
-        # Print blocked operations summary
-        client.print_blocked_operations_summary()
+        # Fuzz tools
+        logging.info("Starting tool fuzzing...")
+        tool_results = await client.fuzz_all_tools(args.runs)
+        client.print_tool_summary(tool_results)
 
-    finally:
-        # Always stop system blocking when done
-        stop_system_blocking()
+        # Fuzz protocols
+        logging.info("Starting protocol fuzzing...")
+        protocol_results = await client.fuzz_all_protocol_types(args.runs_per_type)
+        client.print_protocol_summary(protocol_results)
+
+        # Print overall summary
+        client.print_overall_summary(tool_results, protocol_results)
+
+    # Print blocked operations summary
+    client.print_blocked_operations_summary()
 
 
 if __name__ == "__main__":

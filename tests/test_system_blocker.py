@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 import shutil
 
-from mcp_fuzzer.system_blocker import (
+from mcp_fuzzer.safety_system.system_blocker import (
     SystemCommandBlocker,
     start_system_blocking,
     stop_system_blocking,
@@ -189,7 +189,7 @@ class TestSystemCommandBlocker(unittest.TestCase):
         finally:
             self.blocker.stop_blocking()
 
-    @patch("mcp_fuzzer.system_blocker.logging")
+    @patch("mcp_fuzzer.safety_system.system_blocker.logging")
     def test_error_handling(self, mock_logging):
         """Test error handling in various scenarios."""
         # Test stopping when not started

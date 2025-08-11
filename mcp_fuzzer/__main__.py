@@ -14,5 +14,10 @@ def main():
     run_cli()
 
 
+def run():
+    """Entry point for the command line tool."""
+    run_cli()
+
+
 if __name__ == "__main__":
     main()

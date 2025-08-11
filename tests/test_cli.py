@@ -179,6 +179,171 @@ class TestCLI:
             # Verify console.print was called
             assert mock_console_instance.print.called
 
+    def test_build_unified_client_args_fs_root_and_no_safety(self):
+        """Exercise fs-root setter and disabling safety flags."""
+        args = argparse.Namespace(
+            mode="tools",
+            protocol="http",
+            endpoint="http://localhost:8000",
+            timeout=30,
+            verbose=False,
+            runs=10,
+            runs_per_type=5,
+            protocol_type=None,
+            auth_config=None,
+            auth_env=False,
+            fs_root="/tmp/fuzzer",
+            safety_plugin=None,
+            no_safety=True,
+        )
+
+        with (
+            patch("mcp_fuzzer.cli.safety_filter.set_fs_root") as mock_set_root,
+            patch("mcp_fuzzer.cli.disable_safety") as mock_disable,
+        ):
+            build_unified_client_args(args)
+            mock_set_root.assert_called_once_with("/tmp/fuzzer")
+            mock_disable.assert_called_once()
+
+    def test_build_unified_client_args_safety_plugin_loaded_and_failure(self):
+        """Cover both success and failure branches for safety plugin loading."""
+        base_args = dict(
+            mode="tools",
+            protocol="http",
+            endpoint="http://localhost:8000",
+            timeout=30,
+            verbose=False,
+            runs=10,
+            runs_per_type=5,
+            protocol_type=None,
+            auth_config=None,
+            auth_env=False,
+            fs_root=None,
+            no_safety=False,
+        )
+
+        args_success = argparse.Namespace(**{**base_args, "safety_plugin": "pkg.mod"})
+        with patch("mcp_fuzzer.cli.load_safety_plugin") as mock_load:
+            build_unified_client_args(args_success)
+            mock_load.assert_called_once_with("pkg.mod")
+
+        args_fail = argparse.Namespace(**{**base_args, "safety_plugin": "pkg.bad"})
+        with patch(
+            "mcp_fuzzer.cli.load_safety_plugin", side_effect=Exception("boom")
+        ) as mock_load:
+            build_unified_client_args(args_fail)
+            mock_load.assert_called_once_with("pkg.bad")
+
+    def test_runner_prepare_inner_argv(self):
+        from mcp_fuzzer.cli.runner import prepare_inner_argv
+
+        args = argparse.Namespace(
+            mode="tools",
+            protocol="http",
+            endpoint="http://localhost:8000/mcp/",
+            runs=3,
+            runs_per_type=2,
+            timeout=15,
+            tool_timeout=12.5,
+            protocol_type="InitializeRequest",
+            verbose=True,
+        )
+        argv = prepare_inner_argv(args)
+        assert "--mode" in argv and "tools" in argv
+        assert "--protocol" in argv and "http" in argv
+        assert "--endpoint" in argv and "http://localhost:8000/mcp/" in argv
+        assert "--runs" in argv and "3" in argv
+        assert "--runs-per-type" in argv and "2" in argv
+        assert "--timeout" in argv and "15" in argv
+        assert "--tool-timeout" in argv and "12.5" in argv
+        assert "--protocol-type" in argv and "InitializeRequest" in argv
+        assert "--verbose" in argv
+
+    def test_runner_start_and_stop_safety(self):
+        from mcp_fuzzer.cli.runner import (
+            start_safety_if_enabled,
+            stop_safety_if_started,
+        )
+
+        args_enabled = argparse.Namespace(enable_safety_system=True)
+        args_disabled = argparse.Namespace(enable_safety_system=False)
+
+        with (
+            patch("mcp_fuzzer.cli.runner.start_system_blocking") as mock_start,
+            patch("mcp_fuzzer.cli.runner.stop_system_blocking") as mock_stop,
+        ):
+            started = start_safety_if_enabled(args_enabled)
+            assert started is True
+            mock_start.assert_called_once()
+
+            started2 = start_safety_if_enabled(args_disabled)
+            assert started2 is False
+
+            stop_safety_if_started(True)
+            mock_stop.assert_called_once()
+
+            # No-op when not started
+            stop_safety_if_started(False)
+
+    def test_runner_retry_on_interrupt_retries_once(self):
+        from mcp_fuzzer.cli.runner import run_with_retry_on_interrupt
+
+        args = argparse.Namespace(
+            enable_safety_system=False,
+            retry_with_safety_on_interrupt=True,
+        )
+
+        call_count = {"n": 0}
+
+        def fake_execute(_args, _main, _argv):
+            if call_count["n"] == 0:
+                call_count["n"] += 1
+                raise KeyboardInterrupt()
+            call_count["n"] += 1
+            return None
+
+        with (
+            patch(
+                "mcp_fuzzer.cli.runner.execute_inner_client",
+                side_effect=fake_execute,
+            ) as mock_exec,
+            patch("mcp_fuzzer.cli.runner.start_system_blocking") as mock_start,
+            patch("mcp_fuzzer.cli.runner.stop_system_blocking") as mock_stop,
+        ):
+            run_with_retry_on_interrupt(args, lambda: None, ["prog"])
+            assert mock_exec.call_count == 2
+            mock_start.assert_called_once()
+            mock_stop.assert_called_once()
+
+    def test_runner_retry_on_interrupt_exits_when_no_retry(self):
+        from mcp_fuzzer.cli.runner import run_with_retry_on_interrupt
+
+        args = argparse.Namespace(
+            enable_safety_system=False,
+            retry_with_safety_on_interrupt=False,
+        )
+
+        with (
+            patch(
+                "mcp_fuzzer.cli.runner.execute_inner_client",
+                side_effect=KeyboardInterrupt(),
+            ),
+            patch("mcp_fuzzer.cli.runner.sys.exit") as mock_exit,
+        ):
+            run_with_retry_on_interrupt(args, lambda: None, ["prog"])
+            mock_exit.assert_called_once_with(130)
+
+    def test_runner_execute_inner_client_pytest_branch(self, monkeypatch):
+        from mcp_fuzzer.cli.runner import execute_inner_client
+
+        monkeypatch.setenv("PYTEST_CURRENT_TEST", "1")
+        try:
+            with patch("mcp_fuzzer.cli.runner.asyncio.run") as mock_run:
+                execute_inner_client(argparse.Namespace(), lambda: None, ["prog"])
+                mock_run.assert_called_once()
+        finally:
+            monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
     def test_validate_arguments_valid(self):
         """Test argument validation with valid arguments."""
         args = argparse.Namespace(
