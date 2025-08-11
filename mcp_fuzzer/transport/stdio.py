@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 import logging
 import os
 import shlex
@@ -21,7 +22,7 @@ class StdioTransport(TransportProtocol):
     ) -> Any:
         payload = {
             "jsonrpc": "2.0",
-            "id": "0",
+            "id": str(uuid.uuid4()),
             "method": method,
             "params": params or {},
         }
@@ -40,10 +41,13 @@ class StdioTransport(TransportProtocol):
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(stdin_data), timeout=self.timeout
             )
-        except (KeyboardInterrupt, asyncio.CancelledError):
+        except (KeyboardInterrupt, asyncio.CancelledError, asyncio.TimeoutError):
             try:
                 if sys.platform == "win32":
-                    process.kill()
+                    try:
+                        process.send_signal(_signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+                    except (AttributeError, ValueError):
+                        process.kill()
                 else:
                     pgid = os.getpgid(process.pid)
                     os.killpg(pgid, _signal.SIGKILL)
@@ -101,9 +105,27 @@ class StdioTransport(TransportProtocol):
             ),
         )
         stdin_data = json.dumps(payload).encode() + b"\n"
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(stdin_data), timeout=self.timeout
-        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(stdin_data), timeout=self.timeout
+            )
+        except (KeyboardInterrupt, asyncio.CancelledError, asyncio.TimeoutError):
+            try:
+                if sys.platform == "win32":
+                    try:
+                        process.send_signal(_signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+                    except (AttributeError, ValueError):
+                        process.kill()
+                else:
+                    pgid = os.getpgid(process.pid)
+                    os.killpg(pgid, _signal.SIGKILL)
+            except OSError:
+                pass
+            try:
+                await process.wait()
+            except Exception:
+                pass
+            raise
         if process.returncode != 0:
             logging.error(
                 "Process failed with return code %d: %s",
@@ -152,9 +174,27 @@ class StdioTransport(TransportProtocol):
             ),
         )
         stdin_data = json.dumps(payload).encode() + b"\n"
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(stdin_data), timeout=self.timeout
-        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(stdin_data), timeout=self.timeout
+            )
+        except (KeyboardInterrupt, asyncio.CancelledError, asyncio.TimeoutError):
+            try:
+                if sys.platform == "win32":
+                    try:
+                        process.send_signal(_signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+                    except (AttributeError, ValueError):
+                        process.kill()
+                else:
+                    pgid = os.getpgid(process.pid)
+                    os.killpg(pgid, _signal.SIGKILL)
+            except OSError:
+                pass
+            try:
+                await process.wait()
+            except Exception:
+                pass
+            raise
         if process.returncode != 0:
             logging.error(
                 "Notification subprocess failed with return code %d: %s",

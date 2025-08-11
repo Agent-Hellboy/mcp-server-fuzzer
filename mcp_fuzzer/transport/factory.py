@@ -6,12 +6,18 @@ from .websocket import WebSocketTransport
 
 
 def create_transport(protocol: str, endpoint: str, **kwargs) -> TransportProtocol:
-    if protocol == "http":
-        return HTTPTransport(endpoint, **kwargs)
-    if protocol == "sse":
-        return SSETransport(endpoint, **kwargs)
-    if protocol == "stdio":
-        return StdioTransport(endpoint, **kwargs)
-    if protocol == "websocket":
-        return WebSocketTransport(endpoint, **kwargs)
-    raise ValueError(f"Unsupported protocol: {protocol}")
+    key = protocol.strip().lower()
+    mapping = {
+        "http": HTTPTransport,
+        "https": HTTPTransport,
+        "sse": SSETransport,
+        "stdio": StdioTransport,
+        "websocket": WebSocketTransport,
+        "ws": WebSocketTransport,
+        "wss": WebSocketTransport,
+    }
+    try:
+        transport_cls = mapping[key]
+    except KeyError:
+        raise ValueError(f"Unsupported protocol: {protocol}")
+    return transport_cls(endpoint, **kwargs)

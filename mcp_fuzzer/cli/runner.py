@@ -11,7 +11,7 @@ from ..transport import create_transport
 from ..safety_system import start_system_blocking, stop_system_blocking
 
 
-def create_transport_with_auth(args, client_args: Dict[str, Any]) -> None:
+def create_transport_with_auth(args, client_args: Dict[str, Any]):
     try:
         auth_headers = None
         if client_args.get("auth_manager"):
@@ -21,11 +21,12 @@ def create_transport_with_auth(args, client_args: Dict[str, Any]) -> None:
         if args.protocol == "http" and auth_headers:
             factory_kwargs["auth_headers"] = auth_headers
 
-        _ = create_transport(
+        transport = create_transport(
             protocol=args.protocol,
             endpoint=args.endpoint,
             **factory_kwargs,
         )
+        return transport
     except Exception as transport_error:
         console = Console()
         console.print(f"[bold red]Unexpected error:[/bold red] {transport_error}")
@@ -34,7 +35,7 @@ def create_transport_with_auth(args, client_args: Dict[str, Any]) -> None:
 
 def prepare_inner_argv(args) -> List[str]:
     argv: List[str] = [sys.argv[0]]
-    mode = "tools" if getattr(args, "mode", None) == "tool" else args.mode
+    mode = args.mode
     argv += ["--mode", mode]
     argv += ["--protocol", args.protocol]
     argv += ["--endpoint", args.endpoint]

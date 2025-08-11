@@ -81,8 +81,8 @@ def run_cli() -> None:
                 asyncio_mod = getattr(cli_module, "asyncio", None)
                 if asyncio_mod is None:
                     import asyncio as asyncio_mod  # type: ignore
-                # Avoid creating a coroutine when tests mock asyncio.run
-                asyncio_mod.run(None)
+                # Call the unified client main coroutine
+                asyncio_mod.run(unified_client_main())
             else:
                 argv = prepare_inner_argv(args)
                 run_with_retry_on_interrupt(args, unified_client_main, argv)

@@ -1,4 +1,5 @@
 import json
+import uuid
 import logging
 from typing import Any, Dict, Optional
 
@@ -21,7 +22,7 @@ class SSETransport(TransportProtocol):
     ) -> Any:
         payload = {
             "jsonrpc": "2.0",
-            "id": "0",
+            "id": str(uuid.uuid4()),
             "method": method,
             "params": params or {},
         }
@@ -47,10 +48,14 @@ class SSETransport(TransportProtocol):
             response.raise_for_status()
             for line in response.text.splitlines():
                 if line.startswith("data:"):
-                    data = json.loads(line[len("data:") :].strip())
-                    if "error" in data:
-                        raise Exception(f"Server error: {data['error']}")
-                    return data.get("result", data)
+                    try:
+                        data = json.loads(line[len("data:") :].strip())
+                        if "error" in data:
+                            raise Exception(f"Server error: {data['error']}")
+                        return data.get("result", data)
+                    except json.JSONDecodeError:
+                        logging.error("Failed to parse SSE data line as JSON")
+                        continue
             try:
                 data = response.json()
                 if "error" in data:

@@ -30,18 +30,27 @@ def setup_auth_from_env() -> AuthManager:
     custom_headers = os.getenv("MCP_CUSTOM_HEADERS")
     if custom_headers:
         try:
-            headers: Dict[str, str] = json.loads(custom_headers)
-            auth_manager.add_auth_provider("custom", create_custom_header_auth(headers))
-        except json.JSONDecodeError:
+            headers_json = json.loads(custom_headers)
+            if isinstance(headers_json, dict):
+                headers: Dict[str, str] = {
+                    str(k): str(v) for k, v in headers_json.items()
+                }
+                auth_manager.add_auth_provider(
+                    "custom", create_custom_header_auth(headers)
+                )
+        except (json.JSONDecodeError, TypeError):
             pass
 
     tool_mapping = os.getenv("MCP_TOOL_AUTH_MAPPING")
     if tool_mapping:
         try:
             mapping = json.loads(tool_mapping)
-            for tool_name, auth_provider_name in mapping.items():
-                auth_manager.map_tool_to_auth(tool_name, auth_provider_name)
-        except json.JSONDecodeError:
+            if isinstance(mapping, dict):
+                for tool_name, auth_provider_name in mapping.items():
+                    auth_manager.map_tool_to_auth(
+                        str(tool_name), str(auth_provider_name)
+                    )
+        except (json.JSONDecodeError, TypeError):
             pass
 
     return auth_manager
@@ -83,9 +92,11 @@ def load_auth_config(config_file: str) -> AuthManager:
                 ),
             )
         elif provider_type == "custom":
-            auth_manager.add_auth_provider(
-                name, create_custom_header_auth(provider_config["headers"])
-            )
+            headers = provider_config.get("headers")
+            if not isinstance(headers, dict):
+                raise ValueError(f"Provider '{name}' custom headers must be a dict")
+            headers_str: Dict[str, str] = {str(k): str(v) for k, v in headers.items()}
+            auth_manager.add_auth_provider(name, create_custom_header_auth(headers_str))
         else:
             raise ValueError(f"Unknown provider type: {provider_type}")
 

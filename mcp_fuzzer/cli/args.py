@@ -282,10 +282,19 @@ def get_cli_config() -> Dict[str, Any]:
         "protocol": args.protocol,
         "endpoint": args.endpoint,
         "timeout": args.timeout,
+        "tool_timeout": getattr(args, "tool_timeout", None),
+        "fs_root": getattr(args, "fs_root", None),
         "verbose": args.verbose,
         "runs": args.runs,
         "runs_per_type": args.runs_per_type,
         "protocol_type": args.protocol_type,
+        "enable_safety_system": getattr(args, "enable_safety_system", False),
+        "safety_plugin": getattr(args, "safety_plugin", None),
+        "no_safety": getattr(args, "no_safety", False),
+        "retry_with_safety_on_interrupt": getattr(
+            args, "retry_with_safety_on_interrupt", False
+        ),
+        "log_level": getattr(args, "log_level", None),
     }
 
 

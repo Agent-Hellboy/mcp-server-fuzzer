@@ -53,10 +53,10 @@ class OAuthTokenAuth(AuthProvider):
 
 class CustomHeaderAuth(AuthProvider):
     def __init__(self, headers: Dict[str, str]):
-        self.headers = headers
+        self.headers = dict(headers)
 
     def get_auth_headers(self) -> Dict[str, str]:
-        return self.headers
+        return dict(self.headers)
 
     def get_auth_params(self) -> Dict[str, Any]:
         return {}

@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 import json
 from typing import Any, Dict, Optional
 
@@ -17,7 +18,7 @@ class WebSocketTransport(TransportProtocol):
     ) -> Any:
         payload = {
             "jsonrpc": "2.0",
-            "id": "0",
+            "id": str(uuid.uuid4()),
             "method": method,
             "params": params or {},
         }
