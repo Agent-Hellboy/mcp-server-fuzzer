@@ -22,6 +22,7 @@ class TestUnifiedMCPFuzzerClient(unittest.IsolatedAsyncioTestCase):
         # Ensure awaited calls are awaitable
         self.mock_transport.call_tool = AsyncMock()
         self.mock_transport.send_request = AsyncMock()
+        self.mock_transport.send_notification = AsyncMock()
         self.mock_transport.get_tools = AsyncMock()
         self.mock_auth_manager = MagicMock()
         self.client = UnifiedMCPFuzzerClient(
@@ -333,13 +334,13 @@ class TestUnifiedMCPFuzzerClient(unittest.IsolatedAsyncioTestCase):
             "params": {"progress": 50},
         }
 
-        mock_response = {"result": "success"}
-        self.mock_transport.send_request.return_value = mock_response
+        # Notification should not use send_request; ensure send_notification is called
+        self.mock_transport.send_notification.return_value = None
 
         result = await self.client._send_progress_notification(data)
 
         self.assertEqual(result, {"status": "notification_sent"})
-        self.mock_transport.send_request.assert_called_with(
+        self.mock_transport.send_notification.assert_called_with(
             "notifications/progress", {"progress": 50}
         )
 

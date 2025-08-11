@@ -19,7 +19,8 @@ class TestProtocolFuzzer(unittest.IsolatedAsyncioTestCase):
         """Set up test fixtures."""
         # Create a mock transport for testing
         self.mock_transport = AsyncMock()
-        self.mock_transport.send_request.return_value = {"result": "test_response"}
+        # ProtocolFuzzer now uses send_raw to transmit envelope-level fuzzed messages
+        self.mock_transport.send_raw.return_value = {"result": "test_response"}
         self.fuzzer = ProtocolFuzzer(self.mock_transport)
 
     def test_init(self):
@@ -87,7 +88,7 @@ class TestProtocolFuzzer(unittest.IsolatedAsyncioTestCase):
     async def test_fuzz_protocol_type_transport_exception(self, mock_logging):
         """Test handling of transport exceptions."""
         # Set up transport to raise an exception
-        self.mock_transport.send_request.side_effect = Exception("Transport error")
+        self.mock_transport.send_raw.side_effect = Exception("Transport error")
 
         results = await self.fuzzer.fuzz_protocol_type("InitializeRequest", runs=2)
 

@@ -57,12 +57,15 @@ class ProtocolFuzzer:
 
                 if self.transport:
                     try:
-                        server_response = await self.transport.send_request(fuzz_data)
-                        logging.debug(f"Server accepted fuzz data for {protocol_type}")
+                        # Send envelope exactly as generated
+                        server_response = await self.transport.send_raw(fuzz_data)
+                        logging.debug(
+                            f"Server accepted fuzzed envelope for {protocol_type}"
+                        )
                     except Exception as server_exception:
                         server_error = str(server_exception)
                         logging.debug(
-                            f"Server rejected fuzz data (expected): {server_exception}"
+                            "Server rejected fuzzed envelope: %s", server_exception
                         )
 
                 # Create the result entry

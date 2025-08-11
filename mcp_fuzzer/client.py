@@ -295,15 +295,15 @@ class UnifiedMCPFuzzerClient:
         return await self.transport.send_request("initialize", data.get("params", {}))
 
     async def _send_progress_notification(self, data: Dict[str, Any]) -> Any:
-        """Send a progress notification."""
-        await self.transport.send_request(
+        """Send a progress notification as JSON-RPC notification (no id)."""
+        await self.transport.send_notification(
             "notifications/progress", data.get("params", {})
         )
         return {"status": "notification_sent"}
 
     async def _send_cancel_notification(self, data: Dict[str, Any]) -> Any:
-        """Send a cancel notification."""
-        await self.transport.send_request(
+        """Send a cancel notification as JSON-RPC notification (no id)."""
+        await self.transport.send_notification(
             "notifications/cancelled", data.get("params", {})
         )
         return {"status": "notification_sent"}
