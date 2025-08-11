@@ -2,31 +2,12 @@
 
 A comprehensive fuzzing tool for Model Context Protocol (MCP) servers, designed to test server robustness and identify potential vulnerabilities through intelligent data generation and protocol testing.
 
-The most important thing I'm aiming to ensure here is:
-If your server conforms to the [MCP schema](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/main/schema), this tool will be able to fuzz it effectively.
-
 [![CI](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml/badge.svg)](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml)
 [![codecov](https://codecov.io/gh/Agent-Hellboy/mcp-server-fuzzer/graph/badge.svg?token=HZKC5V28LS)](https://codecov.io/gh/Agent-Hellboy/mcp-server-fuzzer)
 [![PyPI - Version](https://img.shields.io/pypi/v/mcp-fuzzer.svg)](https://pypi.org/project/mcp-fuzzer/)
 [![PyPI Downloads](https://static.pepy.tech/badge/mcp-fuzzer)](https://pepy.tech/projects/mcp-fuzzer)
 
-## Features
-
-### Two-Phase Fuzzing Approach
-
-MCP Fuzzer uses a sophisticated **two-phase approach** for comprehensive testing:
-
-#### Phase 1: Realistic Fuzzing
-- **Purpose**: Test server behavior with **valid, realistic data**
-- **Data Types**: Valid Base64 strings, proper UUIDs, ISO-8601 timestamps, semantic versions
-- **Goals**: Verify correct functionality, find logic bugs, test performance with expected inputs
-- **Examples**: `{"version": "2024-11-05", "id": "550e8400-e29b-41d4-a716-446655440000"}`
-
-#### Phase 2: Aggressive Fuzzing
-- **Purpose**: Test server security and robustness with **malicious/malformed data**
-- **Attack Vectors**: SQL injection, XSS, path traversal, buffer overflows, null bytes
-- **Goals**: Find security vulnerabilities, crash conditions, input validation failures
-- **Examples**: `{"version": "' OR 1=1; --", "id": "<script>alert('xss')</script>"}`
+## 🚀 Features
 
 ### Core Capabilities
 - **Multi-Protocol Support**: HTTP, SSE, and Stdio transports
