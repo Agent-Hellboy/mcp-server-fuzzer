@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -32,17 +35,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-      - name: Upload distributions to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
           name: "Release ${{ github.ref_name }}"
           body: "Release ${{ github.ref_name }}"
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to PyPI
         env:
