@@ -59,6 +59,11 @@ class ProcessManager:
     async def start_process(self, config: ProcessConfig) -> subprocess.Popen:
         """Start a new process asynchronously."""
         try:
+            # Ensure watchdog monitoring is running
+            try:
+                self.watchdog.start()
+            except Exception:
+                pass
             # Start the process in a thread pool to avoid blocking
             process = await self._get_loop.run_in_executor(
                 None, self._start_process_sync, config
@@ -96,8 +101,8 @@ class ProcessManager:
             config.command,
             cwd=config.cwd,
             env=config.env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             preexec_fn=os.setsid if os.name != "nt" else None,
         )
 
@@ -123,7 +128,7 @@ class ProcessManager:
                     None, self._graceful_terminate_process, pid, process, name
                 )
 
-            # Update status
+            # Update status to reflect stop intent
             async with self._lock:
                 if pid in self._processes:
                     self._processes[pid]["status"] = "stopped"

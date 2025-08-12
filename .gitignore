@@ -8,6 +8,8 @@ sdks/
 doc_ref/
 # C extensions
 *.so
+notes.md
+reports/
 mcp_fuzzer/process_mgmt/
 servers
 # Distribution / packaging

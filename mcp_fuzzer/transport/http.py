@@ -113,15 +113,15 @@ class HTTPTransport(TransportProtocol):
             response = await client.post(self.url, json=payload, headers=self.headers)
             response.raise_for_status()
 
-    def get_process_stats(self) -> Dict[str, Any]:
+    async def get_process_stats(self) -> Dict[str, Any]:
         """Get statistics about any managed processes."""
-        return self.process_manager.get_stats()
+        return await self.process_manager.get_stats()
 
-    def send_timeout_signal_to_all(
+    async def send_timeout_signal_to_all(
         self, signal_type: str = "timeout"
     ) -> Dict[int, bool]:
         """Send timeout signals to all managed processes."""
-        return self.process_manager.send_timeout_signal_to_all(signal_type)
+        return await self.process_manager.send_timeout_signal_to_all(signal_type)
 
     async def close(self):
         """Close the transport and cleanup resources."""

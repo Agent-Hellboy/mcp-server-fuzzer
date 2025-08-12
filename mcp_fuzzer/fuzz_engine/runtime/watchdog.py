@@ -275,6 +275,17 @@ class ProcessWatchdog:
                 "last_activity": time.time(),
             }
             self._logger.debug(f"Registered process {pid} ({name}) for monitoring")
+        # Auto-start watchdog loop if not already active
+        try:
+            if self._watchdog_task is None or self._watchdog_task.done():
+                self.start()
+        except Exception as e:
+            self._logger.warning(
+                "Failed to auto-start watchdog after registering process %s (%s): %s",
+                pid,
+                name,
+                e,
+            )
 
     def unregister_process(self, pid: int) -> None:
         """Unregister a process from monitoring."""

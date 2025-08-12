@@ -254,16 +254,16 @@ class StdioTransport(TransportProtocol):
             self.stdout = None
             self.stderr = None
 
-    def get_process_stats(self) -> Dict[str, Any]:
+    async def get_process_stats(self) -> Dict[str, Any]:
         """Get statistics about the managed process."""
-        return self.process_manager.get_stats()
+        return await self.process_manager.get_stats()
 
-    def send_timeout_signal(self, signal_type: str = "timeout") -> bool:
+    async def send_timeout_signal(self, signal_type: str = "timeout") -> bool:
         """Send a timeout signal to the transport process."""
         if self.process and hasattr(self.process, "pid"):
             # Check if process is registered with watchdog
             if self.process.pid in self.process_manager.watchdog._processes:
-                return self.process_manager.send_timeout_signal(
+                return await self.process_manager.send_timeout_signal(
                     self.process.pid, signal_type
                 )
             else:
