@@ -32,10 +32,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          release_name: "Release ${{ github.ref_name }}"
-          release_body: "Release ${{ github.ref_name }}"
-          release_draft: false
-          release_prerelease: false
+      - name: Upload distributions to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          name: "Release ${{ github.ref_name }}"
+          body: "Release ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
