@@ -41,7 +41,7 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000
 mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8000/sse
 ```
 
-## ✨ Key Features
+## Key Features
 
 - **Two-Phase Fuzzing**: Realistic testing + aggressive security testing
 - **Multi-Protocol Support**: HTTP, SSE, and Stdio transports
