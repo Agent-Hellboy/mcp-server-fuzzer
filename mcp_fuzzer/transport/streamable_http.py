@@ -177,13 +177,6 @@ class StreamableHTTPTransport(TransportProtocol):
                         # Mark initialized if this was an explicit initialize call
                         if method == "initialize":
                             self._initialized = True
-                            # Best-effort send initialized notification
-                            try:
-                                await self.send_notification(
-                                    "notifications/initialized", {}
-                                )
-                            except Exception:
-                                pass
                         return data["result"]
                 return data
 
@@ -191,10 +184,6 @@ class StreamableHTTPTransport(TransportProtocol):
                 parsed = await self._parse_sse_response(response)
                 if method == "initialize":
                     self._initialized = True
-                    try:
-                        await self.send_notification("notifications/initialized", {})
-                    except Exception:
-                        pass
                 return parsed
 
             raise Exception(f"Unexpected content type: {ct}")
@@ -241,12 +230,12 @@ class StreamableHTTPTransport(TransportProtocol):
         }
         try:
             await self.send_raw(init_payload)
+            self._initialized = True
             # Send initialized notification (best-effort)
             try:
                 await self.send_notification("notifications/initialized", {})
             except Exception:
                 pass
-            self._initialized = True
         except Exception:
             # Surface the failure; leave _initialized False
             raise

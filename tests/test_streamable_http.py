@@ -93,11 +93,9 @@ async def test_streamable_http_json_initialize(monkeypatch):
         json_body={"jsonrpc": "2.0", "id": "2", "result": {"tools": []}},
         content_type="application/json",
     )
-    # Include a third response for the initialized notification (202)
-    resp3 = _DummyResponse(
-        status_code=202, json_body=None, content_type="application/json"
-    )
-    fake = _FakeAsyncClient([resp1, resp3, resp2])
+    # After centralizing initialized notification in _do_initialize, the
+    # explicit initialize call does not emit a notification here.
+    fake = _FakeAsyncClient([resp1, resp2])
 
     # Patch httpx.AsyncClient to our fake
     import httpx
