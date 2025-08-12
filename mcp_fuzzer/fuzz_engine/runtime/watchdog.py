@@ -328,6 +328,12 @@ class ProcessWatchdog:
                 ),
             }
 
-    def __del__(self):
-        """Cleanup when the object is destroyed."""
+    async def __aenter__(self):
+        """Enter context manager."""
+        self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit context manager."""
         self.stop()
+        return False

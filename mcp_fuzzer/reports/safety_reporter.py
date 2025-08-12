@@ -233,12 +233,15 @@ class SafetyReporter:
             table.add_column("Time", style="dim")
 
             for op in blocked_ops:
-                # Extract time (just the time part)
+                # Extract time (just the time part) with error handling
                 timestamp = op.get("timestamp", "")
-                if "T" in timestamp:
-                    time_part = timestamp.split("T")[1].split(".")[0]  # HH:MM:SS
-                else:
-                    time_part = timestamp
+                try:
+                    if "T" in timestamp:
+                        time_part = timestamp.split("T")[1].split(".")[0]  # HH:MM:SS
+                    else:
+                        time_part = timestamp
+                except (IndexError, AttributeError):
+                    time_part = "Unknown"
 
                 # Determine operation type
                 command = op.get("command", "unknown")

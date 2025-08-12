@@ -73,6 +73,7 @@ class UnifiedMCPFuzzerClient:
 
                 # Enforce per-call timeout and allow immediate Ctrl-C
                 try:
+                    tool_task = None
                     # Prefer explicit tool-timeout passed via CLI; fall back to
                     # transport.timeout or 30s
                     tool_timeout = 30.0
@@ -91,7 +92,7 @@ class UnifiedMCPFuzzerClient:
 
                 except asyncio.CancelledError:
                     # Cancel the tool task if we're cancelled
-                    if "tool_task" in locals():
+                    if tool_task is not None:
                         tool_task.cancel()
                         try:
                             await asyncio.wait_for(tool_task, timeout=1.0)
@@ -100,7 +101,7 @@ class UnifiedMCPFuzzerClient:
                     raise
                 except asyncio.TimeoutError:
                     # Cancel the tool task on timeout
-                    if "tool_task" in locals():
+                    if tool_task is not None:
                         tool_task.cancel()
                         try:
                             await asyncio.wait_for(tool_task, timeout=1.0)
@@ -119,7 +120,7 @@ class UnifiedMCPFuzzerClient:
                     continue
                 except Exception as e:
                     # Handle any other exceptions
-                    if "tool_task" in locals():
+                    if tool_task is not None:
                         tool_task.cancel()
                         try:
                             await asyncio.wait_for(tool_task, timeout=1.0)

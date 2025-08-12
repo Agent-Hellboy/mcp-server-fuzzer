@@ -10,6 +10,16 @@ from rich.console import Console
 from rich.table import Table
 
 
+def calculate_tool_success_rate(
+    total_runs: int, exceptions: int, safety_blocked: int
+) -> float:
+    """Calculate success rate for tool runs."""
+    if total_runs <= 0:
+        return 0.0
+    successful_runs = max(0, total_runs - exceptions - safety_blocked)
+    return (successful_runs / total_runs) * 100
+
+
 class ConsoleFormatter:
     """Handles console output formatting."""
 
@@ -36,10 +46,8 @@ class ConsoleFormatter:
             safety_blocked = sum(
                 1 for r in tool_results if r.get("safety_blocked", False)
             )
-            success_rate = (
-                ((total_runs - exceptions - safety_blocked) / total_runs * 100)
-                if total_runs > 0
-                else 0
+            success_rate = calculate_tool_success_rate(
+                total_runs, exceptions, safety_blocked
             )
 
             table.add_row(
@@ -158,10 +166,8 @@ class JSONFormatter:
             safety_blocked = sum(
                 1 for r in tool_results if r.get("safety_blocked", False)
             )
-            success_rate = (
-                ((total_runs - exceptions - safety_blocked) / total_runs * 100)
-                if total_runs > 0
-                else 0
+            success_rate = calculate_tool_success_rate(
+                total_runs, exceptions, safety_blocked
             )
 
             summary[tool_name] = {

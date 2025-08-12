@@ -268,8 +268,8 @@ The safety system provides multiple layers of protection against dangerous opera
 
 **Safety Features:**
 
-- **Environment Detection**: Automatically detects production systems
-- **System Command Blocking**: Prevents execution of dangerous commands
+- **SafetyFilter**: Centralized filter for all tool and protocol calls
+- **System Command Blocking**: Prevents execution of dangerous commands (PATH shims)
 - **Filesystem Sandboxing**: Confines file operations to specified directories
 - **Process Isolation**: Safe subprocess handling with timeouts
 - **Input Sanitization**: Filters potentially dangerous input

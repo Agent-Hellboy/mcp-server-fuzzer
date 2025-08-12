@@ -305,23 +305,23 @@ await client.fuzz_tools(runs=10)
 
 ```bash
 # Generate reports in default 'reports' directory
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10
 
 # Specify custom output directory
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10 --output-dir "my_reports"
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --output-dir "my_reports"
 
 # Generate comprehensive safety report
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10 --safety-report
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --safety-report
 ```
 
 ### Advanced Reporting
 
 ```bash
 # Export safety data to JSON with custom filename
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10 --export-safety-data "safety_data.json"
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --export-safety-data "safety_data.json"
 
 # Combine all reporting features
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10 \
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 \
     --safety-report \
     --export-safety-data \
     --output-dir "detailed_reports"
@@ -331,7 +331,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10
 
 Each fuzzing session creates timestamped reports:
 
-```
+```text
 reports/
 ├── fuzzing_report_20250812_143000.json    # Complete structured data
 ├── fuzzing_report_20250812_143000.txt     # Human-readable summary
@@ -370,7 +370,7 @@ reports/
 ```
 
 #### Text Report Example
-```
+```text
 ================================================================================
 MCP FUZZER REPORT
 ================================================================================

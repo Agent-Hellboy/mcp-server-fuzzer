@@ -153,7 +153,7 @@ def generate_aggressive_text(min_size: int = 1, max_size: int = 100) -> str:
             "\n" * length,  # Newlines only
             "0" * length,  # Zeros only
             "A" * length,  # A's only
-            "100" * (length // 2),  # Unicode only
+            ("100" * ((length + 2) // 3))[:length],  # digits only; enforce exact length
             "!@#" * (length // 3),  # Special chars only
         ]
         return random.choice(extreme_values)
