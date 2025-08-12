@@ -44,7 +44,6 @@ class ProcessManager:
         self._logger = logging.getLogger(__name__)
         self._loop = None  # Initialize lazily when needed
 
-    @property
     def _get_loop(self):
         """Get the event loop, initializing it if needed."""
         if self._loop is None:
@@ -65,7 +64,7 @@ class ProcessManager:
             except Exception:
                 pass
             # Start the process in a thread pool to avoid blocking
-            process = await self._get_loop.run_in_executor(
+            process = await self._get_loop().run_in_executor(
                 None, self._start_process_sync, config
             )
 
@@ -119,12 +118,12 @@ class ProcessManager:
         try:
             if force:
                 # Force kill
-                await self._get_loop.run_in_executor(
+                await self._get_loop().run_in_executor(
                     None, self._force_kill_process, pid, process, name
                 )
             else:
                 # Graceful termination
-                await self._get_loop.run_in_executor(
+                await self._get_loop().run_in_executor(
                     None, self._graceful_terminate_process, pid, process, name
                 )
 
@@ -240,7 +239,7 @@ class ProcessManager:
                 timeout = 0.1  # Default to very short timeout
 
             # Run process.wait in thread pool to avoid blocking
-            await self._get_loop.run_in_executor(None, process.wait, timeout)
+            await self._get_loop().run_in_executor(None, process.wait, timeout)
             return process.returncode
         except subprocess.TimeoutExpired:
             # Process didn't complete within timeout, return current status
@@ -315,7 +314,7 @@ class ProcessManager:
                 return False
 
             # Send signal in thread pool to avoid blocking
-            await self._get_loop.run_in_executor(
+            await self._get_loop().run_in_executor(
                 None, self._send_signal_sync, pid, process, name, signal_type
             )
 

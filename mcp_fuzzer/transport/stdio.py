@@ -368,6 +368,4 @@ class StdioTransport(TransportProtocol):
                     return False
         return False
 
-    def __del__(self):
-        """Cleanup when the object is destroyed."""
-        pass
+    # Avoid destructors for async cleanup; use close()
