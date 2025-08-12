@@ -170,7 +170,7 @@ class ProcessWatchdog:
             self._logger.info(f"Attempting to kill hanging process {pid} ({name})")
 
             # Run the killing logic in a thread pool to avoid blocking
-            await self._loop.run_in_executor(
+            await self._get_loop.run_in_executor(
                 None, self._kill_process_sync, pid, process, name
             )
 
@@ -299,8 +299,9 @@ class ProcessWatchdog:
 
     def update_activity(self, pid: int) -> None:
         """Update activity timestamp for a process."""
-        if pid in self._processes:
-            self._processes[pid]["last_activity"] = time.time()
+        with self._lock:
+            if pid in self._processes:
+                self._processes[pid]["last_activity"] = time.time()
 
     def get_stats(self) -> dict:
         """Get statistics about monitored processes."""

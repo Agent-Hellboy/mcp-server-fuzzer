@@ -47,9 +47,6 @@ class StdioTransport(TransportProtocol):
 
     async def _ensure_connection(self):
         """Ensure we have a persistent connection to the subprocess."""
-        if self._initialized and self.process and self.process.poll() is None:
-            return
-
         async with self._lock:
             if self._initialized and self.process and self.process.poll() is None:
                 return

@@ -169,9 +169,9 @@ class ProcessManager:
         else:
             process.terminate()
 
-        # Non-blocking wait with very short timeout
+        # Give process a short window to terminate gracefully
         try:
-            process.wait(timeout=0.1)
+            process.wait(timeout=2.0)
             self._logger.info(f"Gracefully stopped process {pid} ({name})")
         except subprocess.TimeoutExpired:
             # Process didn't terminate quickly, mark as stopped anyway
@@ -184,7 +184,9 @@ class ProcessManager:
 
     async def stop_all_processes(self, force: bool = False) -> None:
         """Stop all running processes asynchronously."""
-        pids = list(self._processes.keys())
+        # Snapshot PIDs under lock to avoid concurrent mutation during iteration
+        async with self._lock:
+            pids = list(self._processes.keys())
         tasks = [self.stop_process(pid, force=force) for pid in pids]
         await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -209,10 +211,18 @@ class ProcessManager:
 
     async def list_processes(self) -> List[Dict[str, Any]]:
         """Get a list of all managed processes with their status."""
+        # Copy current PIDs under lock, then fetch statuses outside to avoid
+        # re-entrant lock acquisition in get_process_status
         async with self._lock:
-            return [
-                await self.get_process_status(pid) for pid in self._processes.keys()
-            ]
+            pids = list(self._processes.keys())
+
+        results = await asyncio.gather(
+            *(self.get_process_status(pid) for pid in pids),
+            return_exceptions=True,
+        )
+        # Filter out None and any exceptions
+        filtered: List[Dict[str, Any]] = [r for r in results if isinstance(r, dict)]
+        return filtered
 
     async def wait_for_process(
         self, pid: int, timeout: Optional[float] = None
@@ -369,7 +379,7 @@ class ProcessManager:
                         f"Sent SIGINT interrupt signal to process {pid} ({name})"
                     )
                 except OSError:
-                    # Windows doesn't have SIGINT equivalent, use terminate
+                    # Failed to signal process group; fall back to terminate
                     process.terminate()
                     self._logger.info(
                         f"Sent terminate interrupt signal to process {pid} ({name})"

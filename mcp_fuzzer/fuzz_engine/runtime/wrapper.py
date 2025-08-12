@@ -27,19 +27,6 @@ class AsyncProcessWrapper:
         self.max_workers = max_workers
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self._logger = logging.getLogger(__name__)
-        self._loop = None  # Initialize lazily when needed
-
-    @property
-    def _get_loop(self):
-        """Get the event loop, initializing it if needed."""
-        if self._loop is None:
-            try:
-                self._loop = asyncio.get_event_loop()
-            except RuntimeError:
-                # Create a new event loop if none exists
-                self._loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self._loop)
-        return self._loop
 
     async def start_process(self, config: ProcessConfig) -> Any:
         """Start a process asynchronously."""
@@ -82,8 +69,12 @@ class AsyncProcessWrapper:
     async def shutdown(self) -> None:
         """Shutdown the wrapper and process manager asynchronously."""
         await self.process_manager.shutdown()
-        # Shutdown executor without waiting
-        self.executor.shutdown(wait=False)
+        # Properly shutdown executor without blocking the event loop
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self.executor.shutdown, True)
 
     async def send_timeout_signal(self, pid: int, signal_type: str = "timeout") -> bool:
         """Send a timeout signal asynchronously."""
@@ -133,10 +124,8 @@ class AsyncProcessGroup:
 
     async def get_all_process_statuses(self) -> List[Optional[Dict[str, Any]]]:
         """Get statuses for all processes asynchronously."""
-        processes = await self.process_wrapper.list_processes()
-        pids = [proc["process"].pid for proc in processes if "process" in proc]
-        tasks = [self.process_wrapper.get_process_status(pid) for pid in pids]
-        return await asyncio.gather(*tasks, return_exceptions=True)
+        # list_processes already returns statuses for all processes
+        return await self.process_wrapper.list_processes()
 
     async def shutdown(self) -> None:
         """Shutdown the process group asynchronously."""
