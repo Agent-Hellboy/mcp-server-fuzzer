@@ -28,6 +28,22 @@ jobs:
           rm -rf build/ dist/ *.egg-info
           python -m build
 
+      - name: Upload distributions to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+      - name: Upload distributions to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          name: "Release ${{ github.ref_name }}"
+          body: "Release ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish to PyPI
         env:
           TWINE_USERNAME: __token__
