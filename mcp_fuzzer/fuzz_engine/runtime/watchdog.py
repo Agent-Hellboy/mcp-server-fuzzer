@@ -303,6 +303,11 @@ class ProcessWatchdog:
             if pid in self._processes:
                 self._processes[pid]["last_activity"] = time.time()
 
+    def is_process_registered(self, pid: int) -> bool:
+        """Check if a process is registered for monitoring."""
+        with self._lock:
+            return pid in self._processes
+
     def get_stats(self) -> dict:
         """Get statistics about monitored processes."""
         with self._lock:

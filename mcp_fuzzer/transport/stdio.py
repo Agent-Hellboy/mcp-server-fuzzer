@@ -47,6 +47,11 @@ class StdioTransport(TransportProtocol):
 
     async def _ensure_connection(self):
         """Ensure we have a persistent connection to the subprocess."""
+        # Fast-path: if already initialized and process is alive, avoid locking
+        proc = self.process
+        if self._initialized and proc is not None and proc.poll() is None:
+            return
+
         async with self._lock:
             if self._initialized and self.process and self.process.poll() is None:
                 return
@@ -259,7 +264,7 @@ class StdioTransport(TransportProtocol):
         """Send a timeout signal to the transport process."""
         if self.process and hasattr(self.process, "pid"):
             # Check if process is registered with watchdog
-            if self.process.pid in self.process_manager.watchdog._processes:
+            if await self.process_manager.is_process_registered(self.process.pid):
                 return await self.process_manager.send_timeout_signal(
                     self.process.pid, signal_type
                 )

@@ -131,13 +131,13 @@ def fuzz_initialize_request_realistic() -> Dict[str, Any]:
         "method": random.choice(method_options),
         "params": {
             "protocolVersion": random.choice(protocol_versions),
-            # Align with MCP ServerCapabilities spec: include valid fields only
-            # https://modelcontextprotocol.io/specification/2025-06-18/schema#servercapabilities
+            # Align with MCP ClientCapabilities spec: include valid fields only
+            # https://modelcontextprotocol.io/specification/draft/schema#ClientCapabilities
             "capabilities": {
+                "elicitation": {},
                 "experimental": {},
-                "tools": {"listChanged": True},
-                "prompts": {"listChanged": True},
-                "resources": {"listChanged": True, "subscribe": False},
+                "roots": {"listChanged": True},
+                "sampling": {},
             },
             "clientInfo": {"name": "test-client", "version": "1.0.0"},
         },

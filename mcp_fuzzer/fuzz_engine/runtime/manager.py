@@ -410,3 +410,7 @@ class ProcessManager:
                 results[pid] = result
 
         return results
+
+    async def is_process_registered(self, pid: int) -> bool:
+        """Check if a process is registered with the watchdog."""
+        return self.watchdog.is_process_registered(pid)

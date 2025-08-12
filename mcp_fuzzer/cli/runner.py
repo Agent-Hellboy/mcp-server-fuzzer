@@ -81,7 +81,18 @@ def execute_inner_client(args, unified_client_main, argv):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        # Print an immediate notice on first SIGINT/SIGTERM, then cancel tasks
+        _signal_notice = {"printed": False}
+
         def _cancel_all_tasks():  # pragma: no cover
+            if not _signal_notice["printed"]:
+                try:
+                    Console().print(
+                        "\n[yellow]Received Ctrl+C from user; stopping now[/yellow]"
+                    )
+                except Exception:
+                    pass
+                _signal_notice["printed"] = True
             for task in asyncio.all_tasks(loop):
                 task.cancel()
 
