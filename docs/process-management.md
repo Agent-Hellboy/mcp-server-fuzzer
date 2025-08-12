@@ -29,7 +29,7 @@ AsyncProcessGroup (Group management)
 The core watchdog system that monitors processes for hanging behavior.
 
 ```python
-from mcp_fuzzer.process_mgmt import ProcessWatchdog, WatchdogConfig
+from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
 
 # Custom configuration
 config = WatchdogConfig(
@@ -53,7 +53,7 @@ watchdog.register_process(pid, process, name="my_process")
 High-level process management interface that coordinates with the watchdog system.
 
 ```python
-from mcp_fuzzer.process_mgmt import ProcessManager, ProcessConfig
+from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 manager = ProcessManager()
 
@@ -86,7 +86,7 @@ Async wrapper around ProcessManager for use in async contexts.
 
 ```python
 import asyncio
-from mcp_fuzzer.process_mgmt import AsyncProcessWrapper, ProcessConfig
+from mcp_fuzzer.fuzz_engine.runtime import AsyncProcessWrapper, ProcessConfig
 
 async def main():
     wrapper = AsyncProcessWrapper()
@@ -114,7 +114,7 @@ Manages groups of related processes that should be started, stopped, or monitore
 
 ```python
 import asyncio
-from mcp_fuzzer.process_mgmt import AsyncProcessGroup, ProcessConfig
+from mcp_fuzzer.fuzz_engine.runtime import AsyncProcessGroup, ProcessConfig
 
 async def main():
     group = AsyncProcessGroup()
@@ -211,7 +211,7 @@ asyncio.run(main())
 ### Basic Process Management
 
 ```python
-from mcp_fuzzer.process_mgmt import ProcessManager, ProcessConfig
+from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 # Create manager
 manager = ProcessManager()
@@ -243,7 +243,7 @@ finally:
 
 ```python
 import asyncio
-from mcp_fuzzer.process_mgmt import AsyncProcessWrapper, ProcessConfig
+from mcp_fuzzer.fuzz_engine.runtime import AsyncProcessWrapper, ProcessConfig
 
 async def run_multiple_processes():
     wrapper = AsyncProcessWrapper()
@@ -276,7 +276,7 @@ asyncio.run(run_multiple_processes())
 
 ```python
 import time
-from mcp_fuzzer.process_mgmt import ProcessManager, ProcessConfig
+from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 class CustomProcess:
     def __init__(self):
@@ -319,7 +319,7 @@ manager.shutdown()
 ### Signal Handling
 
 ```python
-from mcp_fuzzer.process_mgmt import ProcessManager, ProcessConfig
+from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 manager = ProcessManager()
 
@@ -352,7 +352,7 @@ manager.shutdown()
 
 ```python
 import asyncio
-from mcp_fuzzer.process_mgmt import AsyncProcessWrapper, ProcessConfig
+from mcp_fuzzer.fuzz_engine.runtime import AsyncProcessWrapper, ProcessConfig
 
 async def main():
     wrapper = AsyncProcessWrapper()
@@ -398,7 +398,7 @@ Enable debug logging to see detailed watchdog activity:
 
 ```python
 import logging
-logging.getLogger('mcp_fuzzer.process_mgmt').setLevel(logging.DEBUG)
+logging.getLogger('mcp_fuzzer.fuzz_engine.runtime').setLevel(logging.DEBUG)
 ```
 
 ### Performance Tuning
@@ -420,6 +420,6 @@ The Process Management system integrates seamlessly with the MCP Fuzzer architec
 
 For complete API documentation, see the individual module docstrings:
 
-- `mcp_fuzzer.process_mgmt.watchdog`
-- `mcp_fuzzer.process_mgmt.manager`
-- `mcp_fuzzer.process_mgmt.wrapper`
+- `mcp_fuzzer.fuzz_engine.runtime.watchdog`
+- `mcp_fuzzer.fuzz_engine.runtime.manager`
+- `mcp_fuzzer.fuzz_engine.runtime.wrapper`

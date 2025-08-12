@@ -18,109 +18,116 @@ The MCP Server Fuzzer is built with a modular, layered architecture that separat
 ```mermaid
 graph TB
     subgraph "CLI Layer"
-        A1[Argument Parser]
-        A2[Main CLI Entry Point]
-        A3[Runner Logic]
+        A1[Args Parser]
+        A2[Main CLI]
+        A3[Runner]
     end
 
-    subgraph "Unified Client Layer"
-        B1[Start/Stop System]
-        B2[System Blocker]
-        B3[Tool/Protocol Orchestration]
+    subgraph "Client"
+        B1[UnifiedMCPFuzzerClient]
+        B2[Safety Integration]
+        B3[Reporting Integration]
     end
 
-    subgraph "Transport Layer"
-        C1[HTTP Transport]
-        C2[SSE Transport]
-        C3[Stdio Transport]
+    subgraph "Transports"
+        C1[HTTP]
+        C2[SSE]
+        C3[STDIO]
     end
 
-    subgraph "Fuzzing Engine"
-        D1[Tool Fuzzer]
-        D2[Protocol Fuzzer]
+    subgraph "Fuzz Engine"
+        D1[ToolFuzzer]
+        D2[ProtocolFuzzer]
         D3[Strategy Manager]
     end
 
+    subgraph "Runtime"
+        R1[ProcessManager]
+        R2[ProcessWatchdog]
+        R3[AsyncProcessWrapper]
+    end
+
     subgraph "Safety System"
-        E1[Core Safety Logic]
-        E2[System Blocker]
-        E3[Environment Detection]
+        E1[SafetyFilter]
+        E2[SystemBlocker]
+    end
+
+    subgraph "Reports"
+        F1[FuzzerReporter]
+        F2[Formatters (Console/JSON/Text)]
+        F3[SafetyReporter]
     end
 
     A1 --> B1
-    A2 --> B2
-    A3 --> B3
+    A2 --> B1
+    A3 --> B1
 
     B1 --> C1
-    B2 --> C2
-    B3 --> C3
-
-    C1 --> D1
-    C2 --> D2
-    C3 --> D3
+    B1 --> C2
+    B1 --> C3
+    B1 --> D1
+    B1 --> D2
+    B1 --> F1
 
     D1 --> E1
-    D2 --> E2
-    D3 --> E3
+    D2 --> E1
+
+    C3 -.-> R1
+    R1 --> R2
+
+    B1 --> E1
+    E1 --> F3
+    F1 --> F2
 ```
 
-## 🔄 Data Flow
+## \U0001F4C4 Data Flow
 
 ### Main Execution Flow
 
 ```mermaid
 graph TD
-    A[CLI Entry Point] --> B[Parse Arguments]
+    A[CLI] --> B[Parse Arguments]
     B --> C[Create Transport]
-    C --> D[Initialize Client]
+    C --> D[Init Client + Reporter]
     D --> E[Discover Tools]
-    E --> F[Select Fuzzing Mode]
+    E --> F{Mode}
 
-    F --> G{Mode?}
-    G -->|Tools| H[Tool Fuzzer]
-    G -->|Protocol| I[Protocol Fuzzer]
+    F -->|Tools| G[ToolFuzzer]
+    F -->|Protocol| H[ProtocolFuzzer]
 
-    H --> J[Generate Test Data]
-    I --> K[Generate Protocol Messages]
+    G --> I[Generate Test Data]
+    H --> J[Generate Protocol Messages]
 
-    J --> L[Execute Tests]
-    K --> M[Execute Protocol Tests]
+    I --> K[Send via Transport]
+    J --> K
 
-    L --> N[Collect Results]
-    M --> O[Collect Results]
+    K --> L{SafetyFilter}
+    L -->|Block| M[Log + Mock Response]
+    L -->|Allow/Sanitize| N[Execute Request]
 
-    N --> P[Generate Report]
-    O --> Q[Generate Report]
+    N --> O[Collect Results]
+    M --> O
 
-    P --> R[Display Results]
-    Q --> R[Display Results]
+    O --> P[Reporter Formats + Writes]
+    P --> Q[Console/Files]
 ```
 
 ### Safety System Flow
 
 ```mermaid
 graph TD
-    A[Input Request] --> B{Environment Check}
-    B -->|Production| C[Apply Safety Rules]
-    B -->|Development| D[Check Safety Level]
+    A[Tool Call] --> B[Sanitize Arguments]
+    B --> C{Dangerous?}
+    C -->|Yes| D[log_blocked_operation]
+    D --> E[create_safe_mock_response]
+    C -->|No| F[Execute]
 
-    C --> E[Block Dangerous Ops]
-    D --> F{Operation Type?}
-
-    F -->|Safe| G[Allow Operation]
-    F -->|Dangerous| H[Apply Safety Filter]
-
-    E --> I[Log Blocked Operation]
-    H --> J[Sanitize Input]
-
-    I --> K[Return Safe Response]
-    J --> L[Execute Operation]
-
-    K --> M[End]
-    L --> M[End]
+    subgraph SystemBlocker
+        G[Intercept OS commands via PATH shims]
+    end
 ```
 
-## 📁 Project Structure
+## \U0001F4C1 Project Structure
 
 ```
 mcp_fuzzer/
@@ -136,21 +143,33 @@ mcp_fuzzer/
 │   ├── http.py            # HTTP/HTTPS transport
 │   ├── sse.py             # Server-Sent Events transport
 │   └── stdio.py           # Standard I/O transport
-├── fuzzer/                 # Fuzzing engine
+├── fuzz_engine/            # Fuzzing engine
 │   ├── __init__.py
-│   ├── tool_fuzzer.py     # Tool-level fuzzing
-│   └── protocol_fuzzer.py # Protocol-level fuzzing
-├── strategy/               # Fuzzing strategies
+│   ├── fuzzer/            # Core fuzzing logic
+│   │   ├── __init__.py
+│   │   ├── tool_fuzzer.py     # Tool-level fuzzing
+│   │   └── protocol_fuzzer.py # Protocol-level fuzzing
+│   ├── strategy/           # Fuzzing strategies
+│   │   ├── __init__.py
+│   │   ├── realistic/         # Realistic data generation
+│   │   │   ├── __init__.py
+│   │   │   ├── protocol_type_strategy.py
+│   │   │   └── tool_strategy.py
+│   │   ├── aggressive/        # Aggressive attack vectors
+│   │   │   ├── __init__.py
+│   │   │   ├── protocol_type_strategy.py
+│   │   │   └── tool_strategy.py
+│   │   └── strategy_manager.py # Strategy orchestration
+│   └── runtime/            # Process management and runtime
+│       ├── __init__.py
+│       ├── manager.py      # Process manager
+│       ├── watchdog.py     # Process monitoring
+│       └── wrapper.py      # Async process wrapper
+├── reports/                # Reporting and output system
 │   ├── __init__.py
-│   ├── realistic/         # Realistic data generation
-│   │   ├── __init__.py
-│   │   ├── protocol_type_strategy.py
-│   │   └── tool_strategy.py
-│   ├── aggressive/        # Aggressive attack vectors
-│   │   ├── __init__.py
-│   │   ├── protocol_type_strategy.py
-│   │   └── tool_strategy.py
-│   └── strategy_manager.py # Strategy orchestration
+│   ├── reporter.py         # Main reporting coordinator
+│   ├── formatters.py       # Output formatters (Console, JSON, Text)
+│   └── safety_reporter.py  # Safety system reporting
 ├── safety_system/          # Safety and protection
 │   ├── __init__.py
 │   ├── safety.py          # Core safety logic
@@ -272,7 +291,37 @@ The authentication system manages various authentication methods for MCP servers
 - **OAuth token authentication**
 - **Custom header authentication**
 
-## 🔄 Execution Flow
+### 7. Reporting System
+
+The reporting system provides centralized output management and comprehensive result reporting.
+
+**Key Components:**
+
+- `reporter.py`: Main `FuzzerReporter` class that coordinates all reporting
+- `formatters.py`: Output formatters for different formats (Console, JSON, Text)
+- `safety_reporter.py`: Dedicated safety system reporting and statistics
+
+**Reporting Features:**
+
+- **Console Output**: Rich, formatted tables with colors and progress tracking
+- **File Export**: JSON and text reports for analysis and documentation
+- **Result Aggregation**: Comprehensive statistics and success rate calculations
+- **Safety Reporting**: Detailed breakdown of blocked operations and risk assessments
+- **Session Tracking**: Timestamped reports with unique session identification
+
+**Output Formats:**
+
+- **Console**: Interactive tables and progress indicators
+- **JSON**: Machine-readable structured data for external analysis
+- **Text**: Human-readable summaries for sharing and documentation
+
+**Report Types:**
+
+- **Fuzzing Reports**: Complete tool and protocol testing results
+- **Safety Reports**: Detailed safety system data and blocked operations
+- **Session Reports**: Metadata, configuration, and execution statistics
+
+## \U0001F4C4 Execution Flow
 
 ### Tool Fuzzing Flow
 
@@ -441,7 +490,7 @@ The architecture supports scaling:
 - **Configurable concurrency limits**
 - **Resource usage monitoring**
 
-## 🔒 Security Considerations
+## Security Considerations
 
 ### Input Validation
 

@@ -62,7 +62,7 @@ export PRODUCTION=true
 export CI=true
 ```
 
-## 🚫 System Command Blocking
+## System Command Blocking
 
 ### Blocked Commands
 
@@ -129,7 +129,7 @@ exit 1
     return safe_path
 ```
 
-## 📁 Filesystem Sandboxing
+## Filesystem Sandboxing
 
 ### Safe Directory Configuration
 
@@ -177,7 +177,7 @@ class FilesystemSandbox:
         return path
 ```
 
-## 🔒 Process Isolation
+## Process Isolation
 
 ### Safe Subprocess Handling
 
@@ -451,7 +451,7 @@ grep "safety_violation" mcp_fuzzer_safety.log
 grep "command_blocked" mcp_fuzzer_safety.log
 ```
 
-## 📋 Safety Checklist
+## Safety Checklist
 
 ### Before Running Fuzzer
 
@@ -566,7 +566,7 @@ def test_safety_system():
     assert sandbox.is_path_safe("/etc/passwd") == False
 ```
 
-## 📚 Best Practices
+## Best Practices
 
 ### General Safety Guidelines
 

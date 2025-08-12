@@ -8,7 +8,7 @@ This module contains the orchestration logic for fuzzing MCP tools.
 import logging
 from typing import Any, Dict, List
 
-from ..safety_system.safety import (
+from ...safety_system.safety import (
     safety_filter,
     is_safe_tool_call,
     sanitize_tool_call,

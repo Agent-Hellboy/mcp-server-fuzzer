@@ -48,19 +48,17 @@ class SimpleMCPServer:
                     "type": "object",
                     "properties": {
                         "message": {"type": "string"},
-                        "count": {"type": "integer"}
-                    }
-                }
+                        "count": {"type": "integer"},
+                    },
+                },
             },
             {
                 "name": "echo_tool",
                 "description": "Echoes back the input",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {
-                        "text": {"type": "string"}
-                    }
-                }
+                    "properties": {"text": {"type": "string"}},
+                },
             },
             {
                 "name": "secure_tool",
@@ -69,7 +67,7 @@ class SimpleMCPServer:
                     "type": "object",
                     "properties": {"msg": {"type": "string"}},
                 },
-            }
+            },
         ]
 
     def _is_authorized(self, headers: Dict[str, str]) -> bool:
@@ -93,13 +91,7 @@ class SimpleMCPServer:
         logger.info(f"Handling request: {method}")
 
         if method == "tools/list":
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "tools": self.tools
-                }
-            }
+            return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": self.tools}}
 
         elif method == "tools/call":
             tool_name = params.get("name")
@@ -121,7 +113,7 @@ class SimpleMCPServer:
                                 ),
                             }
                         ]
-                    }
+                    },
                 }
 
             elif tool_name == "echo_tool":
@@ -129,14 +121,7 @@ class SimpleMCPServer:
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"Echo: {text}"
-                            }
-                        ]
-                    }
+                    "result": {"content": [{"type": "text", "text": f"Echo: {text}"}]},
                 }
 
             elif tool_name == "secure_tool":
@@ -151,9 +136,7 @@ class SimpleMCPServer:
                     "jsonrpc": "2.0",
                     "id": request_id,
                     "result": {
-                        "content": [
-                            {"type": "text", "text": f"Secure OK: {msg}"}
-                        ]
+                        "content": [{"type": "text", "text": f"Secure OK: {msg}"}]
                     },
                 }
 
@@ -163,8 +146,8 @@ class SimpleMCPServer:
                     "id": request_id,
                     "error": {
                         "code": -32601,
-                        "message": f"Method '{tool_name}' not found"
-                    }
+                        "message": f"Method '{tool_name}' not found",
+                    },
                 }
 
         elif method == "initialize":
@@ -173,24 +156,16 @@ class SimpleMCPServer:
                 "id": request_id,
                 "result": {
                     "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {"listChanged": True}
-                    },
-                    "serverInfo": {
-                        "name": "Simple Test Server",
-                        "version": "1.0.0"
-                    }
-                }
+                    "capabilities": {"tools": {"listChanged": True}},
+                    "serverInfo": {"name": "Simple Test Server", "version": "1.0.0"},
+                },
             }
 
         else:
             return {
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "error": {
-                    "code": -32601,
-                    "message": f"Method '{method}' not found"
-                }
+                "error": {"code": -32601, "message": f"Method '{method}' not found"},
             }
 
 
@@ -247,11 +222,7 @@ Content-Length: 50
 
 async def main():
     """Start the test server."""
-    server = await asyncio.start_server(
-        handle_http_request,
-        'localhost',
-        8000
-    )
+    server = await asyncio.start_server(handle_http_request, "localhost", 8000)
 
     logger.info("Test server started on http://localhost:8000")
     logger.info("Available tools: test_tool, echo_tool")

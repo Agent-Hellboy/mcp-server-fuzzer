@@ -244,7 +244,7 @@ def fuzz_progress_notification() -> Dict[str, Any]:
         _generate_malicious_value(),
         "",
         None,
-        "🚀🔥💯",
+        "\U0001f680\U0001f525\U0001f4af",
         "A" * 1000,
         float("inf"),
         float("nan"),

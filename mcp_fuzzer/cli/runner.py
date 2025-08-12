@@ -88,6 +88,7 @@ def execute_inner_client(args, unified_client_main, argv):
         if not getattr(args, "retry_with_safety_on_interrupt", False):
             try:
                 loop.add_signal_handler(signal.SIGINT, _cancel_all_tasks)
+                loop.add_signal_handler(signal.SIGTERM, _cancel_all_tasks)
             except NotImplementedError:
                 pass
         try:
@@ -97,11 +98,21 @@ def execute_inner_client(args, unified_client_main, argv):
             should_exit = True
         finally:
             try:
+                # Cancel all remaining tasks more aggressively
                 pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
                 for t in pending:
                     t.cancel()
-                gathered = asyncio.gather(*pending, return_exceptions=True)
-                loop.run_until_complete(gathered)
+
+                # Wait for cancellation with a short timeout
+                if pending:
+                    gathered = asyncio.gather(*pending, return_exceptions=True)
+                    try:
+                        loop.run_until_complete(asyncio.wait_for(gathered, timeout=2.0))
+                    except asyncio.TimeoutError:
+                        # Force kill any remaining tasks
+                        for t in pending:
+                            if not t.done():
+                                t.cancel()
             except Exception:
                 pass
             loop.close()

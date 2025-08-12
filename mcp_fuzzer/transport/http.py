@@ -1,11 +1,13 @@
 import json
 import logging
 import uuid
+import time
 from typing import Any, Dict, Optional
 
 import httpx
 
 from .base import TransportProtocol
+from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 
 
 class HTTPTransport(TransportProtocol):
@@ -24,6 +26,23 @@ class HTTPTransport(TransportProtocol):
         if auth_headers:
             self.headers.update(auth_headers)
 
+        # Track last activity for process management
+        self._last_activity = time.time()
+
+        # Initialize process manager for any subprocesses (like proxy servers)
+        watchdog_config = WatchdogConfig(
+            check_interval=1.0,
+            process_timeout=timeout,
+            extra_buffer=5.0,
+            max_hang_time=timeout + 10.0,
+            auto_kill=True,
+        )
+        self.process_manager = ProcessManager(watchdog_config)
+
+    def _update_activity(self):
+        """Update last activity timestamp."""
+        self._last_activity = time.time()
+
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> Any:
@@ -34,6 +53,9 @@ class HTTPTransport(TransportProtocol):
             "method": method,
             "params": params or {},
         }
+
+        self._update_activity()
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
             response.raise_for_status()
@@ -60,6 +82,8 @@ class HTTPTransport(TransportProtocol):
             return data
 
     async def send_raw(self, payload: Dict[str, Any]) -> Any:
+        self._update_activity()
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
             response.raise_for_status()
@@ -82,6 +106,33 @@ class HTTPTransport(TransportProtocol):
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> None:
         payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
+
+        self._update_activity()
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
             response.raise_for_status()
+
+    def get_process_stats(self) -> Dict[str, Any]:
+        """Get statistics about any managed processes."""
+        return self.process_manager.get_stats()
+
+    def send_timeout_signal_to_all(
+        self, signal_type: str = "timeout"
+    ) -> Dict[int, bool]:
+        """Send timeout signals to all managed processes."""
+        return self.process_manager.send_timeout_signal_to_all(signal_type)
+
+    async def close(self):
+        """Close the transport and cleanup resources."""
+        try:
+            if hasattr(self, "process_manager"):
+                await self.process_manager.shutdown()
+        except Exception as e:
+            logging.warning(f"Error shutting down HTTP transport process manager: {e}")
+
+    def __del__(self):
+        """Cleanup when the object is destroyed."""
+        # Don't try to call async methods in destructor
+        # The object will be cleaned up by Python's garbage collector
+        pass
