@@ -31,15 +31,19 @@ jobs:
           rm -rf build/ dist/ *.egg-info
           python -m build
 
-      - name: Upload distributions to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          name: "Release ${{ github.ref_name }}"
-          body: "Release ${{ github.ref_name }}"
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release if not exists
+        run: |
+          VERSION="${GITHUB_REF##*/}"
+          gh release view "$VERSION" || gh release create "$VERSION" --title "$VERSION" --notes "Automated release"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload distributions to GitHub Release (clobber)
+        run: |
+          VERSION="${GITHUB_REF##*/}"
+          gh release upload "$VERSION" dist/* --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to PyPI
         env:

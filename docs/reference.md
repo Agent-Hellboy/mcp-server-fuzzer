@@ -2,7 +2,7 @@
 
 This page provides a complete reference for MCP Server Fuzzer, including all command-line options, API documentation, and configuration details.
 
-## \U0001F4CB Command-Line Reference
+## Command-Line Reference
 
 ### Basic Syntax
 
@@ -92,7 +92,7 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol} --protocol {http|sse|stdio} --endpo
 | `MCP_PASSWORD` | Password for basic authentication |
 | `MCP_OAUTH_TOKEN` | OAuth token for authentication |
 
-## \U0001F4DA API Reference
+## API Reference
 
 ### Transport Protocol Interface
 

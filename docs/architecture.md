@@ -11,76 +11,76 @@ The MCP Server Fuzzer is built with a modular, layered architecture that separat
 - **Safe**: Built-in safety mechanisms protect against dangerous operations
 - **Testable**: Each component can be tested independently
 
-## 🧩 Core Components
+## Core Components
 
 ### High-Level Architecture
 
 ```mermaid
-graph TB
-    subgraph "CLI Layer"
-        A1[Args Parser]
-        A2[Main CLI]
-        A3[Runner]
-    end
+flowchart TB
+  subgraph CLI_Layer
+    A1[Args Parser]
+    A2[Main CLI]
+    A3[Runner]
+  end
 
-    subgraph "Client"
-        B1[UnifiedMCPFuzzerClient]
-        B2[Safety Integration]
-        B3[Reporting Integration]
-    end
+  subgraph Client
+    B1[UnifiedMCPFuzzerClient]
+    B2[Safety Integration]
+    B3[Reporting Integration]
+  end
 
-    subgraph "Transports"
-        C1[HTTP]
-        C2[SSE]
-        C3[STDIO]
-    end
+  subgraph Transports
+    C1[HTTP]
+    C2[SSE]
+    C3[STDIO]
+  end
 
-    subgraph "Fuzz Engine"
-        D1[ToolFuzzer]
-        D2[ProtocolFuzzer]
-        D3[Strategy Manager]
-    end
+  subgraph Fuzz_Engine
+    D1[ToolFuzzer]
+    D2[ProtocolFuzzer]
+    D3[Strategy Manager]
+  end
 
-    subgraph "Runtime"
-        R1[ProcessManager]
-        R2[ProcessWatchdog]
-        R3[AsyncProcessWrapper]
-    end
+  subgraph Runtime
+    R1[ProcessManager]
+    R2[ProcessWatchdog]
+    R3[AsyncProcessWrapper]
+  end
 
-    subgraph "Safety System"
-        E1[SafetyFilter]
-        E2[SystemBlocker]
-    end
+  subgraph Safety_System
+    E1[SafetyFilter]
+    E2[SystemBlocker]
+  end
 
-    subgraph "Reports"
-        F1[FuzzerReporter]
-        F2[Formatters (Console/JSON/Text)]
-        F3[SafetyReporter]
-    end
+  subgraph Reports
+    F1[FuzzerReporter]
+    F2[Formatters]
+    F3[SafetyReporter]
+  end
 
-    A1 --> B1
-    A2 --> B1
-    A3 --> B1
+  A1 --> B1
+  A2 --> B1
+  A3 --> B1
 
-    B1 --> C1
-    B1 --> C2
-    B1 --> C3
-    B1 --> D1
-    B1 --> D2
-    B1 --> F1
+  B1 --> C1
+  B1 --> C2
+  B1 --> C3
+  B1 --> D1
+  B1 --> D2
+  B1 --> F1
 
-    D1 --> E1
-    D2 --> E1
+  D1 --> E1
+  D2 --> E1
 
-    C3 -.-> R1
-    R1 --> R2
+  C3 -.-> R1
+  R1 --> R2
 
-    B1 --> E1
-    E1 --> F3
-    F1 --> F2
+  B1 --> E1
+  E1 --> F3
+  F1 --> F2
 ```
 
-## \U0001F4C4 Data Flow
+## Data Flow
 
 ### Main Execution Flow
 
@@ -127,7 +127,7 @@ graph TD
     end
 ```
 
-## \U0001F4C1 Project Structure
+## Project Structure
 
 ```
 mcp_fuzzer/
@@ -321,7 +321,7 @@ The reporting system provides centralized output management and comprehensive re
 - **Safety Reports**: Detailed safety system data and blocked operations
 - **Session Reports**: Metadata, configuration, and execution statistics
 
-## \U0001F4C4 Execution Flow
+## Execution Flow
 
 ### Tool Fuzzing Flow
 

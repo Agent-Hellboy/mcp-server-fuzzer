@@ -222,7 +222,7 @@ export MCP_FUZZER_ENABLE_SAFETY=true
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000
 ```
 
-## \U0001F9EA Testing Examples
+## Testing Examples
 
 ### Local Development Testing
 
