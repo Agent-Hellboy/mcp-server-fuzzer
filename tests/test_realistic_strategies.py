@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unit tests for realistic Hypothesis strategies.
-Tests the realistic strategies from mcp_fuzzer.strategy.realistic.*
+Tests the realistic strategies from mcp_fuzzer.fuzz_engine.strategy.realistic.*
 """
 
 import base64
@@ -13,14 +13,14 @@ from datetime import datetime
 
 from hypothesis import given
 
-from mcp_fuzzer.strategy.realistic.tool_strategy import (
+from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
     base64_strings,
     timestamp_strings,
     uuid_strings,
     generate_realistic_text,
     fuzz_tool_arguments_realistic,
 )
-from mcp_fuzzer.strategy.realistic.protocol_type_strategy import (
+from mcp_fuzzer.fuzz_engine.strategy.realistic.protocol_type_strategy import (
     json_rpc_id_values,
     method_names,
     protocol_version_strings,
@@ -284,7 +284,9 @@ class TestRealisticTextGeneration(unittest.TestCase):
 
     def test_base64_strings_strategy(self):
         """Test base64 string generation strategy."""
-        from mcp_fuzzer.strategy.realistic.tool_strategy import base64_strings
+        from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+            base64_strings,
+        )
 
         # Test with default parameters
         strategy = base64_strings()
@@ -303,7 +305,7 @@ class TestRealisticTextGeneration(unittest.TestCase):
 
     def test_uuid_strings_strategy(self):
         """Test UUID string generation strategy."""
-        from mcp_fuzzer.strategy.realistic.tool_strategy import uuid_strings
+        from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import uuid_strings
 
         # Test UUID4 (default)
         strategy = uuid_strings()
@@ -335,7 +337,9 @@ class TestRealisticTextGeneration(unittest.TestCase):
 
     def test_timestamp_strings_strategy(self):
         """Test timestamp string generation strategy."""
-        from mcp_fuzzer.strategy.realistic.tool_strategy import timestamp_strings
+        from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+            timestamp_strings,
+        )
 
         # Test with default parameters
         strategy = timestamp_strings()

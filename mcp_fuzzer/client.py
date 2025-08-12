@@ -12,14 +12,11 @@ import logging
 import traceback
 from typing import Any, Dict, List, Optional
 
-from rich.console import Console
-from rich.table import Table
 
 from .auth import AuthManager, load_auth_config, setup_auth_from_env
-from .fuzzer.protocol_fuzzer import ProtocolFuzzer
-from .fuzzer.tool_fuzzer import ToolFuzzer
-from .safety_system import get_blocked_operations, is_system_blocking_active
+from .fuzz_engine.fuzzer import ToolFuzzer, ProtocolFuzzer
 from .transport import create_transport
+from .reports import FuzzerReporter
 
 
 class UnifiedMCPFuzzerClient:
@@ -30,11 +27,12 @@ class UnifiedMCPFuzzerClient:
         transport,
         auth_manager: Optional[AuthManager] = None,
         tool_timeout: Optional[float] = None,
+        reporter: Optional[FuzzerReporter] = None,
     ):
         self.transport = transport
         self.tool_fuzzer = ToolFuzzer()
         self.protocol_fuzzer = ProtocolFuzzer(transport)  # Pass transport
-        self.console = Console()
+        self.reporter = reporter or FuzzerReporter()
         self.auth_manager = auth_manager or AuthManager()
         self.tool_timeout = tool_timeout
 
@@ -75,6 +73,7 @@ class UnifiedMCPFuzzerClient:
 
                 # Enforce per-call timeout and allow immediate Ctrl-C
                 try:
+                    tool_task = None
                     # Prefer explicit tool-timeout passed via CLI; fall back to
                     # transport.timeout or 30s
                     tool_timeout = 30.0
@@ -83,18 +82,55 @@ class UnifiedMCPFuzzerClient:
                     if hasattr(self, "tool_timeout") and self.tool_timeout:
                         tool_timeout = float(self.tool_timeout)
 
-                    result = await asyncio.wait_for(
-                        self.transport.call_tool(tool["name"], args),
-                        timeout=tool_timeout,
+                    # Create a task that can be cancelled
+                    tool_task = asyncio.create_task(
+                        self.transport.call_tool(tool["name"], args)
                     )
+
+                    # Wait for the task with timeout and cancellation support
+                    result = await asyncio.wait_for(tool_task, timeout=tool_timeout)
+
                 except asyncio.CancelledError:
+                    # Cancel the tool task if we're cancelled
+                    if tool_task is not None:
+                        tool_task.cancel()
+                        try:
+                            await asyncio.wait_for(tool_task, timeout=1.0)
+                        except (asyncio.CancelledError, asyncio.TimeoutError):
+                            pass
                     raise
                 except asyncio.TimeoutError:
+                    # Cancel the tool task on timeout
+                    if tool_task is not None:
+                        tool_task.cancel()
+                        try:
+                            await asyncio.wait_for(tool_task, timeout=1.0)
+                        except (asyncio.CancelledError, asyncio.TimeoutError):
+                            pass
+
                     results.append(
                         {
                             "args": args,
                             "exception": "timeout",
                             "timed_out": True,
+                            "safety_blocked": False,
+                            "safety_sanitized": False,
+                        }
+                    )
+                    continue
+                except Exception as e:
+                    # Handle any other exceptions
+                    if tool_task is not None:
+                        tool_task.cancel()
+                        try:
+                            await asyncio.wait_for(tool_task, timeout=1.0)
+                        except (asyncio.CancelledError, asyncio.TimeoutError):
+                            pass
+
+                    results.append(
+                        {
+                            "args": args,
+                            "exception": str(e),
                             "safety_blocked": False,
                             "safety_sanitized": False,
                         }
@@ -162,13 +198,40 @@ class UnifiedMCPFuzzerClient:
             return {}
 
         all_results = {}
+        start_time = asyncio.get_event_loop().time()
+        max_total_time = 300  # 5 minutes max for entire fuzzing session
 
-        for tool in tools:
+        for i, tool in enumerate(tools):
+            # Check if we're taking too long overall
+            elapsed = asyncio.get_event_loop().time() - start_time
+            if elapsed > max_total_time:
+                logging.warning(
+                    f"Fuzzing session taking too long ({elapsed:.1f}s), stopping early"
+                )
+                break
+
             tool_name = tool.get("name", "unknown")
-            logging.info(f"Starting to fuzz tool: {tool_name}")
+            logging.info(f"Starting to fuzz tool: {tool_name} ({i + 1}/{len(tools)})")
 
             try:
-                results = await self.fuzz_tool(tool, runs_per_tool)
+                # Add a timeout for each individual tool
+                max_tool_time = 60  # 1 minute max per tool
+
+                tool_task = asyncio.create_task(self.fuzz_tool(tool, runs_per_tool))
+
+                try:
+                    results = await asyncio.wait_for(tool_task, timeout=max_tool_time)
+                except asyncio.TimeoutError:
+                    logging.warning(f"Tool {tool_name} took too long, cancelling")
+                    tool_task.cancel()
+                    try:
+                        await asyncio.wait_for(tool_task, timeout=1.0)
+                    except (asyncio.CancelledError, asyncio.TimeoutError):
+                        pass
+                    results = [
+                        {"error": "tool_timeout", "exception": "Tool fuzzing timed out"}
+                    ]
+
                 all_results[tool_name] = results
 
                 # Calculate statistics
@@ -191,14 +254,19 @@ class UnifiedMCPFuzzerClient:
         self, runs_per_phase: int = 5
     ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
         """Fuzz all tools in both realistic and aggressive phases."""
-        self.console.print(
-            "\n[bold blue]🚀 Starting Two-Phase Tool Fuzzing[/bold blue]"
-        )
+        # Use reporter for output instead of console
+        if hasattr(self, "reporter") and self.reporter:
+            self.reporter.console.print(
+                "\n[bold blue]\U0001f680 Starting Two-Phase Tool Fuzzing[/bold blue]"
+            )
 
         try:
             tools = await self.transport.get_tools()
             if not tools:
-                self.console.print("[yellow]⚠️  No tools available for fuzzing[/yellow]")
+                if hasattr(self, "reporter") and self.reporter:
+                    self.reporter.console.print(
+                        "[yellow]\U000026a0  No tools available for fuzzing[/yellow]"
+                    )
                 return {}
 
             all_results = {}
@@ -206,9 +274,10 @@ class UnifiedMCPFuzzerClient:
 
             for tool in tools:
                 tool_name = tool.get("name", "unknown")
-                self.console.print(
-                    f"\n[cyan]🔧 Two-phase fuzzing tool: {tool_name}[/cyan]"
-                )
+                if hasattr(self, "reporter") and self.reporter:
+                    self.reporter.console.print(
+                        f"\n[cyan]\U0001f527 Two-phase fuzzing tool: {tool_name}[/cyan]"
+                    )
 
                 try:
                     # Run both phases for this tool
@@ -223,9 +292,13 @@ class UnifiedMCPFuzzerClient:
                             [r for r in results if r.get("success", False)]
                         )
                         total = len(results)
-                        self.console.print(
-                            f"  {phase.title()} phase: {successful}/{total} successful"
-                        )
+                        if hasattr(self, "reporter") and self.reporter:
+                            self.reporter.console.print(
+                                (
+                                    f"  {phase.title()} phase: "
+                                    f"{successful}/{total} successful"
+                                )
+                            )
 
                 except Exception as e:
                     logging.error(f"Error in two-phase fuzzing {tool_name}: {e}")
@@ -417,249 +490,23 @@ class UnifiedMCPFuzzerClient:
 
     def print_tool_summary(self, results: Dict[str, List[Dict[str, Any]]]):
         """Print a summary of tool fuzzing results."""
-        table = Table(title="MCP Tool Fuzzing Summary")
-        table.add_column("Tool", style="cyan", no_wrap=True)
-        table.add_column("Total Runs", justify="right")
-        table.add_column("Exceptions", justify="right")
-        table.add_column("Safety Blocked", justify="right", style="yellow")
-        table.add_column("Success Rate", justify="right")
-        table.add_column("Example Exception", style="red")
-        table.add_column("Safety Info", style="yellow")
-
-        for tool_name, tool_results in results.items():
-            if not tool_results:
-                table.add_row(tool_name, "0", "0", "0", "0%", "", "")
-                continue
-
-            # Check if there's a general error
-            if len(tool_results) == 1 and "error" in tool_results[0]:
-                table.add_row(
-                    tool_name,
-                    "0",
-                    "0",
-                    "0",
-                    "0%",
-                    "",
-                    (
-                        tool_results[0]["error"][:50] + "..."
-                        if len(tool_results[0]["error"]) > 50
-                        else tool_results[0]["error"]
-                    ),
-                )
-                continue
-
-            total_runs = len(tool_results)
-            exceptions = len([r for r in tool_results if "exception" in r])
-            safety_blocked = len(
-                [r for r in tool_results if r.get("safety_blocked", False)]
-            )
-            successful = total_runs - exceptions
-            success_rate = (successful / total_runs * 100) if total_runs > 0 else 0
-
-            # Find example exception
-            example_exception = ""
-            for result in tool_results:
-                if "exception" in result:
-                    ex = result["exception"]
-                    example_exception = ex[:50] + "..." if len(ex) > 50 else ex
-                    break
-
-            # Safety information
-            safety_info = ""
-            if safety_blocked > 0:
-                safety_info = f"🛡️ Blocked {safety_blocked}"
-            elif any(r.get("safety_sanitized", False) for r in tool_results):
-                safety_info = "⚠️ Sanitized"
-            else:
-                safety_info = "✅ Safe"
-
-            table.add_row(
-                tool_name,
-                str(total_runs),
-                str(exceptions),
-                str(safety_blocked),
-                f"{success_rate:.1f}%",
-                example_exception,
-                safety_info,
-            )
-
-        self.console.print(table)
+        self.reporter.print_tool_summary(results)
 
     def print_protocol_summary(self, results: Dict[str, List[Dict[str, Any]]]):
         """Print a summary of protocol fuzzing results."""
-        table = Table(title="MCP Protocol Fuzzing Summary")
-        table.add_column("Protocol Type", style="cyan", no_wrap=True)
-        table.add_column("Total Runs", justify="right")
-        table.add_column("Successful", justify="right")
-        table.add_column("Server Errors", justify="right", style="green")
-        table.add_column("Fuzzer Errors", justify="right", style="red")
-        table.add_column("Security Rating", justify="center")
-        table.add_column("Example Server Response", style="blue")
+        self.reporter.print_protocol_summary(results)
 
-        for protocol_type, protocol_results in results.items():
-            if not protocol_results:
-                table.add_row(protocol_type, "0", "0", "0", "0", "N/A", "")
-                continue
+    def print_safety_statistics(self):
+        """Print safety statistics in a compact format."""
+        self.reporter.print_safety_summary()
 
-            # Check if there's a general error
-            if len(protocol_results) == 1 and "error" in protocol_results[0]:
-                table.add_row(
-                    protocol_type,
-                    "0",
-                    "0",
-                    "0",
-                    "1",
-                    "ERROR",
-                    (
-                        protocol_results[0]["error"][:50] + "..."
-                        if len(protocol_results[0]["error"]) > 50
-                        else protocol_results[0]["error"]
-                    ),
-                )
-                continue
-
-            total_runs = len(protocol_results)
-            successful = len([r for r in protocol_results if r.get("success", False)])
-            server_rejections = len(
-                [
-                    r
-                    for r in protocol_results
-                    if r.get("server_handled_malicious_input", False)
-                ]
-            )
-            fuzzer_exceptions = len(
-                [r for r in protocol_results if not r.get("success", False)]
-            )
-
-            # Security rating: Good if server properly rejects malicious inputs
-            if server_rejections > 0:
-                security_rating = "🛡️ GOOD"
-            elif fuzzer_exceptions == 0 and server_rejections == 0:
-                security_rating = "⚠️ WARN"  # Server accepted all malicious inputs
-            else:
-                security_rating = "❌ BAD"
-
-            # Find example server response
-            example_response = ""
-            for result in protocol_results:
-                if result.get("server_error"):
-                    example_response = result["server_error"][:40] + "..."
-                    break
-                elif result.get("server_response"):
-                    resp_str = str(result["server_response"])
-                    example_response = resp_str[:40] + "..."
-                    break
-
-            table.add_row(
-                protocol_type,
-                str(total_runs),
-                str(successful),
-                str(server_rejections),
-                str(fuzzer_exceptions),
-                security_rating,
-                example_response,
-            )
-
-        self.console.print(table)
-
-        # Print legend
-        self.console.print("\n[bold]Legend:[/bold]")
-        self.console.print("🛡️ GOOD: Server properly rejects malicious inputs")
-        self.console.print("⚠️ WARN: Server accepts all inputs (may be vulnerable)")
-        self.console.print("❌ BAD: Fuzzer errors (testing issues)")
-        self.console.print(
-            "[green]Server Errors:[/green] Good - server rejected malicious data"
-        )
-        self.console.print("[red]Fuzzer Errors:[/red] Bad - fuzzer had internal issues")
+    def print_safety_system_summary(self):
+        """Print summary of safety system blocked operations."""
+        self.reporter.print_safety_system_summary()
 
     def print_blocked_operations_summary(self):
         """Print summary of blocked system operations."""
-        console = Console()
-        blocked_ops = get_blocked_operations()
-
-        # Status line about system-level safety
-        try:
-            if is_system_blocking_active():
-                console.print("\n[green]🛡️ System-level safety system enabled[/green]")
-        except Exception:
-            pass
-
-        if not blocked_ops:
-            # If system safety is disabled, clarify that nothing was monitored
-            try:
-                safety_active = is_system_blocking_active()
-            except Exception:
-                safety_active = True
-            if not safety_active:
-                console.print(
-                    "\n[yellow]🛡️ System-level safety system disabled; no system "
-                    "operations were monitored[/yellow]"
-                )
-            else:
-                console.print(
-                    "\n[green]🛡️ No dangerous system operations detected during "
-                    "fuzzing[/green]"
-                )
-            return
-
-        console.print("\n[bold red]🚫 Blocked System Operations Summary[/bold red]")
-        console.print(
-            f"Prevented {len(blocked_ops)} dangerous operations during fuzzing:\n"
-        )
-
-        # Create table for blocked operations
-        table = Table(title="System Operations Blocked During Fuzzing")
-        table.add_column("Operation", style="red", no_wrap=True)
-        table.add_column("Command", style="yellow")
-        table.add_column("Arguments", style="dim")
-        table.add_column("Time", style="dim")
-
-        for op in blocked_ops:
-            # Extract time (just the time part)
-            timestamp = op.get("timestamp", "")
-            if "T" in timestamp:
-                time_part = timestamp.split("T")[1].split(".")[0]  # HH:MM:SS
-            else:
-                time_part = timestamp
-
-            # Determine operation type
-            command = op.get("command", "unknown")
-            args = op.get("args", "")
-
-            if command in ["xdg-open", "open", "start"]:
-                operation_type = "🌐 Browser/URL Open"
-            elif command in ["firefox", "chrome", "chromium", "safari", "edge"]:
-                operation_type = "🌐 Browser Launch"
-            else:
-                operation_type = "⚠️ System Command"
-
-            table.add_row(
-                operation_type,
-                command,
-                args[:50] + "..." if len(args) > 50 else args,
-                time_part,
-            )
-
-        console.print(table)
-
-        # Summary by operation type
-        browser_opens = sum(
-            1
-            for op in blocked_ops
-            if op.get("command") in ["xdg-open", "open", "start"]
-        )
-        browser_launches = sum(
-            1
-            for op in blocked_ops
-            if op.get("command")
-            in ["firefox", "chrome", "chromium", "safari", "edge", "opera", "brave"]
-        )
-
-        console.print("\n[bold]Breakdown:[/bold]")
-        console.print(f"• Browser/URL opens blocked: {browser_opens}")
-        console.print(f"• Direct browser launches blocked: {browser_launches}")
-        other_commands = len(blocked_ops) - browser_opens - browser_launches
-        console.print(f"• Other system commands blocked: {other_commands}")
+        self.reporter.print_blocked_operations_summary()
 
     def print_overall_summary(
         self,
@@ -667,41 +514,19 @@ class UnifiedMCPFuzzerClient:
         protocol_results: Dict[str, List[Dict[str, Any]]],
     ):
         """Print overall summary statistics."""
-        # Tool statistics
-        total_tools = len(tool_results)
-        tools_with_errors = len(
-            [r for r in tool_results.values() if len(r) == 1 and "error" in r[0]]
-        )
-        tools_with_exceptions = len(
-            [
-                r
-                for r in tool_results.values()
-                if len(r) > 1 and any("exception" in res for res in r)
-            ]
-        )
+        self.reporter.print_overall_summary(tool_results, protocol_results)
 
-        # Protocol statistics
-        total_protocol_types = len(protocol_results)
-        protocol_types_with_errors = len(
-            [r for r in protocol_results.values() if len(r) == 1 and "error" in r[0]]
-        )
-        protocol_types_with_exceptions = len(
-            [
-                r
-                for r in protocol_results.values()
-                if len(r) > 1 and any(not res.get("success", False) for res in r)
-            ]
-        )
+    async def cleanup(self):
+        """Clean up resources, especially the transport."""
+        if hasattr(self.transport, "close"):
+            try:
+                await self.transport.close()
+            except Exception as e:
+                logging.warning(f"Error during transport cleanup: {e}")
 
-        self.console.print("\n[bold]Overall Statistics:[/bold]")
-        self.console.print(f"Total tools tested: {total_tools}")
-        self.console.print(f"Tools with errors: {tools_with_errors}")
-        self.console.print(f"Tools with exceptions: {tools_with_exceptions}")
-        self.console.print(f"Total protocol types tested: {total_protocol_types}")
-        self.console.print(f"Protocol types with errors: {protocol_types_with_errors}")
-        self.console.print(
-            f"Protocol types with exceptions: {protocol_types_with_exceptions}"
-        )
+    def print_comprehensive_safety_report(self):
+        """Print a comprehensive safety report including all safety blocks."""
+        self.reporter.print_comprehensive_safety_report()
 
 
 async def main():
@@ -734,11 +559,22 @@ async def main():
         auth_manager = setup_auth_from_env()
         logging.info("Loaded auth from environment variables")
 
+    # Create reporter
+    reporter = FuzzerReporter(output_dir=getattr(args, "output_dir", "reports"))
+    reporter.set_fuzzing_metadata(
+        mode=args.mode,
+        protocol=args.protocol,
+        endpoint=args.endpoint,
+        runs=args.runs,
+        runs_per_type=getattr(args, "runs_per_type", None),
+    )
+
     # Create unified client
     client = UnifiedMCPFuzzerClient(
         transport,
         auth_manager,
         tool_timeout=(args.tool_timeout if hasattr(args, "tool_timeout") else None),
+        reporter=reporter,
     )
 
     # Run fuzzing based on mode
@@ -777,6 +613,29 @@ async def main():
 
     # Print blocked operations summary
     client.print_blocked_operations_summary()
+
+    # Show comprehensive safety report if requested
+    if hasattr(args, "safety_report") and args.safety_report:
+        client.print_comprehensive_safety_report()
+
+    # Export safety data if requested
+    if hasattr(args, "export_safety_data") and args.export_safety_data is not None:
+        try:
+            filename = client.reporter.export_safety_data(args.export_safety_data)
+            if filename:
+                logging.info(f"Safety data exported to: {filename}")
+        except Exception as e:
+            logging.error(f"Failed to export safety data: {e}")
+
+    # Generate final comprehensive report
+    try:
+        report_file = reporter.generate_final_report(include_safety=True)
+        logging.info(f"Final report generated: {report_file}")
+    except Exception as e:
+        logging.error(f"Failed to generate final report: {e}")
+
+    # Clean up transport
+    await client.cleanup()
 
 
 if __name__ == "__main__":

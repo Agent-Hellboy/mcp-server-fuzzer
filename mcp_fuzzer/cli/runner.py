@@ -81,13 +81,25 @@ def execute_inner_client(args, unified_client_main, argv):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        # Print an immediate notice on first SIGINT/SIGTERM, then cancel tasks
+        _signal_notice = {"printed": False}
+
         def _cancel_all_tasks():  # pragma: no cover
+            if not _signal_notice["printed"]:
+                try:
+                    Console().print(
+                        "\n[yellow]Received Ctrl+C from user; stopping now[/yellow]"
+                    )
+                except Exception:
+                    pass
+                _signal_notice["printed"] = True
             for task in asyncio.all_tasks(loop):
                 task.cancel()
 
         if not getattr(args, "retry_with_safety_on_interrupt", False):
             try:
                 loop.add_signal_handler(signal.SIGINT, _cancel_all_tasks)
+                loop.add_signal_handler(signal.SIGTERM, _cancel_all_tasks)
             except NotImplementedError:
                 pass
         try:
@@ -97,11 +109,21 @@ def execute_inner_client(args, unified_client_main, argv):
             should_exit = True
         finally:
             try:
+                # Cancel all remaining tasks more aggressively
                 pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
                 for t in pending:
                     t.cancel()
-                gathered = asyncio.gather(*pending, return_exceptions=True)
-                loop.run_until_complete(gathered)
+
+                # Wait for cancellation with a short timeout
+                if pending:
+                    gathered = asyncio.gather(*pending, return_exceptions=True)
+                    try:
+                        loop.run_until_complete(asyncio.wait_for(gathered, timeout=2.0))
+                    except asyncio.TimeoutError:
+                        # Force kill any remaining tasks
+                        for t in pending:
+                            if not t.done():
+                                t.cancel()
             except Exception:
                 pass
             loop.close()

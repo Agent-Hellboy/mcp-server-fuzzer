@@ -142,6 +142,30 @@ Examples:
         ),
     )
     parser.add_argument(
+        "--safety-report",
+        action="store_true",
+        help=(
+            "Show comprehensive safety report at the end of fuzzing, including "
+            "detailed breakdown of all blocked operations."
+        ),
+    )
+    parser.add_argument(
+        "--export-safety-data",
+        metavar="FILENAME",
+        nargs="?",
+        const="",
+        help=(
+            "Export safety data to JSON file. If no filename provided, "
+            "uses timestamped filename. Use with --safety-report for best results."
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        metavar="DIRECTORY",
+        default="reports",
+        help="Directory to save reports and exports (default: reports)",
+    )
+    parser.add_argument(
         "--safety-plugin",
         help=(
             "Dotted path to a custom safety provider module. The module must expose "
@@ -291,6 +315,9 @@ def get_cli_config() -> Dict[str, Any]:
         "runs_per_type": args.runs_per_type,
         "protocol_type": args.protocol_type,
         "enable_safety_system": getattr(args, "enable_safety_system", False),
+        "safety_report": getattr(args, "safety_report", False),
+        "export_safety_data": getattr(args, "export_safety_data", None),
+        "output_dir": getattr(args, "output_dir", "reports"),
         "safety_plugin": getattr(args, "safety_plugin", None),
         "no_safety": getattr(args, "no_safety", False),
         "retry_with_safety_on_interrupt": getattr(

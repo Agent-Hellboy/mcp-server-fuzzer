@@ -231,6 +231,49 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no
 
 - **Environment Detection**: Automatically detects production systems
 
+## Reporting and Output
+
+### Basic Reporting
+
+The MCP Fuzzer automatically generates comprehensive reports for each fuzzing session:
+
+```bash
+# Generate reports in default 'reports' directory
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10
+
+# Specify custom output directory
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --output-dir "my_reports"
+```
+
+### Enhanced Safety Reporting
+
+```bash
+# Show comprehensive safety report
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --safety-report
+
+# Export safety data to JSON
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --export-safety-data
+
+# Combine both features
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --safety-report --export-safety-data
+```
+
+### Generated Reports
+
+Each fuzzing session creates:
+
+- **`fuzzing_report_YYYYMMDD_HHMMSS.json`** - Complete structured data for analysis
+- **`fuzzing_report_YYYYMMDD_HHMMSS.txt`** - Human-readable summary for sharing
+- **`safety_report_YYYYMMDD_HHMMSS.json`** - Detailed safety system data (if enabled)
+
+### Report Contents
+
+- **Session metadata**: Configuration, timestamps, and execution parameters
+- **Tool results**: Success rates, exceptions, and safety blocks
+- **Protocol results**: Error counts and security ratings
+- **Safety data**: Blocked operations, risk assessments, and system status
+- **Summary statistics**: Overall success rates and performance metrics
+
 ## Common Use Cases
 
 ### Testing Local Development Server
@@ -240,7 +283,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20
 
 # Test local stdio server with safety
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10 --enable-safety-system
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --enable-safety-system
 ```
 
 ### Testing Production-Like Environment

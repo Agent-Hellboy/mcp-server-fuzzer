@@ -9,7 +9,7 @@ import logging
 import unittest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
-from mcp_fuzzer.fuzzer.protocol_fuzzer import ProtocolFuzzer
+from mcp_fuzzer.fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
 
 
 class TestProtocolFuzzer(unittest.IsolatedAsyncioTestCase):
@@ -43,7 +43,7 @@ class TestProtocolFuzzer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(third_id, 3)
         self.assertEqual(self.fuzzer.request_id_counter, 3)
 
-    @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.protocol_fuzzer.logging")
     async def test_fuzz_protocol_type_success(self, mock_logging):
         """Test successful fuzzing of a protocol type."""
         results = await self.fuzzer.fuzz_protocol_type("InitializeRequest", runs=3)
@@ -56,7 +56,7 @@ class TestProtocolFuzzer(unittest.IsolatedAsyncioTestCase):
             self.assertTrue("success" in result)
             self.assertEqual(result["run"], i + 1)
 
-    @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.protocol_fuzzer.logging")
     async def test_fuzz_protocol_type_realistic_vs_aggressive(self, mock_logging):
         """Test that realistic and aggressive phases produce different results."""
         realistic_results = await self.fuzzer.fuzz_protocol_type(
@@ -84,7 +84,7 @@ class TestProtocolFuzzer(unittest.IsolatedAsyncioTestCase):
         # Should return empty list for unknown types
         self.assertEqual(len(results), 0)
 
-    @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.protocol_fuzzer.logging")
     async def test_fuzz_protocol_type_transport_exception(self, mock_logging):
         """Test handling of transport exceptions."""
         # Set up transport to raise an exception
@@ -99,7 +99,7 @@ class TestProtocolFuzzer(unittest.IsolatedAsyncioTestCase):
         # Ensure send_raw was attempted for each run
         self.assertEqual(self.mock_transport.send_raw.await_count, 2)
 
-    @patch("mcp_fuzzer.fuzzer.protocol_fuzzer.logging")
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.protocol_fuzzer.logging")
     async def test_fuzz_all_protocol_types(self, mock_logging):
         """Test fuzzing all protocol types."""
         results = await self.fuzzer.fuzz_all_protocol_types(runs_per_type=2)

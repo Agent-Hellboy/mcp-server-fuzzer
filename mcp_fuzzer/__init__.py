@@ -7,9 +7,9 @@ This package provides tools for fuzzing MCP servers using multiple transport pro
 from .cli import create_argument_parser, get_cli_config, run_cli
 from .client import UnifiedMCPFuzzerClient
 from .client import main as unified_client_main
-from .fuzzer.protocol_fuzzer import ProtocolFuzzer
-from .fuzzer.tool_fuzzer import ToolFuzzer
-from .strategy import ProtocolStrategies, ToolStrategies
+from .fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
+from .fuzz_engine.fuzzer.tool_fuzzer import ToolFuzzer
+from .fuzz_engine.strategy import ProtocolStrategies, ToolStrategies
 
 __version__ = "0.1.6"
 __all__ = [

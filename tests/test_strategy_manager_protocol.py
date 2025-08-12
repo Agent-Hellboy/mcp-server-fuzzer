@@ -6,7 +6,7 @@ BEHAVIOR not content
 
 import unittest
 
-from mcp_fuzzer.strategy import ProtocolStrategies
+from mcp_fuzzer.fuzz_engine.strategy import ProtocolStrategies
 
 # Constants for testing
 JSONRPC_VERSION = "2.0"

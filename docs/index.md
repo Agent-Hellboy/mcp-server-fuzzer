@@ -75,6 +75,18 @@ pip install -e .
 
 - **Detailed Reporting** - Rich output with exception tracking
 
+### Professional Reporting System
+
+- **Automatic Report Generation** - JSON and text reports for each session
+
+- **Comprehensive Data Collection** - Tool results, protocol results, and safety data
+
+- **Safety Transparency** - Detailed breakdown of blocked operations and risk assessments
+
+- **Multiple Output Formats** - Console, JSON, and text for different use cases
+
+- **Session Tracking** - Timestamped reports with unique session identification
+
 ## Architecture
 
 The MCP Fuzzer uses a modular architecture with clear separation of concerns:
@@ -86,6 +98,8 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 - **Strategy System** - Realistic and aggressive data generation
 
 - **Safety System** - Protection mechanisms and environment detection
+
+- **Reporting System** - Centralized output management and comprehensive reporting
 
 - **CLI Interface** - User-friendly command-line interface
 

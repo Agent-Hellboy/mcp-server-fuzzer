@@ -222,7 +222,7 @@ export MCP_FUZZER_ENABLE_SAFETY=true
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000
 ```
 
-## 🧪 Testing Examples
+## \U0001F9EA Testing Examples
 
 ### Local Development Testing
 
@@ -297,6 +297,100 @@ client = UnifiedMCPFuzzerClient(transport)
 
 # Run fuzzing
 await client.fuzz_tools(runs=10)
+```
+
+## Reporting Examples
+
+### Basic Reporting
+
+```bash
+# Generate reports in default 'reports' directory
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10
+
+# Specify custom output directory
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --output-dir "my_reports"
+
+# Generate comprehensive safety report
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --safety-report
+```
+
+### Advanced Reporting
+
+```bash
+# Export safety data to JSON with custom filename
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --export-safety-data "safety_data.json"
+
+# Combine all reporting features
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 \
+    --safety-report \
+    --export-safety-data \
+    --output-dir "detailed_reports"
+```
+
+### Generated Report Files
+
+Each fuzzing session creates timestamped reports:
+
+```text
+reports/
+├── fuzzing_report_20250812_143000.json    # Complete structured data
+├── fuzzing_report_20250812_143000.txt     # Human-readable summary
+└── safety_report_20250812_143000.json     # Safety system data
+```
+
+### Report Content Examples
+
+#### JSON Report Structure
+```json
+{
+  "metadata": {
+    "session_id": "20250812_143000",
+    "start_time": "2025-08-12T14:30:00.123456",
+    "mode": "tools",
+    "protocol": "stdio",
+    "endpoint": "python server.py",
+    "runs": 10,
+    "fuzzer_version": "1.0.0",
+    "end_time": "2025-08-12T14:30:15.654321"
+  },
+  "tool_results": {
+    "test_tool": [
+      {"run": 1, "success": true, "args": {...}},
+      {"run": 2, "success": false, "exception": "Invalid argument"}
+    ]
+  },
+  "summary": {
+    "tools": {
+      "total_tools": 1,
+      "total_runs": 10,
+      "success_rate": 80.0
+    }
+  }
+}
+```
+
+#### Text Report Example
+```text
+================================================================================
+MCP FUZZER REPORT
+================================================================================
+
+FUZZING SESSION METADATA
+----------------------------------------
+session_id: 20250812_143000
+start_time: 2025-08-12T14:30:00.123456
+mode: tools
+protocol: stdio
+endpoint: python server.py
+runs: 10
+
+SUMMARY STATISTICS
+----------------------------------------
+Tools Tested: 1
+Total Tool Runs: 10
+Tools with Errors: 0
+Tools with Exceptions: 2
+Tool Success Rate: 80.0%
 ```
 
 ## Debugging Examples

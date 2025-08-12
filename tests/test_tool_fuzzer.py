@@ -7,7 +7,7 @@ import logging
 import unittest
 from unittest.mock import MagicMock, call, patch
 
-from mcp_fuzzer.fuzzer.tool_fuzzer import ToolFuzzer
+from mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer import ToolFuzzer
 
 
 class TestToolFuzzer(unittest.TestCase):
@@ -21,7 +21,7 @@ class TestToolFuzzer(unittest.TestCase):
         """Test ToolFuzzer initialization."""
         self.assertIsNotNone(self.fuzzer.strategies)
 
-    @patch("mcp_fuzzer.fuzzer.tool_fuzzer.logging")
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
     def test_fuzz_tool_success(self, mock_logging):
         """Test fuzzing of a tool with enhanced safety."""
         tool = {
@@ -52,7 +52,7 @@ class TestToolFuzzer(unittest.TestCase):
             # count can be various types due to aggressive fuzzing
             self.assertIsInstance(args["count"], (int, float, type(None)))
 
-    @patch("mcp_fuzzer.fuzzer.tool_fuzzer.logging")
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
     def test_fuzz_tool_exception_handling(self, mock_logging):
         """Test exception handling during tool fuzzing."""
         tool = {
@@ -74,7 +74,7 @@ class TestToolFuzzer(unittest.TestCase):
                 self.assertIn("exception", result)
                 self.assertEqual(result["exception"], "Test exception")
 
-    @patch("mcp_fuzzer.fuzzer.tool_fuzzer.logging")
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
     def test_fuzz_tools(self, mock_logging):
         """Test fuzzing multiple tools."""
         tools = [
@@ -103,7 +103,7 @@ class TestToolFuzzer(unittest.TestCase):
             successful_runs = [r for r in results[tool_name] if r.get("success", False)]
             self.assertGreater(len(successful_runs), 0)
 
-    @patch("mcp_fuzzer.fuzzer.tool_fuzzer.logging")
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
     def test_fuzz_tools_with_exception(self, mock_logging):
         """Test fuzzing tools with exception handling."""
         tools = [
@@ -338,7 +338,7 @@ class TestToolFuzzer(unittest.TestCase):
             "inputSchema": {"properties": {"name": {"type": "string"}}},
         }
 
-        with patch("mcp_fuzzer.fuzzer.tool_fuzzer.logging") as mock_logging:
+        with patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging") as mock_logging:
             self.fuzzer.fuzz_tool(tool, runs=1)
 
             # Check that logging.info was called

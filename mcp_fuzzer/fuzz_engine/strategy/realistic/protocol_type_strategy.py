@@ -94,6 +94,7 @@ def method_names() -> st.SearchStrategy[str]:
     return st.one_of(prefixes, simple_names)
 
 
+# TODO: expand this to cover all the InitializeRequest fields
 def fuzz_initialize_request_realistic() -> Dict[str, Any]:
     """Generate realistic InitializeRequest for testing valid behavior."""
     # Use realistic protocol versions
@@ -130,7 +131,14 @@ def fuzz_initialize_request_realistic() -> Dict[str, Any]:
         "method": random.choice(method_options),
         "params": {
             "protocolVersion": random.choice(protocol_versions),
-            "capabilities": {"experimental": {}, "roots": {}},
+            # Align with MCP ClientCapabilities spec: include valid fields only
+            # https://modelcontextprotocol.io/specification/draft/schema#ClientCapabilities
+            "capabilities": {
+                "elicitation": {},
+                "experimental": {},
+                "roots": {"listChanged": True},
+                "sampling": {},
+            },
             "clientInfo": {"name": "test-client", "version": "1.0.0"},
         },
     }

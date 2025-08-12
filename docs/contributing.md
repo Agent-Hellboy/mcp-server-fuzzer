@@ -81,7 +81,7 @@ docs = [
 ]
 ```
 
-## 🧪 Testing
+## Testing
 
 ### Running Tests
 
@@ -95,6 +95,9 @@ pytest --cov=mcp_fuzzer --cov-report=html
 # Run specific test modules
 pytest tests/test_transport.py
 pytest tests/test_cli.py
+
+#Run Individual test
+pytest tests/test_transport.py::TestTransportProtocol.test_get_tools_success
 
 # Run with verbose output
 pytest -v -s
@@ -209,7 +212,7 @@ repos:
 
 - **Documentation**: Include docstrings for all public functions and classes
 
-## 📚 Documentation
+## Documentation
 
 ### Building Documentation
 
@@ -388,7 +391,7 @@ Other approaches you've considered
 How this would affect existing functionality
 ```
 
-## 🔒 Security
+## Security
 
 ### Security Vulnerabilities
 
@@ -518,7 +521,7 @@ We are committed to providing a welcoming and inclusive environment for all cont
 
 - **Report inappropriate behavior** to maintainers
 
-## 📚 Resources
+## Resources
 
 ### Learning Resources
 

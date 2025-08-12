@@ -2,7 +2,7 @@
 
 This page provides a complete reference for MCP Server Fuzzer, including all command-line options, API documentation, and configuration details.
 
-## 📋 Command-Line Reference
+## \U0001F4CB Command-Line Reference
 
 ### Basic Syntax
 
@@ -54,6 +54,14 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol} --protocol {http|sse|stdio} --endpo
 | `--no-safety` | Flag | False | Disable argument-level safety filtering (not recommended) |
 | `--retry-with-safety-on-interrupt` | Flag | False | Retry once with safety system enabled on Ctrl-C |
 
+### Reporting Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--output-dir` | Path | reports | Directory to save reports and exports |
+| `--safety-report` | Flag | False | Show comprehensive safety report at end of fuzzing |
+| `--export-safety-data` | String | - | Export safety data to JSON file (optional filename) |
+
 ### Advanced Options
 
 | Option | Type | Default | Description |
@@ -84,7 +92,7 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol} --protocol {http|sse|stdio} --endpo
 | `MCP_PASSWORD` | Password for basic authentication |
 | `MCP_OAUTH_TOKEN` | OAuth token for authentication |
 
-## 📚 API Reference
+## \U0001F4DA API Reference
 
 ### Transport Protocol Interface
 
@@ -265,7 +273,7 @@ class AggressiveToolStrategy:
 }
 ```
 
-## 🔒 Safety System Reference
+## Safety System Reference
 
 ### Environment Detection
 

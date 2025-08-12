@@ -57,8 +57,10 @@ The system is built with a modular architecture:
 - **Transport Layer**: Protocol abstraction (HTTP/SSE/Stdio)
 - **Fuzzing Engine**: Test orchestration and execution
 - **Strategy System**: Data generation (realistic + aggressive)
-- **Safety System**: Protection mechanisms and sandboxing
+- **Safety System**: Core filter + SystemBlocker PATH shim; safe mock responses
+- **Runtime**: Async ProcessManager + ProcessWatchdog + AsyncProcessWrapper
 - **Authentication**: Multiple auth provider support
+- **Reporting**: FuzzerReporter, Console/JSON/Text formatters, SafetyReporter
 
 ## Contributing
 
