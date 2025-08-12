@@ -72,3 +72,24 @@ Notes
 - The example server is intentionally minimal and stateless.
 - `secure_tool` requires `Authorization: Bearer secret123`. Use config file or env auth to hit it successfully.
 - Stop the server with Ctrl+C.
+
+Streamable HTTP example (no SDK checkout required)
+-------------------------------------------------
+
+Install dependencies (one-time):
+
+```
+pip install mcp uvicorn anyio starlette
+```
+
+Start the example StreamableHTTP server on port 3000:
+
+```
+python3 examples/streamable_http_server.py --host 127.0.0.1 --port 3000
+```
+
+Then fuzz it with the StreamableHTTP transport:
+
+```
+python3 -m mcp_fuzzer --mode tools --protocol streamablehttp --endpoint http://127.0.0.1:3000/mcp --runs 3 --timeout 10 --verbose
+```

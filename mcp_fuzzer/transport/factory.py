@@ -2,6 +2,7 @@ from .base import TransportProtocol
 from .http import HTTPTransport
 from .sse import SSETransport
 from .stdio import StdioTransport
+from .streamable_http import StreamableHTTPTransport
 
 
 def create_transport(protocol: str, endpoint: str, **kwargs) -> TransportProtocol:
@@ -9,6 +10,7 @@ def create_transport(protocol: str, endpoint: str, **kwargs) -> TransportProtoco
     mapping = {
         "http": HTTPTransport,
         "https": HTTPTransport,
+        "streamablehttp": StreamableHTTPTransport,
         "sse": SSETransport,
         "stdio": StdioTransport,
     }
