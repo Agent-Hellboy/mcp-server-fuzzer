@@ -2,7 +2,7 @@
 
 This guide explains the safety system in MCP Server Fuzzer, how to configure it, and best practices for safe fuzzing operations.
 
-## 🛡️ Safety System Overview
+## Safety System Overview
 
 The MCP Server Fuzzer includes a comprehensive safety system designed to protect your system during fuzzing operations. The safety system operates at multiple levels:
 
@@ -12,7 +12,7 @@ The MCP Server Fuzzer includes a comprehensive safety system designed to protect
 4. **Process Isolation** - Safe subprocess handling with timeouts
 5. **Input Sanitization** - Filters potentially dangerous input
 
-## 🔍 Environment Detection
+## Environment Detection
 
 ### Automatic Detection
 
@@ -292,7 +292,7 @@ class InputSanitizer:
         return value
 ```
 
-## ⚙️ Safety Configuration
+## Safety Configuration
 
 ### Basic Safety Configuration
 
@@ -341,7 +341,7 @@ export DANGEROUS_TESTS_DISABLED=true
 export PRODUCTION=true
 ```
 
-## 🔧 Custom Safety Providers
+## Custom Safety Providers
 
 ### Creating Custom Safety Provider
 
@@ -527,7 +527,7 @@ If you encounter safety system issues:
 4. **Report the issue to the project maintainers**
 5. **Include safety logs and system information**
 
-## 🔍 Safety Testing
+## Safety Testing
 
 ### Testing Safety Features
 

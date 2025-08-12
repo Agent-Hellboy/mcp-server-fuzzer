@@ -10,7 +10,7 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 [![PyPI - Version](https://img.shields.io/pypi/v/mcp-fuzzer.svg)](https://pypi.org/project/mcp-fuzzer/)
 [![PyPI Downloads](https://static.pepy.tech/badge/mcp-fuzzer)](https://pepy.tech/projects/mcp-fuzzer)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -40,7 +40,7 @@ pip install -e .
    ```
 3. **View results** in beautiful, colorized tables
 
-## 📊 Key Features
+## Key Features
 
 ### Two-Phase Fuzzing Approach
 
@@ -75,7 +75,7 @@ pip install -e .
 
 - **Detailed Reporting** - Rich output with exception tracking
 
-## 🏗️ Architecture
+## Architecture
 
 The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 
@@ -91,7 +91,7 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 
 See [Architecture](architecture.md) for detailed diagrams and flow charts.
 
-## 📚 Documentation
+## Documentation
 
 - **[Getting Started](getting-started.md)** - Installation and basic usage
 - **[Architecture](architecture.md)** - System design and components
@@ -100,14 +100,14 @@ See [Architecture](architecture.md) for detailed diagrams and flow charts.
 - **[Safety Guide](safety.md)** - Safety system configuration
 - **[Contributing](contributing.md)** - Development and contribution guide
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](contributing.md) for details.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/Agent-Hellboy/mcp-server-fuzzer/blob/main/LICENSE) file for details.
 
 ---
 
-**Made with ❤️ for the MCP community**
+**Made with love for the MCP community**

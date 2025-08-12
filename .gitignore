@@ -8,6 +8,7 @@ sdks/
 doc_ref/
 # C extensions
 *.so
+mcp_fuzzer/process_mgmt/
 servers
 # Distribution / packaging
 .Python

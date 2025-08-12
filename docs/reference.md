@@ -60,7 +60,7 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol} --protocol {http|sse|stdio} --endpo
 |--------|------|---------|-------------|
 | `--tool-timeout` | Float | 30.0 | Per-tool call timeout in seconds |
 
-## 🔧 Configuration Reference
+## Configuration Reference
 
 ### Environment Variables
 
@@ -164,7 +164,7 @@ class SafetySystem:
         # Implementation details...
 ```
 
-## 🎯 Fuzzing Strategies
+## Fuzzing Strategies
 
 ### Realistic Strategies
 
@@ -212,7 +212,7 @@ class AggressiveToolStrategy:
         ]))
 ```
 
-## 📊 Output Format
+## Output Format
 
 ### Tool Fuzzer Results
 
@@ -316,7 +316,7 @@ class SystemBlocker:
         # Implementation details...
 ```
 
-## 🚀 Performance Tuning
+## Performance Tuning
 
 ### Timeout Configuration
 
@@ -342,7 +342,7 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8001 --runs 
 wait
 ```
 
-## 🔍 Debugging Reference
+## Debugging Reference
 
 ### Log Levels
 
@@ -380,7 +380,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --re
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-timeout 30.0
 ```
 
-## 📝 Configuration Files
+## Configuration Files
 
 ### Authentication Configuration
 

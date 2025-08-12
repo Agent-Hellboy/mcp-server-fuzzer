@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to MCP Server Fuzzer! This guide will help you get started with development and contribution.
 
-## 🤝 How to Contribute
+## How to Contribute
 
 ### Types of Contributions
 
@@ -28,7 +28,7 @@ We welcome various types of contributions:
 4. **Make your changes** with proper testing
 5. **Submit a pull request** with clear description
 
-## 🛠️ Development Setup
+## Development Setup
 
 ### Prerequisites
 
@@ -153,7 +153,7 @@ xdg-open htmlcov/index.html  # On Linux
 start htmlcov/index.html  # On Windows
 ```
 
-## 🔍 Code Quality
+## Code Quality
 
 ### Linting and Formatting
 
@@ -252,7 +252,7 @@ docs/
 └── contributing.md       # This file
 ```
 
-## 🚀 Adding New Features
+## Adding New Features
 
 ### Transport Protocols
 
@@ -412,7 +412,7 @@ If you discover a security vulnerability:
 
 - **Keep dependencies updated**
 
-## 📝 Pull Requests
+## Pull Requests
 
 ### PR Guidelines
 
@@ -474,7 +474,7 @@ Brief description of changes
 - [ ] Tests added/updated
 ```
 
-## 🏷️ Release Process
+## Release Process
 
 ### Versioning
 
@@ -494,7 +494,7 @@ The project uses semantic versioning:
 4. **Build and publish** to PyPI
 5. **Update documentation** if needed
 
-## 🤝 Community
+## Community
 
 ### Communication Channels
 

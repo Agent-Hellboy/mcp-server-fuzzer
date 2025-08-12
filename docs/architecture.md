@@ -2,7 +2,7 @@
 
 This document describes the architecture and design of the MCP Server Fuzzer system.
 
-## 🏗️ System Overview
+## System Overview
 
 The MCP Server Fuzzer is built with a modular, layered architecture that separates concerns and provides clear interfaces between components. The system is designed to be:
 
@@ -345,7 +345,7 @@ sequenceDiagram
     Client-->>CLI: Generate report
 ```
 
-## 🎯 Design Principles
+## Design Principles
 
 ### 1. Separation of Concerns
 
@@ -390,7 +390,7 @@ Each component can be tested independently:
 - **Comprehensive mocking** support
 - **Isolated test environments**
 
-## 🔧 Configuration Management
+## Configuration Management
 
 ### Environment Variables
 
@@ -413,7 +413,7 @@ export MCP_FUZZER_ENABLE_SAFETY=true
 export MCP_FUZZER_DANGEROUS_TESTS_DISABLED=false
 ```
 
-## 🚀 Performance Considerations
+## Performance Considerations
 
 ### Asynchronous Design
 
@@ -470,7 +470,7 @@ Comprehensive logging for security:
 - **Error conditions are tracked**
 - **Performance metrics are collected**
 
-## 📊 Monitoring and Observability
+## Monitoring and Observability
 
 ### Metrics Collection
 

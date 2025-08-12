@@ -21,8 +21,6 @@ from .fuzzer.tool_fuzzer import ToolFuzzer
 from .safety_system import get_blocked_operations, is_system_blocking_active
 from .transport import create_transport
 
-# Logging is configured by the top-level CLI; do not override here.
-
 
 class UnifiedMCPFuzzerClient:
     """Unified client for fuzzing MCP tools and protocol types."""

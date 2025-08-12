@@ -2,7 +2,7 @@
 
 This page provides working examples and configurations for common use cases with MCP Server Fuzzer.
 
-## 🚀 Basic Examples
+## Basic Examples
 
 ### HTTP Transport Examples
 
@@ -85,7 +85,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --ru
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --retry-with-safety-on-interrupt
 ```
 
-## 🔐 Authentication Examples
+## Authentication Examples
 
 ### API Key Authentication
 
@@ -138,7 +138,7 @@ export MCP_PASSWORD="password"
 mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
 ```
 
-## 🛡️ Safety System Examples
+## Safety System Examples
 
 ### Basic Safety Configuration
 
@@ -169,7 +169,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" \
   --retry-with-safety-on-interrupt
 ```
 
-## 📊 Fuzzing Strategy Examples
+## Fuzzing Strategy Examples
 
 ### Two-Phase Fuzzing
 
@@ -199,7 +199,7 @@ mcp-fuzzer --mode protocol --phase realistic --protocol http --endpoint http://l
 mcp-fuzzer --mode protocol --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
 ```
 
-## 🔧 Configuration Examples
+## Configuration Examples
 
 ### Environment Variables Configuration
 
@@ -265,7 +265,7 @@ mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://loc
 mcp-fuzzer --mode protocol --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 10
 ```
 
-## 📝 Custom Transport Examples
+## Custom Transport Examples
 
 ### Creating Custom Transport
 
@@ -299,7 +299,7 @@ client = UnifiedMCPFuzzerClient(transport)
 await client.fuzz_tools(runs=10)
 ```
 
-## 🔍 Debugging Examples
+## Debugging Examples
 
 ### Verbose Output
 
@@ -327,7 +327,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --re
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-timeout 60.0
 ```
 
-## 📊 Output Examples
+## Output Examples
 
 ### Tool Fuzzer Output
 
@@ -361,7 +361,7 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 Performance Examples
+## Performance Examples
 
 ### High-Volume Testing
 

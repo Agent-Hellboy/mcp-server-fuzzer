@@ -12,9 +12,9 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 
 ## Documentation
 
-**[📖 View Full Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/)**
+**[View Full Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/)**
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -43,13 +43,13 @@ mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8000/sse
 
 ## ✨ Key Features
 
-- **🔍 Two-Phase Fuzzing**: Realistic testing + aggressive security testing
-- **🌐 Multi-Protocol Support**: HTTP, SSE, and Stdio transports
-- **🛡️ Built-in Safety**: Environment detection and system protection
-- **🎯 Intelligent Testing**: Hypothesis-based data generation strategies
-- **📊 Rich Reporting**: Detailed output with exception tracking
+- **Two-Phase Fuzzing**: Realistic testing + aggressive security testing
+- **Multi-Protocol Support**: HTTP, SSE, and Stdio transports
+- **Built-in Safety**: Environment detection and system protection
+- **Intelligent Testing**: Hypothesis-based data generation strategies
+- **Rich Reporting**: Detailed output with exception tracking
 
-## 🏗️ Architecture
+## Architecture
 
 The system is built with a modular architecture:
 
@@ -60,11 +60,11 @@ The system is built with a modular architecture:
 - **Safety System**: Protection mechanisms and sandboxing
 - **Authentication**: Multiple auth provider support
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](https://agent-hellboy.github.io/mcp-server-fuzzer/contributing/) for details.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 

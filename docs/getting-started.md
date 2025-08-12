@@ -2,7 +2,7 @@
 
 This guide will help you get up and running with MCP Server Fuzzer quickly.
 
-## 📦 Installation
+## Installation
 
 ### From PyPI (Recommended)
 
@@ -26,7 +26,7 @@ mcp-fuzzer --help
 
 You should see the help output with all available options.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Set Up Your MCP Server
 
@@ -78,7 +78,7 @@ Results are displayed in beautiful, colorized tables showing:
 
 - **Overall Statistics**: Summary across all tools/protocols
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -119,7 +119,7 @@ Create a configuration file for repeated use:
 }
 ```
 
-## 📊 Fuzzing Modes
+## Fuzzing Modes
 
 ### Tool Fuzzing Mode
 
@@ -157,7 +157,7 @@ mcp-fuzzer --mode protocol --phase realistic --protocol http --endpoint http://l
 mcp-fuzzer --mode protocol --phase aggressive --protocol http --endpoint http://localhost:8000
 ```
 
-## 🔐 Authentication
+## Authentication
 
 ### Using Configuration File
 
@@ -206,7 +206,7 @@ export MCP_PASSWORD="password"
 mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
 ```
 
-## 🛡️ Safety System
+## Safety System
 
 ### Basic Safety Features
 
@@ -231,7 +231,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no
 
 - **Environment Detection**: Automatically detects production systems
 
-## 📝 Common Use Cases
+## Common Use Cases
 
 ### Testing Local Development Server
 
@@ -263,7 +263,7 @@ mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://loc
 mcp-fuzzer --mode protocol --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
 ```
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -293,7 +293,7 @@ mcp-fuzzer --mode tools --help
 mcp-fuzzer --mode protocol --help
 ```
 
-## 📚 Next Steps
+## Next Steps
 
 - **[Examples](examples.md)** - Working examples and configurations
 
