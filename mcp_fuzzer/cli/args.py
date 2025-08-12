@@ -63,9 +63,9 @@ Examples:
     parser.add_argument(
         "--protocol",
         type=str,
-        choices=["http", "sse", "stdio"],
+        choices=["http", "sse", "stdio", "streamablehttp"],
         default="http",
-        help="Transport protocol to use (http, sse, stdio)",
+        help="Transport protocol to use (http, sse, stdio, streamablehttp)",
     )
     parser.add_argument(
         "--endpoint",
