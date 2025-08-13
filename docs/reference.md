@@ -36,7 +36,9 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol|both} --protocol {http|sse|stdio|str
 | `--auth-env` | Flag | False | Use authentication from environment variables |
 
 Notes:
+
 - When using `--protocol streamablehttp` the client:
+
   - Performs an automatic MCP initialize handshake before the first request.
   - Propagates `mcp-session-id` and `mcp-protocol-version` headers after negotiation.
   - Follows 307/308 redirects (e.g., adds a trailing slash `/mcp/`).
@@ -148,6 +150,7 @@ mcp_fuzzer/
 - Transport: Pluggable I/O. Use `--protocol http|sse|stdio|streamablehttp`.
 
 ### Fuzz Engine lifecycle (high level)
+
 - Client builds a `TransportProtocol` via the factory.
 - For tools: `ToolFuzzer` selects a strategy (phase), generates args, invokes `tools/call`.
 - For protocol: `ProtocolFuzzer` selects a message type, generates the JSON-RPC envelope, sends raw via the transport.
@@ -163,12 +166,14 @@ The runtime layer provides robust, asynchronous subprocess lifecycle management 
   - `AsyncProcessWrapper`: small helpers/executor wrapping for non-blocking operations.
 
 - Behavior and guarantees:
+
   - Fully async API; blocking calls (spawn, wait, kill) run in thread executors.
   - Process-group signaling on POSIX to prevent orphan children.
   - Safe stop flow: TERM (grace window) → KILL on timeout if needed.
   - Watchdog auto-starts on first registration/start; auto-unregisters on stop.
 
 - Typical usage:
+
   - Transports that spawn servers should use `ProcessManager.start_process(...)` and register activity callbacks.
   - For externally spawned subprocesses (e.g., `asyncio.create_subprocess_exec`), register with the watchdog to enable hang detection and timeouts.
 
