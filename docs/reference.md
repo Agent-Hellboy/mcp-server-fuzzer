@@ -7,7 +7,7 @@ This page provides a complete reference for MCP Server Fuzzer, including all com
 ### Basic Syntax
 
 ```bash
-mcp-fuzzer [OPTIONS] --mode {tools|protocol} --protocol {http|sse|stdio} --endpoint ENDPOINT
+mcp-fuzzer [OPTIONS] --mode {tools|protocol|both} --protocol {http|sse|stdio|streamablehttp} --endpoint ENDPOINT
 ```
 
 ### Global Options
@@ -17,14 +17,14 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol} --protocol {http|sse|stdio} --endpo
 | `--help` | Flag | - | Show help message and exit |
 | `--version` | Flag | - | Show version and exit |
 | `--verbose` | Flag | False | Enable verbose logging |
-| `--log-level` | Choice | INFO | Set log level (CRITICAL, ERROR, WARNING, INFO, DEBUG) |
+| `--log-level` | Choice | WARNING (INFO with `--verbose`) | Set log level (CRITICAL, ERROR, WARNING, INFO, DEBUG). Defaults to WARNING, or INFO when `--verbose` is set |
 
 ### Mode Options
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `--mode` | Choice | Yes | Fuzzing mode: `tools` or `protocol` |
-| `--protocol` | Choice | Yes | Transport protocol: `http`, `sse`, or `stdio` |
+| `--mode` | Choice | Yes | Fuzzing mode: `tools`, `protocol`, or `both` |
+| `--protocol` | Choice | Yes | Transport protocol: `http`, `sse`, `stdio`, or `streamablehttp` |
 | `--endpoint` | String | Yes | Server endpoint (URL for http/sse, command for stdio) |
 
 ### Transport Options
@@ -34,6 +34,12 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol} --protocol {http|sse|stdio} --endpo
 | `--timeout` | Float | 30.0 | Request timeout in seconds |
 | `--auth-config` | Path | - | Path to authentication configuration file |
 | `--auth-env` | Flag | False | Use authentication from environment variables |
+
+Notes:
+- When using `--protocol streamablehttp` the client:
+  - Performs an automatic MCP initialize handshake before the first request.
+  - Propagates `mcp-session-id` and `mcp-protocol-version` headers after negotiation.
+  - Follows 307/308 redirects (e.g., adds a trailing slash `/mcp/`).
 
 ### Fuzzing Options
 
@@ -93,6 +99,78 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol} --protocol {http|sse|stdio} --endpo
 | `MCP_OAUTH_TOKEN` | OAuth token for authentication |
 
 ## API Reference
+
+## Package Layout and Fuzz Engine
+
+The codebase is organized around a modular fuzz engine with clear boundaries between generation (strategies), orchestration (fuzzers), and execution (runtime):
+
+```
+mcp_fuzzer/
+  fuzz_engine/
+    fuzzer/
+      protocol_fuzzer.py   # Orchestrates protocol-type fuzzing
+      tool_fuzzer.py       # Orchestrates tool fuzzing
+    strategy/
+      strategy_manager.py  # Selects strategies per phase/type
+      realistic/
+        tool_strategy.py
+        protocol_type_strategy.py
+      aggressive/
+        tool_strategy.py
+        protocol_type_strategy.py
+    runtime/
+      manager.py           # Async ProcessManager (start/stop, signals)
+      watchdog.py          # ProcessWatchdog (hang detection)
+      wrapper.py           # Async helpers/executor wrapper
+  transport/
+    base.py                # TransportProtocol interface
+    http.py                # JSON over HTTP
+    sse.py                 # Server-Sent Events
+    stdio.py               # STDIO transport
+    streamable_http.py     # Streamable HTTP (JSON + SSE, session headers)
+    factory.py             # create_transport(...)
+  reports/
+    reporter.py            # Aggregates results
+    formatters.py          # Console/JSON/Text formatters
+    safety_reporter.py     # Safety-specific report
+  safety_system/
+    safety.py              # Argument-level filtering/sanitization
+    system_blocker.py      # System-level command blocking
+  cli/
+    args.py, main.py, runner.py
+  client.py                # UnifiedMCPFuzzerClient orchestrator
+```
+
+- Strategy: Generates inputs for tools and protocol types in two phases:
+  - realistic (valid/spec-conformant), aggressive (malformed/attack vectors).
+- Fuzzer: Runs strategies, sends envelopes via a transport, and records results.
+- Runtime: Manages subprocess lifecycles with a watchdog for hang/timeout handling.
+- Transport: Pluggable I/O. Use `--protocol http|sse|stdio|streamablehttp`.
+
+### Fuzz Engine lifecycle (high level)
+- Client builds a `TransportProtocol` via the factory.
+- For tools: `ToolFuzzer` selects a strategy (phase), generates args, invokes `tools/call`.
+- For protocol: `ProtocolFuzzer` selects a message type, generates the JSON-RPC envelope, sends raw via the transport.
+- Runtime ensures external processes (when used) are supervised and terminated safely.
+
+## Runtime
+
+The runtime layer provides robust, asynchronous subprocess lifecycle management for transports and target servers under test.
+
+- Components:
+  - `ProcessManager` (async): start/stop processes, send signals, await exit, collect stats; integrates with the watchdog.
+  - `ProcessWatchdog`: monitors registered PIDs for hangs/inactivity and terminates them based on policy.
+  - `AsyncProcessWrapper`: small helpers/executor wrapping for non-blocking operations.
+
+- Behavior and guarantees:
+  - Fully async API; blocking calls (spawn, wait, kill) run in thread executors.
+  - Process-group signaling on POSIX to prevent orphan children.
+  - Safe stop flow: TERM (grace window) → KILL on timeout if needed.
+  - Watchdog auto-starts on first registration/start; auto-unregisters on stop.
+
+- Typical usage:
+  - Transports that spawn servers should use `ProcessManager.start_process(...)` and register activity callbacks.
+  - For externally spawned subprocesses (e.g., `asyncio.create_subprocess_exec`), register with the watchdog to enable hang detection and timeouts.
 
 ### Transport Protocol Interface
 
