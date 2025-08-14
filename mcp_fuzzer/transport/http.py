@@ -5,9 +5,14 @@ import time
 from typing import Any, Dict, Optional
 
 import httpx
+from urllib.parse import urljoin, urlparse
 
 from .base import TransportProtocol
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
+from ..config import (
+    JSON_CONTENT_TYPE,
+    DEFAULT_HTTP_ACCEPT,
+)
 
 
 class HTTPTransport(TransportProtocol):
@@ -20,8 +25,8 @@ class HTTPTransport(TransportProtocol):
         self.url = url
         self.timeout = timeout
         self.headers = {
-            "Accept": "application/json, text/event-stream",
-            "Content-Type": "application/json",
+            "Accept": DEFAULT_HTTP_ACCEPT,
+            "Content-Type": JSON_CONTENT_TYPE,
         }
         if auth_headers:
             self.headers.update(auth_headers)
@@ -43,6 +48,24 @@ class HTTPTransport(TransportProtocol):
         """Update last activity timestamp."""
         self._last_activity = time.time()
 
+    def _resolve_redirect_url(self, response: httpx.Response) -> Optional[str]:
+        """Resolve redirect target for 307/308 while enforcing same-origin."""
+        if response.status_code not in (307, 308):
+            return None
+        location = response.headers.get("location")
+        if not location and not self.url.endswith("/"):
+            location = self.url + "/"
+        if not location:
+            return None
+        resolved = urljoin(self.url, location)
+        base, new = urlparse(self.url), urlparse(resolved)
+        if (new.scheme, new.netloc) != (base.scheme, base.netloc):
+            logging.warning(
+                "Refusing cross-origin redirect from %s to %s", self.url, resolved
+            )
+            return None
+        return resolved
+
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> Any:
@@ -56,8 +79,17 @@ class HTTPTransport(TransportProtocol):
 
         self._update_activity()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+        ) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
+            # Follow only 307/308 to preserve method and body
+            redirect_url = self._resolve_redirect_url(response)
+            if redirect_url:
+                response = await client.post(
+                    redirect_url, json=payload, headers=self.headers
+                )
             response.raise_for_status()
             try:
                 data = response.json()
@@ -84,8 +116,16 @@ class HTTPTransport(TransportProtocol):
     async def send_raw(self, payload: Dict[str, Any]) -> Any:
         self._update_activity()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+        ) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
+            redirect_url = self._resolve_redirect_url(response)
+            if redirect_url:
+                response = await client.post(
+                    redirect_url, json=payload, headers=self.headers
+                )
             response.raise_for_status()
             try:
                 data = response.json()
@@ -109,8 +149,16 @@ class HTTPTransport(TransportProtocol):
 
         self._update_activity()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+        ) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
+            redirect_url = self._resolve_redirect_url(response)
+            if redirect_url:
+                response = await client.post(
+                    redirect_url, json=payload, headers=self.headers
+                )
             response.raise_for_status()
 
     async def get_process_stats(self) -> Dict[str, Any]:

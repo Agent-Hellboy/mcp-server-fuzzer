@@ -10,6 +10,7 @@ import random
 from typing import Any, Dict
 
 from hypothesis import strategies as st
+from ....config import DEFAULT_PROTOCOL_VERSION
 
 
 def protocol_version_strings() -> st.SearchStrategy[str]:
@@ -101,7 +102,7 @@ def fuzz_initialize_request_realistic() -> Dict[str, Any]:
     protocol_versions = [
         protocol_version_strings().example(),
         protocol_version_strings().example(),
-        "2024-11-05",  # Latest MCP version
+        DEFAULT_PROTOCOL_VERSION,  # Current MCP version
         "2024-10-01",  # Another valid date format
         "1.0.0",  # Semantic version
     ]

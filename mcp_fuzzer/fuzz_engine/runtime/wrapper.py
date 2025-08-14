@@ -8,7 +8,6 @@ non-blocking operations.
 
 import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
 from .manager import ProcessConfig, ProcessManager
@@ -20,12 +19,9 @@ class AsyncProcessWrapper:
     def __init__(
         self,
         process_manager: Optional[ProcessManager] = None,
-        max_workers: int = 4,
     ):
         """Initialize the async process wrapper."""
         self.process_manager = process_manager or ProcessManager()
-        self.max_workers = max_workers
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self._logger = logging.getLogger(__name__)
 
     async def start_process(self, config: ProcessConfig) -> Any:
@@ -69,12 +65,7 @@ class AsyncProcessWrapper:
     async def shutdown(self) -> None:
         """Shutdown the wrapper and process manager asynchronously."""
         await self.process_manager.shutdown()
-        # Properly shutdown executor without blocking the event loop
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self.executor.shutdown, True)
+        # No additional executor to shutdown
 
     async def send_timeout_signal(self, pid: int, signal_type: str = "timeout") -> bool:
         """Send a timeout signal asynchronously."""

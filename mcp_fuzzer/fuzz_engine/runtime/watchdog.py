@@ -40,24 +40,19 @@ class ProcessWatchdog:
         self._logger = logging.getLogger(__name__)
         self._stop_event = asyncio.Event()
         self._watchdog_task: Optional[asyncio.Task] = None
-        self._loop = None  # Initialize lazily when needed
-
-    def _get_loop(self):
-        """Get the event loop, initializing it if needed."""
-        if self._loop is None:
-            try:
-                self._loop = asyncio.get_event_loop()
-            except RuntimeError:
-                # Create a new event loop if none exists
-                self._loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self._loop)
-        return self._loop
 
     def start(self) -> None:
         """Start the watchdog monitoring."""
         if self._watchdog_task is None or self._watchdog_task.done():
             self._stop_event.clear()
-            loop = self._get_loop()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # No running event loop; start must be called from async context
+                self._logger.warning(
+                    "Watchdog.start() called without a running loop; deferring"
+                )
+                return
             self._watchdog_task = loop.create_task(self._watchdog_loop())
             self._logger.info("Process watchdog started")
 
@@ -169,7 +164,8 @@ class ProcessWatchdog:
             self._logger.info(f"Attempting to kill hanging process {pid} ({name})")
 
             # Run the killing logic in a thread pool to avoid blocking
-            await self._get_loop().run_in_executor(
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
                 None, self._kill_process_sync, pid, process, name
             )
 
