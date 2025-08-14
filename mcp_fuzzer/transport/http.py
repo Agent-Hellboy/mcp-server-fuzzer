@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, Optional
 
 import httpx
+from urllib.parse import urljoin, urlparse
 
 from .base import TransportProtocol
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
@@ -47,6 +48,24 @@ class HTTPTransport(TransportProtocol):
         """Update last activity timestamp."""
         self._last_activity = time.time()
 
+    def _resolve_redirect_url(self, response: httpx.Response) -> Optional[str]:
+        """Resolve redirect target for 307/308 while enforcing same-origin."""
+        if response.status_code not in (307, 308):
+            return None
+        location = response.headers.get("location")
+        if not location and not self.url.endswith("/"):
+            location = self.url + "/"
+        if not location:
+            return None
+        resolved = urljoin(self.url, location)
+        base, new = urlparse(self.url), urlparse(resolved)
+        if (new.scheme, new.netloc) != (base.scheme, base.netloc):
+            logging.warning(
+                "Refusing cross-origin redirect from %s to %s", self.url, resolved
+            )
+            return None
+        return resolved
+
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> Any:
@@ -66,16 +85,11 @@ class HTTPTransport(TransportProtocol):
         ) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
             # Follow only 307/308 to preserve method and body
-            if response.status_code in (307, 308):
-                redirect_url = response.headers.get("location") or response.headers.get(
-                    "Location"
+            redirect_url = self._resolve_redirect_url(response)
+            if redirect_url:
+                response = await client.post(
+                    redirect_url, json=payload, headers=self.headers
                 )
-                if not redirect_url and not self.url.endswith("/"):
-                    redirect_url = self.url + "/"
-                if redirect_url:
-                    response = await client.post(
-                        redirect_url, json=payload, headers=self.headers
-                    )
             response.raise_for_status()
             try:
                 data = response.json()
@@ -107,16 +121,11 @@ class HTTPTransport(TransportProtocol):
             follow_redirects=False,
         ) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
-            if response.status_code in (307, 308):
-                redirect_url = response.headers.get("location") or response.headers.get(
-                    "Location"
+            redirect_url = self._resolve_redirect_url(response)
+            if redirect_url:
+                response = await client.post(
+                    redirect_url, json=payload, headers=self.headers
                 )
-                if not redirect_url and not self.url.endswith("/"):
-                    redirect_url = self.url + "/"
-                if redirect_url:
-                    response = await client.post(
-                        redirect_url, json=payload, headers=self.headers
-                    )
             response.raise_for_status()
             try:
                 data = response.json()
@@ -145,16 +154,11 @@ class HTTPTransport(TransportProtocol):
             follow_redirects=False,
         ) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
-            if response.status_code in (307, 308):
-                redirect_url = response.headers.get("location") or response.headers.get(
-                    "Location"
+            redirect_url = self._resolve_redirect_url(response)
+            if redirect_url:
+                response = await client.post(
+                    redirect_url, json=payload, headers=self.headers
                 )
-                if not redirect_url and not self.url.endswith("/"):
-                    redirect_url = self.url + "/"
-                if redirect_url:
-                    response = await client.post(
-                        redirect_url, json=payload, headers=self.headers
-                    )
             response.raise_for_status()
 
     async def get_process_stats(self) -> Dict[str, Any]:
