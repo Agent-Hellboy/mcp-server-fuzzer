@@ -12,7 +12,7 @@ import time
 from typing import Any, Dict, Optional
 
 from .base import TransportProtocol
-from ..fuzz_engine.runtime import ProcessManager, ProcessConfig, WatchdogConfig
+from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 
 
 class StdioTransport(TransportProtocol):
@@ -109,20 +109,12 @@ class StdioTransport(TransportProtocol):
 
                 # Register with process manager for monitoring
                 if hasattr(self.process, "pid"):
-                    config = ProcessConfig(
-                        command=cmd_parts,
-                        name="stdio_transport",
-                        timeout=self.timeout,
-                        auto_kill=True,
-                        activity_callback=self._get_activity_timestamp,
-                    )
-
-                    # Register the existing process with the manager
-                    self.process_manager.watchdog.register_process(
+                    # Register with manager (ensures tracking + watchdog)
+                    self.process_manager.register_existing_process(
                         self.process.pid,
                         self.process,
-                        config.activity_callback,
-                        config.name,
+                        "stdio_transport",
+                        self._get_activity_timestamp,
                     )
 
                 self._initialized = True
@@ -229,11 +221,23 @@ class StdioTransport(TransportProtocol):
         """Close the transport and cleanup resources."""
         try:
             if self.process and hasattr(self.process, "pid"):
-                # Unregister from process manager first
-                self.process_manager.watchdog.unregister_process(self.process.pid)
-
+                # Ensure manager knows about it (in case of earlier failures)
+                if not await self.process_manager.is_process_registered(
+                    self.process.pid
+                ):
+                    self.process_manager.register_existing_process(
+                        self.process.pid,
+                        self.process,
+                        "stdio_transport",
+                        self._get_activity_timestamp,
+                    )
                 # Use process manager to stop the process
                 await self.process_manager.stop_process(self.process.pid, force=True)
+                # Reap the child to avoid zombies
+                try:
+                    await asyncio.wait_for(self.process.wait(), timeout=1.0)
+                except Exception:
+                    pass
             elif self.process:
                 # Fallback to direct process termination
                 if sys.platform == "win32":

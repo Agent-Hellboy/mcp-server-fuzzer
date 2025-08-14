@@ -56,7 +56,10 @@ class HTTPTransport(TransportProtocol):
 
         self._update_activity()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=True,
+        ) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
             response.raise_for_status()
             try:
@@ -84,7 +87,10 @@ class HTTPTransport(TransportProtocol):
     async def send_raw(self, payload: Dict[str, Any]) -> Any:
         self._update_activity()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=True,
+        ) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
             response.raise_for_status()
             try:
@@ -109,7 +115,10 @@ class HTTPTransport(TransportProtocol):
 
         self._update_activity()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=True,
+        ) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
             response.raise_for_status()
 

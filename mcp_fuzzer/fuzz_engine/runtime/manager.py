@@ -42,18 +42,8 @@ class ProcessManager:
         self._processes: Dict[int, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
         self._logger = logging.getLogger(__name__)
-        self._loop = None  # Initialize lazily when needed
-
-    def _get_loop(self):
-        """Get the event loop, initializing it if needed."""
-        if self._loop is None:
-            try:
-                self._loop = asyncio.get_event_loop()
-            except RuntimeError:
-                # Create a new event loop if none exists
-                self._loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self._loop)
-        return self._loop
+        # No cached loop; always obtain the running loop inside async methods
+        pass
 
     async def start_process(self, config: ProcessConfig) -> subprocess.Popen:
         """Start a new process asynchronously."""
@@ -64,9 +54,8 @@ class ProcessManager:
             except Exception:
                 pass
             # Start the process in a thread pool to avoid blocking
-            process = await self._get_loop().run_in_executor(
-                None, self._start_process_sync, config
-            )
+            loop = asyncio.get_running_loop()
+            process = await loop.run_in_executor(None, self._start_process_sync, config)
 
             # Register with watchdog
             self.watchdog.register_process(
@@ -96,10 +85,16 @@ class ProcessManager:
 
     def _start_process_sync(self, config: ProcessConfig) -> subprocess.Popen:
         """Synchronous process start (runs in thread pool)."""
+        cwd = str(config.cwd) if isinstance(config.cwd, Path) else config.cwd
+        env = (
+            {**os.environ, **(config.env or {})}
+            if config.env is not None
+            else os.environ.copy()
+        )
         return subprocess.Popen(
             config.command,
-            cwd=config.cwd,
-            env=config.env,
+            cwd=cwd,
+            env=env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             preexec_fn=os.setsid if os.name != "nt" else None,
@@ -118,13 +113,23 @@ class ProcessManager:
         try:
             if force:
                 # Force kill
-                await self._get_loop().run_in_executor(
-                    None, self._force_kill_process, pid, process, name
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(
+                    None,
+                    self._force_kill_process,
+                    pid,
+                    process,
+                    name,
                 )
             else:
                 # Graceful termination
-                await self._get_loop().run_in_executor(
-                    None, self._graceful_terminate_process, pid, process, name
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(
+                    None,
+                    self._graceful_terminate_process,
+                    pid,
+                    process,
+                    name,
                 )
 
             # Update status to reflect stop intent
@@ -173,13 +178,13 @@ class ProcessManager:
             process.wait(timeout=2.0)
             self._logger.info(f"Gracefully stopped process {pid} ({name})")
         except subprocess.TimeoutExpired:
-            # Process didn't terminate quickly, mark as stopped anyway
-            self._logger.info(
-                (
-                    f"Process {pid} ({name}) marked as stopped "
-                    "(graceful termination sent)"
-                )
-            )
+            # Escalate to kill and ensure we reap to avoid zombies
+            self._logger.info(f"Escalating to SIGKILL for process {pid} ({name})")
+            self._force_kill_process(pid, process, name)
+            try:
+                process.wait(timeout=1.0)
+            except Exception:
+                pass
 
     async def stop_all_processes(self, force: bool = False) -> None:
         """Stop all running processes asynchronously."""
@@ -199,6 +204,10 @@ class ProcessManager:
             process = process_info["process"]
 
             # Add current process state
+            try:
+                process.poll()
+            except Exception:
+                pass
             if hasattr(process, "returncode"):
                 if process.returncode is None:
                     process_info["status"] = "running"
@@ -234,12 +243,12 @@ class ProcessManager:
             process = self._processes[pid]["process"]
 
         try:
-            # Non-blocking wait with timeout
+            loop = asyncio.get_running_loop()
+            # Run process.wait in thread pool to avoid blocking the event loop
             if timeout is None:
-                timeout = 0.1  # Default to very short timeout
-
-            # Run process.wait in thread pool to avoid blocking
-            await self._get_loop().run_in_executor(None, process.wait, timeout)
+                await loop.run_in_executor(None, process.wait)
+            else:
+                await loop.run_in_executor(None, process.wait, timeout)
             return process.returncode
         except subprocess.TimeoutExpired:
             # Process didn't complete within timeout, return current status
@@ -273,6 +282,10 @@ class ProcessManager:
             pids_to_remove = []
             for pid, process_info in self._processes.items():
                 process = process_info["process"]
+                try:
+                    process.poll()
+                except Exception:
+                    pass
                 if hasattr(process, "returncode") and process.returncode is not None:
                     pids_to_remove.append(pid)
 
@@ -314,8 +327,14 @@ class ProcessManager:
                 return False
 
             # Send signal in thread pool to avoid blocking
-            await self._get_loop().run_in_executor(
-                None, self._send_signal_sync, pid, process, name, signal_type
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None,
+                self._send_signal_sync,
+                pid,
+                process,
+                name,
+                signal_type,
             )
 
             return True
@@ -397,7 +416,8 @@ class ProcessManager:
     ) -> Dict[int, bool]:
         """Send a timeout signal to all running processes asynchronously."""
         results = {}
-        pids = list(self._processes.keys())
+        async with self._lock:
+            pids = list(self._processes.keys())
 
         tasks = [self.send_timeout_signal(pid, signal_type) for pid in pids]
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
@@ -413,3 +433,25 @@ class ProcessManager:
     async def is_process_registered(self, pid: int) -> bool:
         """Check if a process is registered with the watchdog."""
         return self.watchdog.is_process_registered(pid)
+
+    def register_existing_process(
+        self,
+        pid: int,
+        process: subprocess.Popen,
+        name: str,
+        activity_callback: Optional[Callable[[], float]] = None,
+    ) -> None:
+        """Register an already-started subprocess with the manager and watchdog."""
+        # Register with watchdog first
+        self.watchdog.register_process(pid, process, activity_callback, name)
+        # Track in manager table
+        self._processes[pid] = {
+            "process": process,
+            "config": ProcessConfig(
+                command=[name],
+                name=name,
+                activity_callback=activity_callback,
+            ),
+            "started_at": time.time(),
+            "status": "running",
+        }

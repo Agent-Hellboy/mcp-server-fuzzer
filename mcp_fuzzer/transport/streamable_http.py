@@ -43,6 +43,8 @@ class StreamableHTTPTransport(TransportProtocol):
         self.session_id: Optional[str] = None
         self.protocol_version: Optional[str] = None
         self._initialized: bool = False
+        self._init_lock: asyncio.Lock = asyncio.Lock()
+        self._initializing: bool = False
 
     def _prepare_headers(self) -> Dict[str, str]:
         headers = dict(self.headers)
@@ -114,6 +116,19 @@ class StreamableHTTPTransport(TransportProtocol):
         # If we exit loop without a response, return None
         return None
 
+    def _resolve_redirect(self, response: httpx.Response) -> Optional[str]:
+        if response.status_code in (307, 308):
+            redirect_url = response.headers.get("location") or response.headers.get(
+                "Location"
+            )
+            if not redirect_url and not self.url.endswith("/"):
+                redirect_url = self.url + "/"
+            return redirect_url
+        return None
+
+    def _extract_content_type(self, response: httpx.Response) -> str:
+        return response.headers.get(CONTENT_TYPE, "").lower()
+
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> Any:
@@ -133,25 +148,25 @@ class StreamableHTTPTransport(TransportProtocol):
         except AttributeError:
             method = None
         if not self._initialized and method != "initialize":
-            await self._do_initialize()
+            async with self._init_lock:
+                if not self._initialized and not self._initializing:
+                    self._initializing = True
+                    try:
+                        await self._do_initialize()
+                    finally:
+                        self._initializing = False
 
         headers = self._prepare_headers()
         async with httpx.AsyncClient(
             timeout=self.timeout, follow_redirects=False
         ) as client:
-            response = await client.post(self.url, json=payload, headers=headers)
+            response = await self._post_with_retries(client, self.url, payload, headers)
             # Handle redirect by retrying once with provided Location or trailing slash
-            redirect_url = None
-            if response.status_code in (307, 308):
-                redirect_url = response.headers.get("location") or response.headers.get(
-                    "Location"
-                )
-                if not redirect_url and not self.url.endswith("/"):
-                    redirect_url = self.url + "/"
+            redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 self._logger.debug("Following redirect to %s", redirect_url)
-                response = await client.post(
-                    redirect_url, json=payload, headers=headers
+                response = await self._post_with_retries(
+                    client, redirect_url, payload, headers
                 )
             # Update session headers if available
             self._maybe_extract_session_headers(response)
@@ -164,7 +179,7 @@ class StreamableHTTPTransport(TransportProtocol):
                 raise Exception("Session terminated or endpoint not found")
 
             response.raise_for_status()
-            ct = response.headers.get(CONTENT_TYPE, "").lower()
+            ct = self._extract_content_type(response)
 
             if ct.startswith(JSON_CT):
                 data = response.json()
@@ -196,17 +211,12 @@ class StreamableHTTPTransport(TransportProtocol):
         async with httpx.AsyncClient(
             timeout=self.timeout, follow_redirects=False
         ) as client:
-            response = await client.post(self.url, json=payload, headers=headers)
-            if response.status_code in (307, 308):
-                redirect_url = response.headers.get("location") or response.headers.get(
-                    "Location"
+            response = await self._post_with_retries(client, self.url, payload, headers)
+            redirect_url = self._resolve_redirect(response)
+            if redirect_url:
+                response = await self._post_with_retries(
+                    client, redirect_url, payload, headers
                 )
-                if not redirect_url and not self.url.endswith("/"):
-                    redirect_url = self.url + "/"
-                if redirect_url:
-                    response = await client.post(
-                        redirect_url, json=payload, headers=headers
-                    )
             # Update session headers if available
             self._maybe_extract_session_headers(response)
             response.raise_for_status()
@@ -218,7 +228,7 @@ class StreamableHTTPTransport(TransportProtocol):
             "id": str(asyncio.get_running_loop().time()),
             "method": "initialize",
             "params": {
-                "protocolVersion": self.protocol_version or "2024-11-05",
+                "protocolVersion": self.protocol_version or "MCP-2024-11-05",
                 "capabilities": {
                     "elicitation": {},
                     "experimental": {},
@@ -239,3 +249,27 @@ class StreamableHTTPTransport(TransportProtocol):
         except Exception:
             # Surface the failure; leave _initialized False
             raise
+
+    async def _post_with_retries(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        json: Dict[str, Any],
+        headers: Dict[str, str],
+        retries: int = 2,
+    ) -> httpx.Response:
+        """POST with simple exponential backoff for transient network errors."""
+        delay = 0.1
+        attempt = 0
+        while True:
+            try:
+                return await client.post(url, json=json, headers=headers)
+            except (httpx.ConnectError, httpx.ReadTimeout) as e:
+                if attempt >= retries:
+                    raise
+                self._logger.debug(
+                    "POST retry %d for %s due to %s", attempt + 1, url, type(e).__name__
+                )
+                await asyncio.sleep(delay)
+                delay *= 2
+                attempt += 1
