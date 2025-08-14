@@ -228,7 +228,7 @@ class StreamableHTTPTransport(TransportProtocol):
             "id": str(asyncio.get_running_loop().time()),
             "method": "initialize",
             "params": {
-                "protocolVersion": self.protocol_version or "MCP-2024-11-05",
+                "protocolVersion": self.protocol_version or "2025-06-18",
                 "capabilities": {
                     "elicitation": {},
                     "experimental": {},
@@ -265,7 +265,20 @@ class StreamableHTTPTransport(TransportProtocol):
             try:
                 return await client.post(url, json=json, headers=headers)
             except (httpx.ConnectError, httpx.ReadTimeout) as e:
-                if attempt >= retries:
+                # Only retry for safe, idempotent, or initialization-like methods
+                method = None
+                try:
+                    method = json.get("method")
+                except Exception:
+                    pass
+                safe = method in (
+                    "initialize",
+                    "notifications/initialized",
+                    "tools/list",
+                    "prompts/list",
+                    "resources/list",
+                )
+                if attempt >= retries or not safe:
                     raise
                 self._logger.debug(
                     "POST retry %d for %s due to %s", attempt + 1, url, type(e).__name__
