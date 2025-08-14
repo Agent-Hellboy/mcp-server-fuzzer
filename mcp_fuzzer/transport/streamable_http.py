@@ -4,15 +4,26 @@ import logging
 from typing import Any, Dict, Optional
 
 import httpx
+from urllib.parse import urljoin, urlparse
+from ..config import (
+    DEFAULT_PROTOCOL_VERSION,
+    CONTENT_TYPE_HEADER,
+    JSON_CONTENT_TYPE,
+    SSE_CONTENT_TYPE,
+    MCP_SESSION_ID_HEADER,
+    MCP_PROTOCOL_VERSION_HEADER,
+    DEFAULT_HTTP_ACCEPT,
+)
 
 from .base import TransportProtocol
 
 
-MCP_SESSION_ID = "mcp-session-id"
-MCP_PROTOCOL_VERSION = "mcp-protocol-version"
-CONTENT_TYPE = "content-type"
-JSON_CT = "application/json"
-SSE_CT = "text/event-stream"
+# Back-compat local aliases (referenced by tests)
+MCP_SESSION_ID = MCP_SESSION_ID_HEADER
+MCP_PROTOCOL_VERSION = MCP_PROTOCOL_VERSION_HEADER
+CONTENT_TYPE = CONTENT_TYPE_HEADER
+JSON_CT = JSON_CONTENT_TYPE
+SSE_CT = SSE_CONTENT_TYPE
 
 
 class StreamableHTTPTransport(TransportProtocol):
@@ -33,7 +44,7 @@ class StreamableHTTPTransport(TransportProtocol):
         self.url = url
         self.timeout = timeout
         self.headers: Dict[str, str] = {
-            "Accept": f"{JSON_CT}, {SSE_CT}",
+            "Accept": DEFAULT_HTTP_ACCEPT,
             "Content-Type": JSON_CT,
         }
         if auth_headers:
@@ -118,12 +129,22 @@ class StreamableHTTPTransport(TransportProtocol):
 
     def _resolve_redirect(self, response: httpx.Response) -> Optional[str]:
         if response.status_code in (307, 308):
-            redirect_url = response.headers.get("location") or response.headers.get(
-                "Location"
-            )
-            if not redirect_url and not self.url.endswith("/"):
-                redirect_url = self.url + "/"
-            return redirect_url
+            location = response.headers.get("location")
+            if not location and not self.url.endswith("/"):
+                location = self.url + "/"
+            if not location:
+                return None
+            resolved = urljoin(self.url, location)
+            base = urlparse(self.url)
+            new = urlparse(resolved)
+            if (new.scheme, new.netloc) != (base.scheme, base.netloc):
+                self._logger.warning(
+                    "Refusing cross-origin redirect from %s to %s",
+                    self.url,
+                    resolved,
+                )
+                return None
+            return resolved
         return None
 
     def _extract_content_type(self, response: httpx.Response) -> str:
@@ -228,7 +249,7 @@ class StreamableHTTPTransport(TransportProtocol):
             "id": str(asyncio.get_running_loop().time()),
             "method": "initialize",
             "params": {
-                "protocolVersion": self.protocol_version or "2025-06-18",
+                "protocolVersion": self.protocol_version or DEFAULT_PROTOCOL_VERSION,
                 "capabilities": {
                     "elicitation": {},
                     "experimental": {},

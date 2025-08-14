@@ -8,6 +8,10 @@ import httpx
 
 from .base import TransportProtocol
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
+from ..config import (
+    JSON_CONTENT_TYPE,
+    DEFAULT_HTTP_ACCEPT,
+)
 
 
 class HTTPTransport(TransportProtocol):
@@ -20,8 +24,8 @@ class HTTPTransport(TransportProtocol):
         self.url = url
         self.timeout = timeout
         self.headers = {
-            "Accept": "application/json, text/event-stream",
-            "Content-Type": "application/json",
+            "Accept": DEFAULT_HTTP_ACCEPT,
+            "Content-Type": JSON_CONTENT_TYPE,
         }
         if auth_headers:
             self.headers.update(auth_headers)

@@ -7,6 +7,7 @@ from mcp_fuzzer.transport.streamable_http import (
     StreamableHTTPTransport,
     CONTENT_TYPE,
 )
+from mcp_fuzzer.config import DEFAULT_PROTOCOL_VERSION
 
 
 # Force anyio to use asyncio backend for these tests (no trio dependency required)
@@ -82,7 +83,7 @@ class _FakeAsyncClient:
 @pytest.mark.anyio("asyncio")
 async def test_streamable_http_json_initialize(monkeypatch):
     # Arrange: first call returns JSON initialize with session header
-    init_result = {"protocolVersion": "2024-11-05", "ok": True}
+    init_result = {"protocolVersion": DEFAULT_PROTOCOL_VERSION, "ok": True}
     resp1 = _DummyResponse(
         headers={"mcp-session-id": "sess-123"},
         json_body={"jsonrpc": "2.0", "id": "1", "result": init_result},
@@ -110,7 +111,7 @@ async def test_streamable_http_json_initialize(monkeypatch):
     # Assert: protocol and session headers captured
     assert result == init_result
     assert t.session_id == "sess-123"
-    assert t.protocol_version == "2024-11-05"
+    assert t.protocol_version == DEFAULT_PROTOCOL_VERSION
 
     # Act: second request should include headers
     result2 = await t.send_request("tools/list", {})
@@ -118,7 +119,7 @@ async def test_streamable_http_json_initialize(monkeypatch):
     # Verify last call included session + protocol headers
     last_headers = fake.calls[-1]["headers"]
     assert last_headers.get("mcp-session-id") == "sess-123"
-    assert last_headers.get("mcp-protocol-version") == "2024-11-05"
+    assert last_headers.get("mcp-protocol-version") == DEFAULT_PROTOCOL_VERSION
 
 
 @pytest.mark.anyio("asyncio")
