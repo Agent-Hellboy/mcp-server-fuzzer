@@ -5,6 +5,9 @@ import types
 from typing import Any, Dict, List, Optional
 
 import pytest
+
+# Skip this module if pytest-asyncio is not available to avoid failing runs
+pytest.importorskip("pytest_asyncio")
 from mcp_fuzzer.transport.streamable_http import (
     StreamableHTTPTransport,
     CONTENT_TYPE,
