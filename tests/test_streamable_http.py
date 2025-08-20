@@ -1,3 +1,5 @@
+"""Async tests use pytest-asyncio."""
+
 import asyncio
 import types
 from typing import Any, Dict, List, Optional
@@ -8,12 +10,6 @@ from mcp_fuzzer.transport.streamable_http import (
     CONTENT_TYPE,
 )
 from mcp_fuzzer.config import DEFAULT_PROTOCOL_VERSION
-
-
-# Force anyio to use asyncio backend for these tests (no trio dependency required)
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
 
 
 class _DummyResponse:
@@ -80,7 +76,7 @@ class _FakeAsyncClient:
         return self._responses.pop(0)
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_streamable_http_json_initialize(monkeypatch):
     # Arrange: first call returns JSON initialize with session header
     init_result = {"protocolVersion": DEFAULT_PROTOCOL_VERSION, "ok": True}
@@ -122,7 +118,7 @@ async def test_streamable_http_json_initialize(monkeypatch):
     assert last_headers.get("mcp-protocol-version") == DEFAULT_PROTOCOL_VERSION
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_streamable_http_sse_response(monkeypatch):
     # Arrange: SSE data with one JSON-RPC response containing result
     sse_lines = [
