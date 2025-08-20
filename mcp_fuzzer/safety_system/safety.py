@@ -35,8 +35,14 @@ class SafetyProvider(Protocol):
 class SafetyFilter(SafetyProvider):
     """Filters and suppresses dangerous operations during fuzzing."""
 
-    def __init__(self):
-        self.dangerous_url_patterns = [
+    def __init__(
+        self,
+        dangerous_url_patterns: list[str] | None = None,
+        dangerous_command_patterns: list[str] | None = None,
+        dangerous_argument_names: list[str] | None = None,
+    ):
+        # Allow dependency injection of patterns for easier testing and configurability
+        self.dangerous_url_patterns = dangerous_url_patterns or [
             r"https?://",  # Any HTTP/HTTPS URL - CRITICAL to block
             r"ftp://",  # FTP URLs
             r"file://",  # File URLs
@@ -44,7 +50,7 @@ class SafetyFilter(SafetyProvider):
             r"[a-zA-Z0-9-]+\.(com|org|net|edu|gov|mil|int|co\.uk|de|fr|jp|cn)",
         ]
 
-        self.dangerous_command_patterns = [
+        self.dangerous_command_patterns = dangerous_command_patterns or [
             # Browser/app launching commands
             r"xdg-open",  # Linux open command
             r"open\s+",  # macOS open command
@@ -71,7 +77,7 @@ class SafetyFilter(SafetyProvider):
             r"halt",
         ]
 
-        self.dangerous_argument_names = [
+        self.dangerous_argument_names = dangerous_argument_names or [
             "url",
             "link",
             "uri",
@@ -92,6 +98,14 @@ class SafetyFilter(SafetyProvider):
 
         # Track blocked operations for testing and analysis
         self.blocked_operations = []
+        self._fs_root: Path | None = None
+
+    def set_fs_root(self, root: str | Path) -> None:
+        """Record a sandbox root for potential future path validations."""
+        try:
+            self._fs_root = Path(root)
+        except Exception:
+            self._fs_root = None
 
     def contains_dangerous_url(self, value: str) -> bool:
         """Check if a string contains a dangerous URL."""
@@ -358,95 +372,6 @@ class SafetyFilter(SafetyProvider):
                         )
 
         return summary
-
-    def print_blocked_operations_summary(self):
-        """Print a formatted summary of all blocked operations."""
-        summary = self.get_blocked_operations_summary()
-
-        if summary["total_blocked"] == 0:
-            logging.info("\U00002705 No operations were blocked by safety system")
-            return
-
-        logging.info("=" * 80)
-        logging.info("\U0001f6e1 SAFETY SYSTEM BLOCKED OPERATIONS SUMMARY")
-        logging.info("=" * 80)
-        logging.info(f"Total Operations Blocked: {summary['total_blocked']}")
-
-        if summary["tools_blocked"]:
-            logging.info("\nTools Blocked:")
-            for tool, count in summary["tools_blocked"].items():
-                logging.info(f"  • {tool}: {count} times")
-
-        if summary["reasons"]:
-            logging.info("\nBlocking Reasons:")
-            for reason, count in summary["reasons"].items():
-                logging.info(f"  • {reason}: {count} times")
-
-        if summary["dangerous_content_types"]:
-            logging.info("\nDangerous Content Types:")
-            for content_type, count in summary["dangerous_content_types"].items():
-                logging.info(f"  • {content_type}: {count} instances")
-
-        logging.info("=" * 80)
-
-    def export_safety_data(self, filename: str = None) -> str:
-        """Export safety data to JSON file for analysis."""
-        import json
-        from datetime import datetime
-
-        if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"safety_report_{timestamp}.json"
-
-        safety_data = {
-            "export_timestamp": datetime.now().isoformat(),
-            "summary": self.get_blocked_operations_summary(),
-            "detailed_operations": self.blocked_operations,
-            "safety_config": {
-                "dangerous_url_patterns": self.dangerous_url_patterns,
-                "dangerous_command_patterns": self.dangerous_command_patterns,
-                "dangerous_argument_names": self.dangerous_argument_names,
-            },
-        }
-
-        try:
-            with open(filename, "w") as f:
-                json.dump(safety_data, f, indent=2, default=str)
-
-            logging.info(f"Safety data exported to: {filename}")
-            return filename
-        except Exception as e:
-            logging.error(f"Failed to export safety data: {e}")
-            return ""
-
-    def get_safety_statistics(self) -> Dict[str, Any]:
-        """Get comprehensive safety statistics for reporting."""
-        summary = self.get_blocked_operations_summary()
-
-        # Calculate additional statistics
-        stats = {
-            "total_operations_blocked": summary["total_blocked"],
-            "unique_tools_blocked": len(summary["tools_blocked"]),
-            "blocking_reasons": summary["reasons"],
-            "dangerous_content_breakdown": summary["dangerous_content_types"],
-            "most_blocked_tool": None,
-            "most_blocked_tool_count": 0,
-            "risk_assessment": "low",
-        }
-
-        # Find most blocked tool
-        if summary["tools_blocked"]:
-            most_blocked = max(summary["tools_blocked"].items(), key=lambda x: x[1])
-            stats["most_blocked_tool"] = most_blocked[0]
-            stats["most_blocked_tool_count"] = most_blocked[1]
-
-        # Assess overall risk
-        if stats["total_operations_blocked"] > 10:
-            stats["risk_assessment"] = "high"
-        elif stats["total_operations_blocked"] > 5:
-            stats["risk_assessment"] = "medium"
-
-        return stats
 
 
 _current_safety: SafetyProvider = SafetyFilter()

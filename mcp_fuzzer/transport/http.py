@@ -5,13 +5,17 @@ import time
 from typing import Any, Dict, Optional
 
 import httpx
-from urllib.parse import urljoin, urlparse
 
 from .base import TransportProtocol
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ..config import (
     JSON_CONTENT_TYPE,
     DEFAULT_HTTP_ACCEPT,
+)
+from ..safety_system.policy import (
+    is_host_allowed,
+    resolve_redirect_safely,
+    sanitize_headers,
 )
 
 
@@ -49,7 +53,10 @@ class HTTPTransport(TransportProtocol):
         self._last_activity = time.time()
 
     def _resolve_redirect_url(self, response: httpx.Response) -> Optional[str]:
-        """Resolve redirect target for 307/308 while enforcing same-origin."""
+        """
+        Resolve redirect target for 307/308 while enforcing same-origin and
+        host policy.
+        """
         if response.status_code not in (307, 308):
             return None
         location = response.headers.get("location")
@@ -57,13 +64,9 @@ class HTTPTransport(TransportProtocol):
             location = self.url + "/"
         if not location:
             return None
-        resolved = urljoin(self.url, location)
-        base, new = urlparse(self.url), urlparse(resolved)
-        if (new.scheme, new.netloc) != (base.scheme, base.netloc):
-            logging.warning(
-                "Refusing cross-origin redirect from %s to %s", self.url, resolved
-            )
-            return None
+        resolved = resolve_redirect_safely(self.url, location)
+        if not resolved:
+            logging.warning("Refusing redirect that violates policy from %s", self.url)
         return resolved
 
     async def send_request(
@@ -82,8 +85,14 @@ class HTTPTransport(TransportProtocol):
         async with httpx.AsyncClient(
             timeout=self.timeout,
             follow_redirects=False,
+            trust_env=False,
         ) as client:
-            response = await client.post(self.url, json=payload, headers=self.headers)
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(self.headers)
+            response = await client.post(self.url, json=payload, headers=safe_headers)
             # Follow only 307/308 to preserve method and body
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
@@ -119,8 +128,14 @@ class HTTPTransport(TransportProtocol):
         async with httpx.AsyncClient(
             timeout=self.timeout,
             follow_redirects=False,
+            trust_env=False,
         ) as client:
-            response = await client.post(self.url, json=payload, headers=self.headers)
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(self.headers)
+            response = await client.post(self.url, json=payload, headers=safe_headers)
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
                 response = await client.post(
@@ -152,8 +167,14 @@ class HTTPTransport(TransportProtocol):
         async with httpx.AsyncClient(
             timeout=self.timeout,
             follow_redirects=False,
+            trust_env=False,
         ) as client:
-            response = await client.post(self.url, json=payload, headers=self.headers)
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(self.headers)
+            response = await client.post(self.url, json=payload, headers=safe_headers)
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
                 response = await client.post(
