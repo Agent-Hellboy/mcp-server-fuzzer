@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 from rich.console import Console
 
 from ..transport import create_transport
+from ..safety_system.policy import configure_network_policy
 from ..safety_system import start_system_blocking, stop_system_blocking
 
 
@@ -51,6 +52,11 @@ def prepare_inner_argv(args) -> List[str]:
         argv += ["--protocol-type", args.protocol_type]
     if args.verbose:
         argv += ["--verbose"]
+    if getattr(args, "no_network", False):
+        argv += ["--no-network"]
+    if getattr(args, "allow_hosts", None):
+        for h in args.allow_hosts:
+            argv += ["--allow-host", h]
     return argv
 
 
@@ -103,6 +109,12 @@ def execute_inner_client(args, unified_client_main, argv):
             except NotImplementedError:
                 pass
         try:
+            # Configure network policy overrides
+            deny = True if getattr(args, "no_network", False) else None
+            extra = getattr(args, "allow_hosts", None)
+            configure_network_policy(
+                deny_network_by_default=deny, extra_allowed_hosts=extra
+            )
             loop.run_until_complete(unified_client_main())
         except asyncio.CancelledError:
             Console().print("\n[yellow]Fuzzing interrupted by user[/yellow]")

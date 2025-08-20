@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 
 from .base import TransportProtocol
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
+from ..safety_system.policy import sanitize_subprocess_env
 
 
 class StdioTransport(TransportProtocol):
@@ -94,6 +95,7 @@ class StdioTransport(TransportProtocol):
                     stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    env=sanitize_subprocess_env(),
                     preexec_fn=os.setsid if sys.platform != "win32" else None,
                     creationflags=(
                         subprocess.CREATE_NEW_PROCESS_GROUP
