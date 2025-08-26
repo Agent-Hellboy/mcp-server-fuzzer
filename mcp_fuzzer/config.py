@@ -21,3 +21,25 @@ WATCHDOG_DEFAULT_CHECK_INTERVAL: float = 1.0
 WATCHDOG_EXTRA_BUFFER: float = 5.0
 # Additional seconds added to per-transport timeout for max hang time
 WATCHDOG_MAX_HANG_ADDITIONAL: float = 10.0
+
+# Safety defaults
+# Hosts allowed for network operations by default. Keep local-only.
+SAFETY_LOCAL_HOSTS: set[str] = {"localhost", "127.0.0.1", "::1"}
+# Default to deny network to non-local hosts
+SAFETY_NO_NETWORK_DEFAULT: bool = False
+# Headers that should never be forwarded by default to avoid leakage
+SAFETY_HEADER_DENYLIST: set[str] = {"authorization", "cookie"}
+# Environment variables related to proxies that should be stripped by default
+SAFETY_PROXY_ENV_DENYLIST: set[str] = {
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "no_proxy",
+}
+# A minimal allowlist for environment keys to pass to subprocesses when
+# sanitizing. Empty means passthrough except denied keys.
+SAFETY_ENV_ALLOWLIST: set[str] = set()

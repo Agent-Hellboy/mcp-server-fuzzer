@@ -358,54 +358,30 @@ class AggressiveToolStrategy:
 
 ## Safety System Reference
 
-### Environment Detection
+The safety system focuses on containment and preventing external references during fuzzing.
 
-The safety system automatically detects production environments:
+- Argument-level filtering (`mcp_fuzzer.safety_system.safety.SafetyFilter`):
+  - Blocks URLs and risky commands in tool arguments; recursively sanitizes dicts/lists.
+  - Pluggable provider via `--safety-plugin`; `--no-safety` disables filtering.
+  - `set_fs_root(path)` records a sandbox root (for future path checks).
 
-```python
-def is_safe_test_environment() -> bool:
-    """Check if we're in a safe environment for dangerous tests."""
-    # Don't run dangerous tests on production systems
-    if (os.getenv("CI") or
-        os.getenv("PRODUCTION") or
-        os.getenv("DANGEROUS_TESTS_DISABLED")):
-        return False
+- System-level blocking (`mcp_fuzzer.safety_system.system_blocker.SystemCommandBlocker`):
+  - Creates PATH shims for `xdg-open`, `open`, and browsers to prevent app launches.
+  - Enabled with `--enable-safety-system`; cleaned up on exit.
 
-    # Don't run on systems with critical processes
-    try:
-        with open("/proc/1/comm", "r") as f:
-            init_process = f.read().strip()
-            if init_process in ["systemd", "init"]:
-                return False
-    except (OSError, IOError):
-        pass
+- Policy utilities (`mcp_fuzzer.safety_system.policy`):
+  - `is_host_allowed(url, allowed_hosts=None, deny_network_by_default=None)`
+  - `resolve_redirect_safely(base_url, location, ...)` (same-origin + allow-list)
+  - `sanitize_subprocess_env(env)` strips proxy env vars before spawning subprocesses
+  - `sanitize_headers(headers)` removes sensitive outbound headers by default
 
-    return True
-```
+- **Safety Options (CLI Flags)**:
+  - `--no-network`: Disallow non-local hosts.
+  - `--allow-host HOST`: Add to allow-list (bare hostname/IP, no scheme/port). Repeatable.
 
-### System Command Blocking
-
-```python
-class SystemBlocker:
-    """Blocks dangerous system commands during fuzzing."""
-
-    def __init__(self):
-        self.blocked_commands = {
-            "rm", "del", "format", "shutdown", "reboot",
-            "kill", "killall", "pkill", "xkill"
-        }
-        self.blocked_patterns = [
-            r"rm\s+-rf",
-            r"del\s+/[sq]",
-            r"format\s+[a-z]:",
-            r"shutdown\s+",
-            r"reboot\s+"
-        ]
-
-    def is_blocked(self, command: str) -> bool:
-        """Check if command should be blocked."""
-        # Implementation details...
-```
+- **Network and Proxy Policies**:
+  - HTTP transports are created with environment proxies disabled (`trust_env=False`), so environment proxy variables are ignored.
+  - Only same-origin 307 and 308 redirects are automatically followed, and only after checking the host allow-list policy via `is_host_allowed`.
 
 ## Performance Tuning
 

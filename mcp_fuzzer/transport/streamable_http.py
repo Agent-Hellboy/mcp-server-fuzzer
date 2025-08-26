@@ -4,7 +4,6 @@ import logging
 from typing import Any, Dict, Optional
 
 import httpx
-from urllib.parse import urljoin, urlparse
 from ..config import (
     DEFAULT_PROTOCOL_VERSION,
     CONTENT_TYPE_HEADER,
@@ -16,6 +15,11 @@ from ..config import (
 )
 
 from .base import TransportProtocol
+from ..safety_system.policy import (
+    is_host_allowed,
+    resolve_redirect_safely,
+    sanitize_headers,
+)
 
 
 # Back-compat local aliases (referenced by tests)
@@ -128,24 +132,19 @@ class StreamableHTTPTransport(TransportProtocol):
         return None
 
     def _resolve_redirect(self, response: httpx.Response) -> Optional[str]:
-        if response.status_code in (307, 308):
-            location = response.headers.get("location")
-            if not location and not self.url.endswith("/"):
-                location = self.url + "/"
-            if not location:
-                return None
-            resolved = urljoin(self.url, location)
-            base = urlparse(self.url)
-            new = urlparse(resolved)
-            if (new.scheme, new.netloc) != (base.scheme, base.netloc):
-                self._logger.warning(
-                    "Refusing cross-origin redirect from %s to %s",
-                    self.url,
-                    resolved,
-                )
-                return None
-            return resolved
-        return None
+        if response.status_code not in (307, 308):
+            return None
+        location = response.headers.get("location")
+        if not location and not self.url.endswith("/"):
+            location = self.url + "/"
+        if not location:
+            return None
+        resolved = resolve_redirect_safely(self.url, location)
+        if not resolved:
+            self._logger.warning(
+                "Refusing redirect that violates policy from %s", self.url
+            )
+        return resolved
 
     def _extract_content_type(self, response: httpx.Response) -> str:
         return response.headers.get(CONTENT_TYPE, "").lower()
@@ -179,9 +178,15 @@ class StreamableHTTPTransport(TransportProtocol):
 
         headers = self._prepare_headers()
         async with httpx.AsyncClient(
-            timeout=self.timeout, follow_redirects=False
+            timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
-            response = await self._post_with_retries(client, self.url, payload, headers)
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            response = await self._post_with_retries(
+                client, self.url, payload, sanitize_headers(headers)
+            )
             # Handle redirect by retrying once with provided Location or trailing slash
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
@@ -230,16 +235,27 @@ class StreamableHTTPTransport(TransportProtocol):
         payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
         headers = self._prepare_headers()
         async with httpx.AsyncClient(
-            timeout=self.timeout, follow_redirects=False
+            timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
-            response = await self._post_with_retries(client, self.url, payload, headers)
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(headers)
+            response = await self._post_with_retries(
+                client, 
+                self.url, 
+                payload, 
+                safe_headers
+            )
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 response = await self._post_with_retries(
-                    client, redirect_url, payload, headers
+                    client, 
+                    redirect_url, 
+                    payload, 
+                    safe_headers
                 )
-            # Update session headers if available
-            self._maybe_extract_session_headers(response)
             response.raise_for_status()
 
     async def _do_initialize(self) -> None:

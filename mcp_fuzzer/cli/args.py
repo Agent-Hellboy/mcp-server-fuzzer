@@ -187,6 +187,23 @@ Examples:
         ),
     )
 
+    # Network safety controls
+    parser.add_argument(
+        "--no-network",
+        action="store_true",
+        help=("Disallow network to non-local hosts (localhost/127.0.0.1/::1 only)."),
+    )
+    parser.add_argument(
+        "--allow-host",
+        action="append",
+        dest="allow_hosts",
+        metavar="HOST",
+        help=(
+            "Permit additional hostnames when --no-network is used. "
+            "Can be specified multiple times."
+        ),
+    )
+
     return parser
 
 
@@ -324,6 +341,8 @@ def get_cli_config() -> Dict[str, Any]:
             args, "retry_with_safety_on_interrupt", False
         ),
         "log_level": getattr(args, "log_level", None),
+        "no_network": getattr(args, "no_network", False),
+        "allow_hosts": getattr(args, "allow_hosts", None),
     }
 
 
