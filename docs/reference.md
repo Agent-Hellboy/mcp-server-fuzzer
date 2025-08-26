@@ -375,6 +375,14 @@ The safety system focuses on containment and preventing external references duri
   - `sanitize_subprocess_env(env)` strips proxy env vars before spawning subprocesses
   - `sanitize_headers(headers)` removes sensitive outbound headers by default
 
+- **Safety Options (CLI Flags)**:
+  - `--no-network`: Disallow non-local hosts.
+  - `--allow-host HOST`: Add to allow-list (bare hostname/IP, no scheme/port). Repeatable.
+
+- **Network and Proxy Policies**:
+  - HTTP transports are created with environment proxies disabled (`trust_env=False`), so environment proxy variables are ignored.
+  - Only same-origin 307 and 308 redirects are automatically followed, and only after checking the host allow-list policy via `is_host_allowed`.
+
 ## Performance Tuning
 
 ### Timeout Configuration

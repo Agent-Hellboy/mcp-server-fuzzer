@@ -241,16 +241,21 @@ class StreamableHTTPTransport(TransportProtocol):
                 raise Exception(
                     "Network to non-local host is disallowed by safety policy"
                 )
+            safe_headers = sanitize_headers(headers)
             response = await self._post_with_retries(
-                client, self.url, payload, sanitize_headers(headers)
+                client, 
+                self.url, 
+                payload, 
+                safe_headers
             )
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 response = await self._post_with_retries(
-                    client, redirect_url, payload, headers
+                    client, 
+                    redirect_url, 
+                    payload, 
+                    safe_headers
                 )
-            # Update session headers if available
-            self._maybe_extract_session_headers(response)
             response.raise_for_status()
 
     async def _do_initialize(self) -> None:

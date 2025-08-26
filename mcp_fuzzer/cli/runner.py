@@ -112,8 +112,14 @@ def execute_inner_client(args, unified_client_main, argv):
             # Configure network policy overrides
             deny = True if getattr(args, "no_network", False) else None
             extra = getattr(args, "allow_hosts", None)
+            # Reset extra allowed hosts to prevent accumulation across runs
             configure_network_policy(
-                deny_network_by_default=deny, extra_allowed_hosts=extra
+                deny_network_by_default=None, 
+                extra_allowed_hosts=None
+            )
+            configure_network_policy(
+                deny_network_by_default=deny, 
+                extra_allowed_hosts=extra
             )
             loop.run_until_complete(unified_client_main())
         except asyncio.CancelledError:

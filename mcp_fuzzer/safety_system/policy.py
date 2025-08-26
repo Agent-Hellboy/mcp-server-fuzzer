@@ -101,8 +101,9 @@ def sanitize_subprocess_env(
     """
     env = dict(source_env or os.environ)
     deny = set(proxy_denylist or SAFETY_PROXY_ENV_DENYLIST)
+    deny_lower = {k.lower() for k in deny}
     for key in list(env.keys()):
-        if key in deny:
+        if key in deny or key.lower() in deny_lower:
             env.pop(key, None)
     return env
 

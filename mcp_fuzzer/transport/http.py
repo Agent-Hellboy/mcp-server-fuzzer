@@ -97,7 +97,9 @@ class HTTPTransport(TransportProtocol):
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
                 response = await client.post(
-                    redirect_url, json=payload, headers=self.headers
+                    redirect_url, 
+                    json=payload, 
+                    headers=safe_headers
                 )
             response.raise_for_status()
             try:
@@ -139,7 +141,9 @@ class HTTPTransport(TransportProtocol):
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
                 response = await client.post(
-                    redirect_url, json=payload, headers=self.headers
+                    redirect_url, 
+                    json=payload, 
+                    headers=safe_headers
                 )
             response.raise_for_status()
             try:
@@ -178,7 +182,9 @@ class HTTPTransport(TransportProtocol):
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
                 response = await client.post(
-                    redirect_url, json=payload, headers=self.headers
+                    redirect_url, 
+                    json=payload, 
+                    headers=safe_headers
                 )
             response.raise_for_status()
 
