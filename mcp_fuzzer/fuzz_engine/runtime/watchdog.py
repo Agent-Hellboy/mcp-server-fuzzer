@@ -187,7 +187,9 @@ class ProcessWatchdog:
                     self._logger.info(f"Force killed Windows process {pid} ({name})")
                 else:
                     self._logger.info(
-                        "Gracefully terminated Windows process %s (%s)", pid, name
+                        "Gracefully terminated Windows process %s (%s)",
+                        pid,
+                        name,
                     )
             except (AttributeError, ValueError):
                 process.kill()
@@ -251,7 +253,9 @@ class ProcessWatchdog:
                     # Last resort: force kill
                     process.kill()
                     self._logger.info(
-                        "Force killed Unix process %s (%s) as last resort", pid, name
+                        "Force killed Unix process %s (%s) as last resort",
+                        pid,
+                        name,
                     )
 
     def register_process(

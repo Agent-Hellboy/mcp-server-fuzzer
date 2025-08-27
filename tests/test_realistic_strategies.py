@@ -127,7 +127,8 @@ class TestRealisticStrategies(unittest.TestCase):
             ]
         ):
             self.assertTrue(
-                value[0].isalpha(), f"Method name should start with letter: {value}"
+                value[0].isalpha(),
+                f"Method name should start with letter: {value}",
             )
 
 
@@ -207,7 +208,11 @@ class TestRealisticTextGeneration(unittest.TestCase):
             "inputSchema": {
                 "properties": {
                     "count": {"type": "integer", "minimum": 10, "maximum": 100},
-                    "score": {"type": "number", "minimum": 0.0, "maximum": 10.0},
+                    "score": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 10.0,
+                    },
                     "enabled": {"type": "boolean"},
                 }
             }
@@ -305,7 +310,9 @@ class TestRealisticTextGeneration(unittest.TestCase):
 
     def test_uuid_strings_strategy(self):
         """Test UUID string generation strategy."""
-        from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import uuid_strings
+        from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+            uuid_strings,
+        )
 
         # Test UUID4 (default)
         strategy = uuid_strings()
@@ -469,8 +476,16 @@ class TestRealisticTextGeneration(unittest.TestCase):
         tool = {
             "inputSchema": {
                 "properties": {
-                    "small_int": {"type": "integer", "minimum": 1, "maximum": 5},
-                    "large_int": {"type": "integer", "minimum": 1000, "maximum": 2000},
+                    "small_int": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5,
+                    },
+                    "large_int": {
+                        "type": "integer",
+                        "minimum": 1000,
+                        "maximum": 2000,
+                    },
                 }
             }
         }
@@ -484,7 +499,11 @@ class TestRealisticTextGeneration(unittest.TestCase):
         tool = {
             "inputSchema": {
                 "properties": {
-                    "small_float": {"type": "number", "minimum": 0.1, "maximum": 0.9},
+                    "small_float": {
+                        "type": "number",
+                        "minimum": 0.1,
+                        "maximum": 0.9,
+                    },
                     "large_float": {
                         "type": "number",
                         "minimum": 100.0,

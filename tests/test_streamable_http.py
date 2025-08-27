@@ -55,7 +55,9 @@ class _DummySSEStreamResponse:
     def raise_for_status(self) -> None:  # pragma: no cover - simple stub
         pass
 
-    async def aiter_lines(self):  # pragma: no cover - behavior validated via result
+    async def aiter_lines(
+        self,
+    ):  # pragma: no cover - behavior validated via result
         for line in self._lines:
             # Simulate network scheduling
             await asyncio.sleep(0)
@@ -81,6 +83,7 @@ class _FakeAsyncClient:
 
 
 @pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_streamable_http_json_initialize(monkeypatch):
     # Arrange: first call returns JSON initialize with session header
     init_result = {"protocolVersion": DEFAULT_PROTOCOL_VERSION, "ok": True}
@@ -123,6 +126,7 @@ async def test_streamable_http_json_initialize(monkeypatch):
 
 
 @pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_streamable_http_sse_response(monkeypatch):
     # Arrange: SSE data with one JSON-RPC response containing result
     sse_lines = [

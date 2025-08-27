@@ -166,7 +166,15 @@ def _generate_aggressive_integer(
 ) -> int:
     """Generate aggressive random integer with extreme values and edge cases."""
     strategy = random.choice(
-        ["normal", "extreme", "zero", "negative", "overflow", "special", "boundary"]
+        [
+            "normal",
+            "extreme",
+            "zero",
+            "negative",
+            "overflow",
+            "special",
+            "boundary",
+        ]
     )
 
     if strategy == "normal":

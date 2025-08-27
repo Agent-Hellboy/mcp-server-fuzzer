@@ -69,7 +69,7 @@ class ToolFuzzer:
                         "tool_name": tool_name,
                         "run": i + 1,
                         "args": sanitized_args,
-                        "original_args": args if args != sanitized_args else None,
+                        "original_args": (args if args != sanitized_args else None),
                         "success": True,
                         "safety_sanitized": args != sanitized_args,
                     }

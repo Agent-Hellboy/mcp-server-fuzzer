@@ -6,7 +6,12 @@ from typing import Any, Dict
 
 from rich.console import Console
 
-from ..safety_system.safety import safety_filter, disable_safety, load_safety_plugin
+from ..safety_system.safety import (
+    safety_filter,
+    disable_safety,
+    load_safety_plugin,
+)
+from ..config import config
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -319,6 +324,34 @@ def get_cli_config() -> Dict[str, Any]:
     args = _parse()
     _validate(args)
     _setup(args)
+
+    # Update centralized configuration with CLI arguments
+    config.update(
+        {
+            "mode": args.mode,
+            "protocol": args.protocol,
+            "endpoint": args.endpoint,
+            "timeout": args.timeout,
+            "tool_timeout": getattr(args, "tool_timeout", None),
+            "fs_root": getattr(args, "fs_root", None),
+            "verbose": args.verbose,
+            "runs": args.runs,
+            "runs_per_type": args.runs_per_type,
+            "protocol_type": args.protocol_type,
+            "enable_safety_system": getattr(args, "enable_safety_system", False),
+            "safety_report": getattr(args, "safety_report", False),
+            "export_safety_data": getattr(args, "export_safety_data", None),
+            "output_dir": getattr(args, "output_dir", "reports"),
+            "safety_plugin": getattr(args, "safety_plugin", None),
+            "no_safety": getattr(args, "no_safety", False),
+            "retry_with_safety_on_interrupt": getattr(
+                args, "retry_with_safety_on_interrupt", False
+            ),
+            "log_level": getattr(args, "log_level", None),
+            "no_network": getattr(args, "no_network", False),
+            "allow_hosts": getattr(args, "allow_hosts", None),
+        }
+    )
 
     return {
         "mode": args.mode,

@@ -14,6 +14,12 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Protocol, runtime_checkable
 
+from .patterns import (
+    DEFAULT_DANGEROUS_URL_PATTERNS,
+    DEFAULT_DANGEROUS_COMMAND_PATTERNS,
+    DEFAULT_DANGEROUS_ARGUMENT_NAMES,
+)
+
 
 @runtime_checkable
 class SafetyProvider(Protocol):
@@ -42,59 +48,15 @@ class SafetyFilter(SafetyProvider):
         dangerous_argument_names: list[str] | None = None,
     ):
         # Allow dependency injection of patterns for easier testing and configurability
-        self.dangerous_url_patterns = dangerous_url_patterns or [
-            r"https?://",  # Any HTTP/HTTPS URL - CRITICAL to block
-            r"ftp://",  # FTP URLs
-            r"file://",  # File URLs
-            r"www\.",  # Common web URLs
-            r"[a-zA-Z0-9-]+\.(com|org|net|edu|gov|mil|int|co\.uk|de|fr|jp|cn)",
-        ]
-
-        self.dangerous_command_patterns = dangerous_command_patterns or [
-            # Browser/app launching commands
-            r"xdg-open",  # Linux open command
-            r"open\s+",  # macOS open command
-            r"start\s+",  # Windows start command
-            r"cmd\s+/c\s+start",  # Windows cmd start
-            r"explorer\.exe",  # Windows explorer
-            r"rundll32",  # Windows rundll32
-            # Browser executables
-            r"(firefox|chrome|chromium|safari|edge|opera|brave)\.exe",
-            r"(firefox|chrome|chromium|safari|edge|opera|brave)$",
-            # System executables that could launch apps
-            r"\.exe\s*$",
-            r"\.app/Contents/MacOS/",
-            r"\.app\s*$",
-            r"\.dmg\s*$",
-            r"\.msi\s*$",
-            # System modification commands
-            r"sudo\s+",
-            r"rm\s+-rf",
-            r"format\s+",
-            r"del\s+/[sq]",
-            r"shutdown",
-            r"reboot",
-            r"halt",
-        ]
-
-        self.dangerous_argument_names = dangerous_argument_names or [
-            "url",
-            "link",
-            "uri",
-            "href",
-            "website",
-            "webpage",
-            "browser",
-            "application",
-            "app",
-            "executable",
-            "exec",
-            "path",
-            "file_path",
-            "filepath",
-            "command",
-            "cmd",
-        ]
+        self.dangerous_url_patterns = (
+            dangerous_url_patterns or DEFAULT_DANGEROUS_URL_PATTERNS
+        )
+        self.dangerous_command_patterns = (
+            dangerous_command_patterns or DEFAULT_DANGEROUS_COMMAND_PATTERNS
+        )
+        self.dangerous_argument_names = (
+            dangerous_argument_names or DEFAULT_DANGEROUS_ARGUMENT_NAMES
+        )
 
         # Track blocked operations for testing and analysis
         self.blocked_operations = []
@@ -422,7 +384,9 @@ def disable_safety() -> None:
         ) -> bool:  # noqa: ARG002
             return False
 
-        def create_safe_mock_response(self, tool_name: str) -> Dict[str, Any]:  # noqa: ARG002
+        def create_safe_mock_response(
+            self, tool_name: str
+        ) -> Dict[str, Any]:  # noqa: ARG002
             return {"result": {"content": [{"text": "[SAFETY DISABLED]"}]}}
 
         def log_blocked_operation(

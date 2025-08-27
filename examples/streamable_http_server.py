@@ -59,11 +59,15 @@ def build_app(json_response: bool = False) -> Starlette:
             if i < count - 1:
                 await anyio.sleep(interval)
 
-        return [types.TextContent(type="text", text=f"done: {count} events for {caller}")]
+        return [
+            types.TextContent(type="text", text=f"done: {count} events for {caller}")
+        ]
 
     session_manager = StreamableHTTPSessionManager(app=app, json_response=json_response)
 
-    async def handle_streamable_http(scope: Scope, receive: Receive, send: Send) -> None:
+    async def handle_streamable_http(
+        scope: Scope, receive: Receive, send: Send
+    ) -> None:
         await session_manager.handle_request(scope, receive, send)
 
     async def lifespan(_: Starlette) -> AsyncIterator[None]:

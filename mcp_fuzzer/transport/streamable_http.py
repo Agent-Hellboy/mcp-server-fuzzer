@@ -243,18 +243,12 @@ class StreamableHTTPTransport(TransportProtocol):
                 )
             safe_headers = sanitize_headers(headers)
             response = await self._post_with_retries(
-                client, 
-                self.url, 
-                payload, 
-                safe_headers
+                client, self.url, payload, safe_headers
             )
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 response = await self._post_with_retries(
-                    client, 
-                    redirect_url, 
-                    payload, 
-                    safe_headers
+                    client, redirect_url, payload, safe_headers
                 )
             response.raise_for_status()
 
@@ -318,7 +312,10 @@ class StreamableHTTPTransport(TransportProtocol):
                 if attempt >= retries or not safe:
                     raise
                 self._logger.debug(
-                    "POST retry %d for %s due to %s", attempt + 1, url, type(e).__name__
+                    "POST retry %d for %s due to %s",
+                    attempt + 1,
+                    url,
+                    type(e).__name__,
                 )
                 await asyncio.sleep(delay)
                 delay *= 2

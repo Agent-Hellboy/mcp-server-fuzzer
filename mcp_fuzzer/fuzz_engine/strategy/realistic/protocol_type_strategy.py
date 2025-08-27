@@ -86,7 +86,8 @@ def method_names() -> st.SearchStrategy[str]:
     # Simple method names
     simple_names = st.text(
         alphabet=st.characters(
-            whitelist_categories=("Lu", "Ll", "Nd"), whitelist_characters="_-./:"
+            whitelist_categories=("Lu", "Ll", "Nd"),
+            whitelist_characters="_-./:",
         ),
         min_size=3,
         max_size=30,

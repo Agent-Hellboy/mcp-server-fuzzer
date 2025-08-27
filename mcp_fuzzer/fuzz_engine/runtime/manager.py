@@ -84,7 +84,11 @@ class ProcessManager:
             raise
 
     def _start_process_sync(self, config: ProcessConfig) -> subprocess.Popen:
-        """Synchronous process start (runs in thread pool)."""
+        """Synchronous method to start a process, called via executor in async context.
+
+        This method is intentionally synchronous to avoid blocking the event loop
+        and is executed in a thread pool by the async start_process method.
+        """
         cwd = str(config.cwd) if isinstance(config.cwd, Path) else config.cwd
         env = (
             {**os.environ, **(config.env or {})}

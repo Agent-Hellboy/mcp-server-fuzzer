@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""
-Project-wide configuration constants.
-"""
+"""Project-wide configuration constants and management."""
+
+import os
+from typing import Dict, Any
 
 # MCP protocol version fallback used in initialize requests when none provided
 DEFAULT_PROTOCOL_VERSION: str = "2025-06-18"
@@ -43,3 +44,57 @@ SAFETY_PROXY_ENV_DENYLIST: set[str] = {
 # A minimal allowlist for environment keys to pass to subprocesses when
 # sanitizing. Empty means passthrough except denied keys.
 SAFETY_ENV_ALLOWLIST: set[str] = set()
+
+# Default fuzzing run counts
+DEFAULT_TOOL_RUNS: int = 10
+DEFAULT_PROTOCOL_RUNS_PER_TYPE: int = 5
+
+# Default timeout values in seconds
+DEFAULT_TIMEOUT: float = 30.0
+DEFAULT_TOOL_TIMEOUT: float = 30.0
+DEFAULT_MAX_TOOL_TIME: float = 60.0
+DEFAULT_MAX_TOTAL_FUZZING_TIME: float = 300.0
+DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT: float = 2.0
+DEFAULT_FORCE_KILL_TIMEOUT: float = 1.0
+
+
+class Configuration:
+    """Centralized configuration management for MCP Fuzzer."""
+
+    def __init__(self):
+        self._config: Dict[str, Any] = {}
+        self._load_from_env()
+
+    def _load_from_env(self) -> None:
+        """Load configuration values from environment variables."""
+        self._config["timeout"] = float(os.getenv("MCP_FUZZER_TIMEOUT", "30.0"))
+        self._config["log_level"] = os.getenv("MCP_FUZZER_LOG_LEVEL", "INFO")
+        self._config["safety_enabled"] = (
+            os.getenv("MCP_FUZZER_SAFETY_ENABLED", "false").lower() == "true"
+        )
+        self._config["fs_root"] = os.getenv(
+            "MCP_FUZZER_FS_ROOT", os.path.expanduser("~/.mcp_fuzzer")
+        )
+        self._config["http_timeout"] = float(
+            os.getenv("MCP_FUZZER_HTTP_TIMEOUT", "30.0")
+        )
+        self._config["sse_timeout"] = float(os.getenv("MCP_FUZZER_SSE_TIMEOUT", "30.0"))
+        self._config["stdio_timeout"] = float(
+            os.getenv("MCP_FUZZER_STDIO_TIMEOUT", "30.0")
+        )
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get a configuration value by key."""
+        return self._config.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        """Set a configuration value."""
+        self._config[key] = value
+
+    def update(self, config_dict: Dict[str, Any]) -> None:
+        """Update configuration with values from a dictionary."""
+        self._config.update(config_dict)
+
+
+# Global configuration instance
+config = Configuration()
