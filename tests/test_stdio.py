@@ -118,8 +118,12 @@ class TestStdioTransport:
         with patch("time.time", return_value=1234567890.0):
             self.transport.process = MagicMock()
             self.transport.process.pid = 123
-            self.transport._update_activity()
-            assert self.transport._last_activity == 1234567890.0
+            # Mock the process_manager.update_activity method to avoid AsyncMock issues
+            with patch.object(
+                self.transport.process_manager, "update_activity", AsyncMock()
+            ):
+                await self.transport._update_activity()
+                assert self.transport._last_activity == 1234567890.0
 
     @pytest.mark.asyncio
     async def test_get_activity_timestamp(self):
