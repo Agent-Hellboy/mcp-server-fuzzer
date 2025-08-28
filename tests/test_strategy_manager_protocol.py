@@ -66,7 +66,8 @@ class TestProtocolStrategies(unittest.TestCase):
 
                 # Test BEHAVIOR: should return None for unknown types
                 self.assertIsNone(
-                    fuzzer_method, f"Should return None for unknown type {unknown_type}"
+                    fuzzer_method,
+                    f"Should return None for unknown type {unknown_type}",
                 )
 
     def test_fuzzer_methods_return_dictionaries(self):

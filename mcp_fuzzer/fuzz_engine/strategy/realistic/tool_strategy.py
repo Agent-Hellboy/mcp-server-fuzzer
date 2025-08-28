@@ -76,7 +76,9 @@ def uuid_strings(version: Optional[int] = None) -> st.SearchStrategy[str]:
 
 
 def timestamp_strings(
-    min_year: int = 2020, max_year: int = 2030, include_microseconds: bool = True
+    min_year: int = 2020,
+    max_year: int = 2030,
+    include_microseconds: bool = True,
 ) -> st.SearchStrategy[str]:
     """
     Generate ISO-8601 UTC timestamps ending with Z.

@@ -14,11 +14,11 @@ class TransportProtocol(ABC):
     @abstractmethod
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Any:
+    ) -> Dict[str, Any]:
         pass
 
     @abstractmethod
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         pass
 
     @abstractmethod
@@ -33,7 +33,8 @@ class TransportProtocol(ABC):
             logging.debug("Raw server response: %s", response)
             if not isinstance(response, dict):
                 logging.warning(
-                    "Server response is not a dictionary. Got type: %s", type(response)
+                    "Server response is not a dictionary. Got type: %s",
+                    type(response),
                 )
                 return []
             if "tools" not in response:

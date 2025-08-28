@@ -219,7 +219,7 @@ class SafeSubprocess:
             # Kill process if it times out
             process.kill()
             await process.wait()
-            raise TimeoutError(f"Command timed out after {self.timeout} seconds")
+            raise MCPTimeoutError(f"Command timed out after {self.timeout} seconds")
 
     def create_safe_environment(self) -> Dict[str, str]:
         """Create a safe environment for subprocess execution."""

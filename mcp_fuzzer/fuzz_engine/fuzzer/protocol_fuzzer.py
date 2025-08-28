@@ -65,7 +65,8 @@ class ProtocolFuzzer:
                     except Exception as server_exception:
                         server_error = str(server_exception)
                         logging.debug(
-                            "Server rejected fuzzed envelope: %s", server_exception
+                            "Server rejected fuzzed envelope: %s",
+                            server_exception,
                         )
 
                 # Create the result entry

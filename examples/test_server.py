@@ -91,7 +91,11 @@ class SimpleMCPServer:
         logger.info(f"Handling request: {method}")
 
         if method == "tools/list":
-            return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": self.tools}}
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"tools": self.tools},
+            }
 
         elif method == "tools/call":
             tool_name = params.get("name")
@@ -157,7 +161,10 @@ class SimpleMCPServer:
                 "result": {
                     "protocolVersion": "2025-06-18",
                     "capabilities": {"tools": {"listChanged": True}},
-                    "serverInfo": {"name": "Simple Test Server", "version": "1.0.0"},
+                    "serverInfo": {
+                        "name": "Simple Test Server",
+                        "version": "1.0.0",
+                    },
                 },
             }
 
@@ -165,7 +172,10 @@ class SimpleMCPServer:
             return {
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "error": {"code": -32601, "message": f"Method '{method}' not found"},
+                "error": {
+                    "code": -32601,
+                    "message": f"Method '{method}' not found",
+                },
             }
 
 

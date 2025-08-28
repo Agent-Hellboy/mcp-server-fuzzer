@@ -43,7 +43,11 @@ def run_cli() -> None:
         _validate(args)
         _setup(args)
         _build = (
-            getattr(cli_module, "build_unified_client_args", build_unified_client_args)
+            getattr(
+                cli_module,
+                "build_unified_client_args",
+                build_unified_client_args,
+            )
             if cli_module
             else build_unified_client_args
         )

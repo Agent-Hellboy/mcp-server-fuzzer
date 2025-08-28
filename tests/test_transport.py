@@ -88,6 +88,7 @@ class TestTransportProtocol(unittest.IsolatedAsyncioTestCase):
 
         self.transport = TestTransport()
 
+    @pytest.mark.asyncio
     async def test_get_tools_success(self):
         """Test getting tools successfully."""
         with patch.object(self.transport, "send_request") as mock_send:
@@ -105,6 +106,7 @@ class TestTransportProtocol(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(tools[1]["name"], "tool2")
             mock_send.assert_called_with("tools/list")
 
+    @pytest.mark.asyncio
     async def test_get_tools_no_tools_key(self):
         """Test getting tools when response doesn't have tools key."""
         with patch.object(self.transport, "send_request") as mock_send:
@@ -114,6 +116,7 @@ class TestTransportProtocol(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(tools, [])
 
+    @pytest.mark.asyncio
     async def test_get_tools_non_dict_response(self):
         """Test getting tools when response is not a dictionary."""
         with patch.object(self.transport, "send_request") as mock_send:
@@ -123,6 +126,7 @@ class TestTransportProtocol(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(tools, [])
 
+    @pytest.mark.asyncio
     async def test_get_tools_exception(self):
         """Test getting tools with exception."""
         with patch.object(self.transport, "send_request") as mock_send:
@@ -132,6 +136,7 @@ class TestTransportProtocol(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(tools, [])
 
+    @pytest.mark.asyncio
     async def test_call_tool(self):
         """Test calling a tool."""
         with patch.object(self.transport, "send_request") as mock_send:
@@ -141,7 +146,8 @@ class TestTransportProtocol(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(result, {"result": "tool_result"})
             mock_send.assert_called_with(
-                "tools/call", {"name": "test_tool", "arguments": {"param1": "value1"}}
+                "tools/call",
+                {"name": "test_tool", "arguments": {"param1": "value1"}},
             )
 
 
@@ -168,6 +174,7 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(transport.headers["Authorization"], "Bearer token")
 
     @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_success(self, mock_client_class):
         """Test successful HTTP request."""
         mock_client = AsyncMock()
@@ -196,6 +203,7 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
         self.assertIn("id", json_data)
 
     @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_sse_response(self, mock_client_class):
         """Test HTTP request with SSE response."""
         mock_client = AsyncMock()
@@ -214,6 +222,7 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, "sse_success")
 
     @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_http_error(self, mock_client_class):
         """Test HTTP request with HTTP error."""
         mock_client = AsyncMock()
@@ -230,6 +239,7 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
             await self.transport.send_request("test_method")
 
     @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_connection_error(self, mock_client_class):
         """Test HTTP request with connection error."""
         mock_client = AsyncMock()
@@ -241,6 +251,7 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
             await self.transport.send_request("test_method")
 
     @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_json_decode_error(self, mock_client_class):
         """Test send_request with JSON decode error."""
         mock_client = AsyncMock()
@@ -255,6 +266,7 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, "success")
 
     @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_sse_no_data_line(self, mock_client_class):
         """Test send_request with SSE response but no data line."""
         mock_client = AsyncMock()
@@ -268,6 +280,7 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
             await self.transport.send_request("test_method")
 
     @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_sse_invalid_data(self, mock_client_class):
         """Test send_request with SSE response but invalid data."""
         mock_client = AsyncMock()
@@ -281,6 +294,7 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
             await self.transport.send_request("test_method")
 
     @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_server_error(self, mock_client_class):
         """Test send_request with server error response."""
         mock_client = AsyncMock()
@@ -295,6 +309,7 @@ class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
             await self.transport.send_request("test_method")
 
     @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_no_result_key(self, mock_client_class):
         """Test send_request with response that has no result key."""
         mock_client = AsyncMock()
@@ -321,6 +336,7 @@ class TestSSETransport(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.transport.timeout, 30.0)
 
     @patch("mcp_fuzzer.transport.sse.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_sse(self, mock_client_class):
         """Test SSE request."""
         mock_client = AsyncMock()
@@ -338,6 +354,7 @@ class TestSSETransport(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, "sse_success")
 
     @patch("mcp_fuzzer.transport.sse.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_sse_error_response(self, mock_client_class):
         """Test SSE request with error response."""
         mock_client = AsyncMock()
@@ -357,6 +374,7 @@ class TestSSETransport(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Server error", str(context.exception))
 
     @patch("mcp_fuzzer.transport.sse.httpx.AsyncClient")
+    @pytest.mark.asyncio
     async def test_send_request_sse_no_valid_response(self, mock_client_class):
         """Test SSE request with no valid response."""
         mock_client = AsyncMock()
@@ -389,6 +407,7 @@ class TestStdioTransport(unittest.IsolatedAsyncioTestCase):
     @safe_test_only
     @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
     @patch("mcp_fuzzer.transport.stdio.asyncio.wait_for")
+    @pytest.mark.asyncio
     async def test_send_request_stdio(self, mock_wait_for, mock_create_subprocess):
         """Test stdio request."""
         mock_process = AsyncMock()
@@ -406,6 +425,7 @@ class TestStdioTransport(unittest.IsolatedAsyncioTestCase):
     @safe_test_only
     @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
     @patch("mcp_fuzzer.transport.stdio.asyncio.wait_for")
+    @pytest.mark.asyncio
     async def test_send_request_stdio_timeout(
         self, mock_wait_for, mock_create_subprocess
     ):
@@ -420,6 +440,7 @@ class TestStdioTransport(unittest.IsolatedAsyncioTestCase):
     @safe_test_only
     @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
     @patch("mcp_fuzzer.transport.stdio.asyncio.wait_for")
+    @pytest.mark.asyncio
     async def test_send_request_stdio_process_failure(
         self, mock_wait_for, mock_create_subprocess
     ):
@@ -438,6 +459,7 @@ class TestStdioTransport(unittest.IsolatedAsyncioTestCase):
     @safe_test_only
     @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
     @patch("mcp_fuzzer.transport.stdio.asyncio.wait_for")
+    @pytest.mark.asyncio
     async def test_send_request_stdio_error_response(
         self, mock_wait_for, mock_create_subprocess
     ):
@@ -504,6 +526,7 @@ class TestCreateTransport(unittest.TestCase):
 class TestTransportIntegration(unittest.IsolatedAsyncioTestCase):
     """Integration tests for transport modules."""
 
+    @pytest.mark.asyncio
     async def test_transport_protocol_interface(self):
         """Test that all transport classes implement the protocol interface."""
         transports = [

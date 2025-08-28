@@ -127,7 +127,9 @@ class TestSystemCommandBlocker(unittest.TestCase):
                 mock_subprocess.return_value = mock_result
 
                 result = subprocess.run(
-                    ["xdg-open", "https://example.com"], capture_output=True, text=True
+                    ["xdg-open", "https://example.com"],
+                    capture_output=True,
+                    text=True,
                 )
                 self.assertEqual(result.returncode, 0)
                 self.assertIn("FUZZER BLOCKED", result.stderr)
@@ -266,7 +268,10 @@ class TestSystemCommandBlocker(unittest.TestCase):
         """Test cleanup when directory has files."""
         # Set up created_files for the test
         self.blocker.temp_dir = Path("/tmp/test")
-        self.blocker.created_files = [Path("/tmp/test/file1"), Path("/tmp/test/file2")]
+        self.blocker.created_files = [
+            Path("/tmp/test/file1"),
+            Path("/tmp/test/file2"),
+        ]
 
         with patch.object(Path, "exists", return_value=True):
             with patch.object(Path, "unlink") as mock_unlink:
@@ -369,7 +374,11 @@ class TestSystemCommandBlocker(unittest.TestCase):
         # Create a log file with some entries
         log_file = self.blocker.temp_dir / "blocked_operations.log"
         log_entries = [
-            {"command": "test_command", "args": [], "timestamp": "2023-01-01T00:00:00"},
+            {
+                "command": "test_command",
+                "args": [],
+                "timestamp": "2023-01-01T00:00:00",
+            },
             {
                 "command": "another_command",
                 "args": ["arg1"],

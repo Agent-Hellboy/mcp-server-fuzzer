@@ -6,6 +6,7 @@ from mcp_fuzzer.safety_system.policy import (
     resolve_redirect_safely,
     sanitize_subprocess_env,
     sanitize_headers,
+    configure_network_policy,
 )
 
 
@@ -43,3 +44,18 @@ def test_sanitize_headers_drops_auth():
     cleaned = sanitize_headers({"Authorization": "x", "X-Test": "y"})
     assert "Authorization" not in cleaned
     assert cleaned["X-Test"] == "y"
+
+
+def test_configure_network_policy_reset_hosts():
+    # Add a host to allowed list
+    configure_network_policy(extra_allowed_hosts=["example.com"])
+    
+    # Check that host is allowed when deny_network=True
+    url = "http://example.com"
+    assert is_host_allowed(url, deny_network_by_default=True) is True
+    
+    # Reset the allowed hosts list
+    configure_network_policy(reset_allowed_hosts=True)
+    
+    # Check that host is no longer allowed
+    assert is_host_allowed(url, deny_network_by_default=True) is False

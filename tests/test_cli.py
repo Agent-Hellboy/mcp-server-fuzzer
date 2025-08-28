@@ -3,10 +3,16 @@
 Unit tests for CLI module
 """
 
+import asyncio
+import os
+import signal
+import sys
+from unittest.mock import patch, MagicMock, call
+
 import pytest
 import argparse
-import sys
-from unittest.mock import patch, MagicMock, mock_open
+from rich.console import Console
+
 from mcp_fuzzer.cli import (
     create_argument_parser,
     parse_arguments,
@@ -17,6 +23,10 @@ from mcp_fuzzer.cli import (
     get_cli_config,
     run_cli,
 )
+
+# Import the functions to test
+import mcp_fuzzer.cli.runner as runner
+from unittest.mock import AsyncMock
 
 
 class TestCLI:
@@ -85,6 +95,7 @@ class TestCLI:
         """Test building client arguments with basic configuration."""
         args = argparse.Namespace(
             mode="tools",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -109,6 +120,7 @@ class TestCLI:
         with patch("mcp_fuzzer.cli.load_auth_config", return_value=mock_auth_manager):
             args = argparse.Namespace(
                 mode="tools",
+                phase="aggressive",
                 protocol="http",
                 endpoint="http://localhost:8000",
                 timeout=30,
@@ -132,6 +144,7 @@ class TestCLI:
         ):
             args = argparse.Namespace(
                 mode="tools",
+                phase="aggressive",
                 protocol="http",
                 endpoint="http://localhost:8000",
                 timeout=30,
@@ -150,6 +163,7 @@ class TestCLI:
         """Test building client arguments with protocol type."""
         args = argparse.Namespace(
             mode="protocol",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -183,6 +197,7 @@ class TestCLI:
         """Exercise fs-root setter and disabling safety flags."""
         args = argparse.Namespace(
             mode="tools",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -209,6 +224,7 @@ class TestCLI:
         """Cover both success and failure branches for safety plugin loading."""
         base_args = dict(
             mode="tools",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -384,7 +400,8 @@ class TestCLI:
         )
 
         with pytest.raises(
-            ValueError, match="--protocol-type can only be used with --mode protocol"
+            ValueError,
+            match="--protocol-type can only be used with --mode protocol",
         ):
             validate_arguments(args)
 
@@ -467,6 +484,7 @@ class TestCLI:
         ):
             mock_args = argparse.Namespace(
                 mode="tools",
+                phase="aggressive",
                 protocol="http",
                 endpoint="http://localhost:8000",
                 timeout=30,
@@ -512,6 +530,7 @@ class TestCLI:
         """Test successful CLI execution."""
         mock_args = argparse.Namespace(
             mode="tool",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -566,6 +585,7 @@ class TestCLI:
         """Test CLI execution with transport error."""
         mock_args = argparse.Namespace(
             mode="tool",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -627,6 +647,7 @@ class TestCLI:
         """Test CLI execution with keyboard interrupt."""
         mock_args = argparse.Namespace(
             mode="tool",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -766,3 +787,317 @@ class TestCLI:
         assert args.protocol_type is None
         assert args.auth_config is None
         assert args.auth_env is False
+
+    def test_create_transport_with_auth_success(self):
+        """Test successful creation of transport with auth headers."""
+        args = MagicMock()
+        args.protocol = "http"
+        args.endpoint = "http://example.com"
+        args.timeout = 30.0
+        client_args = {"auth_manager": MagicMock()}
+        client_args["auth_manager"].get_auth_headers_for_tool.return_value = {
+            "Authorization": "Bearer token"
+        }
+
+        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
+            transport = runner.create_transport_with_auth(args, client_args)
+            mock_create_transport.assert_called_once_with(
+                protocol="http",
+                endpoint="http://example.com",
+                timeout=30.0,
+                auth_headers={"Authorization": "Bearer token"},
+            )
+            assert transport is not None
+
+    def test_create_transport_with_auth_no_headers(self):
+        """Test transport creation without auth headers."""
+        args = MagicMock()
+        args.protocol = "http"
+        args.endpoint = "http://example.com"
+        args.timeout = 30.0
+        client_args = {}
+
+        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
+            transport = runner.create_transport_with_auth(args, client_args)
+            mock_create_transport.assert_called_once_with(
+                protocol="http", endpoint="http://example.com", timeout=30.0
+            )
+            assert transport is not None
+
+    def test_create_transport_with_auth_error(self, capsys):
+        """Test transport creation error handling."""
+        args = MagicMock()
+        args.protocol = "invalid"
+        args.endpoint = "http://example.com"
+        args.timeout = 30.0
+        client_args = {}
+
+        with patch(
+            "mcp_fuzzer.cli.runner.create_transport",
+            side_effect=Exception("Transport error"),
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                runner.create_transport_with_auth(args, client_args)
+            assert exc_info.value.code == 1
+            captured = capsys.readouterr()
+            assert "Unexpected error: Transport error" in captured.out
+
+    def test_prepare_inner_argv_full_options(self):
+        """Test preparation of inner argv with all options."""
+        args = MagicMock()
+        args.mode = "fuzz"
+        args.protocol = "http"
+        args.endpoint = "http://example.com"
+        args.runs = 10
+        args.runs_per_type = 5
+        args.timeout = 30.0
+        args.tool_timeout = 20.0
+        args.protocol_type = "jsonrpc"
+        args.verbose = True
+        args.no_network = True
+        args.allow_hosts = ["example.com", "test.com"]
+
+        argv = runner.prepare_inner_argv(args)
+        expected_argv = [
+            sys.argv[0],
+            "--mode",
+            "fuzz",
+            "--protocol",
+            "http",
+            "--endpoint",
+            "http://example.com",
+            "--runs",
+            "10",
+            "--runs-per-type",
+            "5",
+            "--timeout",
+            "30.0",
+            "--tool-timeout",
+            "20.0",
+            "--protocol-type",
+            "jsonrpc",
+            "--verbose",
+            "--no-network",
+            "--allow-host",
+            "example.com",
+            "--allow-host",
+            "test.com",
+        ]
+        assert argv == expected_argv
+
+    def test_prepare_inner_argv_minimal_options(self):
+        """Test preparation of inner argv with minimal options."""
+        args = MagicMock()
+        args.mode = "fuzz"
+        args.protocol = "http"
+        args.endpoint = "http://example.com"
+        args.runs = None
+        args.runs_per_type = None
+        args.timeout = None
+        args.tool_timeout = None
+        args.protocol_type = None
+        args.verbose = False
+        args.no_network = False
+        args.allow_hosts = None
+
+        argv = runner.prepare_inner_argv(args)
+        expected_argv = [
+            sys.argv[0],
+            "--mode",
+            "fuzz",
+            "--protocol",
+            "http",
+            "--endpoint",
+            "http://example.com",
+        ]
+        assert argv == expected_argv
+
+    def test_start_safety_if_enabled_true(self):
+        """Test starting safety system when enabled."""
+        args = MagicMock()
+        args.enable_safety_system = True
+
+        with patch("mcp_fuzzer.cli.runner.start_system_blocking") as mock_start:
+            result = runner.start_safety_if_enabled(args)
+            mock_start.assert_called_once()
+            assert result is True
+
+    def test_start_safety_if_enabled_false(self):
+        """Test not starting safety system when disabled."""
+        args = MagicMock()
+        args.enable_safety_system = False
+
+        with patch("mcp_fuzzer.cli.runner.start_system_blocking") as mock_start:
+            result = runner.start_safety_if_enabled(args)
+            mock_start.assert_not_called()
+            assert result is False
+
+    def test_stop_safety_if_started_true(self):
+        """Test stopping safety system when it was started."""
+        with patch("mcp_fuzzer.cli.runner.stop_system_blocking") as mock_stop:
+            runner.stop_safety_if_started(True)
+            mock_stop.assert_called_once()
+
+    def test_stop_safety_if_started_false(self):
+        """Test not stopping safety system when it wasn't started."""
+        with patch("mcp_fuzzer.cli.runner.stop_system_blocking") as mock_stop:
+            runner.stop_safety_if_started(False)
+            mock_stop.assert_not_called()
+
+    def test_execute_inner_client_pytest_env(self):
+        """Test execute_inner_client under pytest environment."""
+        args = MagicMock()
+        unified_client_main = MagicMock()
+        argv = ["test.py", "--mode", "fuzz"]
+
+        with patch("os.environ", {"PYTEST_CURRENT_TEST": "true"}):
+            with patch("asyncio.run") as mock_run:
+                runner.execute_inner_client(args, unified_client_main, argv)
+                mock_run.assert_called_once_with(unified_client_main())
+
+    @pytest.mark.asyncio
+    async def test_execute_inner_client_network_policy_deny(self):
+        """Test execute_inner_client with network policy deny configuration."""
+        args = MagicMock()
+        args.retry_with_safety_on_interrupt = False
+        args.no_network = True
+        args.allow_hosts = None
+        unified_client_main = AsyncMock()
+        argv = ["test.py", "--mode", "fuzz"]
+
+        with patch("asyncio.new_event_loop") as mock_loop:
+            loop_instance = MagicMock()
+            mock_loop.return_value = loop_instance
+            with patch("asyncio.set_event_loop"):
+                with patch(
+                    "mcp_fuzzer.cli.runner.configure_network_policy"
+                ) as mock_config_policy:
+                    with patch.object(loop_instance, "add_signal_handler"):
+                        with patch.object(loop_instance, "run_until_complete"):
+                            # Use an environment without PYTEST_CURRENT_TEST
+                            with patch("os.environ.get", return_value=None):
+                                runner.execute_inner_client(
+                                    args, unified_client_main, argv
+                                )
+                                # Verify configure_network_policy was called twice
+                                mock_config_policy.assert_has_calls(
+                                    [
+                                        call(
+                                            reset_allowed_hosts=True,
+                                            deny_network_by_default=None,
+                                        ),
+                                        call(
+                                            deny_network_by_default=True,
+                                            extra_allowed_hosts=None,
+                                        ),
+                                    ]
+                                )
+                                # Check that run_until_complete was called once
+                                assert loop_instance.run_until_complete.call_count == 1
+                                # Check that unified_client_main was called
+                                unified_client_main.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_inner_client_network_policy_allow_hosts(self):
+        """Test execute_inner_client with network policy allowing specific hosts."""
+        args = MagicMock()
+        args.retry_with_safety_on_interrupt = False
+        args.no_network = False
+        args.allow_hosts = ["example.com", "test.com"]
+        unified_client_main = AsyncMock()
+        argv = ["test.py", "--mode", "fuzz"]
+
+        with patch("asyncio.new_event_loop") as mock_loop:
+            loop_instance = MagicMock()
+            mock_loop.return_value = loop_instance
+            with patch("asyncio.set_event_loop"):
+                with patch(
+                    "mcp_fuzzer.cli.runner.configure_network_policy"
+                ) as mock_config_policy:
+                    with patch.object(loop_instance, "add_signal_handler"):
+                        with patch.object(loop_instance, "run_until_complete"):
+                            # Use an environment without PYTEST_CURRENT_TEST
+                            with patch("os.environ.get", return_value=None):
+                                runner.execute_inner_client(
+                                    args, unified_client_main, argv
+                                )
+                                # Verify configure_network_policy was called twice
+                                mock_config_policy.assert_has_calls(
+                                    [
+                                        call(
+                                            reset_allowed_hosts=True,
+                                            deny_network_by_default=None,
+                                        ),
+                                        call(
+                                            deny_network_by_default=None,
+                                            extra_allowed_hosts=[
+                                                "example.com",
+                                                "test.com",
+                                            ],
+                                        ),
+                                    ]
+                                )
+                                # Check that run_until_complete was called once
+                                assert loop_instance.run_until_complete.call_count == 1
+                                # Check that unified_client_main was called
+                                unified_client_main.assert_called_once()
+
+    def test_run_with_retry_on_interrupt_no_retry(self):
+        """Test run_with_retry_on_interrupt without retry on interrupt."""
+        args = MagicMock()
+        args.enable_safety_system = False
+        args.retry_with_safety_on_interrupt = False
+        unified_client_main = MagicMock()
+        argv = ["test.py", "--mode", "fuzz"]
+
+        with patch("mcp_fuzzer.cli.runner.execute_inner_client") as mock_execute:
+            with patch("mcp_fuzzer.cli.runner.Console") as mock_console:
+                with pytest.raises(SystemExit) as exc_info:
+                    mock_execute.side_effect = KeyboardInterrupt
+                    runner.run_with_retry_on_interrupt(args, unified_client_main, argv)
+                assert exc_info.value.code == 130
+                mock_execute.assert_called_once()
+                mock_console.return_value.print.assert_called_with(
+                    "\n[yellow]Fuzzing interrupted by user[/yellow]"
+                )
+
+    def test_run_with_retry_on_interrupt_with_retry(self):
+        """Test run_with_retry_on_interrupt with retry on interrupt
+        and safety system activation."""
+        # Setup
+        args = MagicMock()
+        args.enable_safety_system = False
+        args.retry_with_safety_on_interrupt = True
+
+        unified_client_main = AsyncMock()
+        argv = ["test.py", "--mode", "fuzz"]
+
+        # Create mocks
+        execute_inner_mock = MagicMock()
+        # Set up to raise KeyboardInterrupt on first call
+        execute_inner_mock.side_effect = [KeyboardInterrupt(), None]
+        mock_console = MagicMock()
+
+        # Test with patches
+        with patch("mcp_fuzzer.cli.runner.execute_inner_client", execute_inner_mock):
+            with patch("mcp_fuzzer.cli.runner.Console", return_value=mock_console):
+                # Patch the directly imported function
+                with patch(
+                    "mcp_fuzzer.cli.runner.start_system_blocking"
+                ) as mock_start_system:
+                    with patch(
+                        "mcp_fuzzer.cli.runner.stop_safety_if_started"
+                    ) as mock_stop:
+                        # Run the function under test
+                        runner.run_with_retry_on_interrupt(
+                            args, unified_client_main, argv
+                        )
+
+                        # Verify the mocks were called correctly
+                        assert execute_inner_mock.call_count == 2
+                        mock_start_system.assert_called_once()
+                        mock_stop.assert_called_once()
+                        mock_console.print.assert_called_with(
+                            "\n[yellow]Interrupted. Retrying once "
+                            "with safety system enabled...[/yellow]"
+                        )

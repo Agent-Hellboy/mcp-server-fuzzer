@@ -13,7 +13,11 @@ from ..transport import create_transport
 import asyncio  # re-export for tests that patch mcp_fuzzer.cli.asyncio.run
 from rich.console import Console
 import sys  # re-export for tests that patch mcp_fuzzer.cli.sys.exit
-from ..safety_system.safety import safety_filter, disable_safety, load_safety_plugin
+from ..safety_system.safety import (
+    safety_filter,
+    disable_safety,
+    load_safety_plugin,
+)
 
 __all__ = [
     "run_cli",

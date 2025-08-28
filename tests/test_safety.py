@@ -25,7 +25,7 @@ class TestSafetyFilter(unittest.TestCase):
         """Test SafetyFilter initialization."""
         self.assertIsInstance(self.filter.dangerous_url_patterns, list)
         self.assertIsInstance(self.filter.dangerous_command_patterns, list)
-        self.assertIsInstance(self.filter.dangerous_argument_names, list)
+        self.assertIsInstance(self.filter.dangerous_argument_names, set)
         self.assertIsInstance(self.filter.blocked_operations, list)
 
     def test_contains_dangerous_url_edge_cases(self):
@@ -343,7 +343,10 @@ class TestSafetyFilter(unittest.TestCase):
         """Test should_skip_tool_call with dictionary arguments."""
         # Test with nested dictionary that contains dangerous content
         nested_args = {
-            "config": {"url": "http://malicious.com", "safe_param": "normal_value"}
+            "config": {
+                "url": "http://malicious.com",
+                "safe_param": "normal_value",
+            }
         }
 
         # This should not be skipped because we only check top-level arguments
@@ -357,7 +360,10 @@ class TestSafetyFilter(unittest.TestCase):
             "string_param": "http://evil.com",  # Should be blocked
             "int_param": 42,  # Should be ignored
             "bool_param": True,  # Should be ignored
-            "list_param": ["safe_item", "https://dangerous.com"],  # Should be blocked
+            "list_param": [
+                "safe_item",
+                "https://dangerous.com",
+            ],  # Should be blocked
         }
 
         result = self.filter.should_skip_tool_call("test_tool", mixed_args)
@@ -421,7 +427,11 @@ class TestSafetyIntegration(unittest.TestCase):
                 "commands": ["echo hello", "xdg-open file.pdf", "ls -la"],
             },
             "nested": {"deep": {"url": "https://evil.com", "safe": "value"}},
-            "list": ["safe_item", {"url": "http://dangerous.net"}, "another_safe_item"],
+            "list": [
+                "safe_item",
+                {"url": "http://dangerous.net"},
+                "another_safe_item",
+            ],
         }
 
         result = self.filter.sanitize_tool_arguments("test_tool", complex_args)

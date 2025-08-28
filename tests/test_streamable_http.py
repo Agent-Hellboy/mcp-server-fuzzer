@@ -55,7 +55,9 @@ class _DummySSEStreamResponse:
     def raise_for_status(self) -> None:  # pragma: no cover - simple stub
         pass
 
-    async def aiter_lines(self):  # pragma: no cover - behavior validated via result
+    async def aiter_lines(
+        self,
+    ):  # pragma: no cover - behavior validated via result
         for line in self._lines:
             # Simulate network scheduling
             await asyncio.sleep(0)

@@ -152,7 +152,10 @@ class TestCustomHeaderAuth(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        self.headers = {"X-Custom-Header": "custom_value", "X-API-Key": "api_key_value"}
+        self.headers = {
+            "X-Custom-Header": "custom_value",
+            "X-API-Key": "api_key_value",
+        }
         self.auth = CustomHeaderAuth(self.headers)
 
     def test_init(self):

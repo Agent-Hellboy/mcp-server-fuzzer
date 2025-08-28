@@ -356,7 +356,10 @@ def fuzz_sampling_message() -> Dict[str, Any]:
     return {
         "role": _generate_malicious_string(),
         "content": [
-            {"type": _generate_malicious_string(), "data": _generate_malicious_string()}
+            {
+                "type": _generate_malicious_string(),
+                "data": _generate_malicious_string(),
+            }
         ],
     }
 

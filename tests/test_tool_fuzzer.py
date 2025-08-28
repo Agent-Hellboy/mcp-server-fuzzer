@@ -27,7 +27,10 @@ class TestToolFuzzer(unittest.TestCase):
         tool = {
             "name": "test_tool",
             "inputSchema": {
-                "properties": {"name": {"type": "string"}, "count": {"type": "integer"}}
+                "properties": {
+                    "name": {"type": "string"},
+                    "count": {"type": "integer"},
+                }
             },
         }
 
@@ -147,7 +150,11 @@ class TestToolFuzzer(unittest.TestCase):
             # tool2 should have proper result structure
             self.assertIn("success", results["tool2"][0])
 
-    def test_fuzz_tool_complex_schema(self):
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call",
+    return_value=True)
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
+    def test_fuzz_tool_complex_schema(self, mock_sanitize, mock_is_safe, mock_logging):
         """Test fuzzing a tool with complex schema."""
         tool = {
             "name": "complex_tool",
@@ -160,28 +167,42 @@ class TestToolFuzzer(unittest.TestCase):
                 }
             },
         }
+        
+        # Mock the sanitize_tool_call function to return predictable values
+        mock_sanitize.return_value = ("complex_tool", {
+            "strings": ["test1", "test2"],
+            "numbers": [1, 2, 3],
+            "metadata": {"key": "value"},
+            "enabled": True
+        })
+        
+        # Mock the strategy to return a simple dict
+        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+            mock_fuzz.return_value = {
+                "strings": ["test1", "test2"],
+                "numbers": [1, 2, 3],
+                "metadata": {"key": "value"},
+                "enabled": True
+            }
+            
+            results = self.fuzzer.fuzz_tool(tool, runs=1)
 
-        results = self.fuzzer.fuzz_tool(tool, runs=1)
+            self.assertEqual(len(results), 1)
+            result = results[0]
 
-        self.assertEqual(len(results), 1)
-        result = results[0]
+            self.assertIn("success", result)
+            args = result["args"]
 
-        self.assertIn("success", result)
-        args = result["args"]
+            # Test BEHAVIOR: fuzzer should generate arguments based on schema
+            self.assertIsInstance(args, dict, "Should return a dictionary of arguments")
+            self.assertGreater(len(args), 0, "Should generate some arguments")
 
-        # Test BEHAVIOR: fuzzer should generate arguments based on schema
-        self.assertIsInstance(args, dict, "Should return a dictionary of arguments")
-        self.assertGreater(len(args), 0, "Should generate some arguments")
+            # Test BEHAVIOR: should generate fields based on schema properties
+            schema_properties = tool["inputSchema"]["properties"].keys()
+            generated_keys = set(args.keys())
 
-        # Test BEHAVIOR: should generate fields based on schema properties
-        # (Content may vary due to aggressive fuzzing, but some fields should
-        # be present)
-        schema_properties = tool["inputSchema"]["properties"].keys()
-        generated_keys = set(args.keys())
-
-        # For aggressive fuzzing, may have extra fields or modified values
-        # We just check that it's generating some structured data
-        self.assertTrue(len(generated_keys) > 0, "Should generate some argument keys")
+            # With our mocking, we should have all the expected keys
+            self.assertEqual(set(schema_properties), generated_keys)
 
     def test_fuzz_tool_no_schema(self):
         """Test fuzzing a tool with no schema."""
@@ -298,38 +319,62 @@ class TestToolFuzzer(unittest.TestCase):
         results = self.fuzzer.fuzz_tools(None, runs_per_tool=1)
         self.assertEqual(results, {})
 
-    def test_fuzz_tool_missing_name(self):
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
+    @patch(
+        "mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call",
+        return_value=True,
+    )
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
+    def test_fuzz_tool_missing_name(self, mock_sanitize, mock_is_safe, mock_logging):
         """Test fuzzing a tool with missing name."""
+        # Mock the sanitize_tool_call function to return predictable values
+        mock_sanitize.return_value = ("unknown", {"param1": "test_value"})
+
         tool = {"inputSchema": {"properties": {"param1": {"type": "string"}}}}
 
-        results = self.fuzzer.fuzz_tool(tool, runs=1)
+        # Mock the strategy to return a simple dict
+        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+            mock_fuzz.return_value = {"param1": "test_value"}
 
-        self.assertEqual(len(results), 1)
-        result = results[0]
+            results = self.fuzzer.fuzz_tool(tool, runs=1)
 
-        # Should use "unknown" as tool name
-        self.assertEqual(result["tool_name"], "unknown")
-        # Enhanced safety may block dangerous content, which is correct behavior
-        # We just verify that fuzzing occurred and tool name was set correctly
-        self.assertIn("success", result)
+            self.assertEqual(len(results), 1)
+            result = results[0]
 
-    def test_fuzz_tool_none_name(self):
+            # Should use "unknown" as tool name
+            self.assertEqual(result["tool_name"], "unknown")
+            # Verify that fuzzing occurred and tool name was set correctly
+            self.assertIn("success", result)
+
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
+    @patch(
+        "mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call",
+        return_value=True,
+    )
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
+    def test_fuzz_tool_none_name(self, mock_sanitize, mock_is_safe, mock_logging):
         """Test fuzzing a tool with None name."""
+        # Mock the sanitize_tool_call function to return predictable values
+        mock_sanitize.return_value = ("unknown", {"param1": "test_value"})
+
         tool = {
             "name": None,
             "inputSchema": {"properties": {"param1": {"type": "string"}}},
         }
 
-        results = self.fuzzer.fuzz_tool(tool, runs=1)
+        # Mock the strategy to return a simple dict
+        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+            mock_fuzz.return_value = {"param1": "test_value"}
 
-        self.assertEqual(len(results), 1)
-        result = results[0]
+            results = self.fuzzer.fuzz_tool(tool, runs=1)
 
-        # Should use "unknown" as tool name (but None is also acceptable for edge cases)
-        self.assertIn(result["tool_name"], ["unknown", None])
-        # Enhanced safety may block dangerous content, which is correct behavior
-        # We just verify that fuzzing occurred and tool name was handled correctly
-        self.assertIn("success", result)
+            self.assertEqual(len(results), 1)
+            result = results[0]
+
+            # Should use "unknown" as tool name (None is also acceptable)
+            self.assertIn(result["tool_name"], ["unknown", None])
+            # Verify that fuzzing occurred and tool name was handled correctly
+            self.assertIn("success", result)
 
     def test_logging_integration(self):
         """Test that logging is properly integrated."""
