@@ -52,6 +52,13 @@ def configure_network_policy(
         if "://" in s:
             parsed = urlparse(s)
             host = parsed.hostname or s
+        else:
+            # For cases like "example.com:80" without protocol
+            if ":" in s and not s.startswith("["): 
+                # Handle IPv6 addresses
+                host = s.split(":", 1)[0]
+            else:
+                host = s
         return host.strip().lower()
         
     if extra_allowed_hosts is not None:
@@ -78,11 +85,30 @@ def is_host_allowed(
         return True
 
     parsed = urlparse(url)
-    host = parsed.hostname or ""
-    hosts = set(allowed_hosts or SAFETY_LOCAL_HOSTS)
+    raw_host = parsed.hostname or ""
+    
+    # Normalize the host from the URL
+    if not raw_host and ":" in url and not url.startswith("["):  # Handle non-URL format with port
+        parts = url.split(":", 1)
+        raw_host = parts[0]
+        
+    host = raw_host.lower()
+    
+    # Collect and normalize all allowed hosts
+    allowed_set = set()
+    for h in (allowed_hosts or SAFETY_LOCAL_HOSTS):
+        # Use same normalization logic as in configure_network_policy
+        if "://" in h:
+            h_parsed = urlparse(h)
+            norm_h = h_parsed.hostname or h
+        else:
+            norm_h = h.split(":")[0] if ":" in h and not h.startswith("[") else h
+        allowed_set.add(norm_h.lower())
+        
     if _POLICY_EXTRA_ALLOWED_HOSTS:
-        hosts |= _POLICY_EXTRA_ALLOWED_HOSTS
-    return host in hosts
+        allowed_set |= _POLICY_EXTRA_ALLOWED_HOSTS
+        
+    return host in allowed_set
 
 
 def resolve_redirect_safely(
