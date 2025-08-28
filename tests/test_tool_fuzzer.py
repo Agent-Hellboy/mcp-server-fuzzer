@@ -279,8 +279,22 @@ class TestToolFuzzer(unittest.TestCase):
         self.assertIn("tool1", results)
         self.assertEqual(len(results["tool1"]), 0)
 
-    def test_fuzz_tool_different_runs(self):
+    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.ToolStrategies")
+    def test_fuzz_tool_different_runs(self, mock_strategies_class):
         """Test that different runs generate different arguments."""
+        # Setup mock strategy to return controlled values
+        mock_strategies = MagicMock()
+        mock_strategies_class.return_value = mock_strategies
+        
+        # Configure mock to return different args for each call
+        mock_strategies.fuzz_tool_arguments.side_effect = [
+            {"name": f"test_{i}", "count": i, "enabled": i % 2 == 0}
+            for i in range(5)
+        ]
+        
+        # Reinitialize fuzzer to use our mock
+        self.fuzzer = ToolFuzzer()
+        
         tool = {
             "name": "test_tool",
             "inputSchema": {
@@ -296,18 +310,21 @@ class TestToolFuzzer(unittest.TestCase):
 
         # Check that we get the expected number of results
         self.assertEqual(len(results), 5)
+        
+        # Verify the strategy was called the expected number of times
+        self.assertEqual(mock_strategies.fuzz_tool_arguments.call_count, 5)
 
         # Check that all runs have proper structure
-        # Enhanced safety may block dangerous content, which is correct behavior
-        for result in results:
-            self.assertIn("success", result)  # Verify field exists
+        for i, result in enumerate(results):
+            self.assertIn("success", result)
             self.assertIn("args", result)
-
-            # Test BEHAVIOR: should generate some arguments
+            
+            # Test that we got the expected arguments from our mock
             args = result["args"]
-            self.assertIsInstance(args, dict, "Should return a dictionary of arguments")
-            # Test BEHAVIOR: aggressive fuzzing may generate any types or structures
-            # We just verify it's producing some output
+            self.assertIsInstance(args, dict)
+            self.assertEqual(args["name"], f"test_{i}")
+            self.assertEqual(args["count"], i)
+            self.assertEqual(args["enabled"], i % 2 == 0)
 
     def test_fuzz_tools_empty_list(self):
         """Test fuzzing an empty list of tools."""

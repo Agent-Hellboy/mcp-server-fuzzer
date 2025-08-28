@@ -82,7 +82,7 @@ class ProcessWatchdog:
                     if process.returncode is None:
                         # Process is running, check activity
                         last_activity = await self._get_last_activity(
-                            process_info, current_time
+                            process_info
                         )
                         time_since_activity = current_time - last_activity
 
@@ -132,7 +132,7 @@ class ProcessWatchdog:
                 del self._processes[pid]
 
     async def _get_last_activity(
-        self, process_info: dict, current_time: float
+        self, process_info: dict
     ) -> float:
         """Get the last activity timestamp for a process."""
         # Try to get activity from callback first
