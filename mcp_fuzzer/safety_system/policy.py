@@ -88,7 +88,8 @@ def is_host_allowed(
     raw_host = parsed.hostname or ""
     
     # Normalize the host from the URL
-    if not raw_host and ":" in url and not url.startswith("["):  # Handle non-URL format with port
+    if not raw_host and ":" in url and not url.startswith("["):
+        # Handle non-URL format with port
         parts = url.split(":", 1)
         raw_host = parts[0]
         
