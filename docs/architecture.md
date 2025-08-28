@@ -41,15 +41,17 @@ flowchart TB
     D3[Strategy Manager]
   end
 
-  subgraph Runtime
+  subgraph Runtime[Async Runtime]
     R1[ProcessManager]
     R2[ProcessWatchdog]
-    R3[Async Operations]
+    R3[Process Lifecycle]
+    R4[Signal Handling]
   end
 
   subgraph Safety_System
     E1[SafetyFilter]
     E2[SystemBlocker]
+    E3[Network Policy]
   end
 
   subgraph Reports
@@ -74,10 +76,13 @@ flowchart TB
 
   C3 -.-> R1
   R1 --> R2
+  R2 -.-> R3
+  R1 -.-> R4
 
   B1 --> E1
   E1 --> F3
   F1 --> F2
+  C1 -.-> E3
 ```
 
 ## Data Flow
@@ -131,59 +136,60 @@ graph TD
 
 ```
 mcp_fuzzer/
-├── cli/                    # Command-line interface
-│   ├── __init__.py
-│   ├── args.py            # Argument parsing and validation
-│   ├── main.py            # Main CLI entry point
-│   └── runner.py          # CLI execution logic
-├── transport/              # Transport layer implementations
-│   ├── __init__.py
-│   ├── base.py            # Abstract transport protocol
-│   ├── factory.py         # Transport factory
-│   ├── http.py            # HTTP/HTTPS transport
-│   ├── sse.py             # Server-Sent Events transport
-│   └── stdio.py           # Standard I/O transport
-├── fuzz_engine/            # Fuzzing engine
-│   ├── __init__.py
-│   ├── fuzzer/            # Core fuzzing logic
-│   │   ├── __init__.py
-│   │   ├── tool_fuzzer.py     # Tool-level fuzzing
-│   │   └── protocol_fuzzer.py # Protocol-level fuzzing
-│   ├── strategy/           # Fuzzing strategies
-│   │   ├── __init__.py
-│   │   ├── realistic/         # Realistic data generation
-│   │   │   ├── __init__.py
-│   │   │   ├── protocol_type_strategy.py
-│   │   │   └── tool_strategy.py
-│   │   ├── aggressive/        # Aggressive attack vectors
-│   │   │   ├── __init__.py
-│   │   │   ├── protocol_type_strategy.py
-│   │   │   └── tool_strategy.py
-│   │   └── strategy_manager.py # Strategy orchestration
-│   └── runtime/            # Process management and runtime
-│       ├── __init__.py
-│       ├── manager.py      # Process manager
-│       ├── watchdog.py     # Process monitoring
-│       └── wrapper.py      # Async process wrapper
-├── reports/                # Reporting and output system
-│   ├── __init__.py
-│   ├── reporter.py         # Main reporting coordinator
-│   ├── formatters.py       # Output formatters (Console, JSON, Text)
-│   └── safety_reporter.py  # Safety system reporting
-├── safety_system/          # Safety and protection
-│   ├── __init__.py
-│   ├── safety.py          # Core safety logic
-│   └── system_blocker.py  # System command blocking
-├── auth/                   # Authentication providers
-│   ├── __init__.py
-│   ├── providers.py        # Auth provider implementations
-│   ├── manager.py          # Auth management
-│   └── loaders.py          # Configuration loading
-├── client.py               # Unified MCP client
-└── __main__.py            # Entry point for module execution
+| -- cli/                    # Command-line interface
+|    | -- __init__.py
+|    | -- args.py            # Argument parsing and validation
+|    | -- main.py            # Main CLI entry point
+|    | -- runner.py          # CLI execution logic
+| -- transport/              # Transport layer implementations
+|    | -- __init__.py
+|    | -- base.py            # Abstract transport protocol
+|    | -- factory.py         # Transport factory
+|    | -- http.py            # HTTP/HTTPS transport
+|    | -- sse.py             # Server-Sent Events transport
+|    | -- stdio.py           # Standard I/O transport
+| -- fuzz_engine/            # Fuzzing engine
+|    | -- __init__.py
+|    | -- fuzzer/            # Core fuzzing logic
+|    |    | -- __init__.py
+|    |    | -- tool_fuzzer.py     # Tool-level fuzzing
+|    |    | -- protocol_fuzzer.py # Protocol-level fuzzing
+|    | -- strategy/           # Fuzzing strategies
+|    |    | -- __init__.py
+|    |    | -- realistic/         # Realistic data generation
+|    |    |    | -- __init__.py
+|    |    |    | -- protocol_type_strategy.py
+|    |    |    | -- tool_strategy.py
+|    |    | -- aggressive/        # Aggressive attack vectors
+|    |    |    | -- __init__.py
+|    |    |    | -- protocol_type_strategy.py
+|    |    |    | -- tool_strategy.py
+|    |    | -- strategy_manager.py # Strategy orchestration
+|    | -- runtime/            # Process management and runtime
+|        | -- __init__.py
+|        | -- manager.py      # Fully async process manager
+|        | -- watchdog.py     # Async process monitoring
+| -- reports/                # Reporting and output system
+|    | -- __init__.py
+|    | -- reporter.py         # Main reporting coordinator
+|    | -- formatters.py       # Output formatters (Console, JSON, Text)
+|    | -- safety_reporter.py  # Safety system reporting
+| -- safety_system/          # Safety and protection
+|    | -- __init__.py
+|    | -- safety.py          # Core safety logic
+|    | -- policy.py          # Network policy and host normalization
+|    | -- patterns.py        # Safety pattern definitions
+|    | -- system_blocker.py  # System command blocking
+| -- auth/                   # Authentication providers
+|    | -- __init__.py
+|    | -- providers.py        # Auth provider implementations
+|    | -- manager.py          # Auth management
+|    | -- loaders.py          # Configuration loading
+| -- client.py               # Unified MCP client
+| -- __main__.py            # Entry point for module execution
 ```
 
-## 🔌 Component Details
+## Component Details
 
 ### 1. CLI Layer
 
@@ -415,7 +421,7 @@ The fuzzer logic is completely independent of transport protocols:
 
 ### 3. Extensibility
 
-The system is designed for easy extension:
+The system is designed for extensibility:
 
 - **New transport protocols** can be added by implementing the interface
 - **New fuzzing strategies** can be added to the strategy system
@@ -471,13 +477,15 @@ The system uses async/await throughout for better performance:
 - **Non-blocking I/O operations**
 - **Concurrent tool execution**
 - **Efficient resource utilization**
+- **Fully asynchronous process management**
+- **Activity monitoring through awaitables**
 
 ### Resource Management
 
 Careful resource management ensures stability:
 
 - **Connection pooling** for HTTP transport
-- **Process lifecycle management** for stdio transport
+- **Async process lifecycle management** for stdio transport
 - **Memory-efficient data generation**
 - **Timeout handling** for all operations
 
@@ -500,6 +508,7 @@ All input is validated and sanitized:
 - **Transport-level input sanitization**
 - **Safety system filtering**
 - **Environment variable validation**
+- **Host normalization** for network access control
 
 ### Access Control
 
@@ -547,3 +556,37 @@ Built-in health monitoring:
 - **Server availability monitoring**
 - **Safety system status**
 - **Resource usage monitoring**
+
+## System Integration
+
+The MCP Fuzzer is designed as a modular system with clear integration points:
+
+### Component Integration
+
+- **Transport Abstraction**: All communication is abstracted through the TransportProtocol interface, allowing any transport to work with the system.
+- **Safety Providers**: The safety system uses a provider interface allowing customization of safety features.
+- **Strategy Extensions**: Fuzzing strategies can be extended with new generators for different data types.
+- **Runtime Management**: The async runtime provides process isolation and management for all components.
+
+### External Integration
+
+- **CI/CD Integration**: The system can be integrated into CI/CD pipelines for automated testing.
+- **Logging Integration**: The logging system can output to standard formats for integration with monitoring tools.
+- **Configuration Management**: Environment variables and config files allow integration with orchestration systems.
+- **Reporting Output**: Reports can be exported in machine-readable formats (JSON) for integration with analysis tools.
+
+### Cross-Component Dependencies
+
+```mermaid
+graph TD
+    A[Transport Layer] --> B[Safety System]
+    C[Fuzzing Engine] --> B
+    D[Runtime] --> E[Process Management]
+    A --> D
+    F[CLI] --> G[Configuration]
+    G --> A
+    G --> C
+    G --> B
+```
+
+This modular design ensures that components can be developed, tested, and extended independently.

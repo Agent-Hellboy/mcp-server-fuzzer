@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide will help you get up and running with MCP Server Fuzzer quickly.
+This guide provides instructions for installing and configuring MCP Server Fuzzer.
 
 ## Installation
 

@@ -142,7 +142,16 @@ class ProcessWatchdog:
                 result = callback()
                 if inspect.isawaitable(result):
                     result = await result
-                return float(result)
+                
+                # Convert and validate timestamp
+                timestamp = float(result)
+                # Validate the timestamp is reasonable (not in future, not negative)
+                if timestamp < 0 or timestamp > time.time() + 1:
+                    self._logger.warning(
+                        f"Activity callback returned invalid timestamp: {timestamp}"
+                    )
+                    return process_info["last_activity"]
+                return timestamp
             except Exception:
                 self._logger.debug(
                     "activity_callback failed; falling back to stored timestamp", 

@@ -1,6 +1,6 @@
-# Process Management System
+# Async Process Management System
 
-The Process Management system provides comprehensive process lifecycle management with automatic watchdog monitoring, cross-platform support, and fully asynchronous interfaces.
+The Process Management system provides comprehensive process lifecycle management with automatic watchdog monitoring, cross-platform support, and fully asynchronous interfaces. All operations are non-blocking and implemented using Python's asyncio framework.
 
 ## Overview
 
@@ -13,7 +13,7 @@ The system consists of two main components:
 
 ```
 ProcessWatchdog (Core monitoring)
-    ↓
+    |
 ProcessManager (Fully async interface)
 ```
 
@@ -116,33 +116,37 @@ asyncio.run(main())
 - **Hanging Detection**: Automatically detects when processes stop responding
 - **Timeout Management**: Configurable timeouts for different process types
 - **Graceful Shutdown**: Attempts graceful termination before force killing
-- **Cross-platform**: Works on Linux and macOS
+- **Cross-platform**: Works on Windows, Linux and macOS
+- **Awaitable Activity Callbacks**: Support for async activity tracking functions
 
 ### Process Lifecycle Management
 
-- **Start/Stop**: Easy process starting and stopping
-- **Status Tracking**: Monitor process status and health
+- **Start/Stop**: Easy asynchronous process starting and stopping
+- **Status Tracking**: Monitor process status and health with async methods
 - **Statistics**: Get comprehensive statistics about managed processes
 - **Cleanup**: Automatic cleanup of finished processes
+- **Process Groups**: Enhanced control through proper process group management
 
 ### Signal Handling
 
 - **Timeout Signals**: Send SIGTERM for graceful shutdown
 - **Force Signals**: Send SIGKILL for immediate termination
-- **Interrupt Signals**: Send SIGINT for user interruption
+- **Interrupt Signals**: Send SIGINT (Unix) or CTRL_BREAK_EVENT (Windows) for user interruption
 - **Bulk Operations**: Send signals to all processes at once
 
 ### Async Support
 
 - **Fully Asynchronous**: All operations are non-blocking
-- **Modern Asyncio**: Uses modern asyncio patterns
+- **Modern Asyncio**: Uses modern asyncio patterns and asyncio.subprocess
 - **Event Loop Integration**: Integrates with existing async event loops
+- **Awaitable Callbacks**: Support for both synchronous and asynchronous activity callbacks
+- **Cross-Platform Async**: Consistent async behavior across Windows and Unix-like systems
 
 ### Safety Features
 
 - **Resource Cleanup**: Automatic cleanup on shutdown
 - **Error Handling**: Comprehensive error handling and logging
-- **Process Isolation**: Processes are properly isolated and managed
+- **Process Isolation**: Processes are properly isolated using process groups and async-aware process management
 - **Memory Management**: Efficient memory usage with proper cleanup
 
 ## Usage Examples

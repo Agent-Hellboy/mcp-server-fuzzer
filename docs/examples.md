@@ -333,9 +333,9 @@ Each fuzzing session creates timestamped reports:
 
 ```text
 reports/
-├── fuzzing_report_20250812_143000.json    # Complete structured data
-├── fuzzing_report_20250812_143000.txt     # Human-readable summary
-└── safety_report_20250812_143000.json     # Safety system data
+| -- fuzzing_report_20250812_143000.json    # Complete structured data
+| -- fuzzing_report_20250812_143000.txt     # Human-readable summary
+| -- safety_report_20250812_143000.json     # Safety system data
 ```
 
 ### Report Content Examples
@@ -426,33 +426,33 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-
 ### Tool Fuzzer Output
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              Tool Fuzzer Results                               │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ Tool Name        │ Success Rate │ Exception Count │ Example Exceptions        │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ get_weather      │ 85.0%        │ 3               │ Invalid city name        │
-│ search_web       │ 92.0%        │ 1               │ Network timeout          │
-│ calculate_math   │ 100.0%       │ 0               │ None                     │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ Overall          │ 92.3%        │ 4               │ 3 tools tested           │
-└─────────────────────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------------------+
+|                              Tool Fuzzer Results                               |
++------------------------------------------------------------------------------+
+| Tool Name        | Success Rate | Exception Count | Example Exceptions        |
++------------------------------------------------------------------------------+
+| get_weather      | 85.0%        | 3               | Invalid city name        |
+| search_web       | 92.0%        | 1               | Network timeout          |
+| calculate_math   | 100.0%       | 0               | None                     |
++------------------------------------------------------------------------------+
+| Overall          | 92.3%        | 4               | 3 tools tested           |
++------------------------------------------------------------------------------+
 ```
 
 ### Protocol Fuzzer Output
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           Protocol Fuzzer Results                              │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ Protocol Type        │ Total Runs │ Successful │ Exceptions │ Success Rate │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ InitializeRequest    │ 5           │ 5          │ 0          │ 100.0%       │
-│ ProgressNotification │ 5           │ 4          │ 1          │ 80.0%        │
-│ CancelNotification   │ 5           │ 5          │ 0          │ 100.0%       │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│ Overall              │ 15          │ 14         │ 1          │ 93.3%        │
-└─────────────────────────────────────────────────────────────────────────────────┘
++------------------------------------------------------------------------------+
+|                           Protocol Fuzzer Results                              |
++------------------------------------------------------------------------------+
+| Protocol Type        | Total Runs | Successful | Exceptions | Success Rate |
++------------------------------------------------------------------------------+
+| InitializeRequest    | 5          | 5          | 0          | 100.0%       |
+| ProgressNotification | 5          | 4          | 1          | 80.0%        |
+| CancelNotification   | 5          | 5          | 0          | 100.0%       |
++------------------------------------------------------------------------------+
+| Overall              | 15         | 14         | 1          | 93.3%        |
++------------------------------------------------------------------------------+
 ```
 
 ## Performance Examples

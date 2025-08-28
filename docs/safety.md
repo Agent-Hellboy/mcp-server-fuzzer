@@ -236,7 +236,7 @@ class SafeSubprocess:
         return env
 ```
 
-## 🧹 Input Sanitization
+## Input Sanitization
 
 ### Argument Filtering
 
@@ -396,7 +396,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" \
   --safety-plugin my_safety_module.CustomSafetyProvider
 ```
 
-## 🚨 Safety Alerts and Logging
+## Safety Alerts and Logging
 
 ### Safety Event Logging
 
@@ -486,7 +486,7 @@ grep "command_blocked" mcp_fuzzer_safety.log
 - [ ] Clean up temporary files and processes
 - [ ] Document any safety issues encountered
 
-## 🚨 Emergency Procedures
+## Emergency Procedures
 
 ### Immediate Safety Stop
 

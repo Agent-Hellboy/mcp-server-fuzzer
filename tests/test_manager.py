@@ -108,7 +108,7 @@ class TestProcessManager:
         
         # Mock the process creation
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -146,7 +146,7 @@ class TestProcessManager:
         
         # Mock the process creation
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -242,7 +242,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -269,7 +269,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -303,7 +303,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -331,7 +331,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -361,7 +361,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -390,7 +390,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -400,7 +400,7 @@ class TestProcessManager:
                     
                     # Test update_activity
                     with patch.object(
-                        self.manager.watchdog, "update_activity"
+                        self.manager.watchdog, "update_activity", new=AsyncMock()
                     ) as mock_update:
                         await self.manager.update_activity(process.pid)
                         mock_update.assert_called_once_with(process.pid)
@@ -417,7 +417,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -429,7 +429,7 @@ class TestProcessManager:
                     with patch.object(
                         self.manager.watchdog, 
                         "get_stats", 
-                        return_value={"test": "stats"}
+                        new=AsyncMock(return_value={"test": "stats"})
                     ):
                         # Get stats
                         stats = await self.manager.get_stats()
@@ -451,7 +451,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -481,7 +481,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -515,7 +515,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -593,7 +593,7 @@ class TestProcessManager:
         
         # Start the process
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -605,7 +605,7 @@ class TestProcessManager:
                     with patch.object(
                         self.manager.watchdog,
                         "is_process_registered",
-                        return_value=True,
+                        new=AsyncMock(return_value=True),
                     ):
                         result = await self.manager.is_process_registered(process.pid)
                         assert result is True
