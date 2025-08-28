@@ -397,17 +397,13 @@ class SafetyReporter:
     def has_safety_data(self) -> bool:
         """Check if there's any safety data available."""
         try:
-            # First check if safety_filter exists
-            if self.safety_filter is None:
-                return False
-            
-            # Try to safely access blocked_operations
+            # Try safety filter (if present)
             try:
-                if self.safety_filter.blocked_operations:
+                ops = getattr(self.safety_filter, "blocked_operations", None)
+                if ops:
                     return True
             except Exception:
-                # If accessing blocked_operations fails, return False
-                return False
+                pass
                 
             # Check system blocker data if available
             if hasattr(self, "get_blocked_operations"):

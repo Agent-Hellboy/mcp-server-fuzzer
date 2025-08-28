@@ -13,7 +13,7 @@ class TransportError(MCPError):
     pass
 
 
-class TimeoutError(MCPError):
+class MCPTimeoutError(MCPError):
     """Raised when an operation times out."""
 
     pass

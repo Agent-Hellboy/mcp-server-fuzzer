@@ -48,15 +48,17 @@ class SafetyFilter(SafetyProvider):
         dangerous_argument_names: list[str] | None = None,
     ):
         # Allow dependency injection of patterns for easier testing and configurability
-        self.dangerous_url_patterns = (
+        self.dangerous_url_patterns = self._compile_patterns(
             dangerous_url_patterns or DEFAULT_DANGEROUS_URL_PATTERNS
         )
-        self.dangerous_command_patterns = (
+        self.dangerous_command_patterns = self._compile_patterns(
             dangerous_command_patterns or DEFAULT_DANGEROUS_COMMAND_PATTERNS
         )
-        self.dangerous_argument_names = (
-            dangerous_argument_names or DEFAULT_DANGEROUS_ARGUMENT_NAMES
-        )
+        # Normalize argument names for case-insensitive membership checks
+        self.dangerous_argument_names = {
+            n.lower() 
+            for n in (dangerous_argument_names or DEFAULT_DANGEROUS_ARGUMENT_NAMES)
+        }
 
         # Track blocked operations for testing and analysis
         self.blocked_operations = []
@@ -69,13 +71,23 @@ class SafetyFilter(SafetyProvider):
         except Exception:
             self._fs_root = None
 
+    def _compile_patterns(self, patterns):
+        """Compile string patterns into regex Pattern objects."""
+        compiled = []
+        for p in patterns:
+            if isinstance(p, re.Pattern):
+                compiled.append(p)
+            else:
+                compiled.append(re.compile(p, re.IGNORECASE))
+        return compiled
+
     def contains_dangerous_url(self, value: str) -> bool:
         """Check if a string contains a dangerous URL."""
         if not value:
             return False
 
         for pattern in self.dangerous_url_patterns:
-            if re.search(pattern, value, re.IGNORECASE):
+            if pattern.search(value):
                 return True
         return False
 
@@ -85,7 +97,7 @@ class SafetyFilter(SafetyProvider):
             return False
 
         for pattern in self.dangerous_command_patterns:
-            if re.search(pattern, value, re.IGNORECASE):
+            if pattern.search(value):
                 return True
         return False
 

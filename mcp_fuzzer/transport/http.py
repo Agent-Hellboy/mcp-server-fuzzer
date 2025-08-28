@@ -71,7 +71,7 @@ class HTTPTransport(TransportProtocol):
 
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Any:
+    ) -> Dict[str, Any]:
         request_id = str(uuid.uuid4())
         payload = {
             "jsonrpc": "2.0",
@@ -120,9 +120,10 @@ class HTTPTransport(TransportProtocol):
                 raise Exception(f"Server error: {data['error']}")
             if isinstance(data, dict):
                 return data.get("result", data)
-            return data
+            # Normalize non-dict responses
+            return {"result": data}
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         self._update_activity()
 
         async with httpx.AsyncClient(
@@ -155,7 +156,8 @@ class HTTPTransport(TransportProtocol):
                 raise Exception(f"Server error: {data['error']}")
             if isinstance(data, dict):
                 return data.get("result", data)
-            return data
+            # Normalize non-dict responses
+            return {"result": data}
 
     async def send_notification(
         self, method: str, params: Optional[Dict[str, Any]] = None

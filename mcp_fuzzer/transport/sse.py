@@ -19,7 +19,7 @@ class SSETransport(TransportProtocol):
 
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Any:
+    ) -> Dict[str, Any]:
         payload = {
             "jsonrpc": "2.0",
             "id": str(uuid.uuid4()),
@@ -42,7 +42,7 @@ class SSETransport(TransportProtocol):
                         continue
             raise Exception("No valid SSE response received")
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=self.headers)
             response.raise_for_status()

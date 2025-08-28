@@ -231,6 +231,7 @@ def setup_logging(args: argparse.Namespace) -> None:
 def build_unified_client_args(args: argparse.Namespace) -> Dict[str, Any]:
     client_args = {
         "mode": args.mode,
+        "phase": args.phase,
         "protocol": args.protocol,
         "endpoint": args.endpoint,
         "timeout": args.timeout,
@@ -329,6 +330,7 @@ def get_cli_config() -> Dict[str, Any]:
     config.update(
         {
             "mode": args.mode,
+            "phase": args.phase,
             "protocol": args.protocol,
             "endpoint": args.endpoint,
             "timeout": args.timeout,
@@ -355,6 +357,7 @@ def get_cli_config() -> Dict[str, Any]:
 
     return {
         "mode": args.mode,
+        "phase": args.phase,
         "protocol": args.protocol,
         "endpoint": args.endpoint,
         "timeout": args.timeout,

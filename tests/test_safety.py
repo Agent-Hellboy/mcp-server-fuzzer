@@ -25,7 +25,7 @@ class TestSafetyFilter(unittest.TestCase):
         """Test SafetyFilter initialization."""
         self.assertIsInstance(self.filter.dangerous_url_patterns, list)
         self.assertIsInstance(self.filter.dangerous_command_patterns, list)
-        self.assertIsInstance(self.filter.dangerous_argument_names, list)
+        self.assertIsInstance(self.filter.dangerous_argument_names, set)
         self.assertIsInstance(self.filter.blocked_operations, list)
 
     def test_contains_dangerous_url_edge_cases(self):

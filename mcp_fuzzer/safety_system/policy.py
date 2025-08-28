@@ -26,16 +26,24 @@ _POLICY_EXTRA_ALLOWED_HOSTS: Set[str] = set()
 def configure_network_policy(
     deny_network_by_default: Optional[bool] = None,
     extra_allowed_hosts: Optional[Iterable[str]] = None,
+    reset_allowed_hosts: bool = False,
 ) -> None:
     """Configure runtime network policy overrides.
 
     - deny_network_by_default: when True, only local hosts are allowed.
     - extra_allowed_hosts: additional hostnames to permit.
+    - reset_allowed_hosts: when True, clear any previously added hosts.
     """
     global _POLICY_DENY_NETWORK_DEFAULT_OVERRIDE
     global _POLICY_EXTRA_ALLOWED_HOSTS
-    _POLICY_DENY_NETWORK_DEFAULT_OVERRIDE = deny_network_by_default
-    if extra_allowed_hosts:
+    
+    if deny_network_by_default is not None:
+        _POLICY_DENY_NETWORK_DEFAULT_OVERRIDE = deny_network_by_default
+    
+    if reset_allowed_hosts:
+        _POLICY_EXTRA_ALLOWED_HOSTS = set()
+        
+    if extra_allowed_hosts is not None:
         _POLICY_EXTRA_ALLOWED_HOSTS |= {h for h in extra_allowed_hosts if h}
 
 

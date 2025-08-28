@@ -95,6 +95,7 @@ class TestCLI:
         """Test building client arguments with basic configuration."""
         args = argparse.Namespace(
             mode="tools",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -119,6 +120,7 @@ class TestCLI:
         with patch("mcp_fuzzer.cli.load_auth_config", return_value=mock_auth_manager):
             args = argparse.Namespace(
                 mode="tools",
+                phase="aggressive",
                 protocol="http",
                 endpoint="http://localhost:8000",
                 timeout=30,
@@ -142,6 +144,7 @@ class TestCLI:
         ):
             args = argparse.Namespace(
                 mode="tools",
+                phase="aggressive",
                 protocol="http",
                 endpoint="http://localhost:8000",
                 timeout=30,
@@ -160,6 +163,7 @@ class TestCLI:
         """Test building client arguments with protocol type."""
         args = argparse.Namespace(
             mode="protocol",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -193,6 +197,7 @@ class TestCLI:
         """Exercise fs-root setter and disabling safety flags."""
         args = argparse.Namespace(
             mode="tools",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -219,6 +224,7 @@ class TestCLI:
         """Cover both success and failure branches for safety plugin loading."""
         base_args = dict(
             mode="tools",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -478,6 +484,7 @@ class TestCLI:
         ):
             mock_args = argparse.Namespace(
                 mode="tools",
+                phase="aggressive",
                 protocol="http",
                 endpoint="http://localhost:8000",
                 timeout=30,
@@ -523,6 +530,7 @@ class TestCLI:
         """Test successful CLI execution."""
         mock_args = argparse.Namespace(
             mode="tool",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -577,6 +585,7 @@ class TestCLI:
         """Test CLI execution with transport error."""
         mock_args = argparse.Namespace(
             mode="tool",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -638,6 +647,7 @@ class TestCLI:
         """Test CLI execution with keyboard interrupt."""
         mock_args = argparse.Namespace(
             mode="tool",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000",
             timeout=30,
@@ -973,8 +983,8 @@ class TestCLI:
                                 mock_config_policy.assert_has_calls(
                                     [
                                         call(
+                                            reset_allowed_hosts=True,
                                             deny_network_by_default=None,
-                                            extra_allowed_hosts=None,
                                         ),
                                         call(
                                             deny_network_by_default=True,
@@ -1015,8 +1025,8 @@ class TestCLI:
                                 mock_config_policy.assert_has_calls(
                                     [
                                         call(
+                                            reset_allowed_hosts=True,
                                             deny_network_by_default=None,
-                                            extra_allowed_hosts=None,
                                         ),
                                         call(
                                             deny_network_by_default=None,

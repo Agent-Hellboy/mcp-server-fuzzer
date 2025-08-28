@@ -17,7 +17,7 @@ from .auth import AuthManager, load_auth_config, setup_auth_from_env
 from .fuzz_engine.fuzzer import ToolFuzzer, ProtocolFuzzer
 from .transport import create_transport
 from .reports import FuzzerReporter
-from .exceptions import MCPError, TimeoutError
+from .exceptions import MCPError, MCPTimeoutError
 from .safety_system.safety import SafetyProvider
 from .config import (
     DEFAULT_TOOL_RUNS,
@@ -152,12 +152,17 @@ class UnifiedMCPFuzzerClient:
                 # Create a task for the tool call with a timeout
                 tool_task = None
                 try:
-                    # Start the tool task
-                    tool_task = asyncio.create_task(
-                        self.transport.call_tool(
-                            tool["name"], sanitized_args, auth_headers
-                        )
-                    )
+                    # Support both (name, args, headers) and (name, args)
+                    async def _call():
+                        try:
+                            return await self.transport.call_tool(
+                                tool["name"], sanitized_args, auth_headers
+                            )
+                        except TypeError:
+                            return await self.transport.call_tool(
+                                tool["name"], sanitized_args
+                            )
+                    tool_task = asyncio.create_task(_call())
                     # Use the tool_timeout passed to this method if available
                     # Otherwise use the tool_timeout from initialization
                     # Otherwise prefer explicit tool-timeout passed via CLI; 
@@ -210,7 +215,7 @@ class UnifiedMCPFuzzerClient:
                             "safety_sanitized": safety_sanitized,
                         }
                     )
-                except (TimeoutError, asyncio.TimeoutError):
+                except (MCPTimeoutError, asyncio.TimeoutError):
                     # Cancel the tool task on timeout
                     if tool_task is not None:
                         tool_task.cancel()
@@ -220,7 +225,7 @@ class UnifiedMCPFuzzerClient:
                             )
                         except (
                             asyncio.CancelledError,
-                            TimeoutError,
+                            MCPTimeoutError,
                             asyncio.TimeoutError,
                         ):
                             pass
@@ -309,7 +314,7 @@ class UnifiedMCPFuzzerClient:
 
                 try:
                     results = await asyncio.wait_for(tool_task, timeout=max_tool_time)
-                except (TimeoutError, asyncio.TimeoutError):
+                except (MCPTimeoutError, asyncio.TimeoutError):
                     logging.warning(f"Tool {tool_name} took too long, cancelling")
                     tool_task.cancel()
                     try:
@@ -375,10 +380,13 @@ class UnifiedMCPFuzzerClient:
                     if auth_params:
                         args.update(auth_params)
 
-                    # Call the tool
-                    result = await self.transport.call_tool(
-                        tool_name, args, auth_headers
-                    )
+                    # Call the tool with compatibility shim
+                    try:
+                        result = await self.transport.call_tool(
+                            tool_name, args, auth_headers
+                        )
+                    except TypeError:
+                        result = await self.transport.call_tool(tool_name, args)
 
                     # Add to results
                     realistic_results.append(
@@ -411,10 +419,13 @@ class UnifiedMCPFuzzerClient:
                     if auth_params:
                         args.update(auth_params)
 
-                    # Call the tool
-                    result = await self.transport.call_tool(
-                        tool_name, args, auth_headers
-                    )
+                    # Call the tool with compatibility shim
+                    try:
+                        result = await self.transport.call_tool(
+                            tool_name, args, auth_headers
+                        )
+                    except TypeError:
+                        result = await self.transport.call_tool(tool_name, args)
 
                     # Add to results
                     aggressive_results.append(

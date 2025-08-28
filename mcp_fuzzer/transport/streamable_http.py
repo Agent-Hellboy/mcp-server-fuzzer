@@ -151,7 +151,7 @@ class StreamableHTTPTransport(TransportProtocol):
 
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Any:
+    ) -> Dict[str, Any]:
         request_id = str(asyncio.get_running_loop().time())
         payload = {
             "jsonrpc": "2.0",
@@ -161,7 +161,7 @@ class StreamableHTTPTransport(TransportProtocol):
         }
         return await self.send_raw(payload)
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         # Ensure MCP initialization handshake once per session
         try:
             method = payload.get("method")
@@ -199,7 +199,7 @@ class StreamableHTTPTransport(TransportProtocol):
 
             # Handle status codes similar to SDK
             if response.status_code == 202:
-                return None
+                return {}
             if response.status_code == 404:
                 # Session terminated or not found
                 raise Exception("Session terminated or endpoint not found")
@@ -218,14 +218,21 @@ class StreamableHTTPTransport(TransportProtocol):
                         # Mark initialized if this was an explicit initialize call
                         if method == "initialize":
                             self._initialized = True
-                        return data["result"]
-                return data
+                        result = data["result"]
+                        return (
+                            result if isinstance(result, dict) 
+                            else {"result": result}
+                        )
+                # Normalize non-dict payloads
+                return data if isinstance(data, dict) else {"result": data}
 
             if ct.startswith(SSE_CT):
                 parsed = await self._parse_sse_response(response)
                 if method == "initialize":
                     self._initialized = True
-                return parsed
+                if parsed is None:
+                    return {}
+                return parsed if isinstance(parsed, dict) else {"result": parsed}
 
             raise Exception(f"Unexpected content type: {ct}")
 
