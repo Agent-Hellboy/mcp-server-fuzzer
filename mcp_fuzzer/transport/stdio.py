@@ -38,13 +38,12 @@ class StdioTransport(TransportProtocol):
         self.process_manager = ProcessManager(watchdog_config)
         self._last_activity = time.time()
 
-    def _update_activity(self):
-        """Update last activity timestamp and notify process manager."""
+    async def _update_activity(self):
+        """Update last activity timestamp and notify process manager asynchronously."""
         self._last_activity = time.time()
         if self.process and hasattr(self.process, "pid"):
-            # Don't await here since this is a sync method
-            # The activity will be updated when needed
-            pass
+            # Update activity in the process manager
+            await self.process_manager.update_activity(self.process.pid)
 
     async def _ensure_connection(self):
         """Ensure we have a persistent connection to the subprocess."""
@@ -120,7 +119,7 @@ class StdioTransport(TransportProtocol):
                     )
 
                 self._initialized = True
-                self._update_activity()
+                await self._update_activity()
                 logging.info(
                     f"Started stdio transport process with PID: {self.process.pid}"
                 )

@@ -2,7 +2,7 @@
 """
 Process Watchdog for MCP Fuzzer Runtime
 
-This module provides process monitoring functionality with non-blocking
+This module provides process monitoring functionality with fully
 async operations.
 """
 
@@ -11,7 +11,6 @@ import logging
 import os
 import signal as _signal
 import sys
-import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
@@ -29,34 +28,25 @@ class WatchdogConfig:
 
 
 class ProcessWatchdog:
-    """Monitors processes for hanging behavior with non-blocking async operations."""
+    """Fully asynchronous process monitoring system."""
 
     def __init__(self, config: Optional[WatchdogConfig] = None):
         """Initialize the process watchdog."""
         self.config = config or WatchdogConfig()
         self._processes: Dict[int, Dict[str, Any]] = {}
-        self._lock = threading.Lock()  # Use threading.Lock for sync methods
-        self._async_lock = asyncio.Lock()  # Use asyncio.Lock for async methods
+        self._lock = asyncio.Lock()
         self._logger = logging.getLogger(__name__)
         self._stop_event = asyncio.Event()
         self._watchdog_task: Optional[asyncio.Task] = None
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Start the watchdog monitoring."""
         if self._watchdog_task is None or self._watchdog_task.done():
             self._stop_event.clear()
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                # No running event loop; start must be called from async context
-                self._logger.warning(
-                    "Watchdog.start() called without a running loop; deferring"
-                )
-                return
-            self._watchdog_task = loop.create_task(self._watchdog_loop())
+            self._watchdog_task = asyncio.create_task(self._watchdog_loop())
             self._logger.info("Process watchdog started")
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Stop the watchdog monitoring."""
         if self._watchdog_task and not self._watchdog_task.done():
             self._stop_event.set()
@@ -81,34 +71,30 @@ class ProcessWatchdog:
         current_time = time.time()
         processes_to_remove = []
 
-        async with self._async_lock:
+        async with self._lock:
             for pid, process_info in self._processes.items():
                 try:
                     process = process_info["process"]
                     name = process_info["name"]
 
                     # Check if process is still running
-                    if hasattr(process, "returncode") and process.returncode is None:
+                    if process.returncode is None:
                         # Process is running, check activity
-                        last_activity = self._get_last_activity(
+                        last_activity = await self._get_last_activity(
                             process_info, current_time
                         )
                         time_since_activity = current_time - last_activity
 
-                        if (
-                            time_since_activity
-                            > self.config.process_timeout + self.config.extra_buffer
-                        ):
+                        timeout_threshold = (
+                            self.config.process_timeout + self.config.extra_buffer
+                        )
+                        if time_since_activity > timeout_threshold:
                             # Process is hanging
-                            threshold = (
-                                self.config.process_timeout + self.config.extra_buffer
-                            )
+                            threshold = timeout_threshold
                             self._logger.warning(
-                                (
-                                    f"Process {pid} ({name}) hanging for "
-                                    f"{time_since_activity:.1f}s, "
-                                    f"threshold: {threshold:.1f}s"
-                                )
+                                f"Process {pid} ({name}) hanging for "
+                                f"{time_since_activity:.1f}s, "
+                                f"threshold: {threshold:.1f}s"
                             )
 
                             if self.config.auto_kill:
@@ -125,10 +111,8 @@ class ProcessWatchdog:
                         elif time_since_activity > self.config.process_timeout:
                             # Process is slow but not hanging yet
                             self._logger.debug(
-                                (
-                                    f"Process {pid} ({name}) slow: "
-                                    f"{time_since_activity:.1f}s since last activity"
-                                )
+                                f"Process {pid} ({name}) slow: "
+                                f"{time_since_activity:.1f}s since last activity"
                             )
                     else:
                         # Process has finished, remove from monitoring
@@ -146,12 +130,19 @@ class ProcessWatchdog:
             for pid in processes_to_remove:
                 del self._processes[pid]
 
-    def _get_last_activity(self, process_info: dict, current_time: float) -> float:
+    async def _get_last_activity(
+        self, process_info: dict, current_time: float
+    ) -> float:
         """Get the last activity timestamp for a process."""
         # Try to get activity from callback first
         if process_info["activity_callback"]:
             try:
-                return process_info["activity_callback"]()
+                # If it's an async callback, await it
+                callback = process_info["activity_callback"]
+                if asyncio.iscoroutinefunction(callback):
+                    return await callback()
+                else:
+                    return callback()
             except Exception:
                 pass
 
@@ -159,106 +150,73 @@ class ProcessWatchdog:
         return process_info["last_activity"]
 
     async def _kill_process(self, pid: int, process: Any, name: str) -> None:
-        """Kill a hanging process with graceful shutdown first."""
+        """Kill a hanging process."""
         try:
             self._logger.info(f"Attempting to kill hanging process {pid} ({name})")
 
-            # Run the killing logic in a thread pool to avoid blocking
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None, self._kill_process_sync, pid, process, name
-            )
+            if sys.platform == "win32":
+                # Windows: try graceful termination first
+                process.terminate()
+                try:
+                    # Give it a moment to terminate gracefully
+                    await asyncio.wait_for(process.wait(), timeout=0.5)
+                    self._logger.info(
+                        f"Gracefully terminated Windows process {pid} ({name})"
+                    )
+                except asyncio.TimeoutError:
+                    # Process still running, force kill
+                    process.kill()
+                    self._logger.info(f"Force killed Windows process {pid} ({name})")
+            else:
+                # Unix-like systems: try SIGTERM first, then SIGKILL
+                try:
+                    # Send SIGTERM for graceful shutdown
+                    pgid = os.getpgid(pid)
+                    os.killpg(pgid, _signal.SIGTERM)
+
+                    try:
+                        # Wait a bit for graceful shutdown
+                        await asyncio.wait_for(process.wait(), timeout=0.5)
+                        action = "Gracefully terminated"
+                        msg = f"{action} Unix process {pid} ({name}) with SIGTERM"
+                        self._logger.info(msg)
+                    except asyncio.TimeoutError:
+                        # Process still running, force kill with SIGKILL
+                        try:
+                            os.killpg(pgid, _signal.SIGKILL)
+                            self._logger.info(
+                                f"Force killed Unix process {pid} ({name}) with SIGKILL"
+                            )
+                        except OSError:
+                            # Fallback to process.kill()
+                            process.kill()
+                            action = "Force killed"
+                            method = "process.kill()"
+                            msg = f"{action} Unix process {pid} ({name}) with {method}"
+                            self._logger.info(msg)
+                except OSError:
+                    # Process group not accessible, try direct process termination
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=0.5)
+                        action = "Gracefully terminated"
+                        method = "process.terminate()"
+                        msg = f"{action} Unix process {pid} ({name}) with {method}"
+                        self._logger.info(msg)
+                    except asyncio.TimeoutError:
+                        # Still running, force kill
+                        process.kill()
+                        action = "Force killed"
+                        method = "process.kill()"
+                        msg = f"{action} Unix process {pid} ({name}) with {method}"
+                        self._logger.info(msg)
 
             self._logger.info(f"Successfully killed hanging process {pid} ({name})")
 
         except Exception as e:
             self._logger.error(f"Failed to kill process {pid} ({name}): {e}")
 
-    def _kill_process_sync(self, pid: int, process: Any, name: str) -> None:
-        """Synchronous process killing (runs in thread pool)."""
-        if sys.platform == "win32":
-            # Windows: try graceful termination first
-            try:
-                process.terminate()
-                # Give it a moment to terminate gracefully (non-blocking)
-                time.sleep(0.1)  # Very short sleep to prevent hanging
-                if hasattr(process, "returncode") and process.returncode is None:
-                    process.kill()
-                    self._logger.info(f"Force killed Windows process {pid} ({name})")
-                else:
-                    self._logger.info(
-                        "Gracefully terminated Windows process %s (%s)",
-                        pid,
-                        name,
-                    )
-            except (AttributeError, ValueError):
-                process.kill()
-                self._logger.info(f"Force killed Windows process {pid} ({name})")
-        else:
-            # Unix-like systems: try SIGTERM first, then SIGKILL
-            try:
-                # Send SIGTERM for graceful shutdown
-                pgid = os.getpgid(pid)
-                os.killpg(pgid, _signal.SIGTERM)
-
-                # Wait a bit for graceful shutdown (non-blocking)
-                time.sleep(0.2)  # Very short sleep to prevent hanging
-
-                # Check if process is still running
-                if hasattr(process, "returncode") and process.returncode is None:
-                    # Process still running, force kill with SIGKILL
-                    try:
-                        os.killpg(pgid, _signal.SIGKILL)
-                        self._logger.info(
-                            f"Force killed Unix process {pid} ({name}) with SIGKILL"
-                        )
-                    except OSError:
-                        # Fallback to process.kill()
-                        process.kill()
-                        self._logger.info(
-                            (
-                                f"Force killed Unix process {pid} ({name}) "
-                                "with process.kill()"
-                            )
-                        )
-                else:
-                    self._logger.info(
-                        (
-                            f"Gracefully terminated Unix process {pid} ({name}) "
-                            "with SIGTERM"
-                        )
-                    )
-
-            except OSError:
-                # Process group not accessible, try direct process termination
-                try:
-                    process.terminate()
-                    time.sleep(0.1)  # Very short sleep to prevent hanging
-                    if hasattr(process, "returncode") and process.returncode is None:
-                        process.kill()
-                        self._logger.info(
-                            (
-                                f"Force killed Unix process {pid} ({name}) "
-                                "with process.kill()"
-                            )
-                        )
-                    else:
-                        self._logger.info(
-                            (
-                                f"Gracefully terminated Unix process {pid} ({name}) "
-                                "with process.terminate()"
-                            )
-                        )
-                except Exception:
-                    # Last resort: force kill
-                    process.kill()
-                    self._logger.info(
-                        "Force killed Unix process %s (%s) as last resort",
-                        pid,
-                        name,
-                    )
-
-    def register_process(
+    async def register_process(
         self,
         pid: int,
         process: Any,
@@ -266,7 +224,7 @@ class ProcessWatchdog:
         name: str,
     ) -> None:
         """Register a process for monitoring."""
-        with self._lock:
+        async with self._lock:
             self._processes[pid] = {
                 "process": process,
                 "activity_callback": activity_callback,
@@ -274,48 +232,40 @@ class ProcessWatchdog:
                 "last_activity": time.time(),
             }
             self._logger.debug(f"Registered process {pid} ({name}) for monitoring")
-        # Auto-start watchdog loop if not already active
-        try:
-            if self._watchdog_task is None or self._watchdog_task.done():
-                self.start()
-        except Exception as e:
-            self._logger.warning(
-                "Failed to auto-start watchdog after registering process %s (%s): %s",
-                pid,
-                name,
-                e,
-            )
 
-    def unregister_process(self, pid: int) -> None:
+        # Auto-start watchdog loop if not already active
+        if self._watchdog_task is None or self._watchdog_task.done():
+            await self.start()
+
+    async def unregister_process(self, pid: int) -> None:
         """Unregister a process from monitoring."""
-        with self._lock:
+        async with self._lock:
             if pid in self._processes:
                 name = self._processes[pid]["name"]
                 del self._processes[pid]
                 self._logger.debug(
-                    "Unregistered process %s (%s) from monitoring", pid, name
+                    f"Unregistered process {pid} ({name}) from monitoring"
                 )
 
-    def update_activity(self, pid: int) -> None:
+    async def update_activity(self, pid: int) -> None:
         """Update activity timestamp for a process."""
-        with self._lock:
+        async with self._lock:
             if pid in self._processes:
                 self._processes[pid]["last_activity"] = time.time()
 
-    def is_process_registered(self, pid: int) -> bool:
+    async def is_process_registered(self, pid: int) -> bool:
         """Check if a process is registered for monitoring."""
-        with self._lock:
+        async with self._lock:
             return pid in self._processes
 
-    def get_stats(self) -> dict:
+    async def get_stats(self) -> dict:
         """Get statistics about monitored processes."""
-        with self._lock:
+        async with self._lock:
             total = len(self._processes)
             running = sum(
                 1
                 for p in self._processes.values()
-                if hasattr(p["process"], "returncode")
-                and p["process"].returncode is None
+                if p["process"].returncode is None
             )
 
             return {
@@ -329,10 +279,10 @@ class ProcessWatchdog:
 
     async def __aenter__(self):
         """Enter context manager."""
-        self.start()
+        await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit context manager."""
-        self.stop()
+        await self.stop()
         return False

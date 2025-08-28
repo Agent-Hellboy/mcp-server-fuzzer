@@ -44,7 +44,7 @@ flowchart TB
   subgraph Runtime
     R1[ProcessManager]
     R2[ProcessWatchdog]
-    R3[AsyncProcessWrapper]
+    R3[Async Operations]
   end
 
   subgraph Safety_System

@@ -163,7 +163,7 @@ The runtime layer provides robust, asynchronous subprocess lifecycle management 
 - Components:
   - `ProcessManager` (async): start/stop processes, send signals, await exit, collect stats; integrates with the watchdog.
   - `ProcessWatchdog`: monitors registered PIDs for hangs/inactivity and terminates them based on policy.
-  - `AsyncProcessWrapper`: small helpers/executor wrapping for non-blocking operations.
+  - All operations are now fully asynchronous using native asyncio.
 
 - Behavior and guarantees:
 

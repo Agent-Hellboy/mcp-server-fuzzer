@@ -1,25 +1,20 @@
 # Process Management System
 
-The Process Management system provides comprehensive process lifecycle management with automatic watchdog monitoring, cross-platform support, and both synchronous and asynchronous interfaces.
+The Process Management system provides comprehensive process lifecycle management with automatic watchdog monitoring, cross-platform support, and fully asynchronous interfaces.
 
 ## Overview
 
-The system consists of three main components:
+The system consists of two main components:
 
 1. **ProcessWatchdog** - Monitors processes for hanging behavior and automatically kills them
-2. **ProcessManager** - High-level interface for process management with watchdog integration
-3. **AsyncProcessWrapper** - Async interfaces for process management operations
+2. **ProcessManager** - Fully asynchronous interface for process management with watchdog integration
 
 ## Architecture
 
 ```
 ProcessWatchdog (Core monitoring)
     ↓
-ProcessManager (Synchronous interface)
-    ↓
-AsyncProcessWrapper (Asynchronous interface)
-    ↓
-AsyncProcessGroup (Group management)
+ProcessManager (Fully async interface)
 ```
 
 ## Components
@@ -30,116 +25,62 @@ The core watchdog system that monitors processes for hanging behavior.
 
 ```python
 from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
-
-# Custom configuration
-config = WatchdogConfig(
-    check_interval=1.0,      # Check every second
-    process_timeout=30.0,    # Process timeout after 30 seconds
-    extra_buffer=5.0,        # Extra 5 seconds before killing
-    max_hang_time=60.0,      # Force kill after 60 seconds
-    auto_kill=True,          # Automatically kill hanging processes
-    log_level="WARNING"
-)
-
-watchdog = ProcessWatchdog(config)
-watchdog.start()
-
-# Register a process for monitoring
-watchdog.register_process(pid, process, name="my_process")
-```
-
-### ProcessManager
-
-High-level process management interface that coordinates with the watchdog system.
-
-```python
-from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
-
-manager = ProcessManager()
-
-# Start a process
-config = ProcessConfig(
-    command=["python", "script.py"],
-    cwd="/path/to/script",
-    env={"PYTHONPATH": "/custom/path"},
-    timeout=60.0,
-    name="python_script"
-)
-
-process = manager.start_process(config)
-print(f"Process started with PID: {process.pid}")
-
-# Wait for completion
-exit_code = manager.wait_for_process(process.pid, timeout=120.0)
-
-# Get statistics
-stats = manager.get_stats()
-print(f"Managed processes: {stats}")
-
-# Cleanup
-manager.shutdown()
-```
-
-### AsyncProcessWrapper
-
-Async wrapper around ProcessManager for use in async contexts.
-
-```python
 import asyncio
-from mcp_fuzzer.fuzz_engine.runtime import AsyncProcessWrapper, ProcessConfig
 
 async def main():
-    wrapper = AsyncProcessWrapper()
-
-    # Start processes asynchronously
-    config1 = ProcessConfig(command=["sleep", "5"], name="sleep1")
-    config2 = ProcessConfig(command=["echo", "hello"], name="echo1")
-
-    process1 = await wrapper.start_process(config1)
-    process2 = await wrapper.start_process(config2)
-
-    # Wait for all to complete
-    await wrapper.wait_for_process(process1.pid)
-    await wrapper.wait_for_process(process2.pid)
-
-    # Cleanup
-    await wrapper.shutdown()
+    # Custom configuration
+    config = WatchdogConfig(
+        check_interval=1.0,      # Check every second
+        process_timeout=30.0,    # Process timeout after 30 seconds
+        extra_buffer=5.0,        # Extra 5 seconds before killing
+        max_hang_time=60.0,      # Force kill after 60 seconds
+        auto_kill=True,          # Automatically kill hanging processes
+    )
+    
+    watchdog = ProcessWatchdog(config)
+    await watchdog.start()
+    
+    # Register a process for monitoring
+    await watchdog.register_process(pid, process, None, "my_process")
+    
+    # Some time later...
+    await watchdog.stop()
 
 asyncio.run(main())
 ```
 
-### AsyncProcessGroup
+### ProcessManager
 
-Manages groups of related processes that should be started, stopped, or monitored together.
+Fully asynchronous process management interface that coordinates with the watchdog system.
 
 ```python
+from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 import asyncio
-from mcp_fuzzer.fuzz_engine.runtime import AsyncProcessGroup, ProcessConfig
 
 async def main():
-    group = AsyncProcessGroup()
-
-    # Add multiple processes
-    await group.add_process("web_server", ProcessConfig(
-        command=["python", "web_server.py"],
-        name="web_server"
-    ))
-
-    await group.add_process("database", ProcessConfig(
-        command=["python", "database.py"],
-        name="database"
-    ))
-
-    # Start all processes
-    started = await group.start_all()
-    print(f"Started {len(started)} processes")
-
-    # Wait for all to complete
-    results = await group.wait_for_all()
-    print(f"Results: {results}")
-
+    manager = ProcessManager()
+    
+    # Start a process
+    config = ProcessConfig(
+        command=["python", "script.py"],
+        cwd="/path/to/script",
+        env={"PYTHONPATH": "/custom/path"},
+        timeout=60.0,
+        name="python_script"
+    )
+    
+    process = await manager.start_process(config)
+    print(f"Process started with PID: {process.pid}")
+    
+    # Wait for completion
+    exit_code = await manager.wait_for_process(process.pid, timeout=120.0)
+    
+    # Get statistics
+    stats = await manager.get_stats()
+    print(f"Managed processes: {stats}")
+    
     # Cleanup
-    await group.shutdown()
+    await manager.shutdown()
 
 asyncio.run(main())
 ```
@@ -155,7 +96,6 @@ asyncio.run(main())
 | `extra_buffer` | 5.0 | Extra buffer before killing (seconds) |
 | `max_hang_time` | 60.0 | Maximum time a process can hang (seconds) |
 | `auto_kill` | True | Whether to automatically kill hanging processes |
-| `log_level` | "WARNING" | Logging level for watchdog events |
 
 ### ProcessConfig
 
@@ -176,7 +116,7 @@ asyncio.run(main())
 - **Hanging Detection**: Automatically detects when processes stop responding
 - **Timeout Management**: Configurable timeouts for different process types
 - **Graceful Shutdown**: Attempts graceful termination before force killing
-- **Cross-platform**: Works on Windows, Linux, and macOS
+- **Cross-platform**: Works on Linux and macOS
 
 ### Process Lifecycle Management
 
@@ -194,10 +134,9 @@ asyncio.run(main())
 
 ### Async Support
 
-- **Non-blocking**: All operations can be performed asynchronously
-- **Thread Pool**: Uses thread pool for CPU-bound operations
+- **Fully Asynchronous**: All operations are non-blocking
+- **Modern Asyncio**: Uses modern asyncio patterns
 - **Event Loop Integration**: Integrates with existing async event loops
-- **Group Management**: Manage multiple related processes together
 
 ### Safety Features
 
@@ -211,63 +150,67 @@ asyncio.run(main())
 ### Basic Process Management
 
 ```python
+import asyncio
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
-# Create manager
-manager = ProcessManager()
+async def main():
+    # Create manager
+    manager = ProcessManager()
+    
+    try:
+        # Start a long-running process
+        config = ProcessConfig(
+            command=["python", "long_running_script.py"],
+            name="long_script",
+            timeout=300.0  # 5 minutes
+        )
+        
+        process = await manager.start_process(config)
+        print(f"Started process: {process.pid}")
+        
+        # Monitor status
+        while True:
+            status = await manager.get_process_status(process.pid)
+            if status is None or status['status'] == 'finished':
+                print(f"Process finished with exit code: {status and status.get('exit_code')}")
+                break
+            await asyncio.sleep(1)
+            
+    finally:
+        await manager.shutdown()
 
-try:
-    # Start a long-running process
-    config = ProcessConfig(
-        command=["python", "long_running_script.py"],
-        name="long_script",
-        timeout=300.0  # 5 minutes
-    )
-
-    process = manager.start_process(config)
-    print(f"Started process: {process.pid}")
-
-    # Monitor status
-    while True:
-        status = manager.get_process_status(process.pid)
-        if status['status'] == 'finished':
-            print(f"Process finished with exit code: {status.get('exit_code')}")
-            break
-        time.sleep(1)
-
-finally:
-    manager.shutdown()
+asyncio.run(main())
 ```
 
-### Async Process Management
+### Multiple Process Management
 
 ```python
 import asyncio
-from mcp_fuzzer.fuzz_engine.runtime import AsyncProcessWrapper, ProcessConfig
+from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def run_multiple_processes():
-    wrapper = AsyncProcessWrapper()
-
+    manager = ProcessManager()
+    
     try:
         # Start multiple processes concurrently
-        tasks = []
+        configs = []
         for i in range(3):
-            config = ProcessConfig(
+            configs.append(ProcessConfig(
                 command=["python", f"worker_{i}.py"],
                 name=f"worker_{i}"
-            )
-            task = wrapper.start_process(config)
-            tasks.append(task)
-
-        # Wait for all to start
+            ))
+        
+        # Start all processes concurrently
+        tasks = [manager.start_process(config) for config in configs]
         processes = await asyncio.gather(*tasks)
-
+        
         # Wait for all to complete
-        for process in processes:
-            await wrapper.wait_for_process(process.pid)
-
+        wait_tasks = [manager.wait_for_process(process.pid) for process in processes]
+        results = await asyncio.gather(*wait_tasks)
+        print(f"All processes completed with exit codes: {results}")
+        
     finally:
-        await wrapper.shutdown()
+        await manager.shutdown()
 
 asyncio.run(run_multiple_processes())
 ```
@@ -275,6 +218,7 @@ asyncio.run(run_multiple_processes())
 ### Custom Activity Monitoring
 
 ```python
+import asyncio
 import time
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
@@ -282,94 +226,81 @@ class CustomProcess:
     def __init__(self):
         self.last_activity = time.time()
         self.activity_count = 0
-
+    
     def do_work(self):
         """Simulate some work."""
         self.last_activity = time.time()
         self.activity_count += 1
-        time.sleep(0.1)
-
+    
     def get_activity_timestamp(self):
         """Callback for watchdog to check activity."""
         return self.last_activity
 
-# Create process manager
-manager = ProcessManager()
+async def main():
+    # Create process manager
+    manager = ProcessManager()
+    
+    # Create custom process
+    custom_proc = CustomProcess()
+    
+    try:
+        # Start monitoring with activity callback
+        config = ProcessConfig(
+            command=["python", "monitored_script.py"],
+            name="monitored_script",
+            activity_callback=custom_proc.get_activity_timestamp
+        )
+        
+        process = await manager.start_process(config)
+        
+        # Simulate work
+        for _ in range(10):
+            custom_proc.do_work()
+            await asyncio.sleep(1)
+            
+            # Update the activity timestamp in the watchdog
+            await manager.update_activity(process.pid)
+    
+    finally:
+        await manager.shutdown()
 
-# Create custom process
-custom_proc = CustomProcess()
-
-# Start monitoring with activity callback
-config = ProcessConfig(
-    command=["python", "monitored_script.py"],
-    name="monitored_script",
-    activity_callback=custom_proc.get_activity_timestamp
-)
-
-process = manager.start_process(config)
-
-# Simulate work
-for _ in range(10):
-    custom_proc.do_work()
-    time.sleep(1)
-
-manager.shutdown()
+asyncio.run(main())
 ```
 
 ### Signal Handling
 
 ```python
+import asyncio
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
-manager = ProcessManager()
-
-# Start a long-running process
-config = ProcessConfig(command=["python", "long_script.py"], name="long_script")
-process = manager.start_process(config)
-
-# Send timeout signal (SIGTERM) for graceful shutdown
-success = manager.send_timeout_signal(process.pid, "timeout")
-if success:
-    print("Timeout signal sent successfully")
-
-# Wait a bit for graceful shutdown
-time.sleep(5)
-
-# If still running, send force signal (SIGKILL)
-status = manager.get_process_status(process.pid)
-if status and status.get('status') == 'running':
-    manager.send_timeout_signal(process.pid, "force")
-    print("Force signal sent")
-
-# Send signals to all processes
-results = manager.send_timeout_signal_to_all("timeout")
-print(f"Signal results: {results}")
-
-manager.shutdown()
-```
-
-### Async Signal Handling
-
-```python
-import asyncio
-from mcp_fuzzer.fuzz_engine.runtime import AsyncProcessWrapper, ProcessConfig
-
 async def main():
-    wrapper = AsyncProcessWrapper()
-
-    # Start a process
-    config = ProcessConfig(command=["python", "script.py"], name="test_script")
-    process = await wrapper.start_process(config)
-
-    # Send interrupt signal (SIGINT)
-    success = await wrapper.send_timeout_signal(process.pid, "interrupt")
-    print(f"Interrupt signal sent: {success}")
-
-    # Wait for completion
-    exit_code = await wrapper.wait_for_process(process.pid)
-    print(f"Process completed with exit code: {exit_code}")
-
-    await wrapper.shutdown()
+    manager = ProcessManager()
+    
+    try:
+        # Start a long-running process
+        config = ProcessConfig(command=["python", "long_script.py"], name="long_script")
+        process = await manager.start_process(config)
+        
+        # Send timeout signal (SIGTERM) for graceful shutdown
+        success = await manager.send_timeout_signal(process.pid, "timeout")
+        if success:
+            print("Timeout signal sent successfully")
+        
+        # Wait a bit for graceful shutdown
+        await asyncio.sleep(5)
+        
+        # If still running, send force signal (SIGKILL)
+        status = await manager.get_process_status(process.pid)
+        if status and status.get('status') == 'running':
+            await manager.send_timeout_signal(process.pid, "force")
+            print("Force signal sent")
+        
+        # Send signals to all processes
+        results = await manager.send_timeout_signal_to_all("timeout")
+        print(f"Signal results: {results}")
+    
+    finally:
+        await manager.shutdown()
 
 asyncio.run(main())
 ```
@@ -380,8 +311,8 @@ asyncio.run(main())
 2. **Configure Timeouts**: Set appropriate timeouts for your use case
 3. **Monitor Resources**: Regularly check process statistics
 4. **Handle Errors**: Implement proper error handling for process failures
-5. **Use Async**: Prefer async interfaces for better performance
-6. **Group Related Processes**: Use AsyncProcessGroup for related processes
+5. **Use Async with Await**: Always await async methods
+6. **Batch Operations**: Use asyncio.gather for concurrent operations
 
 ## Troubleshooting
 
@@ -405,7 +336,6 @@ logging.getLogger('mcp_fuzzer.fuzz_engine.runtime').setLevel(logging.DEBUG)
 
 - **check_interval**: Lower values provide faster response but higher CPU usage
 - **process_timeout**: Set based on expected process behavior
-- **max_workers**: Adjust thread pool size for async operations
 
 ## Integration
 
@@ -422,4 +352,3 @@ For complete API documentation, see the individual module docstrings:
 
 - `mcp_fuzzer.fuzz_engine.runtime.watchdog`
 - `mcp_fuzzer.fuzz_engine.runtime.manager`
-- `mcp_fuzzer.fuzz_engine.runtime.wrapper`

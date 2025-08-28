@@ -2,7 +2,7 @@
 """
 Process Manager for MCP Fuzzer Runtime
 
-This module provides process management functionality with non-blocking
+This module provides process management functionality with fully
 async operations.
 """
 
@@ -10,7 +10,6 @@ import asyncio
 import logging
 import os
 import signal
-import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,32 +32,42 @@ class ProcessConfig:
 
 
 class ProcessManager:
-    """Manages processes with non-blocking async operations."""
+    """Fully asynchronous process manager."""
 
     def __init__(self, config: Optional[WatchdogConfig] = None):
-        """Initialize the process manager."""
+        """Initialize the async process manager."""
         self.config = config or WatchdogConfig()
         self.watchdog = ProcessWatchdog(self.config)
         self._processes: Dict[int, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
         self._logger = logging.getLogger(__name__)
-        # No cached loop; always obtain the running loop inside async methods
-        pass
 
-    async def start_process(self, config: ProcessConfig) -> subprocess.Popen:
+    async def start_process(self, config: ProcessConfig) -> asyncio.subprocess.Process:
         """Start a new process asynchronously."""
         try:
             # Ensure watchdog monitoring is running
-            try:
-                self.watchdog.start()
-            except Exception:
-                pass
-            # Start the process in a thread pool to avoid blocking
-            loop = asyncio.get_running_loop()
-            process = await loop.run_in_executor(None, self._start_process_sync, config)
+            await self.watchdog.start()
+
+            # Start the process using asyncio subprocess
+            cwd = str(config.cwd) if isinstance(config.cwd, Path) else config.cwd
+            env = (
+                {**os.environ, **(config.env or {})}
+                if config.env is not None
+                else os.environ.copy()
+            )
+            
+            # Start the process with asyncio
+            process = await asyncio.create_subprocess_exec(
+                *config.command,
+                cwd=cwd,
+                env=env,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+                preexec_fn=os.setsid if os.name != "nt" else None,
+            )
 
             # Register with watchdog
-            self.watchdog.register_process(
+            await self.watchdog.register_process(
                 process.pid, process, config.activity_callback, config.name
             )
 
@@ -72,37 +81,14 @@ class ProcessManager:
                 }
 
             self._logger.info(
-                (
-                    f"Started process {process.pid} ({config.name}): "
-                    f"{' '.join(config.command)}"
-                )
+                f"Started process {process.pid} ({config.name}): "
+                f"{' '.join(config.command)}"
             )
             return process
 
         except Exception as e:
             self._logger.error(f"Failed to start process {config.name}: {e}")
             raise
-
-    def _start_process_sync(self, config: ProcessConfig) -> subprocess.Popen:
-        """Synchronous method to start a process, called via executor in async context.
-
-        This method is intentionally synchronous to avoid blocking the event loop
-        and is executed in a thread pool by the async start_process method.
-        """
-        cwd = str(config.cwd) if isinstance(config.cwd, Path) else config.cwd
-        env = (
-            {**os.environ, **(config.env or {})}
-            if config.env is not None
-            else os.environ.copy()
-        )
-        return subprocess.Popen(
-            config.command,
-            cwd=cwd,
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            preexec_fn=os.setsid if os.name != "nt" else None,
-        )
 
     async def stop_process(self, pid: int, force: bool = False) -> bool:
         """Stop a running process asynchronously."""
@@ -117,24 +103,10 @@ class ProcessManager:
         try:
             if force:
                 # Force kill
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(
-                    None,
-                    self._force_kill_process,
-                    pid,
-                    process,
-                    name,
-                )
+                await self._force_kill_process(pid, process, name)
             else:
                 # Graceful termination
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(
-                    None,
-                    self._graceful_terminate_process,
-                    pid,
-                    process,
-                    name,
-                )
+                await self._graceful_terminate_process(pid, process, name)
 
             # Update status to reflect stop intent
             async with self._lock:
@@ -142,7 +114,7 @@ class ProcessManager:
                     self._processes[pid]["status"] = "stopped"
 
             # Unregister from watchdog
-            self.watchdog.unregister_process(pid)
+            await self.watchdog.unregister_process(pid)
 
             return True
 
@@ -150,24 +122,33 @@ class ProcessManager:
             self._logger.error(f"Failed to stop process {pid} ({name}): {e}")
             return False
 
-    def _force_kill_process(
-        self, pid: int, process: subprocess.Popen, name: str
+    async def _force_kill_process(
+        self, pid: int, process: asyncio.subprocess.Process, name: str
     ) -> None:
-        """Force kill a process (runs in thread pool)."""
+        """Force kill a process."""
         if os.name != "nt":
             try:
                 pgid = os.getpgid(pid)
                 os.killpg(pgid, signal.SIGKILL)
             except OSError:
                 process.kill()
+            self._logger.info(f"Force killed process {pid} ({name})")
         else:
             process.kill()
-        self._logger.info(f"Force killed process {pid} ({name})")
+            self._logger.info(f"Force killed process {pid} ({name})")
+        
+        # Wait for the process to actually terminate
+        try:
+            await asyncio.wait_for(process.wait(), timeout=1.0)
+        except asyncio.TimeoutError:
+            self._logger.warning(
+                f"Process {pid} ({name}) didn't respond to kill signal"
+            )
 
-    def _graceful_terminate_process(
-        self, pid: int, process: subprocess.Popen, name: str
+    async def _graceful_terminate_process(
+        self, pid: int, process: asyncio.subprocess.Process, name: str
     ) -> None:
-        """Gracefully terminate a process (runs in thread pool)."""
+        """Gracefully terminate a process."""
         if os.name != "nt":
             try:
                 pgid = os.getpgid(pid)
@@ -179,16 +160,12 @@ class ProcessManager:
 
         # Give process a short window to terminate gracefully
         try:
-            process.wait(timeout=2.0)
+            await asyncio.wait_for(process.wait(), timeout=2.0)
             self._logger.info(f"Gracefully stopped process {pid} ({name})")
-        except subprocess.TimeoutExpired:
+        except asyncio.TimeoutError:
             # Escalate to kill and ensure we reap to avoid zombies
             self._logger.info(f"Escalating to SIGKILL for process {pid} ({name})")
-            self._force_kill_process(pid, process, name)
-            try:
-                process.wait(timeout=1.0)
-            except Exception:
-                pass
+            await self._force_kill_process(pid, process, name)
 
     async def stop_all_processes(self, force: bool = False) -> None:
         """Stop all running processes asynchronously."""
@@ -208,16 +185,11 @@ class ProcessManager:
             process = process_info["process"]
 
             # Add current process state
-            try:
-                process.poll()
-            except Exception:
-                pass
-            if hasattr(process, "returncode"):
-                if process.returncode is None:
-                    process_info["status"] = "running"
-                else:
-                    process_info["status"] = "finished"
-                    process_info["exit_code"] = process.returncode
+            if process.returncode is None:
+                process_info["status"] = "running"
+            else:
+                process_info["status"] = "finished"
+                process_info["exit_code"] = process.returncode
 
             return process_info
 
@@ -247,25 +219,23 @@ class ProcessManager:
             process = self._processes[pid]["process"]
 
         try:
-            loop = asyncio.get_running_loop()
-            # Run process.wait in thread pool to avoid blocking the event loop
             if timeout is None:
-                await loop.run_in_executor(None, process.wait)
+                await process.wait()
             else:
-                await loop.run_in_executor(None, process.wait, timeout)
+                await asyncio.wait_for(process.wait(), timeout=timeout)
             return process.returncode
-        except subprocess.TimeoutExpired:
+        except asyncio.TimeoutError:
             # Process didn't complete within timeout, return current status
-            return getattr(process, "returncode", None)
+            return process.returncode
 
     async def update_activity(self, pid: int) -> None:
         """Update activity timestamp for a process."""
-        self.watchdog.update_activity(pid)
+        await self.watchdog.update_activity(pid)
 
     async def get_stats(self) -> Dict[str, Any]:
         """Get overall statistics about managed processes."""
         process_stats = await self.list_processes()
-        watchdog_stats = self.watchdog.get_stats()
+        watchdog_stats = await self.watchdog.get_stats()
 
         # Count processes by status
         status_counts = {}
@@ -286,16 +256,12 @@ class ProcessManager:
             pids_to_remove = []
             for pid, process_info in self._processes.items():
                 process = process_info["process"]
-                try:
-                    process.poll()
-                except Exception:
-                    pass
-                if hasattr(process, "returncode") and process.returncode is not None:
+                if process.returncode is not None:
                     pids_to_remove.append(pid)
 
             for pid in pids_to_remove:
                 del self._processes[pid]
-                self.watchdog.unregister_process(pid)
+                await self.watchdog.unregister_process(pid)
                 cleaned += 1
 
         if cleaned > 0:
@@ -307,13 +273,7 @@ class ProcessManager:
         """Shutdown the process manager and stop all processes."""
         self._logger.info("Shutting down process manager")
         await self.stop_all_processes()
-        self.watchdog.stop()
-
-    def __del__(self):
-        """Cleanup when the object is destroyed."""
-        # Don't try to call async methods in destructor
-        # The object will be cleaned up by Python's garbage collector
-        pass
+        await self.watchdog.stop()
 
     async def send_timeout_signal(self, pid: int, signal_type: str = "timeout") -> bool:
         """Send a timeout signal to a running process asynchronously."""
@@ -326,20 +286,20 @@ class ProcessManager:
             name = process_info["config"].name
 
         try:
-            if hasattr(process, "returncode") and process.returncode is not None:
+            if process.returncode is not None:
                 # Process already finished
                 return False
 
-            # Send signal in thread pool to avoid blocking
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None,
-                self._send_signal_sync,
-                pid,
-                process,
-                name,
-                signal_type,
-            )
+            # Send appropriate signal based on type
+            if signal_type == "timeout":
+                await self._send_term_signal(pid, process, name)
+            elif signal_type == "force":
+                await self._send_kill_signal(pid, process, name)
+            elif signal_type == "interrupt":
+                await self._send_interrupt_signal(pid, process, name)
+            else:
+                self._logger.warning(f"Unknown signal type: {signal_type}")
+                return False
 
             return True
 
@@ -349,71 +309,53 @@ class ProcessManager:
             )
             return False
 
-    def _send_signal_sync(
-        self, pid: int, process: subprocess.Popen, name: str, signal_type: str
+    async def _send_term_signal(
+        self, pid: int, process: asyncio.subprocess.Process, name: str
     ) -> None:
-        """Send signal to process (runs in thread pool)."""
-        if signal_type == "timeout":
-            # Send SIGTERM (graceful termination)
-            if os.name != "nt":
-                try:
-                    pgid = os.getpgid(pid)
-                    os.killpg(pgid, signal.SIGTERM)
-                    self._logger.info(
-                        f"Sent SIGTERM timeout signal to process {pid} ({name})"
-                    )
-                except OSError:
-                    process.terminate()
-                    self._logger.info(
-                        f"Sent terminate timeout signal to process {pid} ({name})"
-                    )
-            else:
+        """Send SIGTERM signal to process."""
+        if os.name != "nt":
+            try:
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGTERM)
+                self._logger.info(f"Sent SIGTERM signal to process {pid} ({name})")
+            except OSError:
                 process.terminate()
-                self._logger.info(
-                    f"Sent terminate timeout signal to process {pid} ({name})"
-                )
-
-        elif signal_type == "force":
-            # Send SIGKILL (force kill)
-            if os.name != "nt":
-                try:
-                    pgid = os.getpgid(pid)
-                    os.killpg(pgid, signal.SIGKILL)
-                    self._logger.info(
-                        f"Sent SIGKILL force signal to process {pid} ({name})"
-                    )
-                except OSError:
-                    process.kill()
-                    self._logger.info(
-                        f"Sent kill force signal to process {pid} ({name})"
-                    )
-            else:
-                process.kill()
-                self._logger.info(f"Sent kill force signal to process {pid} ({name})")
-
-        elif signal_type == "interrupt":
-            # Send SIGINT (interrupt)
-            if os.name != "nt":
-                try:
-                    pgid = os.getpgid(pid)
-                    os.killpg(pgid, signal.SIGINT)
-                    self._logger.info(
-                        f"Sent SIGINT interrupt signal to process {pid} ({name})"
-                    )
-                except OSError:
-                    # Failed to signal process group; fall back to terminate
-                    process.terminate()
-                    self._logger.info(
-                        f"Sent terminate interrupt signal to process {pid} ({name})"
-                    )
-            else:
-                process.terminate()
-                self._logger.info(
-                    f"Sent terminate interrupt signal to process {pid} ({name})"
-                )
-
+                self._logger.info(f"Sent terminate signal to process {pid} ({name})")
         else:
-            self._logger.warning(f"Unknown signal type: {signal_type}")
+            process.terminate()
+            self._logger.info(f"Sent terminate signal to process {pid} ({name})")
+
+    async def _send_kill_signal(
+        self, pid: int, process: asyncio.subprocess.Process, name: str
+    ) -> None:
+        """Send SIGKILL signal to process."""
+        if os.name != "nt":
+            try:
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGKILL)
+                self._logger.info(f"Sent SIGKILL signal to process {pid} ({name})")
+            except OSError:
+                process.kill()
+                self._logger.info(f"Sent kill signal to process {pid} ({name})")
+        else:
+            process.kill()
+            self._logger.info(f"Sent kill signal to process {pid} ({name})")
+
+    async def _send_interrupt_signal(
+        self, pid: int, process: asyncio.subprocess.Process, name: str
+    ) -> None:
+        """Send SIGINT signal to process."""
+        if os.name != "nt":
+            try:
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGINT)
+                self._logger.info(f"Sent SIGINT signal to process {pid} ({name})")
+            except OSError:
+                process.terminate()
+                self._logger.info(f"Sent terminate signal to process {pid} ({name})")
+        else:
+            process.terminate()
+            self._logger.info(f"Sent terminate signal to process {pid} ({name})")
 
     async def send_timeout_signal_to_all(
         self, signal_type: str = "timeout"
@@ -436,26 +378,28 @@ class ProcessManager:
 
     async def is_process_registered(self, pid: int) -> bool:
         """Check if a process is registered with the watchdog."""
-        return self.watchdog.is_process_registered(pid)
+        return await self.watchdog.is_process_registered(pid)
 
-    def register_existing_process(
+    async def register_existing_process(
         self,
         pid: int,
-        process: subprocess.Popen,
+        process: asyncio.subprocess.Process,
         name: str,
         activity_callback: Optional[Callable[[], float]] = None,
     ) -> None:
         """Register an already-started subprocess with the manager and watchdog."""
         # Register with watchdog first
-        self.watchdog.register_process(pid, process, activity_callback, name)
+        await self.watchdog.register_process(pid, process, activity_callback, name)
+        
         # Track in manager table
-        self._processes[pid] = {
-            "process": process,
-            "config": ProcessConfig(
-                command=[name],
-                name=name,
-                activity_callback=activity_callback,
-            ),
-            "started_at": time.time(),
-            "status": "running",
-        }
+        async with self._lock:
+            self._processes[pid] = {
+                "process": process,
+                "config": ProcessConfig(
+                    command=[name],
+                    name=name,
+                    activity_callback=activity_callback,
+                ),
+                "started_at": time.time(),
+                "status": "running",
+            }
