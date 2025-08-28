@@ -564,12 +564,13 @@ class UnifiedMCPFuzzerClient:
                         )
                         continue
 
-                    # Sanitize message if needed
+                    # Sanitize message if safety system supports it
                     original_data = fuzz_data.copy()
-                    fuzz_data = self.safety_system.sanitize_protocol_message(
-                        protocol_type, fuzz_data
-                    )
-                    safety_sanitized = fuzz_data != original_data
+                    if hasattr(self.safety_system, 'sanitize_protocol_message'):
+                        fuzz_data = self.safety_system.sanitize_protocol_message(
+                            protocol_type, fuzz_data
+                        )
+                        safety_sanitized = fuzz_data != original_data
 
                 preview = json.dumps(fuzz_data, indent=2)[:200]
                 logging.info(
@@ -792,8 +793,10 @@ class UnifiedMCPFuzzerClient:
         if self.safety_system:
             # Get statistics and examples to satisfy test expectations
             # This data is used by reporter indirectly
-            self.safety_system.get_statistics()
-            self.safety_system.get_blocked_examples()
+            if hasattr(self.safety_system, 'get_statistics'):
+                self.safety_system.get_statistics()
+            if hasattr(self.safety_system, 'get_blocked_examples'):
+                self.safety_system.get_blocked_examples()
         self.reporter.print_comprehensive_safety_report()
 
 

@@ -8,7 +8,6 @@ import pytest
 from unittest.mock import patch, MagicMock, AsyncMock, call
 
 # Import the classes to test
-from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessConfig
 from mcp_fuzzer.fuzz_engine.runtime.watchdog import (
     ProcessWatchdog,
     WatchdogConfig,

@@ -43,8 +43,20 @@ def configure_network_policy(
     if reset_allowed_hosts:
         _POLICY_EXTRA_ALLOWED_HOSTS = set()
         
+    def _normalize_host(host: str) -> str:
+        """Normalize host to handle URLs, mixed case, etc."""
+        if not host:
+            return ""
+        s = host.strip().lower()
+        # Accept bare host or URL; extract hostname if URL-like
+        if "://" in s:
+            parsed = urlparse(s)
+            host = parsed.hostname or s
+        return host.strip().lower()
+        
     if extra_allowed_hosts is not None:
-        _POLICY_EXTRA_ALLOWED_HOSTS |= {h for h in extra_allowed_hosts if h}
+        normalized_hosts = {_normalize_host(h) for h in extra_allowed_hosts if h}
+        _POLICY_EXTRA_ALLOWED_HOSTS |= {h for h in normalized_hosts if h}
 
 
 def is_host_allowed(
