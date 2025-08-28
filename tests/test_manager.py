@@ -28,9 +28,9 @@ class TestProcessManager:
         """Test starting a process successfully."""
         process_config = ProcessConfig(command=["echo", "test"], name="test_process")
         with patch(
-            "asyncio.create_subprocess_exec", return_value=AsyncMock()
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=self.mock_process)
         ) as mock_create_subprocess:
-            mock_create_subprocess.return_value = self.mock_process
             
             # Mock watchdog.start() since it's called within start_process
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
@@ -54,7 +54,7 @@ class TestProcessManager:
         process_config = ProcessConfig(command=["invalid_command"], name="test_process")
         with patch(
             "asyncio.create_subprocess_exec",
-            side_effect=Exception("Failed to start")
+            new=AsyncMock(side_effect=Exception("Failed to start"))
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with pytest.raises(Exception, match="Failed to start"):
@@ -74,7 +74,8 @@ class TestProcessManager:
         mock_process.pid = 12345
         
         with patch(
-            "asyncio.create_subprocess_exec", return_value=mock_process
+            "asyncio.create_subprocess_exec", 
+            new=AsyncMock(return_value=mock_process)
         ) as mock_create:
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
                 with patch.object(
@@ -120,7 +121,7 @@ class TestProcessManager:
                         self.manager.watchdog, "unregister_process", AsyncMock()
                     ):
                         # Mock terminate and wait
-                        process.terminate = AsyncMock()
+                        process.terminate = MagicMock()
                         process.wait = AsyncMock(return_value=0)
                         
                         result = await self.manager.stop_process(
@@ -158,7 +159,7 @@ class TestProcessManager:
                         self.manager.watchdog, "unregister_process", AsyncMock()
                     ):
                         # Mock kill
-                        process.kill = AsyncMock()
+                        process.kill = MagicMock()
                         
                         result = await self.manager.stop_process(
                             process.pid, force=True

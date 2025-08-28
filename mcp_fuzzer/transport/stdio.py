@@ -49,11 +49,11 @@ class StdioTransport(TransportProtocol):
         """Ensure we have a persistent connection to the subprocess."""
         # Fast-path: if already initialized and process is alive, avoid locking
         proc = self.process
-        if self._initialized and proc is not None and proc.poll() is None:
+        if self._initialized and proc is not None and proc.returncode is None:
             return
 
         async with self._lock:
-            if self._initialized and self.process and self.process.poll() is None:
+            if self._initialized and self.process and self.process.returncode is None:
                 return
 
             # Kill existing process if any
@@ -142,7 +142,7 @@ class StdioTransport(TransportProtocol):
             message_str = json.dumps(message) + "\n"
             self.stdin.write(message_str.encode())
             await self.stdin.drain()
-            self._update_activity()
+            await self._update_activity()
         except Exception as e:
             logging.error(f"Failed to send message to stdio transport: {e}")
             self._initialized = False
@@ -158,7 +158,7 @@ class StdioTransport(TransportProtocol):
             if not line:
                 return None
 
-            self._update_activity()
+            await self._update_activity()
             message = json.loads(line.decode().strip())
             return message
         except Exception as e:

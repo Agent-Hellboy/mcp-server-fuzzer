@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 import signal
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,7 +64,10 @@ class ProcessManager:
                 env=env,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
-                preexec_fn=os.setsid if os.name != "nt" else None,
+                start_new_session=(os.name != "nt"),
+                creationflags=(
+                    subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+                ),
             )
 
             # Register with watchdog
@@ -349,13 +353,19 @@ class ProcessManager:
             try:
                 pgid = os.getpgid(pid)
                 os.killpg(pgid, signal.SIGINT)
-                self._logger.info(f"Sent SIGINT signal to process {pid} ({name})")
+                self._logger.info(f"Sent SIGINT to process group {pid} ({name})")
+            except OSError:
+                os.kill(pid, signal.SIGINT)
+                self._logger.info(f"Sent SIGINT to process {pid} ({name})")
+        else:
+            try:
+                os.kill(pid, signal.CTRL_BREAK_EVENT)
+                self._logger.info(
+                    f"Sent CTRL_BREAK_EVENT to process/group {pid} ({name})"
+                )
             except OSError:
                 process.terminate()
                 self._logger.info(f"Sent terminate signal to process {pid} ({name})")
-        else:
-            process.terminate()
-            self._logger.info(f"Sent terminate signal to process {pid} ({name})")
 
     async def send_timeout_signal_to_all(
         self, signal_type: str = "timeout"

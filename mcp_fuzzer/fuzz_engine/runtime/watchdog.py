@@ -7,6 +7,7 @@ async operations.
 """
 
 import asyncio
+import inspect
 import logging
 import os
 import signal as _signal
@@ -137,14 +138,16 @@ class ProcessWatchdog:
         # Try to get activity from callback first
         if process_info["activity_callback"]:
             try:
-                # If it's an async callback, await it
                 callback = process_info["activity_callback"]
-                if asyncio.iscoroutinefunction(callback):
-                    return await callback()
-                else:
-                    return callback()
+                result = callback()
+                if inspect.isawaitable(result):
+                    result = await result
+                return float(result)
             except Exception:
-                pass
+                self._logger.debug(
+                    "activity_callback failed; falling back to stored timestamp", 
+                    exc_info=True
+                )
 
         # Fall back to stored timestamp
         return process_info["last_activity"]
@@ -210,6 +213,14 @@ class ProcessWatchdog:
                         method = "process.kill()"
                         msg = f"{action} Unix process {pid} ({name}) with {method}"
                         self._logger.info(msg)
+
+            # Ensure the process is reaped
+            try:
+                await asyncio.wait_for(process.wait(), timeout=1.0)
+            except asyncio.TimeoutError:
+                self._logger.warning(
+                    f"Process {pid} ({name}) did not exit after kill within 1.0s"
+                )
 
             self._logger.info(f"Successfully killed hanging process {pid} ({name})")
 

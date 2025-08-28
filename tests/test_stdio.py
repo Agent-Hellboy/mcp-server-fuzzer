@@ -73,8 +73,8 @@ class TestStdioTransport:
         self, mock_create_subprocess
     ):
         """Test _ensure_connection when existing process is alive."""
-        mock_process = MagicMock()
-        mock_process.poll.return_value = None
+        mock_process = AsyncMock()
+        mock_process.returncode = None
         self.transport.process = mock_process
         self.transport._initialized = True
 
@@ -90,8 +90,8 @@ class TestStdioTransport:
         self, mock_create_subprocess
     ):
         """Test _ensure_connection when existing process is dead."""
-        mock_old_process = MagicMock()
-        mock_old_process.poll.return_value = 1
+        mock_old_process = AsyncMock()
+        mock_old_process.returncode = 1
         mock_old_process.pid = 123
         self.transport.process = mock_old_process
         self.transport._initialized = True
