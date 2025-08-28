@@ -116,7 +116,7 @@ class TestStdioTransport:
     async def test_update_activity(self):
         """Test _update_activity method."""
         with patch("time.time", return_value=1234567890.0):
-            self.transport.process = MagicMock()
+            self.transport.process = AsyncMock()
             self.transport.process.pid = 123
             # Mock the process_manager.update_activity method to avoid AsyncMock issues
             with patch.object(

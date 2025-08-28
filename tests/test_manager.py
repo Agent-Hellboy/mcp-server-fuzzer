@@ -192,13 +192,13 @@ class TestProcessManager:
         mock_process1 = AsyncMock()
         mock_process1.pid = 12345
         mock_process1.returncode = None
-        mock_process1.terminate = AsyncMock()
+        mock_process1.terminate = MagicMock()
         mock_process1.wait = AsyncMock(return_value=0)
         
         mock_process2 = AsyncMock()
         mock_process2.pid = 12346
         mock_process2.returncode = None
-        mock_process2.terminate = AsyncMock()
+        mock_process2.terminate = MagicMock()
         mock_process2.wait = AsyncMock(return_value=0)
 
         with patch(
