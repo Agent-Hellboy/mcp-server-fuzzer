@@ -26,6 +26,7 @@ The core watchdog system that monitors processes for hanging behavior.
 ```python
 from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
 import asyncio
+import asyncio.subprocess as asp
 
 async def main():
     # Custom configuration
@@ -39,10 +40,18 @@ async def main():
     
     watchdog = ProcessWatchdog(config)
     await watchdog.start()
-    
+
+    # Launch a subprocess to register
+    process = await asp.create_subprocess_exec("python", "-c", "import time; time.sleep(60)")
+
     # Register a process for monitoring
-    await watchdog.register_process(pid, process, None, "my_process")
-    
+    await watchdog.register_process(
+        pid=process.pid,
+        process=process,
+        activity_callback=None,
+        name="my_process",
+    )
+
     # Some time later...
     await watchdog.stop()
 
@@ -129,9 +138,12 @@ asyncio.run(main())
 
 ### Signal Handling
 
-- **Timeout Signals**: Send SIGTERM for graceful shutdown
-- **Force Signals**: Send SIGKILL for immediate termination
-- **Interrupt Signals**: Send SIGINT (Unix) or CTRL_BREAK_EVENT (Windows) for user interruption
+- **Timeout Signals**: Send SIGTERM (Unix). On Windows, use CTRL_BREAK_EVENT for graceful shutdown (requires CREATE_NEW_PROCESS_GROUP).
+- **Force Signals**: Send SIGKILL (Unix). On Windows, use `process.kill()` (maps to TerminateProcess; no SIGKILL).
+- **Interrupt Signals**: Send SIGINT (Unix) or CTRL_BREAK_EVENT (Windows) for user interruption (requires CREATE_NEW_PROCESS_GROUP).
+
+Note: To deliver CTRL_BREAK_EVENT on Windows, the child must be started in its own process group and the console must be attached.
+
 - **Bulk Operations**: Send signals to all processes at once
 
 ### Async Support

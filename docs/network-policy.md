@@ -18,6 +18,9 @@ The network policy system consists of several components:
 The system automatically normalizes host strings in a consistent way:
 
 ```python
+from urllib.parse import urlparse
+import ipaddress
+
 def _normalize_host(host: str) -> str:
     """Normalize host to handle URLs, mixed case, etc."""
     if not host:
@@ -26,15 +29,22 @@ def _normalize_host(host: str) -> str:
     # Accept bare host or URL; extract hostname if URL-like
     if "://" in s:
         parsed = urlparse(s)
-        host = parsed.hostname or s
+        host = (parsed.hostname or "").strip().lower()
     else:
-        # For cases like "example.com:80" without protocol
-        if ":" in s and not s.startswith("["):
-            # Handle IPv6 addresses
-            host = s.split(":", 1)[0]
+        # Handle bracketed IPv6 like "[::1]:8080"
+        if s.startswith("["):
+            end = s.find("]")
+            host = s[1:end] if end != -1 else s
         else:
-            host = s
-    return host.strip().lower()
+            # If it's a plain IPv6 (has multiple colons), keep as-is
+            try:
+                ipaddress.ip_address(s)
+                host = s
+            except ValueError:
+                # Otherwise, strip a single :port if present
+                host = s.split(":", 1)[0]
+    # Normalize trailing dot for FQDNs
+    return host.rstrip(".")
 ```
 
 This ensures:
