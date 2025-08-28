@@ -1,21 +1,23 @@
 import asyncio
 import os
+import signal as _signal
+import signal
 import time
-from unittest.mock import patch, MagicMock, AsyncMock, call
+
 import pytest
+from unittest.mock import patch, MagicMock, AsyncMock, call
 
 # Import the classes to test
+from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessConfig
 from mcp_fuzzer.fuzz_engine.runtime.watchdog import (
     ProcessWatchdog,
     WatchdogConfig,
 )
-import signal as _signal
-from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessConfig
-import signal
 
 
 class TestProcessWatchdog:
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup_method(self):
         """Set up test fixtures."""
         self.config = WatchdogConfig(
             check_interval=0.1,
@@ -43,7 +45,6 @@ class TestProcessWatchdog:
 
     def test_start_watchdog(self):
         """Test starting the watchdog."""
-        self.setUp()
         with patch("asyncio.get_running_loop") as mock_loop:
             mock_loop.return_value.create_task = MagicMock()
             self.watchdog.start()
@@ -52,14 +53,12 @@ class TestProcessWatchdog:
 
     def test_start_watchdog_no_loop(self):
         """Test starting the watchdog without a running loop."""
-        self.setUp()
         with patch("asyncio.get_running_loop", side_effect=RuntimeError):
             self.watchdog.start()
             assert self.watchdog._watchdog_task is None
 
     def test_stop_watchdog_active(self):
         """Test stopping an active watchdog."""
-        self.setUp()
         # Create a mock task
         mock_task = MagicMock()
         mock_task.done.return_value = False
@@ -77,13 +76,11 @@ class TestProcessWatchdog:
 
     def test_stop_watchdog_inactive(self):
         """Test stopping an inactive watchdog."""
-        self.setUp()
         self.watchdog.stop()
         # No assertion needed, just ensure no crash
 
     def test_register_process(self):
         """Test registering a process."""
-        self.setUp()
         mock_process = MagicMock()
         mock_process.pid = 12345
 
@@ -96,7 +93,6 @@ class TestProcessWatchdog:
 
     def test_unregister_process(self):
         """Test unregistering a process."""
-        self.setUp()
         mock_process = MagicMock()
         mock_process.pid = 12345
 
@@ -111,7 +107,6 @@ class TestProcessWatchdog:
 
     def test_update_activity(self):
         """Test updating activity for a process."""
-        self.setUp()
         mock_process = MagicMock()
         mock_process.pid = 12345
 
@@ -132,7 +127,6 @@ class TestProcessWatchdog:
 
     def test_get_stats(self):
         """Test getting statistics."""
-        self.setUp()
         # Register two processes
         mock_process1 = MagicMock()
         mock_process1.pid = 1111
