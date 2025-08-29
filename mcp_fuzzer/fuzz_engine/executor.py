@@ -5,7 +5,7 @@ Async executor for fuzzing operations.
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
 
 class AsyncFuzzExecutor:
@@ -40,9 +40,13 @@ class AsyncFuzzExecutor:
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._running_tasks: Set[asyncio.Task] = set()
     
+    def _op_name(self, op: Callable[..., Awaitable[Any]]) -> str:
+        """Get the name of an operation safely."""
+        return getattr(op, "__name__", op.__class__.__name__)
+
     async def execute(
         self,
-        operation: Callable,
+        operation: Callable[..., Awaitable[Any]],
         *args,
         timeout: Optional[float] = None,
         **kwargs,
@@ -67,22 +71,32 @@ class AsyncFuzzExecutor:
         
         try:
             async with self._semaphore:
-                return await asyncio.wait_for(operation(*args, **kwargs), timeout=timeout_value)
+                return await asyncio.wait_for(
+                    operation(*args, **kwargs),
+                    timeout=timeout_value,
+                )
         except asyncio.TimeoutError:
             self._logger.warning(
-                f"Operation timed out after {timeout_value}s: {operation.__name__}"
+                "Operation timed out after %.2fs: %s",
+                timeout_value,
+                self._op_name(operation),
             )
+            raise
+        except asyncio.CancelledError:
+            # Preserve cancellation
             raise
         except Exception as e:
             self._logger.debug(
-                f"Operation failed: {operation.__name__} - {str(e)}",
-                exc_info=True
+                "Operation failed: %s - %s",
+                self._op_name(operation),
+                str(e),
+                exc_info=True,
             )
             raise
     
     async def execute_with_retry(
         self,
-        operation: Callable,
+        operation: Callable[..., Awaitable[Any]],
         *args,
         retry_count: Optional[int] = None,
         retry_delay: Optional[float] = None,
@@ -111,16 +125,26 @@ class AsyncFuzzExecutor:
         for attempt in range(retries + 1):
             try:
                 return await self.execute(operation, *args, **kwargs)
+            except asyncio.CancelledError:
+                # Do not retry cancellations
+                raise
             except Exception as e:
                 last_error = e
                 if attempt < retries:
                     self._logger.debug(
-                        f"Retry {attempt+1}/{retries} for {operation.__name__} after error: {str(e)}"
+                        "Retry %d/%d for %s after error: %s",
+                        attempt + 1,
+                        retries,
+                        self._op_name(operation),
+                        str(e),
                     )
-                    await asyncio.sleep(delay * (2 ** attempt))  # Exponential backoff
+                    # Exponential backoff
+                    await asyncio.sleep(delay * (2 ** attempt))
                 else:
                     self._logger.debug(
-                        f"All retries failed for {operation.__name__}: {str(e)}"
+                        "All retries failed for %s: %s",
+                        self._op_name(operation),
+                        str(e),
                     )
         
         assert last_error is not None
@@ -128,7 +152,7 @@ class AsyncFuzzExecutor:
     
     async def execute_batch(
         self,
-        operations: List[Tuple[Callable, List, Dict]],
+        operations: List[Tuple[Callable[..., Awaitable[Any]], List, Dict]],
         collect_results: bool = True,
         collect_errors: bool = True,
     ) -> Dict[str, List]:
@@ -169,7 +193,7 @@ class AsyncFuzzExecutor:
     
     async def _execute_and_track(
         self,
-        operation: Callable,
+        operation: Callable[..., Awaitable[Any]],
         args: List,
         kwargs: Dict,
     ) -> Any:
@@ -196,7 +220,10 @@ class AsyncFuzzExecutor:
         if not self._running_tasks:
             return
             
-        self._logger.debug(f"Shutting down executor with {len(self._running_tasks)} tasks")
+        self._logger.debug(
+            "Shutting down executor with %d tasks",
+            len(self._running_tasks),
+        )
         
         try:
             await asyncio.wait_for(
@@ -205,5 +232,6 @@ class AsyncFuzzExecutor:
             )
         except asyncio.TimeoutError:
             self._logger.warning(
-                f"Shutdown timed out with {len(self._running_tasks)} tasks still running"
+                "Shutdown timed out with %d tasks still running",
+                len(self._running_tasks),
             )

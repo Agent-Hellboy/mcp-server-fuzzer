@@ -8,7 +8,7 @@ This module contains the orchestration logic for fuzzing MCP protocol types.
 import asyncio
 import inspect
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, ClassVar, Tuple
 
 from ..executor import AsyncFuzzExecutor
 from ..strategy import ProtocolStrategies
@@ -18,7 +18,7 @@ class ProtocolFuzzer:
     """Orchestrates fuzzing of MCP protocol types."""
 
     # Protocol types supported for fuzzing
-    PROTOCOL_TYPES = [
+    PROTOCOL_TYPES: ClassVar[Tuple[str, ...]] = (
         "InitializeRequest",
         "ProgressNotification",
         "CancelNotification",
@@ -33,7 +33,7 @@ class ProtocolFuzzer:
         "SubscribeRequest",
         "UnsubscribeRequest",
         "CompleteRequest",
-    ]
+    )
 
     def __init__(self, transport=None, max_concurrency: int = 5):
         """
@@ -48,6 +48,8 @@ class ProtocolFuzzer:
         self.transport = transport
         self.executor = AsyncFuzzExecutor(max_concurrency=max_concurrency)
         self._logger = logging.getLogger(__name__)
+        # Bound concurrent protocol-type tasks
+        self._type_semaphore = asyncio.Semaphore(max_concurrency)
 
     def _get_request_id(self) -> int:
         """Generate a request ID for JSON-RPC requests."""
@@ -128,10 +130,16 @@ class ProtocolFuzzer:
         """
         try:
             # Generate fuzz data using the strategy with phase
-            if "phase" in inspect.signature(fuzzer_method).parameters:
-                fuzz_data = fuzzer_method(phase=phase)
+            kwargs = (
+                {"phase": phase}
+                if "phase" in inspect.signature(fuzzer_method).parameters
+                else {}
+            )
+            maybe_coro = fuzzer_method(**kwargs)
+            if inspect.isawaitable(maybe_coro):
+                fuzz_data = await maybe_coro
             else:
-                fuzz_data = fuzzer_method()
+                fuzz_data = maybe_coro
 
             # Send the request to the server if transport is available
             server_response = None
@@ -165,8 +173,15 @@ class ProtocolFuzzer:
             self._logger.debug(f"Fuzzed {protocol_type} run {run_index + 1}")
             return result
 
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
-            self._logger.error(f"Error fuzzing {protocol_type} run {run_index + 1}: {e}")
+            self._logger.error(
+                "Error fuzzing %s run %s: %s",
+                protocol_type,
+                run_index + 1,
+                e,
+            )
             return {
                 "protocol_type": protocol_type,
                 "run": run_index + 1,
@@ -224,12 +239,16 @@ class ProtocolFuzzer:
 
         all_results = {}
         
-        # Create tasks for each protocol type
+        # Create tasks for each protocol type with bounded concurrency
         tasks = []
+        sem = self._type_semaphore
+        
+        async def _run(pt: str) -> List[Dict[str, Any]]:
+            async with sem:
+                return await self._fuzz_single_protocol_type(pt, runs_per_type, phase)
+                
         for protocol_type in self.PROTOCOL_TYPES:
-            task = asyncio.create_task(self._fuzz_single_protocol_type(
-                protocol_type, runs_per_type, phase
-            ))
+            task = asyncio.create_task(_run(protocol_type))
             tasks.append((protocol_type, task))
         
         # Wait for all tasks to complete

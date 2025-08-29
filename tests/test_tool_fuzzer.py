@@ -161,7 +161,9 @@ class TestToolFuzzer(unittest.TestCase):
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call",
     return_value=True)
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
-    async def test_fuzz_tool_complex_schema(self, mock_sanitize, mock_is_safe, mock_logging):
+    async def test_fuzz_tool_complex_schema(
+        self, mock_sanitize, mock_is_safe, mock_logging
+    ):
         """Test fuzzing a tool with complex schema."""
         tool = {
             "name": "complex_tool",
@@ -370,7 +372,9 @@ class TestToolFuzzer(unittest.TestCase):
     )
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
     @pytest.mark.asyncio
-    async def test_fuzz_tool_missing_name(self, mock_sanitize, mock_is_safe, mock_logging):
+    async def test_fuzz_tool_missing_name(
+        self, mock_sanitize, mock_is_safe, mock_logging
+    ):
         """Test fuzzing a tool with missing name."""
         # Mock the sanitize_tool_call function to return predictable values
         mock_sanitize.return_value = ("unknown", {"param1": "test_value"})

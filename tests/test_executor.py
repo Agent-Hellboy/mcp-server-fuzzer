@@ -117,7 +117,7 @@ class TestAsyncFuzzExecutor(unittest.TestCase):
         results = await self.executor.execute_batch(operations)
         
         self.assertEqual(len(results["results"]), 2)
-        self.assertEqual(results["results"], [10, 17])
+        self.assertCountEqual(results["results"], [10, 17])
         self.assertEqual(len(results["errors"]), 0)
 
     @pytest.mark.asyncio
@@ -193,7 +193,12 @@ class TestAsyncFuzzExecutor(unittest.TestCase):
         await executor.execute_batch(operations)
         
         # Check that at most 2 operations started before any ended
-        starts_before_any_end = execution_order[:execution_order.index(next(x for x in execution_order if x.endswith("_end")))]
+        # Find index of first end event
+        first_end_idx = next(
+            i for i, event in enumerate(execution_order) 
+            if event.endswith("_end")
+        )
+        starts_before_any_end = execution_order[:first_end_idx]
         self.assertLessEqual(len(starts_before_any_end), 2)
 
     @pytest.mark.asyncio

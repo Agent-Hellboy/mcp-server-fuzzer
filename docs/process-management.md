@@ -4,10 +4,11 @@ The Process Management system provides comprehensive process lifecycle managemen
 
 ## Overview
 
-The system consists of two main components:
+The system consists of three main components:
 
 1. **ProcessWatchdog** - Monitors processes for hanging behavior and automatically kills them
 2. **ProcessManager** - Fully asynchronous interface for process management with watchdog integration
+3. **AsyncFuzzExecutor** - Provides controlled concurrency for executing asynchronous operations
 
 ## Architecture
 
@@ -15,9 +16,57 @@ The system consists of two main components:
 ProcessWatchdog (Core monitoring)
     |
 ProcessManager (Fully async interface)
+    |
+AsyncFuzzExecutor (Controlled concurrency)
 ```
 
 ## Components
+
+### AsyncFuzzExecutor
+
+Provides controlled concurrency for executing asynchronous operations with timeout handling and retry mechanisms.
+
+```python
+from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
+import asyncio
+
+async def main():
+    # Create executor with concurrency control
+    executor = AsyncFuzzExecutor(
+        max_concurrency=5,  # Maximum concurrent operations
+        timeout=30.0,      # Default timeout in seconds
+        retry_count=2,     # Number of retries for failed operations
+        retry_delay=1.0    # Delay between retries in seconds
+    )
+    
+    # Define an async operation
+    async def my_operation(value):
+        await asyncio.sleep(0.1)  # Simulate work
+        return value * 2
+    
+    # Execute a single operation
+    result = await executor.execute(my_operation, 5)
+    print(f"Single operation result: {result}")
+    
+    # Execute with retry mechanism
+    result = await executor.execute_with_retry(my_operation, 10)
+    print(f"Operation with retry: {result}")
+    
+    # Execute batch operations concurrently
+    operations = [
+        (my_operation, [5], {}),
+        (my_operation, [10], {}),
+        (my_operation, [15], {})
+    ]
+    
+    batch_results = await executor.execute_batch(operations)
+    print(f"Batch results: {batch_results['results']}")
+    
+    # Shutdown the executor
+    await executor.shutdown()
+
+asyncio.run(main())
+```
 
 ### ProcessWatchdog
 
@@ -368,3 +417,4 @@ For complete API documentation, see the individual module docstrings:
 
 - `mcp_fuzzer.fuzz_engine.runtime.watchdog`
 - `mcp_fuzzer.fuzz_engine.runtime.manager`
+- `mcp_fuzzer.fuzz_engine.executor`

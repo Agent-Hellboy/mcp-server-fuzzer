@@ -75,7 +75,11 @@ class UnifiedMCPFuzzerClient:
     ):
         self.transport = transport
         self.tool_fuzzer = ToolFuzzer(max_concurrency=5)
-        self.protocol_fuzzer = ProtocolFuzzer(transport, max_concurrency=5)  # Pass transport and concurrency
+        # Pass transport and concurrency
+        self.protocol_fuzzer = ProtocolFuzzer(
+            transport,
+            max_concurrency=5,
+        )
         self.reporter = reporter or FuzzerReporter()
         self.auth_manager = auth_manager or AuthManager()
         self.tool_timeout = tool_timeout
@@ -97,9 +101,12 @@ class UnifiedMCPFuzzerClient:
         for i in range(runs):
             try:
                 # Generate fuzz arguments using the fuzzer
-                fuzz_result = (await self.tool_fuzzer.fuzz_tool(tool, 1))[
-                    0
-                ]  # Get single result
+                fuzz_list = await self.tool_fuzzer.fuzz_tool(tool, 1)
+                if not fuzz_list:
+                    tool_name = tool.get("name", "unknown")
+                    logging.warning("Fuzzer returned no args for %s", tool_name)
+                    continue
+                fuzz_result = fuzz_list[0]  # Get single result
                 args = fuzz_result["args"]
 
                 # Check safety before proceeding
@@ -361,7 +368,9 @@ class UnifiedMCPFuzzerClient:
 
         try:
             # Use the tool fuzzer to generate fuzz data for both phases
-            phase_results = await self.tool_fuzzer.fuzz_tool_both_phases(tool, runs_per_phase)
+            phase_results = await self.tool_fuzzer.fuzz_tool_both_phases(
+                tool, runs_per_phase
+            )
 
             # Process realistic phase results
             realistic_results = []
