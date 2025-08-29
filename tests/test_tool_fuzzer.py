@@ -279,10 +279,15 @@ class TestToolFuzzer(unittest.TestCase):
         self.assertIn("tool1", results)
         self.assertEqual(len(results["tool1"]), 0)
 
-    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call", return_value=True)
+    @patch(
+        "mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call",
+        return_value=True
+    )
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.ToolStrategies")
-    def test_fuzz_tool_different_runs(self, mock_strategies_class, mock_sanitize, mock_is_safe):
+    def test_fuzz_tool_different_runs(
+        self, mock_strategies_class, mock_sanitize, mock_is_safe
+    ):
         """Test that different runs generate different arguments."""
         # Setup mock strategy to return controlled values
         mock_strategies = MagicMock()
