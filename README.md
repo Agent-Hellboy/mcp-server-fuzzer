@@ -58,7 +58,7 @@ The system is built with a modular architecture:
 - **Fuzzing Engine**: Test orchestration and execution
 - **Strategy System**: Data generation (realistic + aggressive)
 - **Safety System**: Core filter + SystemBlocker PATH shim; safe mock responses
-- **Runtime**: Async ProcessManager + ProcessWatchdog + AsyncProcessWrapper
+- **Runtime**: Fully async ProcessManager + ProcessWatchdog
 - **Authentication**: Multiple auth provider support
 - **Reporting**: FuzzerReporter, Console/JSON/Text formatters, SafetyReporter
 

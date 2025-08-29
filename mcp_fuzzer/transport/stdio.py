@@ -38,23 +38,22 @@ class StdioTransport(TransportProtocol):
         self.process_manager = ProcessManager(watchdog_config)
         self._last_activity = time.time()
 
-    def _update_activity(self):
-        """Update last activity timestamp and notify process manager."""
+    async def _update_activity(self):
+        """Update last activity timestamp and notify process manager asynchronously."""
         self._last_activity = time.time()
         if self.process and hasattr(self.process, "pid"):
-            # Don't await here since this is a sync method
-            # The activity will be updated when needed
-            pass
+            # Update activity in the process manager
+            await self.process_manager.update_activity(self.process.pid)
 
     async def _ensure_connection(self):
         """Ensure we have a persistent connection to the subprocess."""
         # Fast-path: if already initialized and process is alive, avoid locking
         proc = self.process
-        if self._initialized and proc is not None and proc.poll() is None:
+        if self._initialized and proc is not None and proc.returncode is None:
             return
 
         async with self._lock:
-            if self._initialized and self.process and self.process.poll() is None:
+            if self._initialized and self.process and self.process.returncode is None:
                 return
 
             # Kill existing process if any
@@ -120,7 +119,7 @@ class StdioTransport(TransportProtocol):
                     )
 
                 self._initialized = True
-                self._update_activity()
+                await self._update_activity()
                 logging.info(
                     f"Started stdio transport process with PID: {self.process.pid}"
                 )
@@ -143,7 +142,7 @@ class StdioTransport(TransportProtocol):
             message_str = json.dumps(message) + "\n"
             self.stdin.write(message_str.encode())
             await self.stdin.drain()
-            self._update_activity()
+            await self._update_activity()
         except Exception as e:
             logging.error(f"Failed to send message to stdio transport: {e}")
             self._initialized = False
@@ -159,7 +158,7 @@ class StdioTransport(TransportProtocol):
             if not line:
                 return None
 
-            self._update_activity()
+            await self._update_activity()
             message = json.loads(line.decode().strip())
             return message
         except Exception as e:

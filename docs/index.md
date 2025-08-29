@@ -116,7 +116,7 @@ See [Architecture](architecture.md) for detailed diagrams and flow charts.
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](contributing.md) for details.
+We welcome contributions. Please see our [Contributing Guide](contributing.md) for details.
 
 ## License
 

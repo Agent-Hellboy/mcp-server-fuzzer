@@ -246,13 +246,13 @@ mkdocs gh-deploy
 
 ```
 docs/
-├── index.md              # Home page
-├── getting-started.md    # Installation and basic usage
-├── architecture.md       # System design and components
-├── examples.md           # Working examples and configurations
-├── reference.md          # Complete API reference
-├── safety.md             # Safety system configuration
-└── contributing.md       # This file
+| -- index.md              # Home page
+| -- getting-started.md    # Installation and basic usage
+| -- architecture.md       # System design and components
+| -- examples.md           # Working examples and configurations
+| -- reference.md          # Complete API reference
+| -- safety.md             # Safety system configuration
+| -- contributing.md       # This file
 ```
 
 ## Adding New Features
@@ -317,7 +317,7 @@ To add new safety features:
 4. **Write tests**
 5. **Update documentation**
 
-## 🐛 Bug Reports
+## Bug Reports
 
 ### Reporting Bugs
 
@@ -360,7 +360,7 @@ Any error messages or stack traces
 Any other relevant information
 ```
 
-## 💡 Feature Requests
+## Feature Requests
 
 ### Suggesting Features
 
@@ -541,7 +541,7 @@ We are committed to providing a welcoming and inclusive environment for all cont
 
 - **Fuzzing Tools**: AFL, libFuzzer, and other fuzzing frameworks
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Thank you to all contributors who have helped make MCP Server Fuzzer better:
 
@@ -553,8 +553,8 @@ Thank you to all contributors who have helped make MCP Server Fuzzer better:
 
 - **Testers**: Users who test and validate functionality
 
-Your contributions help make this tool more robust, secure, and useful for the MCP community!
+Your contributions help make this tool more robust, secure, and useful for the MCP community.
 
 ---
 
-**Ready to contribute?** Start by forking the repository and checking out the issues labeled "good first issue" or "help wanted"!
+**Ready to contribute?** Start by forking the repository and checking out the issues labeled "good first issue" or "help wanted".

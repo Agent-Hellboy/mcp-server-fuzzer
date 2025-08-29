@@ -48,7 +48,7 @@ class HTTPTransport(TransportProtocol):
         )
         self.process_manager = ProcessManager(watchdog_config)
 
-    def _update_activity(self):
+    async def _update_activity(self):
         """Update last activity timestamp."""
         self._last_activity = time.time()
 
@@ -80,7 +80,7 @@ class HTTPTransport(TransportProtocol):
             "params": params or {},
         }
 
-        self._update_activity()
+        await self._update_activity()
 
         async with httpx.AsyncClient(
             timeout=self.timeout,
@@ -164,7 +164,7 @@ class HTTPTransport(TransportProtocol):
     ) -> None:
         payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
 
-        self._update_activity()
+        await self._update_activity()
 
         async with httpx.AsyncClient(
             timeout=self.timeout,
