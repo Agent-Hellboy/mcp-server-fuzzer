@@ -80,20 +80,13 @@ Results are displayed in beautiful, colorized tables showing:
 
 ## Configuration
 
-### Environment Variables
+MCP Fuzzer can be configured using environment variables, configuration files (YAML or TOML), or command-line arguments.
 
-Set these environment variables for consistent configuration:
+For detailed configuration information, see the [Configuration Guide](configuration.md).
 
-```bash
-export MCP_FUZZER_TIMEOUT=30.0
-export MCP_FUZZER_LOG_LEVEL=INFO
-export MCP_FUZZER_SAFETY_ENABLED=true
-export MCP_FUZZER_FS_ROOT=~/.mcp_fuzzer
-```
+### Quick Configuration
 
-### Configuration Files
-
-Create a configuration file for repeated use:
+Set these environment variables for quick configuration:
 
 ```json
 {

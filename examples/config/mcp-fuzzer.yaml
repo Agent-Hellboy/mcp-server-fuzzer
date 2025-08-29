@@ -1,0 +1,49 @@
+# MCP Fuzzer Configuration Example (.yaml)
+
+# General settings
+timeout: 30.0
+log_level: "INFO"
+safety_enabled: true
+
+# Transport settings
+http_timeout: 30.0
+sse_timeout: 30.0
+stdio_timeout: 30.0
+
+# Fuzzing settings
+mode: "both"
+phase: "aggressive"
+protocol: "http"
+endpoint: "http://localhost:8000/mcp/"
+runs: 10
+runs_per_type: 5
+max_concurrency: 5
+
+# Safety settings
+safety:
+  enabled: true
+  no_network: false
+  local_hosts:
+    - "localhost"
+    - "127.0.0.1"
+    - "::1"
+  header_denylist:
+    - "authorization"
+    - "cookie"
+
+# Authentication settings
+auth:
+  providers:
+    - type: "api_key"
+      id: "default_api_key"
+      config:
+        key: "YOUR_API_KEY"
+        header_name: "X-API-Key"
+    - type: "basic"
+      id: "default_basic"
+      config:
+        username: "user"
+        password: "pass"
+  mappings:
+    "tool1": "default_api_key"
+    "tool2": "default_basic"
