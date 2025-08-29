@@ -294,7 +294,7 @@ class TestToolFuzzer(unittest.TestCase):
         mock_strategies_class.return_value = mock_strategies
         
         # Make sanitizer a no-op for stable arg comparisons
-        mock_sanitize.side_effect = lambda tool_name, args: args
+        mock_sanitize.side_effect = lambda tool_name, args: (tool_name, args)
         
         # Configure mock to return different args for each call
         mock_strategies.fuzz_tool_arguments.side_effect = [
@@ -327,6 +327,7 @@ class TestToolFuzzer(unittest.TestCase):
         # Check that all runs have proper structure
         for i, result in enumerate(results):
             self.assertIn("success", result)
+            self.assertTrue(result["success"], "Expected success=True for each run")
             self.assertIn("args", result)
             
             # Test that we got the expected arguments from our mock

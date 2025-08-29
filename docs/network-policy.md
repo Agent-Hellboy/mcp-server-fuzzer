@@ -36,12 +36,25 @@ def _normalize_host(host: str) -> str:
             end = s.find("]")
             host = s[1:end] if end != -1 else s
         else:
-            # If it's a plain IPv6 (has multiple colons), keep as-is
-            try:
-                ipaddress.ip_address(s)
-                host = s
-            except ValueError:
-                # Otherwise, strip a single :port if present
+            # Handle unbracketed forms:
+            # 1) Plain IPv6 literal (multiple colons, no port)
+            # 2) IPv6 with trailing :port (non-standard but seen in the wild)
+            if s.count(":") > 1:
+                # Try to split off a trailing port only if it looks like one
+                left, sep, right = s.rpartition(":")
+                if sep and right.isdigit():
+                    try:
+                        port = int(right)
+                        if 0 <= port <= 65535 and isinstance(ipaddress.ip_address(left), ipaddress.IPv6Address):
+                            host = left
+                        else:
+                            host = s
+                    except ValueError:
+                        host = s
+                else:
+                    host = s
+            else:
+                # Otherwise, treat as hostname[:port]
                 host = s.split(":", 1)[0]
     # Normalize trailing dot for FQDNs
     return host.rstrip(".")
@@ -96,6 +109,7 @@ The system prevents subprocesses from using proxy environment variables:
 
 ```python
 # Sanitize environment for subprocess
+import os
 safe_env = sanitize_subprocess_env(source_env=os.environ)
 # HTTP_PROXY, HTTPS_PROXY, etc. will be removed
 ```
@@ -108,10 +122,16 @@ The system uses these default settings:
 
 ```python
 SAFETY_LOCAL_HOSTS = [
-    "localhost", "127.0.0.1", "::1", 
-    "0.0.0.0", "::", "0:0:0:0:0:0:0:0"
+    "localhost", "127.0.0.1", "::1"
 ]
 SAFETY_NO_NETWORK_DEFAULT = True
+
+# (Optional, recommended) Example explicit blocks to mitigate SSRF:
+# SAFETY_BLOCKED_CIDRS = [
+#   "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8",
+#   "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16",
+#   "::/128", "::1/128", "fc00::/7", "fe80::/10"
+# ]
 ```
 
 ### Runtime Configuration
