@@ -100,7 +100,9 @@ class ProtocolFuzzer:
         
         # Process errors
         for error in batch_results["errors"]:
-            self._logger.error(f"Error fuzzing {protocol_type}: {error}")
+            if isinstance(error, asyncio.CancelledError):
+                raise error
+            self._logger.error("Error fuzzing %s: %s", protocol_type, error)
             results.append({
                 "protocol_type": protocol_type,
                 "success": False,
@@ -164,10 +166,10 @@ class ProtocolFuzzer:
                 "protocol_type": protocol_type,
                 "run": run_index + 1,
                 "fuzz_data": fuzz_data,
-                "success": True,
+                "success": server_error is None,
                 "server_response": server_response,
                 "server_error": server_error,
-                "server_handled_malicious_input": server_error is not None,  # Good
+                "server_rejected_input": server_error is not None,
             }
 
             self._logger.debug(f"Fuzzed {protocol_type} run {run_index + 1}")
@@ -289,14 +291,14 @@ class ProtocolFuzzer:
             [
                 r
                 for r in results
-                if r.get("server_handled_malicious_input", False)
+                if r.get("server_rejected_input", False)
             ]
         )
         total = len(results)
         
         self._logger.info(
-            f"Completed {protocol_type}: {successful}/{total} successful, "
-            f"{server_rejections} server rejections"
+            "Completed %s: %d/%d successful, %d server rejections",
+            protocol_type, successful, total, server_rejections
         )
         
         return results

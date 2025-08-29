@@ -72,13 +72,15 @@ class UnifiedMCPFuzzerClient:
         tool_timeout: Optional[float] = None,
         reporter: Optional[FuzzerReporter] = None,
         safety_system: Optional[SafetyProvider] = None,
+        max_concurrency: int = 5,
     ):
         self.transport = transport
-        self.tool_fuzzer = ToolFuzzer(max_concurrency=5)
+        # Use configurable max_concurrency for both fuzzers
+        self.tool_fuzzer = ToolFuzzer(max_concurrency=max_concurrency)
         # Pass transport and concurrency
         self.protocol_fuzzer = ProtocolFuzzer(
             transport,
-            max_concurrency=5,
+            max_concurrency=max_concurrency,
         )
         self.reporter = reporter or FuzzerReporter()
         self.auth_manager = auth_manager or AuthManager()

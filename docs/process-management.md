@@ -12,7 +12,7 @@ The system consists of three main components:
 
 ## Architecture
 
-```
+```text
 ProcessWatchdog (Core monitoring)
     |
 ProcessManager (Fully async interface)
@@ -25,6 +25,29 @@ AsyncFuzzExecutor (Controlled concurrency)
 ### AsyncFuzzExecutor
 
 Provides controlled concurrency for executing asynchronous operations with timeout handling and retry mechanisms.
+
+#### Configuring Concurrency
+
+The executor's concurrency can be configured in several ways:
+
+1. **Direct instantiation**:
+   ```python
+   executor = AsyncFuzzExecutor(max_concurrency=10)
+   ```
+
+2. **Via UnifiedMCPFuzzerClient**:
+   ```python
+   client = UnifiedMCPFuzzerClient(
+       transport,
+       max_concurrency=10  # Controls concurrency for both tool and protocol fuzzers
+   )
+   ```
+
+3. **Future CLI integration**:
+   ```bash
+   # Planned feature - not yet implemented
+   python -m mcp_fuzzer run --max-concurrency=10
+   ```
 
 ```python
 from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
