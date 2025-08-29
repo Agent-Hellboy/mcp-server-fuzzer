@@ -292,8 +292,11 @@ from mcp_fuzzer.client import UnifiedMCPFuzzerClient
 # Create custom transport
 transport = CustomTransport("custom-endpoint")
 
-# Use with fuzzer client
-client = UnifiedMCPFuzzerClient(transport)
+# Use with fuzzer client (with optional concurrency control)
+client = UnifiedMCPFuzzerClient(
+    transport,
+    max_concurrency=10  # Optional: Control concurrent operations
+)
 
 # Run fuzzing
 await client.fuzz_tools(runs=10)

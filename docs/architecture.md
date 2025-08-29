@@ -39,6 +39,7 @@ flowchart TB
     D1[ToolFuzzer]
     D2[ProtocolFuzzer]
     D3[Strategy Manager]
+    D4[AsyncFuzzExecutor]
   end
 
   subgraph Runtime[Async Runtime]
@@ -73,6 +74,8 @@ flowchart TB
 
   D1 --> E1
   D2 --> E1
+  D1 --> D4
+  D2 --> D4
 
   C3 -.-> R1
   R1 --> R2
@@ -102,9 +105,10 @@ graph TD
 
     G --> I[Generate Test Data]
     H --> J[Generate Protocol Messages]
-
-    I --> K[Send via Transport]
-    J --> K
+    
+    I --> K1[AsyncFuzzExecutor]
+    J --> K1
+    K1 --> K[Send via Transport]
 
     K --> L{SafetyFilter}
     L -->|Block| M[Log + Mock Response]
@@ -150,6 +154,7 @@ mcp_fuzzer/
 |    | -- stdio.py           # Standard I/O transport
 | -- fuzz_engine/            # Fuzzing engine
 |    | -- __init__.py
+|    | -- executor.py        # Async execution framework
 |    | -- fuzzer/            # Core fuzzing logic
 |    |    | -- __init__.py
 |    |    | -- tool_fuzzer.py     # Tool-level fuzzing
@@ -239,13 +244,14 @@ The fuzzing engine orchestrates the testing process and manages test execution.
 
 - `tool_fuzzer.py`: Tests individual tools with various argument combinations
 - `protocol_fuzzer.py`: Tests MCP protocol types with various message structures
+- `executor.py`: Provides asynchronous execution framework with concurrency control and retry mechanisms
 
 **Fuzzing Process:**
 
 1. **Discovery**: Automatically discover available tools from the server
 2. **Strategy Selection**: Choose appropriate fuzzing strategy (realistic vs aggressive)
 3. **Data Generation**: Generate test data using Hypothesis and custom strategies
-4. **Execution**: Execute tests and collect results
+4. **Execution**: Execute tests with controlled concurrency via AsyncFuzzExecutor
 5. **Analysis**: Analyze results and generate reports
 
 ### 4. Strategy System
@@ -338,6 +344,7 @@ sequenceDiagram
     participant Transport as Transport
     participant Server as MCP Server
     participant Fuzzer as Tool Fuzzer
+    participant Executor as AsyncFuzzExecutor
     participant Strategy as Strategy Manager
 
     CLI->>Client: Initialize with transport
@@ -351,14 +358,16 @@ sequenceDiagram
         Fuzzer->>Strategy: Request test data
         Strategy-->>Fuzzer: Return test data
 
-        loop For each test run
-            Fuzzer->>Client: Execute tool call
+        Fuzzer->>Executor: Execute batch operations
+        
+        loop For each test run (concurrent)
+            Executor->>Client: Execute tool call
             Client->>Transport: Send tool request
             Transport->>Server: Execute tool
             Server-->>Transport: Return result
             Transport-->>Client: Result received
-            Client-->>Fuzzer: Tool result
-            Fuzzer->>Fuzzer: Record result
+            Client-->>Executor: Tool result
+            Executor->>Fuzzer: Record result
         end
     end
 
@@ -375,6 +384,7 @@ sequenceDiagram
     participant Transport as Transport
     participant Server as MCP Server
     participant Fuzzer as Protocol Fuzzer
+    participant Executor as AsyncFuzzExecutor
     participant Strategy as Strategy Manager
 
     CLI->>Client: Initialize with transport
@@ -385,14 +395,16 @@ sequenceDiagram
         Fuzzer->>Strategy: Request protocol messages
         Strategy-->>Fuzzer: Return test messages
 
-        loop For each test run
-            Fuzzer->>Client: Execute protocol message
+        Fuzzer->>Executor: Execute batch operations
+        
+        loop For each test run (concurrent)
+            Executor->>Client: Execute protocol message
             Client->>Transport: Send protocol message
             Transport->>Server: Execute protocol
             Server-->>Transport: Return response
             Transport-->>Client: Response received
-            Client-->>Fuzzer: Protocol response
-            Fuzzer->>Fuzzer: Record result
+            Client-->>Executor: Protocol response
+            Executor->>Fuzzer: Record result
         end
     end
 
@@ -410,6 +422,7 @@ Each component has a single, well-defined responsibility:
 - **Fuzzing Engine**: Manages test execution
 - **Strategy System**: Generates test data
 - **Safety System**: Provides protection mechanisms
+- **AsyncFuzzExecutor**: Manages concurrency and execution
 
 ### 2. Protocol Agnosticism
 
@@ -479,6 +492,7 @@ The system uses async/await throughout for better performance:
 - **Efficient resource utilization**
 - **Fully asynchronous process management**
 - **Activity monitoring through awaitables**
+- **Controlled concurrency with AsyncFuzzExecutor**
 
 ### Resource Management
 
@@ -488,6 +502,7 @@ Careful resource management ensures stability:
 - **Async process lifecycle management** for stdio transport
 - **Memory-efficient data generation**
 - **Timeout handling** for all operations
+- **Concurrency limits** via AsyncFuzzExecutor
 
 ### Scalability
 
@@ -497,6 +512,7 @@ The architecture supports scaling:
 - **Distributed fuzzing** across machines
 - **Configurable concurrency limits**
 - **Resource usage monitoring**
+- **Batch operation execution**
 
 ## Security Considerations
 
@@ -567,6 +583,7 @@ The MCP Fuzzer is designed as a modular system with clear integration points:
 - **Safety Providers**: The safety system uses a provider interface allowing customization of safety features.
 - **Strategy Extensions**: Fuzzing strategies can be extended with new generators for different data types.
 - **Runtime Management**: The async runtime provides process isolation and management for all components.
+- **Execution Framework**: The AsyncFuzzExecutor provides a bridge between strategies and execution.
 
 ### External Integration
 
@@ -587,6 +604,8 @@ graph TD
     G --> A
     G --> C
     G --> B
+    C --> H[AsyncFuzzExecutor]
+    H --> A
 ```
 
 This modular design ensures that components can be developed, tested, and extended independently.

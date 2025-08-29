@@ -5,6 +5,7 @@ Unit tests for ToolFuzzer
 
 import logging
 import unittest
+import pytest
 from unittest.mock import MagicMock, call, patch
 
 from mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer import ToolFuzzer
@@ -17,12 +18,14 @@ class TestToolFuzzer(unittest.TestCase):
         """Set up test fixtures."""
         self.fuzzer = ToolFuzzer()
 
-    def test_init(self):
+    @pytest.mark.asyncio
+    async def test_init(self):
         """Test ToolFuzzer initialization."""
         self.assertIsNotNone(self.fuzzer.strategies)
 
+    @pytest.mark.asyncio
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
-    def test_fuzz_tool_success(self, mock_logging):
+    async def test_fuzz_tool_success(self, mock_logging):
         """Test fuzzing of a tool with enhanced safety."""
         tool = {
             "name": "test_tool",
@@ -34,7 +37,7 @@ class TestToolFuzzer(unittest.TestCase):
             },
         }
 
-        results = self.fuzzer.fuzz_tool(tool, runs=3)
+        results = await self.fuzzer.fuzz_tool(tool, runs=3)
 
         self.assertEqual(len(results), 3)
 
@@ -55,8 +58,9 @@ class TestToolFuzzer(unittest.TestCase):
             # count can be various types due to aggressive fuzzing
             self.assertIsInstance(args["count"], (int, float, type(None)))
 
+    @pytest.mark.asyncio
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
-    def test_fuzz_tool_exception_handling(self, mock_logging):
+    async def test_fuzz_tool_exception_handling(self, mock_logging):
         """Test exception handling during tool fuzzing."""
         tool = {
             "name": "test_tool",
@@ -67,7 +71,7 @@ class TestToolFuzzer(unittest.TestCase):
         with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
             mock_fuzz.side_effect = Exception("Test exception")
 
-            results = self.fuzzer.fuzz_tool(tool, runs=2)
+            results = await self.fuzzer.fuzz_tool(tool, runs=2)
 
             self.assertEqual(len(results), 2)
 
@@ -77,8 +81,9 @@ class TestToolFuzzer(unittest.TestCase):
                 self.assertIn("exception", result)
                 self.assertEqual(result["exception"], "Test exception")
 
+    @pytest.mark.asyncio
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
-    def test_fuzz_tools(self, mock_logging):
+    async def test_fuzz_tools(self, mock_logging):
         """Test fuzzing multiple tools."""
         tools = [
             {
@@ -91,7 +96,7 @@ class TestToolFuzzer(unittest.TestCase):
             },
         ]
 
-        results = self.fuzzer.fuzz_tools(tools, runs_per_tool=2)
+        results = await self.fuzzer.fuzz_tools(tools, runs_per_tool=2)
 
         # Check that all tools are present
         self.assertIn("tool1", results)
@@ -106,8 +111,9 @@ class TestToolFuzzer(unittest.TestCase):
             successful_runs = [r for r in results[tool_name] if r.get("success", False)]
             self.assertGreater(len(successful_runs), 0)
 
+    @pytest.mark.asyncio
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
-    def test_fuzz_tools_with_exception(self, mock_logging):
+    async def test_fuzz_tools_with_exception(self, mock_logging):
         """Test fuzzing tools with exception handling."""
         tools = [
             {
@@ -138,7 +144,7 @@ class TestToolFuzzer(unittest.TestCase):
 
             mock_fuzz.side_effect = side_effect
 
-            results = self.fuzzer.fuzz_tools(tools, runs_per_tool=1)
+            results = await self.fuzzer.fuzz_tools(tools, runs_per_tool=1)
 
             # Should still return results for all tools
             self.assertIn("tool1", results)
@@ -150,11 +156,14 @@ class TestToolFuzzer(unittest.TestCase):
             # tool2 should have proper result structure
             self.assertIn("success", results["tool2"][0])
 
+    @pytest.mark.asyncio
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call",
     return_value=True)
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
-    def test_fuzz_tool_complex_schema(self, mock_sanitize, mock_is_safe, mock_logging):
+    async def test_fuzz_tool_complex_schema(
+        self, mock_sanitize, mock_is_safe, mock_logging
+    ):
         """Test fuzzing a tool with complex schema."""
         tool = {
             "name": "complex_tool",
@@ -185,7 +194,7 @@ class TestToolFuzzer(unittest.TestCase):
                 "enabled": True
             }
             
-            results = self.fuzzer.fuzz_tool(tool, runs=1)
+            results = await self.fuzzer.fuzz_tool(tool, runs=1)
 
             self.assertEqual(len(results), 1)
             result = results[0]
@@ -204,11 +213,12 @@ class TestToolFuzzer(unittest.TestCase):
             # With our mocking, we should have all the expected keys
             self.assertEqual(set(schema_properties), generated_keys)
 
-    def test_fuzz_tool_no_schema(self):
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_no_schema(self):
         """Test fuzzing a tool with no schema."""
         tool = {"name": "no_schema_tool"}
 
-        results = self.fuzzer.fuzz_tool(tool, runs=1)
+        results = await self.fuzzer.fuzz_tool(tool, runs=1)
 
         self.assertEqual(len(results), 1)
         result = results[0]
@@ -216,11 +226,12 @@ class TestToolFuzzer(unittest.TestCase):
         self.assertIn("success", result)
         self.assertIsInstance(result["args"], dict)
 
-    def test_fuzz_tool_empty_schema(self):
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_empty_schema(self):
         """Test fuzzing a tool with empty schema."""
         tool = {"name": "empty_schema_tool", "inputSchema": {}}
 
-        results = self.fuzzer.fuzz_tool(tool, runs=1)
+        results = await  self.fuzzer.fuzz_tool(tool, runs=1)
 
         self.assertEqual(len(results), 1)
         result = results[0]
@@ -231,27 +242,30 @@ class TestToolFuzzer(unittest.TestCase):
         # injected fields for aggressive fuzzing)
         self.assertIsInstance(result["args"], dict)
 
-    def test_fuzz_tool_zero_runs(self):
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_zero_runs(self):
         """Test fuzzing a tool with zero runs."""
         tool = {
             "name": "test_tool",
             "inputSchema": {"properties": {"name": {"type": "string"}}},
         }
 
-        results = self.fuzzer.fuzz_tool(tool, runs=0)
+        results = await self.fuzzer.fuzz_tool(tool, runs=0)
         self.assertEqual(len(results), 0)
 
-    def test_fuzz_tool_negative_runs(self):
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_negative_runs(self):
         """Test fuzzing a tool with negative runs."""
         tool = {
             "name": "test_tool",
             "inputSchema": {"properties": {"name": {"type": "string"}}},
         }
 
-        results = self.fuzzer.fuzz_tool(tool, runs=-1)
+        results = await self.fuzzer.fuzz_tool(tool, runs=-1)
         self.assertEqual(len(results), 0)
 
-    def test_fuzz_tools_zero_runs(self):
+    @pytest.mark.asyncio
+    async def test_fuzz_tools_zero_runs(self):
         """Test fuzzing tools with zero runs per tool."""
         tools = [
             {
@@ -260,12 +274,13 @@ class TestToolFuzzer(unittest.TestCase):
             }
         ]
 
-        results = self.fuzzer.fuzz_tools(tools, runs_per_tool=0)
+        results = await self.fuzzer.fuzz_tools(tools, runs_per_tool=0)
 
         self.assertIn("tool1", results)
         self.assertEqual(len(results["tool1"]), 0)
 
-    def test_fuzz_tools_negative_runs(self):
+    @pytest.mark.asyncio
+    async def test_fuzz_tools_negative_runs(self):
         """Test fuzzing tools with negative runs per tool."""
         tools = [
             {
@@ -274,7 +289,7 @@ class TestToolFuzzer(unittest.TestCase):
             }
         ]
 
-        results = self.fuzzer.fuzz_tools(tools, runs_per_tool=-1)
+        results = await self.fuzzer.fuzz_tools(tools, runs_per_tool=-1)
 
         self.assertIn("tool1", results)
         self.assertEqual(len(results["tool1"]), 0)
@@ -285,7 +300,8 @@ class TestToolFuzzer(unittest.TestCase):
     )
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.ToolStrategies")
-    def test_fuzz_tool_different_runs(
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_different_runs(
         self, mock_strategies_class, mock_sanitize, mock_is_safe
     ):
         """Test that different runs generate different arguments."""
@@ -316,7 +332,7 @@ class TestToolFuzzer(unittest.TestCase):
             },
         }
 
-        results = self.fuzzer.fuzz_tool(tool, runs=5)
+        results = await self.fuzzer.fuzz_tool(tool, runs=5)
 
         # Check that we get the expected number of results
         self.assertEqual(len(results), 5)
@@ -337,14 +353,16 @@ class TestToolFuzzer(unittest.TestCase):
             self.assertEqual(args["count"], i)
             self.assertEqual(args["enabled"], i % 2 == 0)
 
-    def test_fuzz_tools_empty_list(self):
+    @pytest.mark.asyncio
+    async def test_fuzz_tools_empty_list(self):
         """Test fuzzing an empty list of tools."""
-        results = self.fuzzer.fuzz_tools([], runs_per_tool=1)
+        results = await self.fuzzer.fuzz_tools([], runs_per_tool=1)
         self.assertEqual(results, {})
 
-    def test_fuzz_tools_none_list(self):
+    @pytest.mark.asyncio
+    async def test_fuzz_tools_none_list(self):
         """Test fuzzing None as tools list."""
-        results = self.fuzzer.fuzz_tools(None, runs_per_tool=1)
+        results = await self.fuzzer.fuzz_tools(None, runs_per_tool=1)
         self.assertEqual(results, {})
 
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
@@ -353,7 +371,10 @@ class TestToolFuzzer(unittest.TestCase):
         return_value=True,
     )
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
-    def test_fuzz_tool_missing_name(self, mock_sanitize, mock_is_safe, mock_logging):
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_missing_name(
+        self, mock_sanitize, mock_is_safe, mock_logging
+    ):
         """Test fuzzing a tool with missing name."""
         # Mock the sanitize_tool_call function to return predictable values
         mock_sanitize.return_value = ("unknown", {"param1": "test_value"})
@@ -364,7 +385,7 @@ class TestToolFuzzer(unittest.TestCase):
         with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
             mock_fuzz.return_value = {"param1": "test_value"}
 
-            results = self.fuzzer.fuzz_tool(tool, runs=1)
+            results = await self.fuzzer.fuzz_tool(tool, runs=1)
 
             self.assertEqual(len(results), 1)
             result = results[0]
@@ -380,7 +401,8 @@ class TestToolFuzzer(unittest.TestCase):
         return_value=True,
     )
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
-    def test_fuzz_tool_none_name(self, mock_sanitize, mock_is_safe, mock_logging):
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_none_name(self, mock_sanitize, mock_is_safe, mock_logging):
         """Test fuzzing a tool with None name."""
         # Mock the sanitize_tool_call function to return predictable values
         mock_sanitize.return_value = ("unknown", {"param1": "test_value"})
@@ -394,7 +416,7 @@ class TestToolFuzzer(unittest.TestCase):
         with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
             mock_fuzz.return_value = {"param1": "test_value"}
 
-            results = self.fuzzer.fuzz_tool(tool, runs=1)
+            results = await  self.fuzzer.fuzz_tool(tool, runs=1)
 
             self.assertEqual(len(results), 1)
             result = results[0]
@@ -404,7 +426,8 @@ class TestToolFuzzer(unittest.TestCase):
             # Verify that fuzzing occurred and tool name was handled correctly
             self.assertIn("success", result)
 
-    def test_logging_integration(self):
+    @pytest.mark.asyncio
+    async def test_logging_integration(self):
         """Test that logging is properly integrated."""
         tool = {
             "name": "test_tool",
@@ -412,7 +435,7 @@ class TestToolFuzzer(unittest.TestCase):
         }
 
         with patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging") as mock_logging:
-            self.fuzzer.fuzz_tool(tool, runs=1)
+            await self.fuzzer.fuzz_tool(tool, runs=1)
 
             # Check that logging.info was called
             mock_logging.info.assert_called()
@@ -426,7 +449,8 @@ class TestToolFuzzer(unittest.TestCase):
                     break
             self.assertTrue(found_tool)
 
-    def test_strategy_integration(self):
+    @pytest.mark.asyncio
+    async def test_strategy_integration(self):
         """Test integration with ToolStrategies."""
         tool = {
             "name": "test_tool",
@@ -437,13 +461,14 @@ class TestToolFuzzer(unittest.TestCase):
         with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
             mock_fuzz.return_value = {"name": "test_value"}
 
-            results = self.fuzzer.fuzz_tool(tool, runs=1)
+            results = await  self.fuzzer.fuzz_tool(tool, runs=1)
 
             mock_fuzz.assert_called_with(tool, phase="aggressive")
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["args"], {"name": "test_value"})
 
-    def test_tool_argument_validation(self):
+    @pytest.mark.asyncio
+    async def test_tool_argument_validation(self):
         """Test that generated tool arguments are valid."""
         tools = [
             {
@@ -469,7 +494,7 @@ class TestToolFuzzer(unittest.TestCase):
         ]
 
         for tool in tools:
-            results = self.fuzzer.fuzz_tool(tool, runs=1)
+            results = await self.fuzzer.fuzz_tool(tool, runs=1)
 
             if results:
                 result = results[0]
@@ -483,7 +508,8 @@ class TestToolFuzzer(unittest.TestCase):
                     for prop_name in tool["inputSchema"]["properties"]:
                         self.assertIn(prop_name, args)
 
-    def test_fuzzer_isolation(self):
+    @pytest.mark.asyncio
+    async def test_fuzzer_isolation(self):
         """Test that fuzzer instances are isolated."""
         fuzzer1 = ToolFuzzer()
         fuzzer2 = ToolFuzzer()
