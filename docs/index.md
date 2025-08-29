@@ -108,10 +108,14 @@ See [Architecture](architecture.md) for detailed diagrams and flow charts.
 ## Documentation
 
 - **[Getting Started](getting-started.md)** - Installation and basic usage
+- **[Configuration](configuration.md)** - Configuration options and file formats
 - **[Architecture](architecture.md)** - System design and components
+- **[Client Architecture](client-architecture.md)** - Client package structure
+- **[Code Structure](code-structure.md)** - Code organization and patterns
 - **[Examples](examples.md)** - Working examples and configurations
 - **[Reference](reference.md)** - Complete API reference
 - **[Safety Guide](safety.md)** - Safety system configuration
+- **[Exceptions](exceptions.md)** - Error handling and exception hierarchy
 - **[Contributing](contributing.md)** - Development and contribution guide
 
 ## Contributing
