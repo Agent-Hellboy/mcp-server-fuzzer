@@ -12,7 +12,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
 
 # Import the class and functions to test
-from mcp_fuzzer.client import MCPFuzzerClient as UnifiedMCPFuzzerClient
+from mcp_fuzzer.client.base import MCPFuzzerClient as UnifiedMCPFuzzerClient
 from mcp_fuzzer.cli.main import run_cli
 from mcp_fuzzer.reports import FuzzerReporter
 from mcp_fuzzer.auth import AuthManager
@@ -32,7 +32,7 @@ class TestUnifiedMCPFuzzerClient:
         self.mock_transport.send_request = AsyncMock()
         self.mock_transport.send_notification = AsyncMock()
         self.mock_transport.get_tools = AsyncMock()
-        
+
         # Mock auth manager
         self.mock_auth_manager = MagicMock()
         self.mock_auth_manager.get_auth_headers_for_tool = MagicMock(return_value={})
@@ -50,7 +50,7 @@ class TestUnifiedMCPFuzzerClient:
         self.mock_tool_client.fuzz_tool_both_phases = AsyncMock()
         self.mock_tool_client.fuzz_all_tools_both_phases = AsyncMock()
         self.mock_tool_client.shutdown = AsyncMock()
-        
+
         self.mock_protocol_client = MagicMock()
         self.mock_protocol_client.fuzz_protocol_type = AsyncMock()
         self.mock_protocol_client.fuzz_all_protocol_types = AsyncMock()
@@ -71,23 +71,26 @@ class TestUnifiedMCPFuzzerClient:
         self.mock_protocol_client._send_generic_request = AsyncMock()
 
         # Create client with mocks
-        with patch(
-            'mcp_fuzzer.client.tool_client.ToolClient', 
-            return_value=self.mock_tool_client
-        ), patch(
-            'mcp_fuzzer.client.protocol_client.ProtocolClient', 
-            return_value=self.mock_protocol_client
+        with (
+            patch(
+                "mcp_fuzzer.client.tool_client.ToolClient",
+                return_value=self.mock_tool_client,
+            ),
+            patch(
+                "mcp_fuzzer.client.protocol_client.ProtocolClient",
+                return_value=self.mock_protocol_client,
+            ),
         ):
             self.client = UnifiedMCPFuzzerClient(
                 self.mock_transport,
                 self.mock_auth_manager,
                 reporter=self.reporter,
             )
-            
+
         # Replace the client's specialized clients with our mocks
         self.client.tool_client = self.mock_tool_client
         self.client.protocol_client = self.mock_protocol_client
-        
+
         # Add safety_system attribute manually since it's expected by some methods
         self.mock_safety_system = MagicMock()
         self.mock_safety_system.should_skip_tool_call = MagicMock(return_value=False)
@@ -99,7 +102,7 @@ class TestUnifiedMCPFuzzerClient:
         )
         self.mock_safety_system.get_blocking_reason = MagicMock(return_value=None)
         self.client.safety_system = self.mock_safety_system
-        
+
         # No need to replace fuzzers anymore, we're using the client directly
 
     def teardown_method(self, method):
@@ -142,10 +145,11 @@ class TestUnifiedMCPFuzzerClient:
             "args": {"param1": "test_value", "param2": 42},
             "success": True,
         }
-        
+
         # Set up mock return values
         self.mock_tool_client.fuzz_tool.return_value = [
-            mock_fuzz_result, mock_fuzz_result
+            mock_fuzz_result,
+            mock_fuzz_result,
         ]
 
         # Execute the method under test
@@ -176,10 +180,10 @@ class TestUnifiedMCPFuzzerClient:
             "exception": "Test exception",
             "traceback": "Mock traceback",
         }
-        
+
         # Set up mock return value for tool_client.fuzz_tool
         self.mock_tool_client.fuzz_tool.return_value = [error_result]
-            
+
         # Execute the method under test
         results = await self.client.fuzz_tool(tool, runs=1)
 
@@ -196,7 +200,7 @@ class TestUnifiedMCPFuzzerClient:
     async def test_fuzz_tool_with_auth_params(self, mock_logging):
         """Test fuzz_tool with authentication parameters."""
         tool = {"name": "test_tool"}
-        
+
         # Setup auth manager mocks
         self.mock_auth_manager.get_auth_headers_for_tool.return_value = {
             "Authorization": "Bearer token"
@@ -208,15 +212,15 @@ class TestUnifiedMCPFuzzerClient:
         # Set up mock return value for tool_client.fuzz_tool
         mock_result = {"result": {"result": "success"}}
         self.mock_tool_client.fuzz_tool.return_value = [mock_result]
-        
+
         # Execute the method under test
         results = await self.client.fuzz_tool(tool, runs=1)
-        
+
         # Verify results
         assert len(results) == 1
         assert "result" in results[0]
         assert results[0]["result"] == {"result": "success"}
-        
+
         # Verify tool_client.fuzz_tool was called with correct parameters
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=None
@@ -242,14 +246,11 @@ class TestUnifiedMCPFuzzerClient:
         # Mock tool fuzzer results for each tool
         tool1_results = [{"args": {"param1": "value1"}, "success": True}]
         tool2_results = [{"args": {"param2": 42}, "success": True}]
-        
+
         # Set up mock for tool_client.fuzz_all_tools
-        all_results = {
-            "tool1": tool1_results,
-            "tool2": tool2_results
-        }
+        all_results = {"tool1": tool1_results, "tool2": tool2_results}
         self.mock_tool_client.fuzz_all_tools.return_value = all_results
-        
+
         # Execute the method under test
         results = await self.client.fuzz_all_tools(runs_per_tool=2)
 
@@ -259,7 +260,7 @@ class TestUnifiedMCPFuzzerClient:
         assert "tool2" in results
         assert results["tool1"] == tool1_results
         assert results["tool2"] == tool2_results
-        
+
         # Verify tool_client.fuzz_all_tools was called with correct parameters
         self.mock_tool_client.fuzz_all_tools.assert_called_once_with(
             runs_per_tool=2, tool_timeout=None
@@ -270,10 +271,10 @@ class TestUnifiedMCPFuzzerClient:
     async def test_fuzz_all_tools_empty_list(self, mock_logging):
         """Test fuzzing all tools with empty tool list."""
         self.mock_transport.get_tools.return_value = []
-        
+
         # Set up mock for tool_client.fuzz_all_tools
         self.mock_tool_client.fuzz_all_tools.return_value = {}
-        
+
         results = await self.client.fuzz_all_tools()
 
         assert results == {}
@@ -291,13 +292,13 @@ class TestUnifiedMCPFuzzerClient:
         ) as mock_get_tools:
             # Set up mock for fuzz_all_tools to return empty dict
             self.mock_tool_client.fuzz_all_tools.return_value = {}
-            
+
             # Execute the method under test
             results = await self.client.fuzz_all_tools()
-            
+
             # Verify results
             assert results == {}
-            
+
             # Verify tool_client.fuzz_all_tools was called
             self.mock_tool_client.fuzz_all_tools.assert_called_once_with(
                 runs_per_tool=10, tool_timeout=None
@@ -334,19 +335,19 @@ class TestUnifiedMCPFuzzerClient:
                 "safety_blocked": False,
                 "safety_sanitized": False,
                 "success": True,
-            }
+            },
         ]
-        
+
         # Set up mock for protocol_client.fuzz_protocol_type
         self.mock_protocol_client.fuzz_protocol_type.return_value = mock_results
-        
+
         # Execute the method under test
         results = await self.client.fuzz_protocol_type(protocol_type, runs=2)
 
         # Verify results
         assert len(results) == 2
         assert results == mock_results
-        
+
         # Verify protocol_client.fuzz_protocol_type was called
         self.mock_protocol_client.fuzz_protocol_type.assert_called_once_with(
             protocol_type, runs=2
@@ -371,10 +372,10 @@ class TestUnifiedMCPFuzzerClient:
                 "traceback": "Mock traceback",
             }
         ]
-        
+
         # Set up mock for protocol_client.fuzz_protocol_type
         self.mock_protocol_client.fuzz_protocol_type.return_value = error_result
-        
+
         # Execute the method under test
         results = await self.client.fuzz_protocol_type(protocol_type, runs=1)
 
@@ -385,7 +386,7 @@ class TestUnifiedMCPFuzzerClient:
         assert "exception" in result
         assert result["exception"] == "Test exception"
         assert "traceback" in result
-        
+
         # Verify protocol_client.fuzz_protocol_type was called
         self.mock_protocol_client.fuzz_protocol_type.assert_called_once_with(
             protocol_type, runs=1
@@ -403,7 +404,7 @@ class TestUnifiedMCPFuzzerClient:
 
         mock_response = {"result": "success"}
         self.mock_transport.send_request.return_value = mock_response
-        
+
         # Set the return value for the AsyncMock
         self.mock_protocol_client._send_protocol_request.return_value = mock_response
 
@@ -424,7 +425,7 @@ class TestUnifiedMCPFuzzerClient:
 
         mock_response = {"result": "success"}
         self.mock_transport.send_request.return_value = mock_response
-        
+
         # Set the return value for the AsyncMock
         self.mock_protocol_client._send_protocol_request.return_value = mock_response
 
@@ -443,12 +444,12 @@ class TestUnifiedMCPFuzzerClient:
         data = {"params": {"version": "1.0"}}
         mock_response = {"result": {"success": True}}
         self.mock_transport.send_request.return_value = mock_response
-        
+
         # Set the return value for the AsyncMock
         self.mock_protocol_client._send_initialize_request.return_value = mock_response
-        
+
         result = await self.mock_protocol_client._send_initialize_request(data)
-        
+
         # Just verify the result, since we're mocking the method directly
         assert result == mock_response
 
@@ -458,20 +459,21 @@ class TestUnifiedMCPFuzzerClient:
         data = {"params": {"progress": 50}}
         mock_response = {"status": "notification_sent"}
         self.mock_transport.send_notification.return_value = None
-        
+
         # Set the return value for the AsyncMock
-        self.mock_protocol_client._send_progress_notification.return_value = \
+        self.mock_protocol_client._send_progress_notification.return_value = (
             mock_response
-        
+        )
+
         result = await self.mock_protocol_client._send_progress_notification(data)
-        
+
         # Just verify the result, since we're mocking the method directly
         assert result == mock_response
 
     @pytest.mark.asyncio
     async def test_send_cancel_notification(self):
         """Test sending a cancel notification."""
-        # Skip this test as _send_cancel_notification has been removed in the 
+        # Skip this test as _send_cancel_notification has been removed in the
         # refactoring
         pytest.skip("_send_cancel_notification has been removed in the refactoring")
 
@@ -494,19 +496,21 @@ class TestUnifiedMCPFuzzerClient:
                 }
             ]
         }
-        
+
         # Set up the mock return value
         self.mock_protocol_client.fuzz_all_protocol_types.return_value = mock_results
-        
+
         # Call the method under test
         results = await self.client.fuzz_all_protocol_types(runs_per_type=2)
-        
+
         # Verify results
         assert isinstance(results, dict)
         assert len(results) > 0
-        
+
         # Verify protocol_client.fuzz_all_protocol_types was called
-        self.mock_protocol_client.fuzz_all_protocol_types.assert_called_once_with(runs_per_type=2)
+        self.mock_protocol_client.fuzz_all_protocol_types.assert_called_once_with(
+            runs_per_type=2
+        )
 
     @pytest.mark.asyncio
     @patch("mcp_fuzzer.client.base.logging")
@@ -527,7 +531,7 @@ class TestUnifiedMCPFuzzerClient:
 
         # Call the method
         self.client.print_tool_summary(results)
-        
+
         # Just verify that the method completes without error
         # We can't check the reporter's internal state easily with the mock
 
@@ -548,7 +552,7 @@ class TestUnifiedMCPFuzzerClient:
 
         # Call the method
         self.client.print_protocol_summary(results)
-        
+
         # Just verify that the method completes without error
         # We can't check the reporter's internal state easily with the mock
 
@@ -566,7 +570,7 @@ class TestUnifiedMCPFuzzerClient:
 
         # Call the method
         self.client.print_overall_summary(tool_results, protocol_results)
-        
+
         # Just verify that the method completes without error
         # We can't check the reporter's internal state easily with the mock
 
@@ -598,24 +602,24 @@ class TestUnifiedMCPFuzzerClient:
         # Mock tool client result with safety metadata
         mock_fuzz_result = [
             {
-                "args": {"param1": "test_value"}, 
+                "args": {"param1": "test_value"},
                 "success": True,
                 "safety_blocked": True,
-                "safety_sanitized": False
+                "safety_sanitized": False,
             }
         ]
-        
+
         # Set up the mock return value
         self.mock_tool_client.fuzz_tool.return_value = mock_fuzz_result
-        
+
         # Call the method under test
         results = await self.client.fuzz_tool(tool, runs=1)
-        
+
         # Verify results
         assert len(results) == 1
         assert results[0]["safety_blocked"] is True
         assert results[0]["safety_sanitized"] is False
-        
+
         # Verify tool_client.fuzz_tool was called
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=None
@@ -633,27 +637,27 @@ class TestUnifiedMCPFuzzerClient:
         # Mock tool client result with content blocking
         mock_fuzz_result = [
             {
-                "args": {"param1": "test_value"}, 
+                "args": {"param1": "test_value"},
                 "success": True,
                 "safety_blocked": True,
                 "result": {
                     "content": [
                         {"text": "This was [SAFETY BLOCKED] due to dangerous content"}
                     ]
-                }
+                },
             }
         ]
-        
+
         # Set up the mock return value
         self.mock_tool_client.fuzz_tool.return_value = mock_fuzz_result
-        
+
         # Call the method under test
         results = await self.client.fuzz_tool(tool, runs=1)
-        
+
         # Verify results
         assert len(results) == 1
         assert results[0]["safety_blocked"] is True
-        
+
         # Verify tool_client.fuzz_tool was called
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=None
@@ -671,27 +675,25 @@ class TestUnifiedMCPFuzzerClient:
         # Mock tool client result with blocked content variant
         mock_fuzz_result = [
             {
-                "args": {"param1": "test_value"}, 
+                "args": {"param1": "test_value"},
                 "success": True,
                 "safety_blocked": True,
                 "result": {
-                    "content": [
-                        {"text": "This was [BLOCKED due to dangerous content"}
-                    ]
-                }
+                    "content": [{"text": "This was [BLOCKED due to dangerous content"}]
+                },
             }
         ]
-        
+
         # Set up the mock return value
         self.mock_tool_client.fuzz_tool.return_value = mock_fuzz_result
-        
+
         # Call the method under test
         results = await self.client.fuzz_tool(tool, runs=1)
-        
+
         # Verify results
         assert len(results) == 1
         assert results[0]["safety_blocked"] is True
-        
+
         # Verify tool_client.fuzz_tool was called
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=None
@@ -710,21 +712,23 @@ class TestUnifiedMCPFuzzerClient:
             "test_tool2": {
                 "realistic": [{"args": {}, "result": "success"}],
                 "aggressive": [{"args": {}, "result": "success"}],
-            }
+            },
         }
-        
+
         # Set up the mock return value
         self.mock_tool_client.fuzz_all_tools_both_phases.return_value = mock_results
-        
+
         # Call the method under test
         results = await self.client.fuzz_all_tools_both_phases(runs_per_phase=1)
-        
+
         # Verify results
         assert "test_tool1" in results
         assert "test_tool2" in results
-        
+
         # Verify tool_client.fuzz_all_tools_both_phases was called
-        self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(runs_per_phase=1)
+        self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(
+            runs_per_phase=1
+        )
 
     @pytest.mark.asyncio
     @patch("mcp_fuzzer.client.base.logging")
@@ -732,15 +736,17 @@ class TestUnifiedMCPFuzzerClient:
         """Test fuzz_all_tools_both_phases with empty tools list."""
         # Set up the mock return value for empty tools
         self.mock_tool_client.fuzz_all_tools_both_phases.return_value = {}
-        
+
         # Call the method under test
         results = await self.client.fuzz_all_tools_both_phases()
-        
+
         # Verify results
         assert results == {}
-        
+
         # Verify tool_client.fuzz_all_tools_both_phases was called
-        self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(runs_per_phase=5)
+        self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(
+            runs_per_phase=5
+        )
 
     @pytest.mark.asyncio
     async def test_send_protocol_request_initialize(self):
@@ -748,7 +754,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "InitializeRequest"
         data = {"params": {"version": "1.0"}}
         mock_response = {"result": {"capabilities": {}}}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "initialize_request", data, mock_response
         )
@@ -759,7 +765,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "ProgressNotification"
         data = {"params": {"progress": 50}}
         mock_response = {"status": "notification_sent"}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "progress_notification", data, mock_response
         )
@@ -768,58 +774,61 @@ class TestUnifiedMCPFuzzerClient:
         self, protocol_type, method_name, data, mock_response
     ):
         """Helper method for testing protocol request methods.
-        
+
         Args:
             protocol_type: The protocol type to test
-            method_name: The name of the method that should be called 
+            method_name: The name of the method that should be called
                 (without the _send_ prefix)
             data: The data to pass to the method
             mock_response: The mock response to return
         """
         # Get the method to call
         method_to_call = getattr(self.mock_protocol_client, f"_send_{method_name}")
-        
-        # Create a new mock for _send_protocol_request that will call the real 
+
+        # Create a new mock for _send_protocol_request that will call the real
         # implementation
-        original_send_protocol_request = \
+        original_send_protocol_request = (
             self.mock_protocol_client._send_protocol_request
-        
+        )
+
         # Create a custom implementation that will call the appropriate method
         async def mock_send_protocol_request(p_type, p_data):
             if p_type == protocol_type:
                 return await method_to_call(p_data)
             return mock_response
-            
+
         # Replace the mock with our custom implementation
         self.mock_protocol_client._send_protocol_request = mock_send_protocol_request
-        
+
         # Set up the mock return value
         method_to_call.return_value = mock_response
-        
+
         # Call the method under test
         result = await self.mock_protocol_client._send_protocol_request(
             protocol_type, data
         )
-        
+
         # Verify the result and that the correct method was called
         assert result == mock_response
         method_to_call.assert_called_once_with(data)
-        
+
         # Restore the original mock
-        self.mock_protocol_client._send_protocol_request = \
+        self.mock_protocol_client._send_protocol_request = (
             original_send_protocol_request
-    
+        )
+
     @pytest.mark.asyncio
     async def test_send_protocol_request_cancel(self):
         """Test _send_protocol_request with cancel type."""
         protocol_type = "CancelNotification"
         data = {"params": {"id": 123}}
         mock_response = {"status": "notification_sent"}
-        
+
         # Make sure _send_cancel_notification is an AsyncMock
-        self.mock_protocol_client._send_cancel_notification = \
-            AsyncMock(return_value=mock_response)
-        
+        self.mock_protocol_client._send_cancel_notification = AsyncMock(
+            return_value=mock_response
+        )
+
         await self._test_protocol_request_helper(
             protocol_type, "cancel_notification", data, mock_response
         )
@@ -830,7 +839,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "ListResourcesRequest"
         data = {"params": {"path": "/"}}
         mock_response = {"resources": ["file1.txt", "file2.txt"]}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "list_resources_request", data, mock_response
         )
@@ -841,7 +850,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "ReadResourceRequest"
         data = {"params": {"uri": "file://test.txt"}}
         mock_response = {"content": "test content"}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "read_resource_request", data, mock_response
         )
@@ -852,7 +861,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "SetLevelRequest"
         data = {"params": {"level": "INFO"}}
         mock_response = {"status": "updated"}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "set_level_request", data, mock_response
         )
@@ -863,7 +872,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "CreateMessageRequest"
         data = {"params": {"text": "Hello"}}
         mock_response = {"id": "msg123"}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "create_message_request", data, mock_response
         )
@@ -874,7 +883,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "ListPromptsRequest"
         data = {"params": {}}
         mock_response = {"prompts": [{"id": "prompt1", "name": "Test Prompt"}]}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "list_prompts_request", data, mock_response
         )
@@ -885,7 +894,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "GetPromptRequest"
         data = {"params": {"id": "prompt1"}}
         mock_response = {"prompt": {"id": "prompt1", "content": "Test prompt content"}}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "get_prompt_request", data, mock_response
         )
@@ -896,7 +905,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "ListRootsRequest"
         data = {"params": {}}
         mock_response = {"roots": [{"name": "root1", "uri": "file:///root1"}]}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "list_roots_request", data, mock_response
         )
@@ -907,7 +916,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "SubscribeRequest"
         data = {"params": {"uri": "file://test.txt"}}
         mock_response = {"status": "subscribed"}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "subscribe_request", data, mock_response
         )
@@ -918,7 +927,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "UnsubscribeRequest"
         data = {"params": {"uri": "file://test.txt"}}
         mock_response = {"status": "unsubscribed"}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "unsubscribe_request", data, mock_response
         )
@@ -929,7 +938,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "CompleteRequest"
         data = {"params": {"text": "Complete this"}}
         mock_response = {"completion": "Completed text"}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "complete_request", data, mock_response
         )
@@ -940,7 +949,7 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "unknown_type"
         data = {"method": "custom/method", "params": {"data": "test"}}
         mock_response = {"result": "success"}
-        
+
         await self._test_protocol_request_helper(
             protocol_type, "generic_request", data, mock_response
         )
@@ -976,7 +985,7 @@ class TestUnifiedMCPFuzzerClient:
         # Mock tool_client.fuzz_all_tools to return a dictionary with results
         mock_results = {
             "test_tool1": [{"args": {}, "result": "success"}],
-            "test_tool2": [{"error": "Fuzzing failed", "exception": "Fuzzing failed"}]
+            "test_tool2": [{"error": "Fuzzing failed", "exception": "Fuzzing failed"}],
         }
         self.mock_tool_client.fuzz_all_tools.return_value = mock_results
 
@@ -1005,7 +1014,7 @@ class TestUnifiedMCPFuzzerClient:
 
         # Mock the tool_client.fuzz_tool to return the desired result
         self.mock_tool_client.fuzz_tool.return_value = [{"args": {"param1": "unsafe"}}]
-        
+
         # Mock the response to include safety metadata
         self.mock_transport.call_tool.return_value = {
             "content": [],
@@ -1013,15 +1022,17 @@ class TestUnifiedMCPFuzzerClient:
         }
 
         # Set up expected result for tool_client.fuzz_tool
-        expected_result = [{
-            "args": {"param1": "sanitized"},
-            "safety_sanitized": True,
-            "safety_blocked": False,
-            "result": {
-                "content": [],
-                "_meta": {"safety_sanitized": True, "safety_blocked": False},
+        expected_result = [
+            {
+                "args": {"param1": "sanitized"},
+                "safety_sanitized": True,
+                "safety_blocked": False,
+                "result": {
+                    "content": [],
+                    "_meta": {"safety_sanitized": True, "safety_blocked": False},
+                },
             }
-        }]
+        ]
         self.mock_tool_client.fuzz_tool.return_value = expected_result
 
         results = await self.client.fuzz_tool(tool, runs=1)
@@ -1029,7 +1040,7 @@ class TestUnifiedMCPFuzzerClient:
         assert results[0]["args"] == {"param1": "sanitized"}
         assert results[0]["safety_sanitized"] is True
         assert results[0]["safety_blocked"] is False
-        
+
         # Verify tool_client.fuzz_tool was called
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=None
@@ -1051,17 +1062,19 @@ class TestUnifiedMCPFuzzerClient:
         self.mock_transport.call_tool.return_value = {"content": []}
 
         # Set up expected result for tool_client.fuzz_tool
-        expected_result = [{
-            "args": {"param1": "value", "api_key": "secret"},
-            "result": {"content": []},
-            "success": True
-        }]
+        expected_result = [
+            {
+                "args": {"param1": "value", "api_key": "secret"},
+                "result": {"content": []},
+                "success": True,
+            }
+        ]
         self.mock_tool_client.fuzz_tool.return_value = expected_result
 
         results = await self.client.fuzz_tool(tool, runs=1)
         assert len(results) == 1
         assert results[0]["args"] == {"param1": "value", "api_key": "secret"}
-        
+
         # Verify tool_client.fuzz_tool was called
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=None
@@ -1099,14 +1112,16 @@ class TestUnifiedMCPFuzzerClient:
             "name": "test_tool",
             "inputSchema": {"properties": {"param1": {"type": "string"}}},
         }
-        
+
         # Set up expected result for tool_client.fuzz_tool
-        expected_result = [{
-            "args": {"param1": "value"},
-            "exception": "MCP specific error",
-            "timed_out": False,
-            "safety_blocked": False
-        }]
+        expected_result = [
+            {
+                "args": {"param1": "value"},
+                "exception": "MCP specific error",
+                "timed_out": False,
+                "safety_blocked": False,
+            }
+        ]
         self.mock_tool_client.fuzz_tool.return_value = expected_result
 
         results = await self.client.fuzz_tool(tool, runs=1)
@@ -1114,7 +1129,7 @@ class TestUnifiedMCPFuzzerClient:
         assert results[0]["exception"] == "MCP specific error"
         assert results[0]["timed_out"] is False
         assert results[0]["safety_blocked"] is False
-        
+
         # Verify tool_client.fuzz_tool was called
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=None
@@ -1153,7 +1168,7 @@ class TestUnifiedMCPFuzzerClient:
         assert len(results) == 1
         assert "tool1" in results
         assert results["tool1"][0]["error"] == "tool_timeout"
-        
+
         # Verify tool_client.fuzz_all_tools was called
         self.mock_tool_client.fuzz_all_tools.assert_called_once_with(
             runs_per_tool=1, tool_timeout=None
@@ -1181,26 +1196,32 @@ class TestUnifiedMCPFuzzerClient:
         """Test sending a list resources request."""
         data = {"params": {"path": "/"}}
         mock_response = {"resources": []}
-        self.mock_protocol_client._send_list_resources_request.return_value = \
+        self.mock_protocol_client._send_list_resources_request.return_value = (
             mock_response
-        
+        )
+
         result = await self.mock_protocol_client._send_list_resources_request(data)
-        
+
         assert result == mock_response
-        self.mock_protocol_client._send_list_resources_request.assert_called_once_with(data)
+        self.mock_protocol_client._send_list_resources_request.assert_called_once_with(
+            data
+        )
 
     @pytest.mark.asyncio
     async def test_send_read_resource_request(self):
         """Test sending a read resource request."""
         data = {"params": {"uri": "file://test.txt"}}
         mock_response = {"content": "test"}
-        self.mock_protocol_client._send_read_resource_request.return_value = \
+        self.mock_protocol_client._send_read_resource_request.return_value = (
             mock_response
-        
+        )
+
         result = await self.mock_protocol_client._send_read_resource_request(data)
-        
+
         assert result == mock_response
-        self.mock_protocol_client._send_read_resource_request.assert_called_once_with(data)
+        self.mock_protocol_client._send_read_resource_request.assert_called_once_with(
+            data
+        )
 
     @pytest.mark.asyncio
     async def test_send_set_level_request(self):
@@ -1208,9 +1229,9 @@ class TestUnifiedMCPFuzzerClient:
         data = {"params": {"level": "INFO"}}
         mock_response = {"status": "updated"}
         self.mock_protocol_client._send_set_level_request.return_value = mock_response
-        
+
         result = await self.mock_protocol_client._send_set_level_request(data)
-        
+
         assert result == mock_response
         self.mock_protocol_client._send_set_level_request.assert_called_once_with(data)
 
@@ -1219,26 +1240,32 @@ class TestUnifiedMCPFuzzerClient:
         """Test sending a create message request."""
         data = {"params": {"text": "Hello"}}
         mock_response = {"id": "msg123"}
-        self.mock_protocol_client._send_create_message_request.return_value = \
+        self.mock_protocol_client._send_create_message_request.return_value = (
             mock_response
-        
+        )
+
         result = await self.mock_protocol_client._send_create_message_request(data)
-        
+
         assert result == mock_response
-        self.mock_protocol_client._send_create_message_request.assert_called_once_with(data)
+        self.mock_protocol_client._send_create_message_request.assert_called_once_with(
+            data
+        )
 
     @pytest.mark.asyncio
     async def test_send_list_prompts_request(self):
         """Test sending a list prompts request."""
         data = {"params": {}}
         mock_response = {"prompts": []}
-        self.mock_protocol_client._send_list_prompts_request.return_value = \
+        self.mock_protocol_client._send_list_prompts_request.return_value = (
             mock_response
-        
+        )
+
         result = await self.mock_protocol_client._send_list_prompts_request(data)
-        
+
         assert result == mock_response
-        self.mock_protocol_client._send_list_prompts_request.assert_called_once_with(data)
+        self.mock_protocol_client._send_list_prompts_request.assert_called_once_with(
+            data
+        )
 
     @pytest.mark.asyncio
     async def test_send_get_prompt_request(self):
@@ -1246,9 +1273,9 @@ class TestUnifiedMCPFuzzerClient:
         data = {"params": {"id": "prompt1"}}
         mock_response = {"prompt": "test prompt"}
         self.mock_protocol_client._send_get_prompt_request.return_value = mock_response
-        
+
         result = await self.mock_protocol_client._send_get_prompt_request(data)
-        
+
         assert result == mock_response
         self.mock_protocol_client._send_get_prompt_request.assert_called_once_with(data)
 
@@ -1258,9 +1285,9 @@ class TestUnifiedMCPFuzzerClient:
         data = {"params": {}}
         mock_response = {"roots": []}
         self.mock_protocol_client._send_list_roots_request.return_value = mock_response
-        
+
         result = await self.mock_protocol_client._send_list_roots_request(data)
-        
+
         assert result == mock_response
         self.mock_protocol_client._send_list_roots_request.assert_called_once_with(data)
 
@@ -1270,9 +1297,9 @@ class TestUnifiedMCPFuzzerClient:
         data = {"params": {"uri": "file://test"}}
         mock_response = {"status": "subscribed"}
         self.mock_protocol_client._send_subscribe_request.return_value = mock_response
-        
+
         result = await self.mock_protocol_client._send_subscribe_request(data)
-        
+
         assert result == mock_response
         self.mock_protocol_client._send_subscribe_request.assert_called_once_with(data)
 
@@ -1282,11 +1309,13 @@ class TestUnifiedMCPFuzzerClient:
         data = {"params": {"uri": "file://test"}}
         mock_response = {"status": "unsubscribed"}
         self.mock_protocol_client._send_unsubscribe_request.return_value = mock_response
-        
+
         result = await self.mock_protocol_client._send_unsubscribe_request(data)
-        
+
         assert result == mock_response
-        self.mock_protocol_client._send_unsubscribe_request.assert_called_once_with(data)
+        self.mock_protocol_client._send_unsubscribe_request.assert_called_once_with(
+            data
+        )
 
     @pytest.mark.asyncio
     async def test_send_complete_request(self):
@@ -1294,9 +1323,9 @@ class TestUnifiedMCPFuzzerClient:
         data = {"params": {"text": "Complete this"}}
         mock_response = {"completion": "Completed text"}
         self.mock_protocol_client._send_complete_request.return_value = mock_response
-        
+
         result = await self.mock_protocol_client._send_complete_request(data)
-        
+
         assert result == mock_response
         self.mock_protocol_client._send_complete_request.assert_called_once_with(data)
 
@@ -1306,9 +1335,9 @@ class TestUnifiedMCPFuzzerClient:
         data = {"method": "custom/method", "params": {"data": "test"}}
         mock_response = {"result": "success"}
         self.mock_protocol_client._send_generic_request.return_value = mock_response
-        
+
         result = await self.mock_protocol_client._send_generic_request(data)
-        
+
         assert result == mock_response
         self.mock_protocol_client._send_generic_request.assert_called_once_with(data)
 
@@ -1567,20 +1596,22 @@ class TestUnifiedMCPFuzzerClient:
         }
 
         # Create expected results with sanitized data
-        expected_results = [{
-            "fuzz_data": {
-                "jsonrpc": "2.0",
-                "method": "initialize",
-                "params": {"protocolVersion": "sanitized"},
-            },
-            "success": True,
-            "safety_sanitized": True,
-            "result": {
-                "result": {"capabilities": {}},
-                "_meta": {"safety_sanitized": True},
+        expected_results = [
+            {
+                "fuzz_data": {
+                    "jsonrpc": "2.0",
+                    "method": "initialize",
+                    "params": {"protocolVersion": "sanitized"},
+                },
+                "success": True,
+                "safety_sanitized": True,
+                "result": {
+                    "result": {"capabilities": {}},
+                    "_meta": {"safety_sanitized": True},
+                },
             }
-        }]
-        
+        ]
+
         # Mock protocol_client.fuzz_protocol_type
         self.mock_protocol_client.fuzz_protocol_type.return_value = expected_results
 
@@ -1590,7 +1621,7 @@ class TestUnifiedMCPFuzzerClient:
         # Verify results
         assert len(results) == 1
         assert "sanitized" in results[0]["fuzz_data"]["params"]["protocolVersion"]
-        
+
         # Verify protocol_client.fuzz_protocol_type was called
         self.mock_protocol_client.fuzz_protocol_type.assert_called_once_with(
             protocol_type, runs=1
@@ -1608,7 +1639,7 @@ class TestUnifiedMCPFuzzerClient:
         # Set up expected results for tool_client.fuzz_tool
         expected_results = [
             {"exception": "Invalid schema", "args": {}, "success": False},
-            {"exception": "Invalid schema", "args": {}, "success": False}
+            {"exception": "Invalid schema", "args": {}, "success": False},
         ]
         self.mock_tool_client.fuzz_tool.return_value = expected_results
 
@@ -1621,7 +1652,7 @@ class TestUnifiedMCPFuzzerClient:
         for result in results:
             assert "exception" in result
             assert "Invalid schema" in result["exception"]
-        
+
         # Verify tool_client.fuzz_tool was called
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=2, tool_timeout=None
@@ -1637,12 +1668,14 @@ class TestUnifiedMCPFuzzerClient:
         }
 
         # Set up expected results for tool_client.fuzz_tool with timeout
-        expected_result = [{
-            "args": {"param1": "test_value"},
-            "timed_out": True,
-            "exception": "Tool execution timed out",
-            "success": False
-        }]
+        expected_result = [
+            {
+                "args": {"param1": "test_value"},
+                "timed_out": True,
+                "exception": "Tool execution timed out",
+                "success": False,
+            }
+        ]
         self.mock_tool_client.fuzz_tool.return_value = expected_result
 
         # Execute the method with timeout parameter
@@ -1652,7 +1685,7 @@ class TestUnifiedMCPFuzzerClient:
         assert len(results) == 1
         assert "timed_out" in results[0]
         assert results[0]["timed_out"] is True
-        
+
         # Verify tool_client.fuzz_tool was called with timeout parameter
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=0.05
@@ -1673,16 +1706,16 @@ class TestUnifiedMCPFuzzerClient:
                 {
                     "args": {"param1": "realistic"},
                     "success": True,
-                    "result": {"result": "realistic_result"}
+                    "result": {"result": "realistic_result"},
                 }
             ],
             "aggressive": [
                 {
                     "args": {"param1": "aggressive"},
                     "success": True,
-                    "result": {"result": "aggressive_result"}
+                    "result": {"result": "aggressive_result"},
                 }
-            ]
+            ],
         }
         self.mock_tool_client.fuzz_tool_both_phases.return_value = expected_result
 
@@ -1696,7 +1729,7 @@ class TestUnifiedMCPFuzzerClient:
         assert len(results["aggressive"]) == 1
         assert results["realistic"][0]["result"] == {"result": "realistic_result"}
         assert results["aggressive"][0]["result"] == {"result": "aggressive_result"}
-        
+
         # Verify tool_client.fuzz_tool_both_phases was called
         self.mock_tool_client.fuzz_tool_both_phases.assert_called_once_with(
             tool, runs_per_phase=1
@@ -1716,16 +1749,18 @@ class TestUnifiedMCPFuzzerClient:
 
         # Set up expected results for protocol_client.fuzz_protocol_type with blocked
         # message
-        expected_result = [{
-            "fuzz_data": {
-                "jsonrpc": "2.0",
-                "method": "initialize",
-                "params": {"protocolVersion": "unsafe"},
-            },
-            "safety_blocked": True,
-            "blocking_reason": "Contains unsafe content",
-            "success": False
-        }]
+        expected_result = [
+            {
+                "fuzz_data": {
+                    "jsonrpc": "2.0",
+                    "method": "initialize",
+                    "params": {"protocolVersion": "unsafe"},
+                },
+                "safety_blocked": True,
+                "blocking_reason": "Contains unsafe content",
+                "success": False,
+            }
+        ]
         self.mock_protocol_client.fuzz_protocol_type.return_value = expected_result
 
         # Execute the method
@@ -1736,12 +1771,12 @@ class TestUnifiedMCPFuzzerClient:
         assert results[0]["safety_blocked"] is True
         assert "blocking_reason" in results[0]
         assert results[0]["blocking_reason"] == "Contains unsafe content"
-        
+
         # Verify protocol_client.fuzz_protocol_type was called
         self.mock_protocol_client.fuzz_protocol_type.assert_called_once_with(
             protocol_type, runs=1
         )
-        
+
         # The transport should not have been called because the message was blocked
         self.mock_transport.send_request.assert_not_called()
 
@@ -1752,12 +1787,14 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "InitializeRequest"
 
         # Set up expected results for protocol_client.fuzz_protocol_type with an error
-        expected_result = [{
-            "fuzz_data": None,
-            "exception": "Invalid protocol type",
-            "traceback": "Traceback...",
-            "success": False
-        }]
+        expected_result = [
+            {
+                "fuzz_data": None,
+                "exception": "Invalid protocol type",
+                "traceback": "Traceback...",
+                "success": False,
+            }
+        ]
         self.mock_protocol_client.fuzz_protocol_type.return_value = expected_result
 
         # Execute the method
@@ -1767,7 +1804,7 @@ class TestUnifiedMCPFuzzerClient:
         assert len(results) == 1
         assert "exception" in results[0]
         assert "Invalid protocol type" in results[0]["exception"]
-        
+
         # Verify protocol_client.fuzz_protocol_type was called
         self.mock_protocol_client.fuzz_protocol_type.assert_called_once_with(
             protocol_type, runs=1
@@ -1782,7 +1819,7 @@ class TestUnifiedMCPFuzzerClient:
             "fast_tool": [{"result": "success"}],
             "slow_tool": [
                 {"error": "tool_timeout", "exception": "Tool fuzzing timed out"}
-            ]
+            ],
         }
         self.mock_tool_client.fuzz_all_tools.return_value = expected_result
 
@@ -1797,7 +1834,7 @@ class TestUnifiedMCPFuzzerClient:
         assert results["slow_tool"][0]["error"] == "tool_timeout"
         assert "exception" in results["slow_tool"][0]
         assert "Tool fuzzing timed out" in results["slow_tool"][0]["exception"]
-        
+
         # Verify tool_client.fuzz_all_tools was called with timeout parameter
         self.mock_tool_client.fuzz_all_tools.assert_called_once_with(
             runs_per_tool=1, tool_timeout=0.1
@@ -1809,15 +1846,17 @@ class TestUnifiedMCPFuzzerClient:
         """Test fuzz_all_protocol_types when no protocol types are returned."""
         # Set up protocol_client.fuzz_all_protocol_types to return empty results
         self.mock_protocol_client.fuzz_all_protocol_types.return_value = {}
-        
+
         # Execute the method
         results = await self.client.fuzz_all_protocol_types(runs_per_type=1)
-        
+
         # Verify results
         assert results == {}
-        
+
         # Verify protocol_client.fuzz_all_protocol_types was called
-        self.mock_protocol_client.fuzz_all_protocol_types.assert_called_once_with(runs_per_type=1)
+        self.mock_protocol_client.fuzz_all_protocol_types.assert_called_once_with(
+            runs_per_type=1
+        )
 
     @pytest.mark.asyncio
     @patch("mcp_fuzzer.client.base.logging")
@@ -1840,17 +1879,19 @@ class TestUnifiedMCPFuzzerClient:
         protocol_type = "ProgressNotification"
 
         # Mock protocol client result for notification type
-        mock_result = [{
-            "fuzz_data": {
-                "jsonrpc": "2.0",
-                "method": "notifications/progress",
-                "params": {"progress": 50},
-            },
-            "result": {"status": "notification_sent"},
-            "success": True
-        }]
+        mock_result = [
+            {
+                "fuzz_data": {
+                    "jsonrpc": "2.0",
+                    "method": "notifications/progress",
+                    "params": {"progress": 50},
+                },
+                "result": {"status": "notification_sent"},
+                "success": True,
+            }
+        ]
         self.mock_protocol_client.fuzz_protocol_type.return_value = mock_result
-        
+
         # Execute the method
         results = await self.client.fuzz_protocol_type(protocol_type, runs=1)
 
@@ -1858,7 +1899,7 @@ class TestUnifiedMCPFuzzerClient:
         assert len(results) == 1
         assert "status" in results[0]["result"]
         assert results[0]["result"]["status"] == "notification_sent"
-        
+
         # Verify protocol_client.fuzz_protocol_type was called
         self.mock_protocol_client.fuzz_protocol_type.assert_called_once_with(
             protocol_type, runs=1
@@ -1885,11 +1926,9 @@ class TestUnifiedMCPFuzzerClient:
         expected_result = {
             "success_tool": {
                 "realistic": [{"args": {}, "result": "success"}],
-                "aggressive": [{"args": {}, "result": "success"}]
+                "aggressive": [{"args": {}, "result": "success"}],
             },
-            "error_tool": {
-                "error": "Tool schema error"
-            }
+            "error_tool": {"error": "Tool schema error"},
         }
         self.mock_tool_client.fuzz_all_tools_both_phases.return_value = expected_result
 
@@ -1905,9 +1944,11 @@ class TestUnifiedMCPFuzzerClient:
         assert "error_tool" in results
         assert "error" in results["error_tool"]
         assert "Tool schema error" in results["error_tool"]["error"]
-        
+
         # Verify tool_client.fuzz_all_tools_both_phases was called
-        self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(runs_per_phase=1)
+        self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(
+            runs_per_phase=1
+        )
 
     @pytest.mark.asyncio
     async def test_fuzz_protocol_type_invalid_type(self):
@@ -1916,22 +1957,19 @@ class TestUnifiedMCPFuzzerClient:
 
         # Set up protocol_client.fuzz_protocol_type to return empty results for invalid
         # type
-        expected_result = [{
-            "exception": "list index out of range",
-            "success": False
-        }]
+        expected_result = [{"exception": "list index out of range", "success": False}]
         self.mock_protocol_client.fuzz_protocol_type.return_value = expected_result
-        
+
         # Execute the method
         results = await self.client.fuzz_protocol_type(protocol_type, runs=1)
-        
+
         # Verify results
         assert len(results) == 1
         assert "exception" in results[0]
         assert "list index out of range" in results[0]["exception"]
         assert "success" in results[0]
         assert not results[0]["success"]
-        
+
         # Verify protocol_client.fuzz_protocol_type was called
         self.mock_protocol_client.fuzz_protocol_type.assert_called_once_with(
             protocol_type, runs=1
@@ -1979,12 +2017,15 @@ class TestUnifiedMCPFuzzerClient:
         }
 
         # Set up expected results for tool_client.fuzz_tool with rate limiting error
-        expected_result = [{
-            "args": {"param1": "test_value"},
-            "exception": ("Rate limit exceeded: {'code': 429, "
-                         "'message': 'Too many requests'}"),
-            "success": False
-        }]
+        expected_result = [
+            {
+                "args": {"param1": "test_value"},
+                "exception": (
+                    "Rate limit exceeded: {'code': 429, 'message': 'Too many requests'}"
+                ),
+                "success": False,
+            }
+        ]
         self.mock_tool_client.fuzz_tool.return_value = expected_result
 
         # Execute the method
@@ -1996,7 +2037,7 @@ class TestUnifiedMCPFuzzerClient:
         assert "Rate limit exceeded" in results[0]["exception"]
         assert "code': 429" in results[0]["exception"]
         assert "Too many requests" in results[0]["exception"]
-        
+
         # Verify tool_client.fuzz_tool was called
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=None
@@ -2047,11 +2088,13 @@ class TestUnifiedMCPFuzzerClient:
         }
 
         # Set up expected results for tool_client.fuzz_tool with unexpected response
-        expected_result = [{
-            "args": {"param1": "test_value"},
-            "result": "Not a dictionary",
-            "success": True
-        }]
+        expected_result = [
+            {
+                "args": {"param1": "test_value"},
+                "result": "Not a dictionary",
+                "success": True,
+            }
+        ]
         self.mock_tool_client.fuzz_tool.return_value = expected_result
 
         # Execute the method
@@ -2060,7 +2103,7 @@ class TestUnifiedMCPFuzzerClient:
         # Verify results
         assert len(results) == 1
         assert results[0]["result"] == "Not a dictionary"
-        
+
         # Verify tool_client.fuzz_tool was called
         self.mock_tool_client.fuzz_tool.assert_called_once_with(
             tool, runs=1, tool_timeout=None

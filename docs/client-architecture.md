@@ -14,7 +14,6 @@ mcp_fuzzer/
 │   ├── tool_client.py           # Tool fuzzing functionality
 │   ├── protocol_client.py       # Protocol fuzzing functionality
 │   └── utils.py                 # Utility functions
-└── client.py                    # Backward compatibility
 ```
 
 ## Components

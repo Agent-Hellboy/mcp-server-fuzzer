@@ -32,7 +32,7 @@ class ToolClient:
     ):
         """
         Initialize the tool client.
-        
+
         Args:
             transport: Transport protocol for server communication
             auth_manager: Authentication manager for tool authentication
@@ -47,7 +47,7 @@ class ToolClient:
 
     async def _get_tools_from_server(self) -> List[Dict[str, Any]]:
         """Get tools from the server.
-        
+
         Returns:
             List of tool definitions or empty list if failed.
         """
@@ -69,18 +69,18 @@ class ToolClient:
         tool_timeout: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
         """Fuzz a single tool with timeout handling.
-        
+
         Args:
             tool: Tool definition to fuzz
             runs_per_tool: Number of runs per tool
             tool_timeout: Optional timeout for tool fuzzing
-            
+
         Returns:
             List of fuzzing results
         """
         tool_name = tool.get("name", "unknown")
         max_tool_time = DEFAULT_MAX_TOOL_TIME  # 1 minute max per tool
-        
+
         try:
             tool_task = asyncio.create_task(
                 self.fuzz_tool(tool, runs_per_tool, tool_timeout=tool_timeout)
@@ -88,7 +88,7 @@ class ToolClient:
 
             try:
                 return await asyncio.wait_for(tool_task, timeout=max_tool_time)
-            except (asyncio.TimeoutError):
+            except asyncio.TimeoutError:
                 self._logger.warning(f"Tool {tool_name} took too long, cancelling")
                 tool_task.cancel()
                 try:
@@ -165,9 +165,10 @@ class ToolClient:
                     tool.get("name", "unknown")
                 )
 
-                # Merge auth params with tool arguments if needed
+                # Merge auth params only into the call payload; never persist secrets
+                args_for_call = dict(sanitized_args)
                 if auth_params:
-                    sanitized_args.update(auth_params)
+                    args_for_call.update(auth_params)
 
                 # High-level run progress at INFO without arguments
                 self._logger.info(f"Fuzzing {tool['name']} (run {i + 1}/{runs})")
@@ -176,7 +177,7 @@ class ToolClient:
                 try:
                     timeout = tool_timeout
                     result = await self.transport.call_tool(
-                        tool["name"], sanitized_args, auth_headers, timeout=timeout
+                        tool["name"], args_for_call, auth_headers, timeout=timeout
                     )
                     results.append(
                         {
@@ -188,9 +189,7 @@ class ToolClient:
                         }
                     )
                 except Exception as e:
-                    self._logger.warning(
-                        f"Exception calling tool {tool['name']}: {e}"
-                    )
+                    self._logger.warning(f"Exception calling tool {tool['name']}: {e}")
                     results.append(
                         {
                             "args": sanitized_args,
@@ -265,12 +264,12 @@ class ToolClient:
     ):
         """Print phase report statistics."""
         from ..reports import FuzzerReporter
-        
+
         if not hasattr(self, "reporter") or not isinstance(
             self.reporter, FuzzerReporter
         ):
             return
-            
+
         successful = len([r for r in results if r.get("success", False)])
         total = len(results)
         self.reporter.console.print(
@@ -282,9 +281,9 @@ class ToolClient:
     ) -> Dict[str, Any]:
         """Fuzz a single tool in both phases and report results."""
         tool_name = tool.get("name", "unknown")
-        
+
         self._logger.info(f"Two-phase fuzzing tool: {tool_name}")
-            
+
         try:
             # Run both phases for this tool
             phase_results = await self.fuzz_tool_both_phases(tool, runs_per_phase)
@@ -292,8 +291,7 @@ class ToolClient:
             # Check if the result is an error
             if "error" in phase_results:
                 self._logger.error(
-                    f"Error in two-phase fuzzing {tool_name}: "
-                    f"{phase_results['error']}"
+                    f"Error in two-phase fuzzing {tool_name}: {phase_results['error']}"
                 )
                 return {"error": phase_results["error"]}
 
@@ -321,20 +319,22 @@ class ToolClient:
             realistic_processed = []
             for fuzz_result in realistic_results:
                 args = fuzz_result["args"]
-                
+
                 # Skip if safety system blocks this call
                 if self.safety_system and self.safety_system.should_skip_tool_call(
                     tool_name, args
                 ):
-                    realistic_processed.append({
-                        "args": args,
-                        "exception": "safety_blocked",
-                        "safety_blocked": True,
-                        "safety_sanitized": False,
-                        "success": False,
-                    })
+                    realistic_processed.append(
+                        {
+                            "args": args,
+                            "exception": "safety_blocked",
+                            "safety_blocked": True,
+                            "safety_sanitized": False,
+                            "success": False,
+                        }
+                    )
                     continue
-                
+
                 # Sanitize arguments if needed
                 sanitized_args = args
                 safety_sanitized = False
@@ -343,35 +343,39 @@ class ToolClient:
                         tool_name, args
                     )
                     safety_sanitized = sanitized_args != args
-                
+
                 # Get authentication for this tool
                 auth_headers = self.auth_manager.get_auth_headers_for_tool(tool_name)
                 auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
-                
+
                 # Merge auth params with tool arguments if needed
                 if auth_params:
                     sanitized_args.update(auth_params)
-                
+
                 # Call the tool with the generated arguments
                 try:
                     result = await self.transport.call_tool(
                         tool_name, sanitized_args, auth_headers
                     )
-                    realistic_processed.append({
-                        "args": sanitized_args,
-                        "result": result,
-                        "safety_blocked": False,
-                        "safety_sanitized": safety_sanitized,
-                        "success": True,
-                    })
+                    realistic_processed.append(
+                        {
+                            "args": sanitized_args,
+                            "result": result,
+                            "safety_blocked": False,
+                            "safety_sanitized": safety_sanitized,
+                            "success": True,
+                        }
+                    )
                 except Exception as e:
-                    realistic_processed.append({
-                        "args": sanitized_args,
-                        "exception": str(e),
-                        "safety_blocked": False,
-                        "safety_sanitized": safety_sanitized,
-                        "success": False,
-                    })
+                    realistic_processed.append(
+                        {
+                            "args": sanitized_args,
+                            "exception": str(e),
+                            "safety_blocked": False,
+                            "safety_sanitized": safety_sanitized,
+                            "success": False,
+                        }
+                    )
 
             # Phase 2: Aggressive fuzzing
             self._logger.info(f"Phase 2 (Aggressive): {tool_name}")
@@ -383,20 +387,22 @@ class ToolClient:
             aggressive_processed = []
             for fuzz_result in aggressive_results:
                 args = fuzz_result["args"]
-                
+
                 # Skip if safety system blocks this call
                 if self.safety_system and self.safety_system.should_skip_tool_call(
                     tool_name, args
                 ):
-                    aggressive_processed.append({
-                        "args": args,
-                        "exception": "safety_blocked",
-                        "safety_blocked": True,
-                        "safety_sanitized": False,
-                        "success": False,
-                    })
+                    aggressive_processed.append(
+                        {
+                            "args": args,
+                            "exception": "safety_blocked",
+                            "safety_blocked": True,
+                            "safety_sanitized": False,
+                            "success": False,
+                        }
+                    )
                     continue
-                
+
                 # Sanitize arguments if needed
                 sanitized_args = args
                 safety_sanitized = False
@@ -405,35 +411,39 @@ class ToolClient:
                         tool_name, args
                     )
                     safety_sanitized = sanitized_args != args
-                
+
                 # Get authentication for this tool
                 auth_headers = self.auth_manager.get_auth_headers_for_tool(tool_name)
                 auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
-                
+
                 # Merge auth params with tool arguments if needed
                 if auth_params:
                     sanitized_args.update(auth_params)
-                
+
                 # Call the tool with the generated arguments
                 try:
                     result = await self.transport.call_tool(
                         tool_name, sanitized_args, auth_headers
                     )
-                    aggressive_processed.append({
-                        "args": sanitized_args,
-                        "result": result,
-                        "safety_blocked": False,
-                        "safety_sanitized": safety_sanitized,
-                        "success": True,
-                    })
+                    aggressive_processed.append(
+                        {
+                            "args": sanitized_args,
+                            "result": result,
+                            "safety_blocked": False,
+                            "safety_sanitized": safety_sanitized,
+                            "success": True,
+                        }
+                    )
                 except Exception as e:
-                    aggressive_processed.append({
-                        "args": sanitized_args,
-                        "exception": str(e),
-                        "safety_blocked": False,
-                        "safety_sanitized": safety_sanitized,
-                        "success": False,
-                    })
+                    aggressive_processed.append(
+                        {
+                            "args": sanitized_args,
+                            "exception": str(e),
+                            "safety_blocked": False,
+                            "safety_sanitized": safety_sanitized,
+                            "success": False,
+                        }
+                    )
 
             return {
                 "realistic": realistic_processed,
@@ -473,7 +483,7 @@ class ToolClient:
         except Exception as e:
             self._logger.error(f"Failed to fuzz all tools (two-phase): {e}")
             return {}
-            
+
     async def shutdown(self):
         """Shutdown the tool fuzzer."""
         await self.tool_fuzzer.shutdown()

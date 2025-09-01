@@ -10,7 +10,7 @@ import logging
 import traceback
 from typing import Any, Dict, List, Optional
 
-from ..fuzz_engine.fuzzer import ProtocolFuzzer
+from ..fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
 from ..safety_system.safety import SafetyProvider
 
 
@@ -25,7 +25,7 @@ class ProtocolClient:
     ):
         """
         Initialize the protocol client.
-        
+
         Args:
             transport: Transport protocol for server communication
             safety_system: Safety system for filtering operations
@@ -42,11 +42,11 @@ class ProtocolClient:
         self, protocol_type: str, fuzz_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Check if a protocol message should be blocked by the safety system.
-        
+
         Args:
             protocol_type: Type of protocol message
             fuzz_data: Message data to check
-            
+
         Returns:
             Dictionary with safety check results containing:
             - blocked: True if message should be blocked
@@ -57,7 +57,7 @@ class ProtocolClient:
         safety_sanitized = False
         blocking_reason = None
         modified_data = fuzz_data
-        
+
         if not self.safety_system:
             return {
                 "blocked": False,
@@ -65,7 +65,7 @@ class ProtocolClient:
                 "blocking_reason": None,
                 "data": fuzz_data,
             }
-            
+
         # Check if message should be blocked
         if self.safety_system.should_block_protocol_message(protocol_type, fuzz_data):
             blocking_reason = self.safety_system.get_blocking_reason()
@@ -81,29 +81,29 @@ class ProtocolClient:
 
         # Sanitize message if safety system supports it
         original_data = fuzz_data.copy()
-        if hasattr(self.safety_system, 'sanitize_protocol_message'):
+        if hasattr(self.safety_system, "sanitize_protocol_message"):
             modified_data = self.safety_system.sanitize_protocol_message(
                 protocol_type, fuzz_data
             )
             safety_sanitized = modified_data != original_data
-            
+
         return {
             "blocked": False,
             "sanitized": safety_sanitized,
             "blocking_reason": None,
             "data": modified_data,
         }
-        
+
     async def _process_single_protocol_fuzz(
         self, protocol_type: str, run_index: int, total_runs: int
     ) -> Dict[str, Any]:
         """Process a single protocol fuzzing run.
-        
+
         Args:
             protocol_type: Type of protocol to fuzz
             run_index: Current run index (0-based)
             total_runs: Total number of runs
-            
+
         Returns:
             Dictionary with fuzzing results
         """
@@ -118,7 +118,7 @@ class ProtocolClient:
             safety_result = await self._check_safety_for_protocol_message(
                 protocol_type, fuzz_data
             )
-            
+
             # If blocked by safety system, return early
             if safety_result["blocked"]:
                 return {
@@ -127,7 +127,7 @@ class ProtocolClient:
                     "blocking_reason": safety_result["blocking_reason"],
                     "success": False,
                 }
-                
+
             # Use potentially sanitized data
             fuzz_data = safety_result["data"]
             safety_sanitized = safety_result["sanitized"]
@@ -169,7 +169,7 @@ class ProtocolClient:
                 "traceback": traceback.format_exc(),
                 "success": False,
             }
-    
+
     async def fuzz_protocol_type(
         self, protocol_type: str, runs: int = 10
     ) -> List[Dict[str, Any]]:
@@ -184,7 +184,7 @@ class ProtocolClient:
 
     async def _get_protocol_types(self) -> List[str]:
         """Get list of protocol types to fuzz.
-        
+
         Returns:
             List of protocol type strings
         """
@@ -328,7 +328,7 @@ class ProtocolClient:
         method = data.get("method", "unknown")
         params = data.get("params", {})
         return await self.transport.send_request(method, params)
-        
+
     async def shutdown(self):
         """Shutdown the protocol fuzzer."""
         await self.protocol_fuzzer.shutdown()

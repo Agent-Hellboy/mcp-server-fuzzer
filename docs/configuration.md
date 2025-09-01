@@ -162,8 +162,11 @@ The following table describes the available configuration options:
 | `runs` | integer | Number of fuzzing runs | 10 |
 | `runs_per_type` | integer | Number of runs per protocol type | 5 |
 | `protocol_type` | string | Specific protocol type to fuzz | - |
-| `no_network` | boolean | Disable network access | false |
-| `allow_hosts` | array | List of allowed hosts | ["localhost", "127.0.0.1", "::1"] |
+| `safety.no_network` | boolean | Disable network access | false |
+| `safety.local_hosts` | array | List of allowed hosts | ["localhost", "127.0.0.1", "::1"] |
+| `safety.header_denylist` | array | Headers to strip/deny | ["authorization","cookie"] |
+| `safety.proxy_env_denylist` | array | Proxy env vars to ignore | ["HTTP_PROXY","HTTPS_PROXY"] |
+| `safety.env_allowlist` | array | Env vars allowed to pass through | [] |
 | `max_concurrency` | integer | Maximum concurrent operations | 5 |
 
 ### Nested Configuration
