@@ -8,7 +8,9 @@ This module contains the orchestration logic for fuzzing MCP protocol types.
 import asyncio
 import inspect
 import logging
-from typing import Any, Dict, List, ClassVar, Optional, Tuple
+from typing import Any, Dict, List, ClassVar, Optional, Tuple, Callable
+
+from ...types import FuzzDataResult
 
 from ..executor import AsyncFuzzExecutor
 from ..strategy import ProtocolStrategies
@@ -62,7 +64,7 @@ class ProtocolFuzzer:
         runs: int = 10,
         phase: str = "aggressive",
         generate_only: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[FuzzDataResult]:
         """
         Fuzz a specific protocol type with specified phase and analyze responses.
 
@@ -91,7 +93,9 @@ class ProtocolFuzzer:
         # Execute operations and process results
         return await self._execute_and_process_operations(operations, protocol_type)
 
-    def _get_fuzzer_method(self, protocol_type: str) -> Optional[callable]:
+    def _get_fuzzer_method(
+        self, protocol_type: str
+    ) -> Optional[Callable[..., Dict[str, Any]]]:
         """
         Get the appropriate fuzzer method for a protocol type.
 
@@ -110,11 +114,11 @@ class ProtocolFuzzer:
     def _prepare_fuzzing_operations(
         self,
         protocol_type: str,
-        fuzzer_method: callable,
+        fuzzer_method: Callable[..., Dict[str, Any]],
         runs: int,
         phase: str,
         generate_only: bool,
-    ) -> List[Tuple[callable, List[Any], Dict[str, Any]]]:
+    ) -> List[Tuple[Callable, List[Any], Dict[str, Any]]]:
         """
         Prepare operations for batch execution.
 
@@ -141,9 +145,9 @@ class ProtocolFuzzer:
 
     async def _execute_and_process_operations(
         self,
-        operations: List[Tuple[callable, List[Any], Dict[str, Any]]],
+        operations: List[Tuple[Callable, List[Any], Dict[str, Any]]],
         protocol_type: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[FuzzDataResult]:
         """
         Execute operations and process results.
 
@@ -181,11 +185,11 @@ class ProtocolFuzzer:
     async def _fuzz_protocol_type_single_run(
         self,
         protocol_type: str,
-        fuzzer_method: Any,
+        fuzzer_method: Callable[..., Dict[str, Any]],
         run_index: int,
         phase: str,
         generate_only: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> FuzzDataResult:
         """
         Execute a single fuzzing run for a protocol type.
 
@@ -234,7 +238,7 @@ class ProtocolFuzzer:
             }
 
     async def _generate_fuzz_data(
-        self, fuzzer_method: callable, phase: str
+        self, fuzzer_method: Callable[..., Dict[str, Any]], phase: str
     ) -> Dict[str, Any]:
         """
         Generate fuzz data using the strategy method.
@@ -300,7 +304,7 @@ class ProtocolFuzzer:
         fuzz_data: Dict[str, Any],
         server_response: Optional[Dict[str, Any]],
         server_error: Optional[str],
-    ) -> Dict[str, Any]:
+    ) -> FuzzDataResult:
         """
         Create a standardized result dictionary for a fuzzing run.
 
@@ -326,7 +330,7 @@ class ProtocolFuzzer:
 
     async def fuzz_protocol_type_both_phases(
         self, protocol_type: str, runs_per_phase: int = 5
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> Dict[str, List[FuzzDataResult]]:
         """
         Fuzz a protocol type in both realistic and aggressive phases.
 
@@ -357,7 +361,7 @@ class ProtocolFuzzer:
 
     async def fuzz_all_protocol_types(
         self, runs_per_type: int = 5, phase: str = "aggressive"
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> Dict[str, List[FuzzDataResult]]:
         """
         Fuzz all known protocol types asynchronously.
 
@@ -401,7 +405,7 @@ class ProtocolFuzzer:
         protocol_type: str,
         runs: int,
         phase: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[FuzzDataResult]:
         """
         Fuzz a single protocol type and log statistics.
 

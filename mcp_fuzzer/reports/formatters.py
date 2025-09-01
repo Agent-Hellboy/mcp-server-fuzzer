@@ -101,10 +101,12 @@ class ConsoleFormatter:
         for tool_results_list in tool_results.values():
             total_tool_runs += len(tool_results_list)
             for result in tool_results_list:
-                if "error" in result:
-                    tools_with_errors += 1
+                # Avoid double-counting errors
                 if "exception" in result:
                     tools_with_exceptions += 1
+                # Only count errors if not already counted as an exception
+                elif "error" in result:
+                    tools_with_errors += 1
 
         # Protocol statistics
         total_protocol_types = len(protocol_results)
@@ -115,10 +117,14 @@ class ConsoleFormatter:
         for protocol_results_list in protocol_results.values():
             total_protocol_runs += len(protocol_results_list)
             for result in protocol_results_list:
-                if "error" in result:
-                    protocol_types_with_errors += 1
+                # Avoid double-counting errors
                 if "exception" in result:
                     protocol_types_with_exceptions += 1
+                # Only count errors if not already counted as an exception
+                elif "error" in result or (
+                    "server_error" in result and result.get("server_error") is not None
+                ):
+                    protocol_types_with_errors += 1
 
         self.console.print("\n[bold]Overall Statistics:[/bold]")
         self.console.print(f"Total tools tested: {total_tools}")
