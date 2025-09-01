@@ -229,7 +229,11 @@ class StreamableHTTPTransport(TransportProtocol):
                             content_str = content.decode("utf-8").strip()
                             decoder = json.JSONDecoder()
                             pos = 0
-                            while pos < len(content_str):
+                            # Limit attempts to prevent infinite loops
+                            max_attempts = 1000
+                            attempts = 0
+                            while pos < len(content_str) and attempts < max_attempts:
+                                attempts += 1
                                 try:
                                     parsed, new_pos = decoder.raw_decode(
                                         content_str, pos
@@ -238,6 +242,7 @@ class StreamableHTTPTransport(TransportProtocol):
                                     break
                                 except json.JSONDecodeError:
                                     pos += 1
+                                    # Skip whitespace
                                     while (
                                         pos < len(content_str)
                                         and content_str[pos].isspace()
