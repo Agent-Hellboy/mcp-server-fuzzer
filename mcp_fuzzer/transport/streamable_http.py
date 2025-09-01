@@ -219,47 +219,32 @@ class StreamableHTTPTransport(TransportProtocol):
             if ct.startswith(JSON_CT):
                 # Try to get the JSON response
                 try:
-                    # First try the standard json() method
                     data = response.json()
-
-                    # Only runs for real httpx responses with streaming capability
-                    # Skipped for tests with _DummyResponse
+                except json.JSONDecodeError:
+                    # Fallback: parse first JSON object from raw stream
+                    data = {}
                     if hasattr(response, "aread"):
                         try:
-                            # Get raw content for chunked/multi-line JSON
                             content = await response.aread()
                             content_str = content.decode("utf-8").strip()
-
-                            # Handle multiple JSON objects
                             decoder = json.JSONDecoder()
                             pos = 0
-                            stream_data = None
-
-                            # Try to find the first valid JSON object
                             while pos < len(content_str):
                                 try:
-                                    obj_data = content_str[pos:]
-                                    stream_data, new_pos = decoder.raw_decode(obj_data)
-                                    pos = pos + new_pos
+                                    parsed, new_pos = decoder.raw_decode(
+                                        content_str, pos
+                                    )
+                                    data = parsed
                                     break
                                 except json.JSONDecodeError:
                                     pos += 1
-                                    # Skip to next non-whitespace
-                                    content_len = len(content_str)
                                     while (
-                                        pos < content_len and content_str[pos].isspace()
+                                        pos < len(content_str)
+                                        and content_str[pos].isspace()
                                     ):
                                         pos += 1
-
-                            # Use valid JSON from stream if found
-                            if stream_data is not None:
-                                data = stream_data
                         except Exception:
-                            # Fallback to data from response.json()
                             pass
-                except json.JSONDecodeError:
-                    # If JSON parsing fails completely, return empty dict
-                    data = {}
 
                 if isinstance(data, dict):
                     if "error" in data:

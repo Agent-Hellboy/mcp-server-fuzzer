@@ -121,14 +121,14 @@ class ProtocolClient:
             # Configure the protocol fuzzer to use our transport
             original_transport = self.protocol_fuzzer.transport
             self.protocol_fuzzer.transport = self.transport
-
-            # Generate and send fuzz data in one operation
-            fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
-                protocol_type, 1, generate_only=False
-            )
-
-            # Restore the original transport configuration
-            self.protocol_fuzzer.transport = original_transport
+            try:
+                # Generate only (no send); client handles safety + send
+                fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
+                    protocol_type, 1, generate_only=True
+                )
+            finally:
+                # Restore the original transport configuration
+                self.protocol_fuzzer.transport = original_transport
 
             if not fuzz_results:
                 raise ValueError(f"No results returned for {protocol_type}")
@@ -138,11 +138,6 @@ class ProtocolClient:
 
             if fuzz_data is None:
                 raise ValueError(f"No fuzz_data returned for {protocol_type}")
-
-            # Check safety - do this after fuzzing since the result is already sent
-            safety_result = await self._check_safety_for_protocol_message(
-                protocol_type, fuzz_data
-            )
 
             # Log preview of data
             try:
@@ -158,10 +153,37 @@ class ProtocolClient:
                 preview,
             )
 
-            # Get the server response from the fuzzer result
-            server_response = fuzz_result.get("server_response")
-            server_error = fuzz_result.get("server_error")
-            success = fuzz_result.get("success", False)
+            # Safety first, then send
+            safety_result = await self._check_safety_for_protocol_message(
+                protocol_type, fuzz_data
+            )
+            if safety_result["blocked"]:
+                self._logger.warning(
+                    "Blocked %s by safety system: %s",
+                    protocol_type,
+                    safety_result.get("blocking_reason"),
+                )
+                return {
+                    "fuzz_data": fuzz_data,
+                    "result": {"response": None, "error": "blocked_by_safety_system"},
+                    "safety_blocked": True,
+                    "safety_sanitized": False,
+                    "success": False,
+                }
+
+            data_to_send = safety_result["data"]
+
+            # Route outbound via typed helpers
+            try:
+                server_response = await self._send_protocol_request(
+                    protocol_type, data_to_send
+                )
+                server_error = None
+                success = True
+            except Exception as send_exc:
+                server_response = None
+                server_error = str(send_exc)
+                success = False
 
             # Construct our result
             result = {"response": server_response, "error": server_error}
