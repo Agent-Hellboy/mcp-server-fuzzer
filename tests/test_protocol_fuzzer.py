@@ -143,8 +143,9 @@ class TestProtocolFuzzer:
         results1 = await self.fuzzer.fuzz_protocol_type("InitializeRequest", runs=5)
         results2 = await self.fuzzer.fuzz_protocol_type("ProgressNotification", runs=5)
 
+        # Verify correct number of results for each protocol type
         assert len(results1) == 5
-        assert len(results2) == 5
+        assert len(results2) == 5  # Verify second type has correct results
 
         # Verify different protocol types
         for result in results1:

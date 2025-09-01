@@ -811,6 +811,7 @@ class TestUnifiedMCPFuzzerClient:
         # Verify the result and that the correct method was called
         assert result == mock_response
         method_to_call.assert_called_once_with(data)
+        assert method_to_call.await_count == 1  # Verify method was awaited once
 
         # Restore the original mock
         self.mock_protocol_client._send_protocol_request = (

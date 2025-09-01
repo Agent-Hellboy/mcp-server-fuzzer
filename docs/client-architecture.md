@@ -6,7 +6,7 @@ The MCP Fuzzer client has been refactored into a modular package structure to im
 
 The client package is organized into several modules, each with a specific responsibility:
 
-```
+```text
 mcp_fuzzer/
 ├── client/
 │   ├── __init__.py              # Exports main client class
