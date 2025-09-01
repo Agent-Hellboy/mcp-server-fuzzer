@@ -105,7 +105,7 @@ graph TD
 
     G --> I[Generate Test Data]
     H --> J[Generate Protocol Messages]
-    
+
     I --> K1[AsyncFuzzExecutor]
     J --> K1
     K1 --> K[Send via Transport]
@@ -138,7 +138,7 @@ graph TD
 
 ## Project Structure
 
-```
+```text
 mcp_fuzzer/
 | -- cli/                    # Command-line interface
 |    | -- __init__.py
@@ -359,7 +359,7 @@ sequenceDiagram
         Strategy-->>Fuzzer: Return test data
 
         Fuzzer->>Executor: Execute batch operations
-        
+
         loop For each test run (concurrent)
             Executor->>Client: Execute tool call
             Client->>Transport: Send tool request
@@ -396,7 +396,7 @@ sequenceDiagram
         Strategy-->>Fuzzer: Return test messages
 
         Fuzzer->>Executor: Execute batch operations
-        
+
         loop For each test run (concurrent)
             Executor->>Client: Execute protocol message
             Client->>Transport: Send protocol message

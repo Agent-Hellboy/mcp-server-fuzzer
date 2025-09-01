@@ -10,6 +10,8 @@ import logging
 import traceback
 from typing import Any, Dict, List, Optional
 
+from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
+
 from ..fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
 from ..safety_system.safety import SafetyProvider
 
@@ -39,7 +41,7 @@ class ProtocolClient:
 
     async def _check_safety_for_protocol_message(
         self, protocol_type: str, fuzz_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    ) -> SafetyCheckResult:
         """Check if a protocol message should be blocked by the safety system.
 
         Args:
@@ -103,7 +105,7 @@ class ProtocolClient:
 
     async def _process_single_protocol_fuzz(
         self, protocol_type: str, run_index: int, total_runs: int
-    ) -> Dict[str, Any]:
+    ) -> ProtocolFuzzResult:
         """Process a single protocol fuzzing run.
 
         Args:
@@ -115,62 +117,87 @@ class ProtocolClient:
             Dictionary with fuzzing results
         """
         try:
-            # Generate fuzz data using the fuzzer
-            fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
-                protocol_type, 1
-            )
-            if not fuzz_results or "fuzz_data" not in fuzz_results[0]:
+            # Use the transport from this client for the fuzzer to send the request
+            # Configure the protocol fuzzer to use our transport
+            original_transport = self.protocol_fuzzer.transport
+            self.protocol_fuzzer.transport = self.transport
+            try:
+                # Generate only (no send); client handles safety + send
+                fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
+                    protocol_type, 1, generate_only=True
+                )
+            finally:
+                # Restore the original transport configuration
+                self.protocol_fuzzer.transport = original_transport
+
+            if not fuzz_results:
+                raise ValueError(f"No results returned for {protocol_type}")
+
+            fuzz_result = fuzz_results[0]
+            fuzz_data = fuzz_result.get("fuzz_data")
+
+            if fuzz_data is None:
                 raise ValueError(f"No fuzz_data returned for {protocol_type}")
-            fuzz_data = fuzz_results[0]["fuzz_data"]
-
-            # Check safety
-            safety_result = await self._check_safety_for_protocol_message(
-                protocol_type, fuzz_data
-            )
-
-            # If blocked by safety system, return early
-            if safety_result["blocked"]:
-                return {
-                    "fuzz_data": fuzz_data,
-                    "safety_blocked": True,
-                    "blocking_reason": safety_result["blocking_reason"],
-                    "success": False,
-                }
-
-            # Use potentially sanitized data
-            fuzz_data = safety_result["data"]
-            safety_sanitized = safety_result["sanitized"]
 
             # Log preview of data
             try:
-                preview = json.dumps(fuzz_data, indent=2)[:200]
+                preview = json.dumps(fuzz_data, indent=2)[:PREVIEW_LENGTH]
             except Exception:
-                preview = (str(fuzz_data) if fuzz_data is not None else "null")[:200]
+                preview_text = str(fuzz_data) if fuzz_data is not None else "null"
+                preview = preview_text[:PREVIEW_LENGTH]
             self._logger.info(
-                "Fuzzing %s (run %d/%d) with data: %s...",
+                "Fuzzed %s (run %d/%d) with data: %s...",
                 protocol_type,
                 run_index + 1,
                 total_runs,
                 preview,
             )
 
-            # Send the fuzz data through transport
-            result = await self._send_protocol_request(protocol_type, fuzz_data)
+            # Safety first, then send
+            safety_result = await self._check_safety_for_protocol_message(
+                protocol_type, fuzz_data
+            )
+            if safety_result["blocked"]:
+                self._logger.warning(
+                    "Blocked %s by safety system: %s",
+                    protocol_type,
+                    safety_result.get("blocking_reason"),
+                )
+                return {
+                    "fuzz_data": fuzz_data,
+                    "result": {"response": None, "error": "blocked_by_safety_system"},
+                    "safety_blocked": True,
+                    "safety_sanitized": False,
+                    "success": False,
+                }
 
-            # Check for safety metadata in response
+            data_to_send = safety_result["data"]
+
+            # Route outbound via typed helpers
+            try:
+                server_response = await self._send_protocol_request(
+                    protocol_type, data_to_send
+                )
+                server_error = None
+                success = True
+            except Exception as send_exc:
+                server_response = None
+                server_error = str(send_exc)
+                success = False
+
+            # Construct our result
+            result = {"response": server_response, "error": server_error}
+
+            # Check for safety metadata
             safety_blocked = safety_result["blocked"]
-            if isinstance(result, dict) and isinstance(result.get("_meta"), dict):
-                if "safety_blocked" in result["_meta"]:
-                    safety_blocked = result["_meta"]["safety_blocked"]
-                if "safety_sanitized" in result["_meta"]:
-                    safety_sanitized = result["_meta"]["safety_sanitized"]
+            safety_sanitized = safety_result["sanitized"]
 
             return {
                 "fuzz_data": fuzz_data,
                 "result": result,
                 "safety_blocked": safety_blocked,
                 "safety_sanitized": safety_sanitized,
-                "success": True,
+                "success": success,
             }
 
         except Exception as e:
@@ -184,7 +211,7 @@ class ProtocolClient:
 
     async def fuzz_protocol_type(
         self, protocol_type: str, runs: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> List[ProtocolFuzzResult]:
         """Fuzz a specific protocol type."""
         results = []
 
@@ -209,7 +236,7 @@ class ProtocolClient:
 
     async def fuzz_all_protocol_types(
         self, runs_per_type: int = 5
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> Dict[str, List[ProtocolFuzzResult]]:
         """Fuzz all protocol types using ProtocolClient safety + sending."""
         try:
             protocol_types = await self._get_protocol_types()
@@ -249,7 +276,7 @@ class ProtocolClient:
 
     async def _send_protocol_request(
         self, protocol_type: str, data: Dict[str, Any]
-    ) -> Any:
+    ) -> Dict[str, Any]:
         """Send a protocol request based on the type."""
         if protocol_type == "InitializeRequest":
             return await self._send_initialize_request(data)
@@ -281,85 +308,85 @@ class ProtocolClient:
             # Generic JSON-RPC request
             return await self._send_generic_request(data)
 
-    async def _send_initialize_request(self, data: Any) -> Any:
+    async def _send_initialize_request(self, data: Any) -> Dict[str, Any]:
         """Send an initialize request."""
         return await self.transport.send_request(
             "initialize", self._extract_params(data)
         )
 
-    async def _send_progress_notification(self, data: Any) -> Any:
+    async def _send_progress_notification(self, data: Any) -> Dict[str, str]:
         """Send a progress notification as JSON-RPC notification (no id)."""
         params = self._extract_params(data)
         await self.transport.send_notification("notifications/progress", params)
         return {"status": "notification_sent"}
 
-    async def _send_cancel_notification(self, data: Any) -> Any:
+    async def _send_cancel_notification(self, data: Any) -> Dict[str, str]:
         """Send a cancel notification as JSON-RPC notification (no id)."""
         params = self._extract_params(data)
         await self.transport.send_notification("notifications/cancelled", params)
         return {"status": "notification_sent"}
 
-    async def _send_list_resources_request(self, data: Any) -> Any:
+    async def _send_list_resources_request(self, data: Any) -> Dict[str, Any]:
         """Send a list resources request."""
         return await self.transport.send_request(
             "resources/list", self._extract_params(data)
         )
 
-    async def _send_read_resource_request(self, data: Any) -> Any:
+    async def _send_read_resource_request(self, data: Any) -> Dict[str, Any]:
         """Send a read resource request."""
         return await self.transport.send_request(
             "resources/read", self._extract_params(data)
         )
 
-    async def _send_set_level_request(self, data: Any) -> Any:
+    async def _send_set_level_request(self, data: Any) -> Dict[str, Any]:
         """Send a set level request."""
         return await self.transport.send_request(
             "logging/setLevel", self._extract_params(data)
         )
 
-    async def _send_create_message_request(self, data: Any) -> Any:
+    async def _send_create_message_request(self, data: Any) -> Dict[str, Any]:
         """Send a create message request."""
         return await self.transport.send_request(
             "sampling/createMessage", self._extract_params(data)
         )
 
-    async def _send_list_prompts_request(self, data: Any) -> Any:
+    async def _send_list_prompts_request(self, data: Any) -> Dict[str, Any]:
         """Send a list prompts request."""
         return await self.transport.send_request(
             "prompts/list", self._extract_params(data)
         )
 
-    async def _send_get_prompt_request(self, data: Any) -> Any:
+    async def _send_get_prompt_request(self, data: Any) -> Dict[str, Any]:
         """Send a get prompt request."""
         return await self.transport.send_request(
             "prompts/get", self._extract_params(data)
         )
 
-    async def _send_list_roots_request(self, data: Any) -> Any:
+    async def _send_list_roots_request(self, data: Any) -> Dict[str, Any]:
         """Send a list roots request."""
         return await self.transport.send_request(
             "roots/list", self._extract_params(data)
         )
 
-    async def _send_subscribe_request(self, data: Any) -> Any:
+    async def _send_subscribe_request(self, data: Any) -> Dict[str, Any]:
         """Send a subscribe request."""
         return await self.transport.send_request(
             "resources/subscribe", self._extract_params(data)
         )
 
-    async def _send_unsubscribe_request(self, data: Any) -> Any:
+    async def _send_unsubscribe_request(self, data: Any) -> Dict[str, Any]:
         """Send an unsubscribe request."""
         return await self.transport.send_request(
             "resources/unsubscribe", self._extract_params(data)
         )
 
-    async def _send_complete_request(self, data: Any) -> Any:
+    async def _send_complete_request(self, data: Any) -> Dict[str, Any]:
         """Send a complete request."""
         return await self.transport.send_request(
             "completion/complete", self._extract_params(data)
         )
 
-    async def _send_generic_request(self, data: Any) -> Any:
+    async def _send_generic_request(self, data: Any) -> Dict[str, Any]:
         """Send a generic JSON-RPC request."""
         method = data.get("method") if isinstance(data, dict) else None
         if not isinstance(method, str) or not method:
@@ -367,6 +394,6 @@ class ProtocolClient:
         params = self._extract_params(data)
         return await self.transport.send_request(method, params)
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Shutdown the protocol fuzzer."""
         await self.protocol_fuzzer.shutdown()
