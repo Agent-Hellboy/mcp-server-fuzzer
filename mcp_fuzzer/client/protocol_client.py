@@ -159,7 +159,7 @@ class ProtocolClient:
 
             # Check for safety metadata in response
             safety_blocked = safety_result["blocked"]
-            if "_meta" in result and isinstance(result["_meta"], dict):
+            if isinstance(result, dict) and isinstance(result.get("_meta"), dict):
                 if "safety_blocked" in result["_meta"]:
                     safety_blocked = result["_meta"]["safety_blocked"]
                 if "safety_sanitized" in result["_meta"]:
@@ -221,6 +221,24 @@ class ProtocolClient:
             self._logger.error(f"Failed to fuzz all protocol types: {e}")
             return {}
 
+    def _extract_params(self, data: Any) -> Dict[str, Any]:
+        """Extract parameters from data, safely handling non-dict inputs.
+
+        Args:
+            data: Input data that may or may not be a dict
+
+        Returns:
+            Dictionary of parameters, or empty dict if not available
+        """
+        if isinstance(data, dict):
+            params = data.get("params", {})
+            if isinstance(params, dict):
+                return params
+        self._logger.debug(
+            "Coercing non-dict params to empty dict for %s", type(data).__name__
+        )
+        return {}
+
     async def _send_protocol_request(
         self, protocol_type: str, data: Dict[str, Any]
     ) -> Any:
@@ -255,90 +273,90 @@ class ProtocolClient:
             # Generic JSON-RPC request
             return await self._send_generic_request(data)
 
-    async def _send_initialize_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_initialize_request(self, data: Any) -> Any:
         """Send an initialize request."""
-        return await self.transport.send_request("initialize", data.get("params", {}))
+        return await self.transport.send_request(
+            "initialize", self._extract_params(data)
+        )
 
-    async def _send_progress_notification(self, data: Dict[str, Any]) -> Any:
+    async def _send_progress_notification(self, data: Any) -> Any:
         """Send a progress notification as JSON-RPC notification (no id)."""
-        params = data.get("params", {})
-        if not isinstance(params, dict):
-            self._logger.debug(
-                "Non-dict params for progress notification; coercing to empty dict"
-            )
-            params = {}
+        params = self._extract_params(data)
         await self.transport.send_notification("notifications/progress", params)
         return {"status": "notification_sent"}
 
-    async def _send_cancel_notification(self, data: Dict[str, Any]) -> Any:
+    async def _send_cancel_notification(self, data: Any) -> Any:
         """Send a cancel notification as JSON-RPC notification (no id)."""
-        params = data.get("params", {})
-        if not isinstance(params, dict):
-            self._logger.debug(
-                "Non-dict params for cancel notification; coercing to empty dict"
-            )
-            params = {}
+        params = self._extract_params(data)
         await self.transport.send_notification("notifications/cancelled", params)
         return {"status": "notification_sent"}
 
-    async def _send_list_resources_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_list_resources_request(self, data: Any) -> Any:
         """Send a list resources request."""
         return await self.transport.send_request(
-            "resources/list", data.get("params", {})
+            "resources/list", self._extract_params(data)
         )
 
-    async def _send_read_resource_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_read_resource_request(self, data: Any) -> Any:
         """Send a read resource request."""
         return await self.transport.send_request(
-            "resources/read", data.get("params", {})
+            "resources/read", self._extract_params(data)
         )
 
-    async def _send_set_level_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_set_level_request(self, data: Any) -> Any:
         """Send a set level request."""
         return await self.transport.send_request(
-            "logging/setLevel", data.get("params", {})
+            "logging/setLevel", self._extract_params(data)
         )
 
-    async def _send_create_message_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_create_message_request(self, data: Any) -> Any:
         """Send a create message request."""
         return await self.transport.send_request(
-            "sampling/createMessage", data.get("params", {})
+            "sampling/createMessage", self._extract_params(data)
         )
 
-    async def _send_list_prompts_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_list_prompts_request(self, data: Any) -> Any:
         """Send a list prompts request."""
-        return await self.transport.send_request("prompts/list", data.get("params", {}))
+        return await self.transport.send_request(
+            "prompts/list", self._extract_params(data)
+        )
 
-    async def _send_get_prompt_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_get_prompt_request(self, data: Any) -> Any:
         """Send a get prompt request."""
-        return await self.transport.send_request("prompts/get", data.get("params", {}))
+        return await self.transport.send_request(
+            "prompts/get", self._extract_params(data)
+        )
 
-    async def _send_list_roots_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_list_roots_request(self, data: Any) -> Any:
         """Send a list roots request."""
-        return await self.transport.send_request("roots/list", data.get("params", {}))
+        return await self.transport.send_request(
+            "roots/list", self._extract_params(data)
+        )
 
-    async def _send_subscribe_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_subscribe_request(self, data: Any) -> Any:
         """Send a subscribe request."""
         return await self.transport.send_request(
-            "resources/subscribe", data.get("params", {})
+            "resources/subscribe", self._extract_params(data)
         )
 
-    async def _send_unsubscribe_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_unsubscribe_request(self, data: Any) -> Any:
         """Send an unsubscribe request."""
         return await self.transport.send_request(
-            "resources/unsubscribe", data.get("params", {})
+            "resources/unsubscribe", self._extract_params(data)
         )
 
-    async def _send_complete_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_complete_request(self, data: Any) -> Any:
         """Send a complete request."""
         return await self.transport.send_request(
-            "completion/complete", data.get("params", {})
+            "completion/complete", self._extract_params(data)
         )
 
-    async def _send_generic_request(self, data: Dict[str, Any]) -> Any:
+    async def _send_generic_request(self, data: Any) -> Any:
         """Send a generic JSON-RPC request."""
-        method = data.get("method", "unknown")
-        params = data.get("params", {})
+        method = data.get("method") if isinstance(data, dict) else None
+        if not isinstance(method, str) or not method:
+            method = "unknown"
+        params = self._extract_params(data)
         return await self.transport.send_request(method, params)
 
     async def shutdown(self):
