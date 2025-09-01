@@ -70,9 +70,10 @@ The new client can be used in the same way as the old client:
 
 ```python
 from mcp_fuzzer.client import MCPFuzzerClient
+from mcp_fuzzer.transport.factory import create_transport
 
 async def fuzz_server():
-    transport = await create_transport('http', 'http://localhost:8000')
+    transport = create_transport('http', 'http://localhost:8000')
     client = MCPFuzzerClient(transport)
     results = await client.fuzz_all_tools(runs_per_tool=5)
     print(f"Fuzzing results: {results}")

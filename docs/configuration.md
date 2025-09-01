@@ -41,7 +41,6 @@ The recognized file names are:
 # General settings
 timeout: 30.0
 log_level: "INFO"
-safety_enabled: true
 
 # Transport settings
 http_timeout: 30.0
@@ -151,7 +150,7 @@ The following table describes the available configuration options:
 | `timeout` | float | Default timeout in seconds | 30.0 |
 | `tool_timeout` | float | Tool-specific timeout in seconds | 30.0 |
 | `log_level` | string | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO |
-| `safety_enabled` | boolean | Whether safety features are enabled | true |
+| `safety.enabled` | boolean | Whether safety features are enabled | true |
 | `fs_root` | string | Root directory for file operations | ~/.mcp_fuzzer |
 | `http_timeout` | float | HTTP transport timeout in seconds | 30.0 |
 | `sse_timeout` | float | SSE transport timeout in seconds | 30.0 |

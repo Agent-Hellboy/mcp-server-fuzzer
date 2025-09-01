@@ -83,6 +83,7 @@ Exception
 ### Example: Transport Error Handling
 
 ```python
+import logging
 from mcp_fuzzer.exceptions import ConnectionError, ResponseError, AuthenticationError
 
 try:
@@ -102,6 +103,7 @@ except AuthenticationError as e:
 ### Example: Safety Violation Handling
 
 ```python
+import logging
 from mcp_fuzzer.exceptions import NetworkPolicyViolation, SystemCommandViolation
 
 try:
