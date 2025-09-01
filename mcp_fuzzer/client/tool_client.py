@@ -119,13 +119,13 @@ class ToolClient:
     ) -> List[Dict[str, Any]]:
         """Fuzz a tool by calling it with random/edge-case arguments."""
         results = []
+        tool_name = tool.get("name", "unknown")
 
         for i in range(runs):
             try:
                 # Generate fuzz arguments using the fuzzer
                 fuzz_list = await self.tool_fuzzer.fuzz_tool(tool, 1)
                 if not fuzz_list:
-                    tool_name = tool.get("name", "unknown")
                     self._logger.warning("Fuzzer returned no args for %s", tool_name)
                     continue
                 fuzz_result = fuzz_list[0]  # Get single result
@@ -133,10 +133,10 @@ class ToolClient:
 
                 # Check safety before proceeding
                 if self.safety_system and self.safety_system.should_skip_tool_call(
-                    tool.get("name", "unknown"), args
+                    tool_name, args
                 ):
                     self._logger.warning(
-                        f"Safety system blocked tool call for {tool['name']}"
+                        "Safety system blocked tool call for %s", tool_name
                     )
                     results.append(
                         {
@@ -153,17 +153,13 @@ class ToolClient:
                 safety_sanitized = False
                 if self.safety_system:
                     sanitized_args = self.safety_system.sanitize_tool_arguments(
-                        tool.get("name", "unknown"), args
+                        tool_name, args
                     )
                     safety_sanitized = sanitized_args != args
 
                 # Get authentication for this tool
-                auth_headers = self.auth_manager.get_auth_headers_for_tool(
-                    tool.get("name", "unknown")
-                )
-                auth_params = self.auth_manager.get_auth_params_for_tool(
-                    tool.get("name", "unknown")
-                )
+                auth_headers = self.auth_manager.get_auth_headers_for_tool(tool_name)
+                auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
 
                 # Merge auth params only into the call payload; never persist secrets
                 args_for_call = dict(sanitized_args)
@@ -171,13 +167,13 @@ class ToolClient:
                     args_for_call.update(auth_params)
 
                 # High-level run progress at INFO without arguments
-                self._logger.info(f"Fuzzing {tool['name']} (run {i + 1}/{runs})")
+                self._logger.info("Fuzzing %s (run %d/%d)", tool_name, i + 1, runs)
 
                 # Call the tool with the generated arguments
                 try:
                     timeout = tool_timeout
                     result = await self.transport.call_tool(
-                        tool["name"], args_for_call, auth_headers, timeout=timeout
+                        tool_name, args_for_call, auth_headers, timeout=timeout
                     )
                     results.append(
                         {
@@ -189,7 +185,7 @@ class ToolClient:
                         }
                     )
                 except Exception as e:
-                    self._logger.warning(f"Exception calling tool {tool['name']}: {e}")
+                    self._logger.warning("Exception calling tool %s: %s", tool_name, e)
                     results.append(
                         {
                             "args": sanitized_args,
@@ -201,7 +197,7 @@ class ToolClient:
                     )
 
             except Exception as e:
-                self._logger.warning(f"Exception during fuzzing {tool['name']}: {e}")
+                self._logger.warning("Exception during fuzzing %s: %s", tool_name, e)
                 results.append(
                     {
                         "args": None,
@@ -348,14 +344,15 @@ class ToolClient:
                 auth_headers = self.auth_manager.get_auth_headers_for_tool(tool_name)
                 auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
 
-                # Merge auth params with tool arguments if needed
+                # Merge auth params only into call payload
+                args_for_call = dict(sanitized_args)
                 if auth_params:
-                    sanitized_args.update(auth_params)
+                    args_for_call.update(auth_params)
 
                 # Call the tool with the generated arguments
                 try:
                     result = await self.transport.call_tool(
-                        tool_name, sanitized_args, auth_headers
+                        tool_name, args_for_call, auth_headers
                     )
                     realistic_processed.append(
                         {
@@ -416,14 +413,15 @@ class ToolClient:
                 auth_headers = self.auth_manager.get_auth_headers_for_tool(tool_name)
                 auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
 
-                # Merge auth params with tool arguments if needed
+                # Merge auth params only into call payload
+                args_for_call = dict(sanitized_args)
                 if auth_params:
-                    sanitized_args.update(auth_params)
+                    args_for_call.update(auth_params)
 
                 # Call the tool with the generated arguments
                 try:
                     result = await self.transport.call_tool(
-                        tool_name, sanitized_args, auth_headers
+                        tool_name, args_for_call, auth_headers
                     )
                     aggressive_processed.append(
                         {

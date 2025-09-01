@@ -33,9 +33,8 @@ class ProtocolClient:
         """
         self.transport = transport
         self.safety_system = safety_system
-        self.protocol_fuzzer = ProtocolFuzzer(
-            transport, max_concurrency=max_concurrency
-        )
+        # Important: let ProtocolClient own sending (safety checks happen here)
+        self.protocol_fuzzer = ProtocolFuzzer(None, max_concurrency=max_concurrency)
         self._logger = logging.getLogger(__name__)
 
     async def _check_safety_for_protocol_message(
@@ -66,9 +65,17 @@ class ProtocolClient:
                 "data": fuzz_data,
             }
 
-        # Check if message should be blocked
-        if self.safety_system.should_block_protocol_message(protocol_type, fuzz_data):
-            blocking_reason = self.safety_system.get_blocking_reason()
+        # Check if message should be blocked (duck-typed, guard if present)
+        if hasattr(
+            self.safety_system, "should_block_protocol_message"
+        ) and self.safety_system.should_block_protocol_message(
+            protocol_type, fuzz_data
+        ):
+            blocking_reason = (
+                self.safety_system.get_blocking_reason()  # type: ignore[attr-defined]
+                if hasattr(self.safety_system, "get_blocking_reason")
+                else "blocked_by_safety_system"
+            )
             self._logger.warning(
                 f"Safety system blocked {protocol_type} message: {blocking_reason}"
             )
@@ -80,7 +87,7 @@ class ProtocolClient:
             }
 
         # Sanitize message if safety system supports it
-        original_data = fuzz_data.copy()
+        original_data = fuzz_data.copy() if isinstance(fuzz_data, dict) else fuzz_data
         if hasattr(self.safety_system, "sanitize_protocol_message"):
             modified_data = self.safety_system.sanitize_protocol_message(
                 protocol_type, fuzz_data
@@ -112,6 +119,8 @@ class ProtocolClient:
             fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
                 protocol_type, 1
             )
+            if not fuzz_results or "fuzz_data" not in fuzz_results[0]:
+                raise ValueError(f"No fuzz_data returned for {protocol_type}")
             fuzz_data = fuzz_results[0]["fuzz_data"]
 
             # Check safety
@@ -133,7 +142,10 @@ class ProtocolClient:
             safety_sanitized = safety_result["sanitized"]
 
             # Log preview of data
-            preview = json.dumps(fuzz_data, indent=2)[:200]
+            try:
+                preview = json.dumps(fuzz_data, indent=2)[:200]
+            except Exception:
+                preview = (str(fuzz_data) if fuzz_data is not None else "null")[:200]
             self._logger.info(
                 "Fuzzing %s (run %d/%d) with data: %s...",
                 protocol_type,
@@ -190,7 +202,7 @@ class ProtocolClient:
         """
         try:
             # The protocol fuzzer knows which protocol types to fuzz
-            return self.protocol_fuzzer.get_protocol_types()
+            return list(getattr(self.protocol_fuzzer, "PROTOCOL_TYPES", ()))
         except Exception as e:
             self._logger.error(f"Failed to get protocol types: {e}")
             return []
