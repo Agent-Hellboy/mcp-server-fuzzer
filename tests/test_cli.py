@@ -492,6 +492,7 @@ class TestCLI:
                 runs=10,
                 runs_per_type=5,
                 protocol_type=None,
+                config=None,  # Add the config attribute
             )
             mock_parse.return_value = mock_args
 

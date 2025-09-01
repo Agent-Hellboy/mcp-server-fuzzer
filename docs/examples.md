@@ -287,13 +287,13 @@ class CustomTransport(TransportProtocol):
 ### Using Custom Transport
 
 ```python
-from mcp_fuzzer.client import UnifiedMCPFuzzerClient
+from mcp_fuzzer.client import MCPFuzzerClient
 
 # Create custom transport
 transport = CustomTransport("custom-endpoint")
 
 # Use with fuzzer client (with optional concurrency control)
-client = UnifiedMCPFuzzerClient(
+client = MCPFuzzerClient(
     transport,
     max_concurrency=10  # Optional: Control concurrent operations
 )

@@ -44,6 +44,14 @@ Examples:
         ),
     )
 
+    # Configuration file options
+    parser.add_argument(
+        "--config",
+        "-c",
+        help="Path to configuration file (YAML: .yml or .yaml)",
+        default=None,
+    )
+
     parser.add_argument(
         "--mode",
         choices=["tools", "protocol", "both"],
@@ -323,6 +331,28 @@ def get_cli_config() -> Dict[str, Any]:
     )
 
     args = _parse()
+
+    # Load configuration file if specified
+    if args.config:
+        from ..config_loader import load_config_file
+        from ..exceptions import ConfigFileError
+
+        try:
+            config_data = load_config_file(args.config)
+            config.update(config_data)
+        except Exception as e:
+            error_msg = f"Failed to load configuration file '{args.config}': {e}"
+            raise ConfigFileError(error_msg)
+    else:
+        # Try to find and load a configuration file in default locations
+        try:
+            from ..config_loader import apply_config_file
+
+            apply_config_file()
+        except Exception as e:
+            logging.debug(f"Error loading default configuration file: {e}")
+
+    # CLI arguments take precedence over configuration file
     _validate(args)
     _setup(args)
 
