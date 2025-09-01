@@ -389,11 +389,17 @@ class ProtocolFuzzer:
             task = asyncio.create_task(_run(protocol_type))
             tasks.append((protocol_type, task))
 
-        # Wait for all tasks to complete
+        # Wait for all tasks to complete with timeout
         for protocol_type, task in tasks:
             try:
-                results = await task
+                # Add a timeout to prevent hanging indefinitely
+                results = await asyncio.wait_for(task, timeout=30.0)
                 all_results[protocol_type] = results
+            except asyncio.TimeoutError:
+                self._logger.error(f"Timeout while fuzzing {protocol_type}")
+                all_results[protocol_type] = []
+                # Cancel the task to avoid orphaned tasks
+                task.cancel()
             except Exception as e:
                 self._logger.error(f"Failed to fuzz {protocol_type}: {e}")
                 all_results[protocol_type] = []
