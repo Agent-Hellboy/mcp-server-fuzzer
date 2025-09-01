@@ -115,31 +115,32 @@ class ProtocolClient:
             Dictionary with fuzzing results
         """
         try:
-            # Generate fuzz data using the fuzzer
-            fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
-                protocol_type, 1
-            )
-            if not fuzz_results or "fuzz_data" not in fuzz_results[0]:
-                raise ValueError(f"No fuzz_data returned for {protocol_type}")
-            fuzz_data = fuzz_results[0]["fuzz_data"]
+            # Use the transport from this client for the fuzzer to send the request
+            # Configure the protocol fuzzer to use our transport
+            original_transport = self.protocol_fuzzer.transport
+            self.protocol_fuzzer.transport = self.transport
 
-            # Check safety
+            # Generate and send fuzz data in one operation
+            fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
+                protocol_type, 1, generate_only=False
+            )
+
+            # Restore the original transport configuration
+            self.protocol_fuzzer.transport = original_transport
+
+            if not fuzz_results:
+                raise ValueError(f"No results returned for {protocol_type}")
+
+            fuzz_result = fuzz_results[0]
+            fuzz_data = fuzz_result.get("fuzz_data")
+
+            if fuzz_data is None:
+                raise ValueError(f"No fuzz_data returned for {protocol_type}")
+
+            # Check safety - do this after fuzzing since the result is already sent
             safety_result = await self._check_safety_for_protocol_message(
                 protocol_type, fuzz_data
             )
-
-            # If blocked by safety system, return early
-            if safety_result["blocked"]:
-                return {
-                    "fuzz_data": fuzz_data,
-                    "safety_blocked": True,
-                    "blocking_reason": safety_result["blocking_reason"],
-                    "success": False,
-                }
-
-            # Use potentially sanitized data
-            fuzz_data = safety_result["data"]
-            safety_sanitized = safety_result["sanitized"]
 
             # Log preview of data
             try:
@@ -147,30 +148,31 @@ class ProtocolClient:
             except Exception:
                 preview = (str(fuzz_data) if fuzz_data is not None else "null")[:200]
             self._logger.info(
-                "Fuzzing %s (run %d/%d) with data: %s...",
+                "Fuzzed %s (run %d/%d) with data: %s...",
                 protocol_type,
                 run_index + 1,
                 total_runs,
                 preview,
             )
 
-            # Send the fuzz data through transport
-            result = await self._send_protocol_request(protocol_type, fuzz_data)
+            # Get the server response from the fuzzer result
+            server_response = fuzz_result.get("server_response")
+            server_error = fuzz_result.get("server_error")
+            success = fuzz_result.get("success", False)
 
-            # Check for safety metadata in response
+            # Construct our result
+            result = {"response": server_response, "error": server_error}
+
+            # Check for safety metadata
             safety_blocked = safety_result["blocked"]
-            if isinstance(result, dict) and isinstance(result.get("_meta"), dict):
-                if "safety_blocked" in result["_meta"]:
-                    safety_blocked = result["_meta"]["safety_blocked"]
-                if "safety_sanitized" in result["_meta"]:
-                    safety_sanitized = result["_meta"]["safety_sanitized"]
+            safety_sanitized = safety_result["sanitized"]
 
             return {
                 "fuzz_data": fuzz_data,
                 "result": result,
                 "safety_blocked": safety_blocked,
                 "safety_sanitized": safety_sanitized,
-                "success": True,
+                "success": success,
             }
 
         except Exception as e:
