@@ -210,13 +210,21 @@ class ProtocolClient:
     async def fuzz_all_protocol_types(
         self, runs_per_type: int = 5
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """Fuzz all protocol types using the ProtocolFuzzer and group results."""
+        """Fuzz all protocol types using ProtocolClient safety + sending."""
         try:
-            # The protocol fuzzer now actually sends requests to the server
-            results = await self.protocol_fuzzer.fuzz_all_protocol_types(runs_per_type)
-            if not results:
-                self._logger.warning("No protocol types returned from fuzzer")
-            return results
+            protocol_types = await self._get_protocol_types()
+            if not protocol_types:
+                self._logger.warning("No protocol types available")
+                return {}
+            all_results: Dict[str, List[Dict[str, Any]]] = {}
+            for pt in protocol_types:
+                per_type: List[Dict[str, Any]] = []
+                for i in range(runs_per_type):
+                    per_type.append(
+                        await self._process_single_protocol_fuzz(pt, i, runs_per_type)
+                    )
+                all_results[pt] = per_type
+            return all_results
         except Exception as e:
             self._logger.error(f"Failed to fuzz all protocol types: {e}")
             return {}
