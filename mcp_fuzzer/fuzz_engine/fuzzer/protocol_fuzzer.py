@@ -222,9 +222,23 @@ class ProtocolFuzzer:
             if server_response is not None and not generate_only:
                 try:
                     if isinstance(server_response, list):
-                        batch = verify_batch_responses(server_response)
-                        viols = [str(v) for v in batch.values() if v is not True]
-                        invariant_violations.extend(viols)
+                        try:
+                            # Handle batch responses with timeout to prevent hanging
+                            batch = await asyncio.wait_for(
+                                asyncio.create_task(
+                                    verify_batch_responses(server_response)
+                                ),
+                                timeout=5.0,  # 5 second timeout for batch validation
+                            )
+                            viols = [str(v) for k, v in batch.items() if v is not True]
+                            invariant_violations.extend(viols)
+                        except asyncio.TimeoutError:
+                            invariant_violations.append("Batch validation timed out")
+                            self._logger.warning(
+                                "Batch validation timeout in %s run %s",
+                                protocol_type,
+                                run_index + 1,
+                            )
                     else:
                         verify_response_invariants(server_response)
                 except InvariantViolation as e:

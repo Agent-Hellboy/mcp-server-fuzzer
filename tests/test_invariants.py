@@ -4,6 +4,7 @@ Unit tests for invariants module.
 """
 
 import unittest
+import pytest
 from unittest.mock import patch
 
 from mcp_fuzzer.fuzz_engine.invariants import (
@@ -215,7 +216,8 @@ class TestInvariants(unittest.TestCase):
             mock_validity.assert_called_once_with(response)
             mock_error.assert_called_once_with(response["error"], expected_error_codes)
 
-    def test_verify_batch_responses_all_valid(self):
+    @pytest.mark.asyncio
+    async def test_verify_batch_responses_all_valid(self):
         """Test that all responses in a batch are validated."""
         responses = [
             {"jsonrpc": "2.0", "id": 1, "result": "success"},
@@ -227,12 +229,13 @@ class TestInvariants(unittest.TestCase):
         ) as mock_verify:
             mock_verify.return_value = True
 
-            results = verify_batch_responses(responses)
+            results = await verify_batch_responses(responses)
             self.assertEqual(len(results), 2)
             self.assertTrue(all(results.values()))
             self.assertEqual(mock_verify.call_count, 2)
 
-    def test_verify_batch_responses_some_invalid(self):
+    @pytest.mark.asyncio
+    async def test_verify_batch_responses_some_invalid(self):
         """Test that invalid responses in a batch are reported."""
         responses = [
             {"jsonrpc": "2.0", "id": 1, "result": "success"},
@@ -244,7 +247,7 @@ class TestInvariants(unittest.TestCase):
         ) as mock_verify:
             mock_verify.side_effect = [True, InvariantViolation("Invalid version")]
 
-            results = verify_batch_responses(responses)
+            results = await verify_batch_responses(responses)
             self.assertEqual(len(results), 2)
             self.assertTrue(results[0])
             self.assertEqual(results[1], "Invalid version")

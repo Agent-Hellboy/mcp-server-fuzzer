@@ -82,17 +82,26 @@ def check_response_validity(response: Any) -> bool:
                     "JSON-RPC response cannot have both 'result' and 'error'", response
                 )
 
-            if not has_result and not has_error:
-                # Check if this is a notification (no id) or a response
-                if "id" in response:
-                    # Responses must have result or error
-                    raise InvariantViolation(
-                        "JSON-RPC response must have either 'result' or 'error'",
-                        response,
-                    )
+            # Determine if this is a notification, request, or response
+            has_id = "id" in response
+            has_method = "method" in response
+
+            # If it has method but no id, it's a notification (valid)
+            if has_method and not has_id:
+                # Notifications don't need result/error
+                return True
+
+            # If it has id but no method, it's a response and needs result or error
+            if not has_result and not has_error and has_id and not has_method:
+                # Responses must have result or error
+                raise InvariantViolation(
+                    "JSON-RPC response must have either 'result' or 'error'",
+                    response,
+                )
 
             # id is required for any response (result or error)
-            if has_result or has_error:
+            # but not for notifications (which have method but no id)
+            if (has_result or has_error) and not has_method:
                 if "id" not in response:
                     raise InvariantViolation("JSON-RPC response missing 'id'", response)
                 if (
@@ -235,13 +244,13 @@ def verify_response_invariants(
     return True
 
 
-def verify_batch_responses(
+async def verify_batch_responses(
     responses: List[Any],
     expected_error_codes: Optional[List[int]] = None,
     schema: Optional[Dict[str, Any]] = None,
 ) -> Dict[int, Union[bool, str]]:
     """
-    Verify invariants for a batch of responses.
+    Verify invariants for a batch of responses asynchronously.
 
     Args:
         responses: The responses to verify
@@ -254,12 +263,23 @@ def verify_batch_responses(
     """
     results = {}
 
+    # Guard against None or empty responses
+    if not responses:
+        return results
+
+    # Guard against non-list responses
+    if not isinstance(responses, list):
+        results[0] = "Expected a list of responses, got {type(responses)}"
+        return results
+
     for i, response in enumerate(responses):
         try:
             verify_response_invariants(response, expected_error_codes, schema)
             results[i] = True
         except InvariantViolation as e:
             results[i] = str(e)
+        except Exception as e:
+            results[i] = f"Unexpected error: {str(e)}"
 
     return results
 
