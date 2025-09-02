@@ -139,76 +139,99 @@ def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str:
 
 def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
     """Generate realistic tool arguments based on schema."""
+    from ..schema_parser import make_fuzz_strategy_from_jsonschema
+
     schema = tool.get("inputSchema", {})
-    properties = schema.get("properties", {})
+
+    # Use the enhanced schema parser to generate realistic values
+    args = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+
+    # If the schema parser returned something other than a dict, create a default dict
+    if not isinstance(args, dict):
+        args = {}
+
+    # Get required fields
     required = schema.get("required", [])
 
-    args = {}
+    # Handle required fields even if no properties are defined
+    if required and not args:
+        for field in required:
+            args[field] = generate_realistic_text()
 
-    for prop_name, prop_spec in properties.items():
-        prop_type = prop_spec.get("type", "string")
+    # Ensure we have at least some arguments
+    if schema.get("properties"):
+        properties = schema.get("properties", {})
 
-        # Generate realistic values based on type
-        if prop_type == "string":
-            if "format" in prop_spec:
-                fmt = prop_spec["format"]
-                if fmt == "uuid":
-                    args[prop_name] = str(uuid.uuid4())
-                elif fmt == "date-time":
+        for prop_name, prop_spec in properties.items():
+            # Special handling for array type properties
+            if prop_spec.get("type") == "array":
+                if prop_name not in args or not isinstance(args[prop_name], list):
+                    # Generate a simple array with 1-3 items
+                    if prop_spec.get("items", {}).get("type") == "object":
+                        # For object arrays, create objects with properties
+                        item_props = prop_spec.get("items", {}).get("properties", {})
+                        items = []
+                        for _ in range(random.randint(1, 3)):
+                            item = {}
+                            for item_prop, item_spec in item_props.items():
+                                item[item_prop] = generate_realistic_text()
+                            items.append(item)
+                        args[prop_name] = items
+                    else:
+                        # For simple arrays, generate simple items
+                        args[prop_name] = [
+                            generate_realistic_text()
+                            for _ in range(random.randint(1, 3))
+                        ]
+            # Special handling for object type properties
+            elif prop_spec.get("type") == "object":
+                if prop_name not in args or not isinstance(args[prop_name], dict):
+                    # Generate a nested object with its properties
+                    nested_props = prop_spec.get("properties", {})
+                    nested_obj = {}
+                    for nested_prop, nested_spec in nested_props.items():
+                        nested_obj[nested_prop] = generate_realistic_text()
+                    args[prop_name] = nested_obj
+            # Special handling for integer type properties
+            elif prop_spec.get("type") == "integer":
+                # Generate an integer within the specified range
+                minimum = prop_spec.get("minimum", -100)
+                maximum = prop_spec.get("maximum", 100)
+                args[prop_name] = random.randint(minimum, maximum)
+            # Special handling for number type properties
+            elif prop_spec.get("type") == "number":
+                # Generate a float within the specified range
+                minimum = prop_spec.get("minimum", -100.0)
+                maximum = prop_spec.get("maximum", 100.0)
+                args[prop_name] = round(random.uniform(minimum, maximum), 2)
+            # Special handling for boolean type properties
+            elif prop_spec.get("type") == "boolean":
+                args[prop_name] = random.choice([True, False])
+            # Special handling for string format types
+            elif prop_spec.get("type") == "string" and prop_spec.get("format"):
+                # Generate a formatted string based on the format type
+                format_type = prop_spec.get("format")
+                if format_type == "email":
+                    domains = ["example.com", "test.org", "mail.net", "domain.io"]
+                    username = "".join(random.choices(string.ascii_lowercase, k=8))
+                    domain = random.choice(domains)
+                    args[prop_name] = f"{username}@{domain}"
+                elif format_type == "uri":
+                    schemes = ["http", "https"]
+                    domains = ["example.com", "test.org", "api.domain.io"]
+                    paths = ["", "/api", "/v1/resources", "/users/123"]
+                    scheme = random.choice(schemes)
+                    domain = random.choice(domains)
+                    path = random.choice(paths)
+                    args[prop_name] = f"{scheme}://{domain}{path}"
+                elif format_type == "date-time":
                     args[prop_name] = datetime.now(timezone.utc).isoformat()
-                elif fmt == "email":
-                    args[prop_name] = "user@example.com"
-                elif fmt == "uri":
-                    args[prop_name] = "https://example.com/api"
+                elif format_type == "uuid":
+                    args[prop_name] = str(uuid.uuid4())
                 else:
                     args[prop_name] = generate_realistic_text()
-            else:
+            # In realistic mode, generate all properties
+            elif prop_name not in args:
                 args[prop_name] = generate_realistic_text()
-
-        elif prop_type == "integer":
-            min_val = prop_spec.get("minimum", 1)
-            max_val = prop_spec.get("maximum", 1000)
-            args[prop_name] = random.randint(min_val, max_val)
-
-        elif prop_type == "number":
-            min_val = prop_spec.get("minimum", 0.0)
-            max_val = prop_spec.get("maximum", 1000.0)
-            args[prop_name] = random.uniform(min_val, max_val)
-
-        elif prop_type == "boolean":
-            args[prop_name] = random.choice([True, False])
-
-        elif prop_type == "array":
-            items_spec = prop_spec.get("items", {})
-            items_type = items_spec.get("type", "string")
-
-            # Generate 1-3 realistic array items
-            array_size = random.randint(1, 3)
-            if items_type == "string":
-                args[prop_name] = [generate_realistic_text() for _ in range(array_size)]
-            elif items_type == "integer":
-                args[prop_name] = [random.randint(1, 100) for _ in range(array_size)]
-            elif items_type == "number":
-                args[prop_name] = [
-                    random.uniform(0.0, 100.0) for _ in range(array_size)
-                ]
-            else:
-                args[prop_name] = ["item_" + str(i) for i in range(array_size)]
-
-        elif prop_type == "object":
-            # Generate a simple realistic object
-            args[prop_name] = {
-                "name": generate_realistic_text(),
-                "value": random.randint(1, 100),
-                "enabled": True,
-            }
-        else:
-            # Fallback for unknown types
-            args[prop_name] = generate_realistic_text()
-
-    # Ensure required fields are present
-    for required_field in required:
-        if required_field not in args:
-            args[required_field] = generate_realistic_text()
 
     return args

@@ -242,81 +242,47 @@ def _generate_aggressive_float() -> float:
 
 def fuzz_tool_arguments_aggressive(tool: Dict[str, Any]) -> Dict[str, Any]:
     """Generate aggressive/malicious tool arguments."""
+    from ..schema_parser import make_fuzz_strategy_from_jsonschema
+
     schema = tool.get("inputSchema", {})
-    properties = schema.get("properties", {})
 
-    args = {}
+    # Use the enhanced schema parser to generate aggressive values
+    args = make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
 
-    for prop_name, prop_spec in properties.items():
-        prop_type = prop_spec.get("type", "string")
+    # If the schema parser returned something other than a dict, create a default dict
+    if not isinstance(args, dict):
+        args = {}
 
-        # Generate aggressive values based on type
-        if prop_type == "string":
-            args[prop_name] = generate_aggressive_text()
-        elif prop_type == "integer":
-            args[prop_name] = _generate_aggressive_integer()
-        elif prop_type == "number":
-            args[prop_name] = _generate_aggressive_float()
-        elif prop_type == "boolean":
-            # Use non-boolean values to test validation
-            args[prop_name] = random.choice(
-                [
-                    None,
-                    "",
-                    "true",
-                    "false",
-                    0,
-                    1,
-                    -1,
-                    42,
-                    [],
-                    {},
-                    "yes",
-                    "no",
-                    "on",
-                    "off",
-                    "True",
-                    "False",
-                ]
-            )
-        elif prop_type == "array":
-            # Generate malformed arrays
-            aggressive_arrays = [
-                None,  # Not an array
-                "not_an_array",  # String instead
-                [generate_aggressive_text() for _ in range(random.randint(0, 10))],
-                [None] * random.randint(1, 5),  # Array of nulls
-                [{}] * random.randint(1, 3),  # Array of empty objects
-                [],  # Empty array
-                ["A" * 10000],  # Huge string in array
-                list(range(10000)),  # Huge array
-            ]
-            args[prop_name] = random.choice(aggressive_arrays)
-        elif prop_type == "object":
-            # Generate malformed objects
-            aggressive_objects = [
-                None,  # Not an object
-                "not_an_object",  # String instead
-                [],  # Array instead
-                {},  # Empty object
-                {generate_aggressive_text(): generate_aggressive_text()},
-                {"evil": "<script>alert('xss')</script>"},
-                {"\x00null\x00": "null_key"},
-                {"a" * 1000: "huge_key"},
-            ]
-            args[prop_name] = random.choice(aggressive_objects)
-        else:
-            # Fallback for unknown types - try to break them
-            args[prop_name] = random.choice(
-                [
-                    None,
-                    generate_aggressive_text(),
-                    _generate_aggressive_integer(),
-                    _generate_aggressive_float(),
-                    [],
-                    {},
-                ]
-            )
+    # Ensure we have at least some arguments
+    if not args and schema.get("properties"):
+        # Fallback to basic property handling
+        properties = schema.get("properties", {})
+
+        for prop_name, prop_spec in properties.items():
+            if random.random() < 0.8:  # 80% chance to include each property
+                prop_type = prop_spec.get("type", "string")
+
+                # Generate aggressive values based on type
+                if prop_type == "string":
+                    args[prop_name] = generate_aggressive_text()
+                elif prop_type == "integer":
+                    args[prop_name] = _generate_aggressive_integer()
+                elif prop_type == "number":
+                    args[prop_name] = _generate_aggressive_float()
+                elif prop_type == "boolean":
+                    args[prop_name] = random.choice(
+                        [None, "", "true", "false", 0, 1, -1, 42, [], {}, "yes", "no"]
+                    )
+                elif prop_type == "array":
+                    args[prop_name] = [
+                        generate_aggressive_text() for _ in range(random.randint(0, 5))
+                    ]
+                elif prop_type == "object":
+                    args[prop_name] = {
+                        generate_aggressive_text(): generate_aggressive_text()
+                    }
+                else:
+                    args[prop_name] = generate_aggressive_text()
 
     # Add some extra malicious fields that shouldn't be there
     malicious_extras = {
