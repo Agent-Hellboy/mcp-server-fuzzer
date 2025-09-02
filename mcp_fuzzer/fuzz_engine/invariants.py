@@ -262,10 +262,12 @@ async def verify_batch_responses(
         Dict[int, Union[bool, str]]: A dictionary mapping response indices to
             verification results (True if valid, error message if invalid)
     """
+    import asyncio
+
     results = {}
 
-    # Guard against None or empty responses
-    if not responses:
+    # Guard against None
+    if responses is None:
         return results
 
     # Guard against non-list responses
@@ -273,14 +275,29 @@ async def verify_batch_responses(
         results[0] = f"Expected a list of responses, got {type(responses)}"
         return results
 
-    for i, response in enumerate(responses):
+    # Guard against empty list
+    if len(responses) == 0:
+        return results
+
+    # Process responses in parallel using asyncio
+    async def _verify_single_response(idx, resp):
         try:
-            verify_response_invariants(response, expected_error_codes, schema)
-            results[i] = True
+            # Use to_thread to avoid blocking the event loop
+            await asyncio.to_thread(
+                verify_response_invariants, resp, expected_error_codes, schema
+            )
+            return idx, True
         except InvariantViolation as e:
-            results[i] = str(e)
+            return idx, str(e)
         except Exception as e:
-            results[i] = f"Unexpected error: {str(e)}"
+            return idx, f"Unexpected error: {str(e)}"
+
+    # Create tasks for all responses
+    tasks = [_verify_single_response(i, resp) for i, resp in enumerate(responses)]
+
+    # Gather results
+    for idx, result in await asyncio.gather(*tasks, return_exceptions=False):
+        results[idx] = result
 
     return results
 
