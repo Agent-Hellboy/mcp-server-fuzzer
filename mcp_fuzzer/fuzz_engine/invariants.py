@@ -142,9 +142,9 @@ def check_error_type_correctness(
     Raises:
         InvariantViolation: If the error is not of the correct type
     """
-    # Check if error is None
+    # 'error' must be an object when present per JSON-RPC 2.0
     if error is None:
-        return True
+        raise InvariantViolation("JSON-RPC error must be an object; got null", error)
 
     # For JSON-RPC errors, check required fields
     if isinstance(error, dict):
@@ -154,9 +154,10 @@ def check_error_type_correctness(
         if "message" not in error:
             raise InvariantViolation("JSON-RPC error missing 'message' field", error)
 
-        if not isinstance(error["code"], int):
+        code = error["code"]
+        if isinstance(code, bool) or not isinstance(code, int):
             raise InvariantViolation(
-                (f"JSON-RPC error code must be an integer, got {type(error['code'])}"),
+                "JSON-RPC error code must be an integer (bool not allowed)",
                 error,
             )
 
@@ -269,7 +270,7 @@ async def verify_batch_responses(
 
     # Guard against non-list responses
     if not isinstance(responses, list):
-        results[0] = "Expected a list of responses, got {type(responses)}"
+        results[0] = f"Expected a list of responses, got {type(responses)}"
         return results
 
     for i, response in enumerate(responses):

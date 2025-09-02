@@ -83,8 +83,9 @@ class TestInvariants(unittest.TestCase):
         self.assertTrue(check_error_type_correctness(error))
 
     def test_check_error_type_correctness_none(self):
-        """Test that None error passes validation."""
-        self.assertTrue(check_error_type_correctness(None))
+        """Test that None error raises an exception."""
+        with self.assertRaises(InvariantViolation):
+            check_error_type_correctness(None)
 
     def test_check_error_type_correctness_missing_code(self):
         """Test that a missing code raises an exception."""
