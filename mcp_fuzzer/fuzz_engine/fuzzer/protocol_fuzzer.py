@@ -14,7 +14,11 @@ from ...types import FuzzDataResult
 
 from ..executor import AsyncFuzzExecutor
 from ..strategy import ProtocolStrategies
-from ..invariants import verify_response_invariants, InvariantViolation
+from ..invariants import (
+    verify_response_invariants,
+    InvariantViolation,
+    verify_batch_responses,
+)
 
 
 class ProtocolFuzzer:
@@ -215,9 +219,14 @@ class ProtocolFuzzer:
 
             # Verify invariants if we have a server response
             invariant_violations = []
-            if server_response and not generate_only:
+            if server_response is not None and not generate_only:
                 try:
-                    verify_response_invariants(server_response)
+                    if isinstance(server_response, list):
+                        batch = verify_batch_responses(server_response)
+                        viols = [str(v) for v in batch.values() if v is not True]
+                        invariant_violations.extend(viols)
+                    else:
+                        verify_response_invariants(server_response)
                 except InvariantViolation as e:
                     invariant_violations.append(str(e))
                     self._logger.warning(

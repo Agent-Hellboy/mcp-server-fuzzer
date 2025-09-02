@@ -141,10 +141,15 @@ def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
     """Generate realistic tool arguments based on schema."""
     from ..schema_parser import make_fuzz_strategy_from_jsonschema
 
-    schema = tool.get("inputSchema", {})
+    schema = tool.get("inputSchema")
+    if not isinstance(schema, dict):
+        schema = {}
 
     # Use the enhanced schema parser to generate realistic values
-    args = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    try:
+        args = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    except Exception:
+        args = {}
 
     # If the schema parser returned something other than a dict, create a default dict
     if not isinstance(args, dict):
@@ -153,10 +158,11 @@ def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
     # Get required fields
     required = schema.get("required", [])
 
-    # Handle required fields even if no properties are defined
-    if required and not args:
+    # Always backfill any missing required fields
+    if required:
         for field in required:
-            args[field] = generate_realistic_text()
+            if field not in args:
+                args[field] = generate_realistic_text()
 
     # Ensure we have at least some arguments
     if schema.get("properties"):

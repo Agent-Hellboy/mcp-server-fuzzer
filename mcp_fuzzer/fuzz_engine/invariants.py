@@ -64,19 +64,13 @@ def check_response_validity(response: Any) -> bool:
     if response is None:
         raise InvariantViolation("Response is None")
 
-    # For JSON-RPC responses, check if they have the required fields
+    # For JSON-RPC responses, check required fields
     if isinstance(response, dict):
         if "jsonrpc" in response:
             # This appears to be a JSON-RPC response
             if response.get("jsonrpc") != "2.0":
                 raise InvariantViolation(
                     f"Invalid JSON-RPC version: {response.get('jsonrpc')}", response
-                )
-
-            # Check for id if it's not a notification
-            if "id" not in response and "error" in response:
-                raise InvariantViolation(
-                    "JSON-RPC error response missing 'id' field", response
                 )
 
             # Check that response has either result or error, but not both
@@ -89,12 +83,36 @@ def check_response_validity(response: Any) -> bool:
                 )
 
             if not has_result and not has_error:
-                # Notifications don't require result or error
+                # Check if this is a notification (no id) or a response
                 if "id" in response:
+                    # Responses must have result or error
                     raise InvariantViolation(
                         "JSON-RPC response must have either 'result' or 'error'",
                         response,
                     )
+
+            # id is required for any response (result or error)
+            if has_result or has_error:
+                if "id" not in response:
+                    raise InvariantViolation("JSON-RPC response missing 'id'", response)
+                if (
+                    not isinstance(response["id"], (int, str))
+                    and response["id"] is not None
+                ):
+                    raise InvariantViolation(
+                        f"JSON-RPC id must be int, str, or null; "
+                        f"got {type(response['id'])}",
+                        response,
+                    )
+        else:
+            # If dict but not a JSON-RPC envelope, optionally treat as invalid
+            raise InvariantViolation(
+                "Unexpected non JSON-RPC response object", response
+            )
+    else:
+        raise InvariantViolation(
+            f"Unexpected response type: {type(response)}", response
+        )
 
     return True
 
@@ -119,7 +137,7 @@ def check_error_type_correctness(
     if error is None:
         return True
 
-    # For JSON-RPC errors, check if they have the required fields
+    # For JSON-RPC errors, check required fields
     if isinstance(error, dict):
         if "code" not in error:
             raise InvariantViolation("JSON-RPC error missing 'code' field", error)
@@ -151,6 +169,8 @@ def check_error_type_correctness(
                 ),
                 error,
             )
+    else:
+        raise InvariantViolation("JSON-RPC error must be an object", error)
 
     return True
 
@@ -247,15 +267,15 @@ def verify_batch_responses(
 def check_state_consistency(
     before_state: Dict[str, Any],
     after_state: Dict[str, Any],
-    allowed_changes: Optional[List[str]] = None,
+    expected_changes: Optional[List[str]] = None,
 ) -> bool:
     """
     Check if the state is consistent before and after an operation.
 
     Args:
-        before_state: The state before the operation
-        after_state: The state after the operation
-        allowed_changes: Optional list of keys that are allowed to change
+        before_state: State before the operation
+        after_state: State after the operation
+        expected_changes: Optional list of keys that are expected to change
 
     Returns:
         bool: True if the state is consistent, False otherwise
@@ -263,19 +283,25 @@ def check_state_consistency(
     Raises:
         InvariantViolation: If the state is inconsistent
     """
-    allowed_changes = allowed_changes or []
-
-    # Check that all keys in before_state are also in after_state
+    # Check if all keys in before_state are still in after_state
     for key in before_state:
         if key not in after_state:
-            raise InvariantViolation(f"Key '{key}' missing from after_state")
+            raise InvariantViolation(f"Key '{key}' missing in after_state")
 
-    # Check that values for keys not in allowed_changes are the same
+    # Check if any unexpected keys were added
+    for key in after_state:
+        if key not in before_state:
+            if not expected_changes or key not in expected_changes:
+                raise InvariantViolation(f"Unexpected key '{key}' added to after_state")
+
+    # Check if any values changed unexpectedly
     for key in before_state:
-        if key not in allowed_changes and before_state[key] != after_state[key]:
-            raise InvariantViolation(
-                f"Key '{key}' changed unexpectedly: {before_state[key]} -> "
-                f"{after_state[key]}"
-            )
+        if key in after_state:
+            if before_state[key] != after_state[key]:
+                if not expected_changes or key not in expected_changes:
+                    raise InvariantViolation(
+                        f"Unexpected change in '{key}': "
+                        f"{before_state[key]} -> {after_state[key]}"
+                    )
 
     return True

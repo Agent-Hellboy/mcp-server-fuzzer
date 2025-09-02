@@ -29,11 +29,31 @@ from typing import Any, Dict, List
 MAX_RECURSION_DEPTH = 5
 
 
+def _merge_allOf(schemas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Deep merge for allOf schemas."""
+    merged: Dict[str, Any] = {}
+    props: Dict[str, Any] = {}
+    required: List[str] = []
+    for s in schemas:
+        if "properties" in s and isinstance(s["properties"], dict):
+            props.update(s["properties"])
+        if "required" in s and isinstance(s["required"], list):
+            required.extend([r for r in s["required"] if isinstance(r, str)])
+        for k, v in s.items():
+            if k not in ("properties", "required"):
+                merged[k] = v if k not in merged else merged[k]
+    if props:
+        merged["properties"] = props
+    if required:
+        merged["required"] = sorted(set(required))
+    return merged
+
+
 def make_fuzz_strategy_from_jsonschema(
     schema: Dict[str, Any],
     phase: str = "realistic",
     recursion_depth: int = 0,
-) -> Dict[str, Any]:
+) -> Any:
     """
     Create a fuzzing strategy based on a JSON Schema.
 
@@ -66,9 +86,7 @@ def make_fuzz_strategy_from_jsonschema(
 
     if "allOf" in schema and isinstance(schema["allOf"], list):
         # Merge all schemas in the allOf list
-        merged_schema = {}
-        for sub_schema in schema["allOf"]:
-            merged_schema.update(sub_schema)
+        merged_schema = _merge_allOf(schema["allOf"])
         return make_fuzz_strategy_from_jsonschema(
             merged_schema, phase, recursion_depth + 1
         )
@@ -195,14 +213,17 @@ def _handle_array_type(
         return [_generate_default_value(phase) for _ in range(random.randint(1, 3))]
 
     # Handle array constraints
-    min_items = schema.get("minItems", 0)
-    max_items = schema.get("maxItems", 10)  # Default to reasonable max
+    min_items = max(0, int(schema.get("minItems", 0)))
+    max_items = int(schema.get("maxItems", 10))  # Default to reasonable max
+    if max_items < min_items:
+        max_items = min_items
     unique_items = schema.get("uniqueItems", False)
 
     # Determine array size
     if phase == "realistic":
         # In realistic mode, use reasonable array sizes
-        array_size = random.randint(min_items, min(max_items, 5))
+        hi = max(min(max_items, 5), min_items)
+        array_size = random.randint(min_items, hi)
     else:
         # In aggressive mode, sometimes use edge cases
         if random.random() < 0.7:
@@ -253,8 +274,10 @@ def _handle_array_type(
 def _handle_string_type(schema: Dict[str, Any], phase: str) -> str:
     """Handle string type schema."""
     # Handle string constraints
-    min_length = schema.get("minLength", 0)
-    max_length = schema.get("maxLength", 100)
+    min_length = max(0, int(schema.get("minLength", 0)))
+    max_length = int(schema.get("maxLength", 100))
+    if max_length < min_length:
+        max_length = min_length
     pattern = schema.get("pattern")
     format_type = schema.get("format")
 
@@ -441,15 +464,19 @@ def _handle_integer_type(schema: Dict[str, Any], phase: str) -> int:
     # Handle integer constraints
     minimum = schema.get("minimum", -1000000)
     maximum = schema.get("maximum", 1000000)
-    exclusive_minimum = schema.get("exclusiveMinimum", False)
-    exclusive_maximum = schema.get("exclusiveMaximum", False)
+    exc_min = schema.get("exclusiveMinimum")
+    exc_max = schema.get("exclusiveMaximum")
     multiple_of = schema.get("multipleOf")
 
-    # Adjust bounds for exclusive constraints
-    if exclusive_minimum:
+    # Handle boolean (draft-04) and numeric (draft-06+) exclusive*
+    if isinstance(exc_min, bool) and exc_min:
         minimum += 1
-    if exclusive_maximum:
+    elif isinstance(exc_min, (int, float)):
+        minimum = int(exc_min) + 1
+    if isinstance(exc_max, bool) and exc_max:
         maximum -= 1
+    elif isinstance(exc_max, (int, float)):
+        maximum = int(exc_max) - 1
 
     # Ensure minimum <= maximum
     if minimum > maximum:
@@ -458,19 +485,20 @@ def _handle_integer_type(schema: Dict[str, Any], phase: str) -> int:
     if phase == "realistic":
         # Generate a reasonable integer
         value = random.randint(minimum, maximum)
-
-        # Handle multipleOf constraint
         if multiple_of:
-            # Find the closest multiple
-            value = round(value / multiple_of) * multiple_of
-
-            # Ensure it's within bounds
-            if value < minimum:
-                value += multiple_of
-            if value > maximum:
-                value -= multiple_of
-
-        return value
+            try:
+                m = int(multiple_of)
+                if m > 0:
+                    # First multiple >= minimum
+                    start = ((minimum + (m - 1)) // m) * m
+                    if start > maximum:
+                        return value  # no valid multiple; fallback to value in range
+                    # Pick a multiple within range
+                    kmax = (maximum - start) // m
+                    value = start + m * random.randint(0, kmax)
+            except Exception:
+                pass
+        return int(value)
     else:
         # In aggressive mode, sometimes use edge cases
         if random.random() < 0.7:
@@ -504,15 +532,20 @@ def _handle_number_type(schema: Dict[str, Any], phase: str) -> float:
     # Handle number constraints
     minimum = schema.get("minimum", -1000000.0)
     maximum = schema.get("maximum", 1000000.0)
-    exclusive_minimum = schema.get("exclusiveMinimum", False)
-    exclusive_maximum = schema.get("exclusiveMaximum", False)
+    exc_min = schema.get("exclusiveMinimum")
+    exc_max = schema.get("exclusiveMaximum")
     multiple_of = schema.get("multipleOf")
 
     # Adjust bounds for exclusive constraints
-    if exclusive_minimum:
-        minimum += 0.000001  # Small epsilon
-    if exclusive_maximum:
-        maximum -= 0.000001  # Small epsilon
+    eps = 1e-9
+    if isinstance(exc_min, bool) and exc_min:
+        minimum += eps
+    elif isinstance(exc_min, (int, float)):
+        minimum = float(exc_min) + eps
+    if isinstance(exc_max, bool) and exc_max:
+        maximum -= eps
+    elif isinstance(exc_max, (int, float)):
+        maximum = float(exc_max) - eps
 
     # Ensure minimum <= maximum
     if minimum > maximum:
@@ -521,19 +554,23 @@ def _handle_number_type(schema: Dict[str, Any], phase: str) -> float:
     if phase == "realistic":
         # Generate a reasonable float
         value = random.uniform(minimum, maximum)
-
-        # Handle multipleOf constraint
         if multiple_of:
-            # Find the closest multiple
-            value = round(value / multiple_of) * multiple_of
+            try:
+                m = float(multiple_of)
+                if m > 0:
+                    # Compute index range of valid multiples
+                    import math
 
-            # Ensure it's within bounds
-            if value < minimum:
-                value += multiple_of
-            if value > maximum:
-                value -= multiple_of
-
-        return value
+                    k_start = math.ceil(minimum / m)
+                    k_end = math.floor(maximum / m)
+                    if k_start <= k_end:
+                        # Pick a random multiple within bounds
+                        k = random.randint(k_start, k_end)
+                        value = k * m
+            except Exception:
+                # Fallback to the uniform sample if anything goes wrong
+                pass
+        return float(value)
     else:
         # In aggressive mode, sometimes use edge cases
         if random.random() < 0.7:

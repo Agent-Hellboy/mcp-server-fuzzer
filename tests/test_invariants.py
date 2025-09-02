@@ -254,7 +254,10 @@ class TestInvariants(unittest.TestCase):
         """Test that consistent states pass validation."""
         before_state = {"a": 1, "b": 2, "c": 3}
         after_state = {"a": 1, "b": 2, "c": 3, "d": 4}
-        self.assertTrue(check_state_consistency(before_state, after_state))
+        expected_changes = ["d"]
+        self.assertTrue(
+            check_state_consistency(before_state, after_state, expected_changes)
+        )
 
     def test_check_state_consistency_with_allowed_changes(self):
         """Test that allowed changes pass validation."""
