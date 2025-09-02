@@ -22,7 +22,7 @@ jobs:
           pip install pytest pytest-cov pytest-asyncio
       - name: Run tests with coverage
         run: |
-          pytest -vv
+          pytest -vv --cov=mcp_fuzzer --cov-report=xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:

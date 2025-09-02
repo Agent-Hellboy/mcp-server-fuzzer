@@ -22,24 +22,24 @@ from mcp_fuzzer.fuzz_engine.runtime import (
 
 class TestProcessManager:
     """Test the Process Manager"""
-    
+
     @pytest.mark.skip(reason="Need to fix mocking for asyncio.create_subprocess_exec")
     @pytest.mark.asyncio
     async def test_start_process_success(self):
         """Test starting a process successfully."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
         manager = ProcessManager(config)
-        
+
         # Set up a mock for the watchdog
         manager.watchdog = AsyncMock()
         manager.watchdog.start = AsyncMock()
         manager.watchdog.register_process = AsyncMock()
-        
+
         # Mock the process
         mock_process = AsyncMock()
         mock_process.pid = 12345
         mock_process.returncode = None
-        
+
         try:
             # For now we just verify the test setup works
             assert True
@@ -51,16 +51,16 @@ class TestProcessManager:
         """Test stopping a process."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
         manager = ProcessManager(config)
-        
+
         # Set up a mock for the watchdog
         manager.watchdog = AsyncMock()
         manager.watchdog.unregister_process = AsyncMock()
-        
+
         # Mock the process
         mock_process = AsyncMock()
         mock_process.pid = 12345
         mock_process.returncode = None
-        
+
         try:
             # Set up a process in the manager
             async with manager._lock:
@@ -70,7 +70,7 @@ class TestProcessManager:
                     "started_at": time.time(),
                     "status": "running",
                 }
-            
+
             # Test stopping the process
             with patch.object(
                 manager, "_graceful_terminate_process", AsyncMock()
@@ -87,12 +87,12 @@ class TestProcessManager:
         """Test getting process status."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
         manager = ProcessManager(config)
-        
+
         # Mock the process
         mock_process = AsyncMock()
         mock_process.pid = 12345
         mock_process.returncode = None
-        
+
         try:
             # Set up a process in the manager
             async with manager._lock:
@@ -102,19 +102,19 @@ class TestProcessManager:
                     "started_at": time.time(),
                     "status": "running",
                 }
-            
+
             # Get status for a running process
             status = await manager.get_process_status(12345)
             assert status is not None
             assert status["status"] == "running"
-            
+
             # Get status for a finished process
             mock_process.returncode = 0
             status = await manager.get_process_status(12345)
             assert status is not None
             assert status["status"] == "finished"
             assert status["exit_code"] == 0
-            
+
             # Get status for a non-existent process
             status = await manager.get_process_status(99999)
             assert status is None
@@ -126,16 +126,16 @@ class TestProcessManager:
         """Test listing processes."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
         manager = ProcessManager(config)
-        
+
         # Mock the processes
         mock_process1 = AsyncMock()
         mock_process1.pid = 12345
         mock_process1.returncode = None
-        
+
         mock_process2 = AsyncMock()
         mock_process2.pid = 67890
         mock_process2.returncode = 0
-        
+
         try:
             # Set up two processes in the manager
             async with manager._lock:
@@ -145,14 +145,14 @@ class TestProcessManager:
                     "started_at": time.time(),
                     "status": "running",
                 }
-                
+
                 manager._processes[67890] = {
                     "process": mock_process2,
                     "config": ProcessConfig(command=["test2"], name="test_process2"),
                     "started_at": time.time(),
                     "status": "finished",
                 }
-            
+
             # Just verify we can call list_processes without error
             processes = await manager.list_processes()
             assert len(processes) == 2
@@ -162,7 +162,7 @@ class TestProcessManager:
 
 class TestProcessWatchdog:
     """Test the Process Watchdog"""
-    
+
     @pytest.mark.asyncio
     async def test_start_stop(self):
         """Test starting and stopping the watchdog."""
@@ -174,7 +174,7 @@ class TestProcessWatchdog:
             auto_kill=True,
         )
         watchdog = ProcessWatchdog(config)
-        
+
         try:
             await watchdog.start()
             assert watchdog._watchdog_task is not None
@@ -194,23 +194,21 @@ class TestProcessWatchdog:
             auto_kill=True,
         )
         watchdog = ProcessWatchdog(config)
-        
+
         # Mock the process
         mock_process = AsyncMock()
         mock_process.pid = 12345
         mock_process.returncode = None
-        
+
         try:
             # Register a process
-            await watchdog.register_process(
-                12345, mock_process, None, "test_process"
-            )
-            
+            await watchdog.register_process(12345, mock_process, None, "test_process")
+
             # Check if process is registered
             async with watchdog._lock:
                 assert 12345 in watchdog._processes
                 assert watchdog._processes[12345]["name"] == "test_process"
-            
+
             # Unregister the process
             await watchdog.unregister_process(12345)
             async with watchdog._lock:
@@ -229,29 +227,27 @@ class TestProcessWatchdog:
             auto_kill=True,
         )
         watchdog = ProcessWatchdog(config)
-        
+
         # Mock the process
         mock_process = AsyncMock()
         mock_process.pid = 12345
         mock_process.returncode = None
-        
+
         try:
             # Register a process
-            await watchdog.register_process(
-                12345, mock_process, None, "test_process"
-            )
-            
+            await watchdog.register_process(12345, mock_process, None, "test_process")
+
             # Store original timestamp
             original_timestamp = None
             async with watchdog._lock:
                 original_timestamp = watchdog._processes[12345]["last_activity"]
-            
+
             # Wait a small amount of time to ensure timestamp would be different
             await asyncio.sleep(0.01)
-            
+
             # Update activity
             await watchdog.update_activity(12345)
-            
+
             # Check that timestamp was updated
             async with watchdog._lock:
                 new_timestamp = watchdog._processes[12345]["last_activity"]
