@@ -2,8 +2,22 @@
 """
 JSON Schema Parser for Fuzzing Strategies
 
-This module provides enhanced JSON Schema parsing capabilities for generating
-fuzz test data based on schema definitions.
+This module provides comprehensive support for parsing JSON Schema definitions
+and generating appropriate test data based on the schema specifications. It handles
+all standard JSON Schema types, constraints, and combinations including:
+
+- Basic types: string, number, integer, boolean, array, object, null
+- String constraints: minLength, maxLength, pattern, format
+- Number/Integer constraints: minimum, maximum, exclusiveMinimum,
+  exclusiveMaximum, multipleOf
+- Array constraints: minItems, maxItems, uniqueItems
+- Object constraints: required properties, minProperties, maxProperties
+- Schema combinations: oneOf, anyOf, allOf
+- Enums and constants
+
+The module supports both "realistic" and "aggressive" fuzzing strategies, where
+realistic mode generates valid data conforming to the schema, while aggressive
+mode intentionally generates edge cases and invalid data to test error handling.
 """
 
 import random
