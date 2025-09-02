@@ -14,6 +14,11 @@ from ...types import FuzzDataResult
 
 from ..executor import AsyncFuzzExecutor
 from ..strategy import ProtocolStrategies
+from ..invariants import (
+    verify_response_invariants,
+    InvariantViolation,
+    verify_batch_responses,
+)
 
 
 class ProtocolFuzzer:
@@ -212,10 +217,47 @@ class ProtocolFuzzer:
                 protocol_type, fuzz_data, generate_only
             )
 
+            # Verify invariants if we have a server response
+            invariant_violations = []
+            if server_response is not None and not generate_only:
+                try:
+                    if isinstance(server_response, list):
+                        try:
+                            # Handle batch responses with timeout to prevent hanging
+                            batch = await asyncio.wait_for(
+                                asyncio.create_task(
+                                    verify_batch_responses(server_response)
+                                ),
+                                timeout=5.0,  # 5 second timeout for batch validation
+                            )
+                            viols = [str(v) for k, v in batch.items() if v is not True]
+                            invariant_violations.extend(viols)
+                        except asyncio.TimeoutError:
+                            invariant_violations.append("Batch validation timed out")
+                            self._logger.warning(
+                                "Batch validation timeout in %s run %s",
+                                protocol_type,
+                                run_index + 1,
+                            )
+                    else:
+                        verify_response_invariants(server_response)
+                except InvariantViolation as e:
+                    invariant_violations.append(str(e))
+                    self._logger.warning(
+                        "Invariant violation in %s run %s: %s",
+                        protocol_type,
+                        run_index + 1,
+                        e,
+                    )
+
             # Create the result
             result = self._create_fuzz_result(
                 protocol_type, run_index, fuzz_data, server_response, server_error
             )
+
+            # Add invariant violations to the result
+            if invariant_violations:
+                result["invariant_violations"] = invariant_violations
 
             self._logger.debug(f"Fuzzed {protocol_type} run {run_index + 1}")
             return result
@@ -326,6 +368,7 @@ class ProtocolFuzzer:
             "server_response": server_response,
             "server_error": server_error,
             "server_rejected_input": server_error is not None,
+            "invariant_violations": [],  # Will be populated if violations occur
         }
 
     async def fuzz_protocol_type_both_phases(

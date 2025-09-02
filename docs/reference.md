@@ -113,6 +113,7 @@ mcp_fuzzer/
       protocol_fuzzer.py   # Orchestrates protocol-type fuzzing
       tool_fuzzer.py       # Orchestrates tool fuzzing
     strategy/
+      schema_parser.py     # JSON Schema parser for test data generation
       strategy_manager.py  # Selects strategies per phase/type
       realistic/
         tool_strategy.py
@@ -120,6 +121,7 @@ mcp_fuzzer/
       aggressive/
         tool_strategy.py
         protocol_type_strategy.py
+    invariants.py         # Property-based invariants and checks
     runtime/
       manager.py           # Async ProcessManager (start/stop, signals)
       watchdog.py          # ProcessWatchdog (hang detection)
@@ -141,6 +143,74 @@ mcp_fuzzer/
   cli/
     args.py, main.py, runner.py
   client.py                # UnifiedMCPFuzzerClient orchestrator
+```
+
+## Schema Parser
+
+The schema parser module (`mcp_fuzzer.fuzz_engine.strategy.schema_parser`) provides comprehensive support for parsing JSON Schema definitions and generating appropriate test data based on schema specifications.
+
+### Features
+
+- **Basic Types**: Handles string, number, integer, boolean, array, object, and null types
+- **String Constraints**: Supports minLength, maxLength, pattern, and format validations
+- **Number/Integer Constraints**: Handles minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf
+- **Array Constraints**: Supports minItems, maxItems, uniqueItems
+- **Object Constraints**: Handles required properties, minProperties, maxProperties
+- **Schema Combinations**: Processes oneOf, anyOf, allOf schema combinations
+- **Enums and Constants**: Supports enum values and constants
+- **Fuzzing Phases**: Supports both "realistic" (valid) and "aggressive" (edge cases) modes
+
+### Example Usage
+
+```python
+from mcp_fuzzer.fuzz_engine.strategy.schema_parser import make_fuzz_strategy_from_jsonschema
+
+# Define a JSON schema
+schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string", "minLength": 3, "maxLength": 50},
+        "age": {"type": "integer", "minimum": 18, "maximum": 120},
+        "email": {"type": "string", "format": "email"}
+    },
+    "required": ["name", "age"]
+}
+
+# Generate realistic data
+realistic_data = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+
+# Generate aggressive data for security testing
+aggressive_data = make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
+```
+
+## Invariants System
+
+The invariants module (`mcp_fuzzer.fuzz_engine.invariants`) provides property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
+
+### Features
+
+- **Response Validity**: Ensures responses follow JSON-RPC 2.0 specification
+- **Error Type Correctness**: Verifies error responses have correct structure and codes
+- **Schema Conformity**: Validates responses against JSON schema definitions
+- **Batch Verification**: Applies invariant checks to batches of responses
+- **State Consistency**: Ensures server state remains consistent during fuzzing
+
+### Example Usage
+
+```python
+from mcp_fuzzer.fuzz_engine.invariants import verify_response_invariants, InvariantViolation
+
+# Verify a response against invariants
+try:
+    verify_response_invariants(
+        response={"jsonrpc": "2.0", "id": 1, "result": "success"},
+        expected_error_codes=[400, 404, 500],
+        schema={"type": "object", "properties": {"result": {"type": "string"}}}
+    )
+    # Response is valid
+except InvariantViolation as e:
+    # Invariant violation detected
+    print(f"Violation: {e}")
 ```
 
 - Strategy: Generates inputs for tools and protocol types in two phases:

@@ -244,6 +244,7 @@ The fuzzing engine orchestrates the testing process and manages test execution.
 
 - `tool_fuzzer.py`: Tests individual tools with various argument combinations
 - `protocol_fuzzer.py`: Tests MCP protocol types with various message structures
+- `invariants.py`: Implements property-based invariants and checks for fuzz testing
 - `executor.py`: Provides asynchronous execution framework with concurrency control and retry mechanisms
 
 **Fuzzing Process:**
@@ -252,7 +253,8 @@ The fuzzing engine orchestrates the testing process and manages test execution.
 2. **Strategy Selection**: Choose appropriate fuzzing strategy (realistic vs aggressive)
 3. **Data Generation**: Generate test data using Hypothesis and custom strategies
 4. **Execution**: Execute tests with controlled concurrency via AsyncFuzzExecutor
-5. **Analysis**: Analyze results and generate reports
+5. **Invariant Verification**: Verify responses against property-based invariants
+6. **Analysis**: Analyze results and generate reports
 
 ### 4. Strategy System
 
@@ -263,13 +265,43 @@ The strategy system generates test data using different approaches.
 - `realistic/`: Generates valid, realistic data for functionality testing
 - `aggressive/`: Generates malicious/malformed data for security testing
 - `strategy_manager.py`: Orchestrates strategy selection and execution
+- `schema_parser.py`: Parses JSON Schema definitions to generate appropriate test data
 
 **Strategy Types:**
 
 - **Realistic Strategies**: Generate valid Base64, UUIDs, timestamps, semantic versions
 - **Aggressive Strategies**: Generate SQL injection, XSS, path traversal, buffer overflow attempts
 
-### 5. Safety System
+**Schema Parser:**
+
+The schema parser provides comprehensive support for parsing JSON Schema definitions and generating appropriate test data based on schema specifications. It handles:
+
+- Basic types: string, number, integer, boolean, array, object, null
+- String constraints: minLength, maxLength, pattern, format
+- Number/Integer constraints: minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf
+- Array constraints: minItems, maxItems, uniqueItems
+- Object constraints: required properties, minProperties, maxProperties
+- Schema combinations: oneOf, anyOf, allOf
+- Enums and constants
+
+The module supports both "realistic" and "aggressive" fuzzing strategies, where realistic mode generates valid data conforming to the schema, while aggressive mode intentionally generates edge cases and invalid data to test error handling.
+
+### 5. Invariants System
+
+The invariants system provides property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
+
+**Key Components:**
+
+- `check_response_validity`: Ensures responses follow JSON-RPC 2.0 specification
+- `check_error_type_correctness`: Verifies error responses have correct structure and codes
+- `check_response_schema_conformity`: Validates responses against JSON schema definitions
+- `verify_response_invariants`: Orchestrates multiple invariant checks on a single response
+- `verify_batch_responses`: Applies invariant checks to batches of responses
+- `check_state_consistency`: Ensures server state remains consistent during fuzzing
+
+These invariants serve as runtime assertions that validate the behavior of the server being tested, helping to identify potential issues that might not be caught by simple error checking.
+
+### 6. Safety System
 
 The safety system provides multiple layers of protection against dangerous operations.
 
