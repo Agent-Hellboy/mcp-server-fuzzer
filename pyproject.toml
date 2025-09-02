@@ -76,6 +76,19 @@ per-file-ignores = { "tests/**" = ["F401", "F841"] }
 [tool.pytest.ini_options]
 addopts = "-q --maxfail=1 --disable-warnings --cov=mcp_fuzzer --cov-report=term-missing --cov-report=xml"
 testpaths = ["tests"]
+markers = [
+    "auth: tests for the auth component",
+    "cli: tests for the cli component",
+    "client: tests for the client component",
+    "config: tests for the config component",
+    "fuzz_engine: tests for the fuzz_engine component",
+    "fuzzer: tests for the fuzzer subcomponent",
+    "runtime: tests for the runtime subcomponent",
+    "strategy: tests for the strategy subcomponent",
+    "safety_system: tests for the safety_system component",
+    "transport: tests for the transport component",
+    "integration: integration tests"
+]
 
 [tool.coverage.run]
 branch = true

@@ -1,0 +1,83 @@
+name: Component Tests
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'mcp_fuzzer/auth/**'
+      - 'mcp_fuzzer/cli/**'
+      - 'mcp_fuzzer/client/**'
+      - 'mcp_fuzzer/fuzz_engine/**'
+      - 'mcp_fuzzer/safety_system/**'
+      - 'mcp_fuzzer/transport/**'
+
+jobs:
+  component-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for git diff
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Determine changed components
+        id: changes
+        run: |
+          # Get base branch for the PR
+          BASE_BRANCH=${{ github.base_ref }}
+
+          # Check which components have changes
+          AUTH_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/auth/" && echo "true" || echo "false")
+          CLI_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/cli/" && echo "true" || echo "false")
+          CLIENT_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/client/" && echo "true" || echo "false")
+          FUZZ_ENGINE_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/fuzz_engine/" && echo "true" || echo "false")
+          SAFETY_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/safety_system/" && echo "true" || echo "false")
+          TRANSPORT_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/transport/" && echo "true" || echo "false")
+
+          echo "auth=$AUTH_CHANGES" >> $GITHUB_OUTPUT
+          echo "cli=$CLI_CHANGES" >> $GITHUB_OUTPUT
+          echo "client=$CLIENT_CHANGES" >> $GITHUB_OUTPUT
+          echo "fuzz_engine=$FUZZ_ENGINE_CHANGES" >> $GITHUB_OUTPUT
+          echo "safety=$SAFETY_CHANGES" >> $GITHUB_OUTPUT
+          echo "transport=$TRANSPORT_CHANGES" >> $GITHUB_OUTPUT
+
+      - name: Run auth tests
+        if: steps.changes.outputs.auth == 'true'
+        run: pytest -vv tests/unit/auth --cov=mcp_fuzzer.auth --cov-report=xml
+
+      - name: Run CLI tests
+        if: steps.changes.outputs.cli == 'true'
+        run: pytest -vv tests/unit/cli --cov=mcp_fuzzer.cli --cov-report=xml
+
+      - name: Run client tests
+        if: steps.changes.outputs.client == 'true'
+        run: pytest -vv tests/unit/client --cov=mcp_fuzzer.client --cov-report=xml
+
+      - name: Run fuzz engine tests
+        if: steps.changes.outputs.fuzz_engine == 'true'
+        run: pytest -vv tests/unit/fuzz_engine --cov=mcp_fuzzer.fuzz_engine --cov-report=xml
+
+      - name: Run safety system tests
+        if: steps.changes.outputs.safety == 'true'
+        run: pytest -vv tests/unit/safety_system --cov=mcp_fuzzer.safety_system --cov-report=xml
+
+      - name: Run transport tests
+        if: steps.changes.outputs.transport == 'true'
+        run: pytest -vv tests/unit/transport --cov=mcp_fuzzer.transport --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: true

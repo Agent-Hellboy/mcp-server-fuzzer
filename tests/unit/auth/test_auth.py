@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, call, patch
 
+import pytest
 from mcp_fuzzer.auth import (
     APIKeyAuth,
     AuthManager,
@@ -23,6 +24,8 @@ from mcp_fuzzer.auth import (
     load_auth_config,
     setup_auth_from_env,
 )
+
+pytestmark = [pytest.mark.unit, pytest.mark.auth]
 
 
 class TestAuthProvider(unittest.TestCase):
