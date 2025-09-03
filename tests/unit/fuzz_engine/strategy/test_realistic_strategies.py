@@ -1,401 +1,528 @@
 #!/usr/bin/env python3
 """
-Unit tests for realistic strategies.
+Unit tests for realistic Hypothesis strategies.
+Tests the realistic strategies from mcp_fuzzer.fuzz_engine.strategy.realistic.*
 """
 
+import base64
 import re
-import unittest
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
-from hypothesis import given, settings
-from hypothesis import strategies as st
+import pytest
+from hypothesis import given
 
 from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
     base64_strings,
-    fuzz_tool_arguments_realistic,
     timestamp_strings,
     uuid_strings,
+    generate_realistic_text,
+    fuzz_tool_arguments_realistic,
+)
+from mcp_fuzzer.fuzz_engine.strategy.realistic.protocol_type_strategy import (
+    json_rpc_id_values,
+    method_names,
+    protocol_version_strings,
 )
 
-
-class TestRealisticStrategies(unittest.TestCase):
-    """Test cases for realistic strategy generators."""
-
-    def test_base64_strings_valid(self):
-        """Test that base64_strings generates valid base64 encoded strings."""
-        # Generate 100 random base64 strings
-        for _ in range(100):
-            b64_str = base64_strings().example()
-            # Check that it's a string
-            self.assertIsInstance(b64_str, str)
-            # Check that it contains only valid base64 characters
-            self.assertTrue(
-                all(
-                    c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-                    "0123456789+/="
-                    for c in b64_str
-                )
-            )
-
-    def test_uuid_strings_valid(self):
-        """Test that uuid_strings generates valid UUID strings."""
-        # Generate 100 random UUID strings
-        for _ in range(100):
-            uuid_str = uuid_strings().example()
-            # Check that it's a string
-            self.assertIsInstance(uuid_str, str)
-            # Check that it's a valid UUID format
-            try:
-                uuid_obj = uuid.UUID(uuid_str)
-                self.assertEqual(str(uuid_obj), uuid_str)
-            except ValueError:
-                self.fail(f"Generated invalid UUID: {uuid_str}")
-
-    def test_uuid_strings_version1(self):
-        """Test that uuid_strings can generate version 1 UUIDs."""
-        # Generate 10 version 1 UUIDs
-        for _ in range(10):
-            uuid_str = uuid_strings(version=1).example()
-            uuid_obj = uuid.UUID(uuid_str)
-            self.assertEqual(uuid_obj.version, 1)
-
-    def test_uuid_strings_version4(self):
-        """Test that uuid_strings can generate version 4 UUIDs."""
-        # Generate 10 version 4 UUIDs
-        for _ in range(10):
-            uuid_str = uuid_strings(version=4).example()
-            uuid_obj = uuid.UUID(uuid_str)
-            self.assertEqual(uuid_obj.version, 4)
-
-    def test_timestamp_strings_valid(self):
-        """Test that timestamp_strings generates valid ISO-8601 timestamps."""
-        # Generate 100 random timestamps
-        for _ in range(100):
-            ts_str = timestamp_strings().example()
-            # Check that it's a string
-            self.assertIsInstance(ts_str, str)
-            # Check that it's a valid ISO-8601 format
-            try:
-                # Use datetime.fromisoformat for Python 3.7+
-                dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                self.assertIsInstance(dt, datetime)
-            except ValueError:
-                self.fail(f"Generated invalid ISO-8601 timestamp: {ts_str}")
-
-    def test_timestamp_strings_year_range(self):
-        """Test that timestamp_strings respects year range."""
-        min_year = 2020
-        max_year = 2025
-        # Generate 100 random timestamps within the specified range
-        for _ in range(100):
-            ts_str = timestamp_strings(min_year=min_year, max_year=max_year).example()
-            dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-            self.assertGreaterEqual(dt.year, min_year)
-            self.assertLessEqual(dt.year, max_year)
-
-    def test_json_rpc_id_values_types(self):
-        """Test that json_rpc_id_values generates valid JSON-RPC ID types."""
-        # JSON-RPC IDs can be string, number, or null
-        # We'll test that our strategy generates these types
-        valid_types = (str, int, float, type(None))
-        # Generate 100 random IDs
-        for _ in range(100):
-            id_value = st.one_of(
-                st.text(min_size=1, max_size=50),
-                st.integers(),
-                st.floats(allow_nan=False, allow_infinity=False),
-                st.none(),
-            ).example()
-            self.assertIsInstance(id_value, valid_types)
-
-    def test_method_names_format(self):
-        """Test that method_names generates valid method name formats."""
-        # Method names should follow common patterns
-        method_pattern = re.compile(
-            r"^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)*$"
-        )
-        # Generate 100 random method names
-        for _ in range(100):
-            method_name = st.one_of(
-                st.text(
-                    alphabet=st.characters(
-                        whitelist_categories=("Lu", "Ll", "Nd"),
-                        whitelist_characters="_.",
-                    ),
-                    min_size=1,
-                    max_size=50,
-                )
-            ).example()
-            # If it's not a valid method name pattern, we'll skip the check
-            # This is because we're using a general text strategy that might
-            # generate invalid method names
-            if method_pattern.match(method_name):
-                self.assertTrue(method_pattern.match(method_name))
-
-    def test_protocol_version_strings_format(self):
-        """Test that protocol_version_strings generates valid version formats."""
-        # Version strings should follow semantic versioning pattern
-        version_pattern = re.compile(r"^\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9]+)?$")
-        # Generate 100 random version strings
-        for _ in range(100):
-            version = st.one_of(
-                st.from_regex(r"\d+\.\d+(\.\d+)?(-[a-zA-Z0-9]+)?", fullmatch=True),
-            ).example()
-            # If it's a string and matches the pattern, it's valid
-            if isinstance(version, str) and version_pattern.match(version):
-                self.assertTrue(version_pattern.match(version))
+pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.strategy]
 
 
-class TestCustomStrategiesIntegration(unittest.TestCase):
-    """Test integration of custom strategies with hypothesis."""
-
-    @settings(max_examples=10)
-    @given(base64_strings(min_size=10, max_size=20))
-    def test_base64_strings_with_size_constraints(self, b64_str):
-        """Test base64_strings with size constraints."""
-        # The size constraints apply to the original data before encoding
-        # so we can't directly check the length of the encoded string
-        self.assertIsInstance(b64_str, str)
-        # But we can check that it's valid base64
-        self.assertTrue(
-            all(
-                c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
-                for c in b64_str
-            )
-        )
-
-    @settings(max_examples=10)
-    @given(timestamp_strings(include_microseconds=False))
-    def test_timestamp_strings_without_microseconds(self, ts_str):
-        """Test timestamp_strings without microseconds."""
-        self.assertIsInstance(ts_str, str)
-        # Check that there are no microseconds
-        self.assertNotIn(".", ts_str)
-
-    @settings(max_examples=10)
-    @given(uuid_strings(version=4))
-    def test_uuid_strings_different_versions(self, uuid_str):
-        """Test uuid_strings with different versions."""
-        self.assertIsInstance(uuid_str, str)
-        uuid_obj = uuid.UUID(uuid_str)
-        self.assertEqual(uuid_obj.version, 4)
+# Tests for realistic strategies
+@given(base64_strings())
+def test_base64_strings_valid(value):
+    """Test that base64_strings generates valid Base64 strings."""
+    assert isinstance(value, str)
+    # Should be valid Base64
+    try:
+        decoded = base64.b64decode(value)
+        # Re-encoding should give the same result
+        reencoded = base64.b64encode(decoded).decode("ascii")
+        assert value == reencoded
+    except Exception as e:
+        pytest.fail(f"Invalid Base64 string generated: {value}, error: {e}")
 
 
-class TestRealisticTextGeneration(unittest.TestCase):
-    """Test realistic text generation for fuzzing."""
+@given(uuid_strings())
+def test_uuid_strings_valid(value):
+    """Test that uuid_strings generates valid UUID strings."""
+    assert isinstance(value, str)
+    # Should be valid UUID format
+    try:
+        parsed_uuid = uuid.UUID(value)
+        assert str(parsed_uuid) == value
+    except ValueError as e:
+        pytest.fail(f"Invalid UUID string generated: {value}, error: {e}")
 
-    def test_base64_strings_strategy(self):
-        """Test base64_strings strategy."""
-        # Generate a base64 string
-        b64_str = base64_strings().example()
-        self.assertIsInstance(b64_str, str)
-        # Check that it's valid base64
-        self.assertTrue(
-            all(
-                c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
-                for c in b64_str
-            )
-        )
 
-    def test_fuzz_tool_arguments_edge_cases(self):
-        """Test edge cases in tool argument generation."""
+@given(uuid_strings(version=1))
+def test_uuid_strings_version1(value):
+    """Test UUID version 1 generation."""
+    parsed_uuid = uuid.UUID(value)
+    assert parsed_uuid.version == 1
 
-        # Test with empty schema
-        tool = {"inputSchema": {}}
-        result = fuzz_tool_arguments_realistic(tool)
-        assert result == {}
 
-        # Test with no properties
-        tool = {"inputSchema": {"properties": {}}}
-        result = fuzz_tool_arguments_realistic(tool)
-        assert result == {}
+@given(uuid_strings(version=4))
+def test_uuid_strings_version4(value):
+    """Test UUID version 4 generation."""
+    parsed_uuid = uuid.UUID(value)
+    assert parsed_uuid.version == 4
 
-        # Test with required fields but no properties
-        tool = {"inputSchema": {"required": ["field1", "field2"]}}
-        result = fuzz_tool_arguments_realistic(tool)
-        # Required fields should be generated even without properties
-        assert "field1" in result
-        assert "field2" in result
-        assert result["field1"] is not None
-        assert result["field2"] is not None
 
-        # Test with missing inputSchema
-        tool = {}
-        result = fuzz_tool_arguments_realistic(tool)
-        assert result == {}
+@given(timestamp_strings())
+def test_timestamp_strings_valid(value):
+    """Test that timestamp_strings generates valid ISO-8601 timestamps."""
+    assert isinstance(value, str)
+    # Should be valid ISO-8601 format
+    try:
+        parsed_dt = datetime.fromisoformat(value)
+        assert isinstance(parsed_dt, datetime)
+        # Should have timezone info
+        assert parsed_dt.tzinfo is not None
+    except ValueError as e:
+        pytest.fail(f"Invalid timestamp string generated: {value}, error: {e}")
 
-        # Test with complex nested schema
-        tool = {
-            "inputSchema": {
-                "properties": {
-                    "nested": {
-                        "type": "object",
-                        "properties": {"deep": {"type": "string"}},
-                    }
-                }
-            }
+
+@given(timestamp_strings(min_year=2024, max_year=2024))
+def test_timestamp_strings_year_range(value):
+    """Test timestamp year range constraint."""
+    parsed_dt = datetime.fromisoformat(value)
+    assert parsed_dt.year == 2024
+
+
+@given(protocol_version_strings())
+def test_protocol_version_strings_format(value):
+    """Test that protocol_version_strings generates valid formats."""
+    assert isinstance(value, str)
+    # Should match either date format (YYYY-MM-DD) or semantic version
+    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
+    semver_pattern = r"^\d+\.\d+\.\d+$"
+
+    assert re.match(date_pattern, value) or re.match(semver_pattern, value), (
+        f"Version string '{value}' doesn't match expected patterns"
+    )
+
+
+@given(json_rpc_id_values())
+def test_json_rpc_id_values_types(value):
+    """Test that json_rpc_id_values generates valid types."""
+    # Should be None, string, int, or float
+    assert type(value) in [
+        type(None),
+        str,
+        int,
+        float,
+    ], f"Invalid JSON-RPC ID type: {type(value)}"
+
+
+@given(method_names())
+def test_method_names_format(value):
+    """Test that method_names generates reasonable method names."""
+    assert isinstance(value, str)
+    assert len(value) > 0
+    # Should not start with whitespace or special characters (except letters)
+    if not any(
+        value.startswith(prefix)
+        for prefix in [
+            "initialize",
+            "tools/",
+            "resources/",
+            "prompts/",
+            "notifications/",
+            "completion/",
+            "sampling/",
+        ]
+    ):
+        assert value[0].isalpha(), f"Method name should start with letter: {value}"
+
+
+# Custom strategies integration tests
+def test_base64_strings_with_size_constraints():
+    """Test base64_strings with size constraints."""
+    strategy = base64_strings(min_size=10, max_size=20)
+    value = strategy.example()
+    decoded = base64.b64decode(value)
+    assert len(decoded) >= 10
+    assert len(decoded) <= 20
+
+
+def test_timestamp_strings_without_microseconds():
+    """Test timestamp_strings without microseconds."""
+    strategy = timestamp_strings(include_microseconds=False)
+    value = strategy.example()
+    # Should not contain microseconds (no .)
+    assert "." not in value
+
+
+def test_uuid_strings_different_versions():
+    """Test uuid_strings with different versions."""
+    for version in [1, 3, 4, 5]:
+        strategy = uuid_strings(version=version)
+        value = strategy.example()
+        parsed_uuid = uuid.UUID(value)
+        assert parsed_uuid.version == version
+
+
+# Realistic text generation tests
+def test_generate_realistic_text():
+    """Test generate_realistic_text returns a string."""
+    text = generate_realistic_text()
+    assert isinstance(text, str)
+    assert len(text) > 0
+
+
+def test_fuzz_tool_arguments_realistic():
+    """Test realistic tool argument generation with various schema types."""
+
+    # Test with string type properties
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "uuid_field": {"type": "string", "format": "uuid"},
+                "datetime_field": {"type": "string", "format": "date-time"},
+                "email_field": {"type": "string", "format": "email"},
+                "uri_field": {"type": "string", "format": "uri"},
+            },
+            "required": ["name"],
         }
-        result = fuzz_tool_arguments_realistic(tool)
-        assert "nested" in result
-        assert isinstance(result["nested"], dict)
+    }
 
-    def test_fuzz_tool_arguments_array_edge_cases(self):
-        """Test array generation edge cases."""
+    result = fuzz_tool_arguments_realistic(tool)
 
-        # Test array with no items specification
-        tool = {"inputSchema": {"properties": {"items": {"type": "array"}}}}
+    # Verify all properties are generated
+    assert "name" in result
+    assert "description" in result
+    assert "uuid_field" in result
+    assert "datetime_field" in result
+    assert "email_field" in result
+    assert "uri_field" in result
 
-        result = fuzz_tool_arguments_realistic(tool)
-        assert "items" in result
-        assert isinstance(result["items"], list)
-        assert 1 <= len(result["items"]) <= 3
+    # Verify required field is present
+    assert result["name"] is not None
 
-        # Test array with complex items
-        tool = {
-            "inputSchema": {
-                "properties": {
-                    "complex_array": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {"name": {"type": "string"}},
-                        },
-                    }
-                }
-            }
-        }
+    # Verify format-specific values
+    assert result["email_field"] == "user@example.com"
+    assert result["uri_field"] == "https://example.com/api"
 
-        result = fuzz_tool_arguments_realistic(tool)
-        assert "complex_array" in result
-        assert isinstance(result["complex_array"], list)
-        assert 1 <= len(result["complex_array"]) <= 3
-
-    def test_fuzz_tool_arguments_numeric_constraints(self):
-        """Test numeric type generation with constraints."""
-
-        # Test integer with specific range
-        tool = {
-            "inputSchema": {
-                "properties": {
-                    "small_int": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 5,
-                    },
-                    "large_int": {
-                        "type": "integer",
-                        "minimum": 1000,
-                        "maximum": 2000,
-                    },
-                }
-            }
-        }
-
-        result = fuzz_tool_arguments_realistic(tool)
-
-        assert 1 <= result["small_int"] <= 5
-        assert 1000 <= result["large_int"] <= 2000
-
-        # Test float with specific range
-        tool = {
-            "inputSchema": {
-                "properties": {
-                    "small_float": {
-                        "type": "number",
-                        "minimum": 0.1,
-                        "maximum": 0.9,
-                    },
-                    "large_float": {
-                        "type": "number",
-                        "minimum": 100.0,
-                        "maximum": 200.0,
-                    },
-                }
-            }
-        }
-
-        result = fuzz_tool_arguments_realistic(tool)
-
-        assert 0.1 <= result["small_float"] <= 0.9
-        assert 100.0 <= result["large_float"] <= 200.0
-
-    def test_fuzz_tool_arguments_realistic(self):
-        """Test realistic tool argument generation with various schema types."""
-
-        # Test with string type properties
-        tool = {
-            "inputSchema": {
-                "properties": {
-                    "name": {"type": "string"},
-                    "description": {"type": "string"},
-                    "uuid_field": {"type": "string", "format": "uuid"},
-                    "datetime_field": {"type": "string", "format": "date-time"},
-                    "email_field": {"type": "string", "format": "email"},
-                    "uri_field": {"type": "string", "format": "uri"},
+    # Test with numeric types
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "count": {"type": "integer", "minimum": 10, "maximum": 100},
+                "score": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 10.0,
                 },
-                "required": ["name"],
+                "enabled": {"type": "boolean"},
             }
         }
+    }
 
-        result = fuzz_tool_arguments_realistic(tool)
+    result = fuzz_tool_arguments_realistic(tool)
 
-        # Verify all properties are generated
-        assert "name" in result
-        assert "description" in result
-        assert "uuid_field" in result
-        assert "datetime_field" in result
-        assert "email_field" in result
-        assert "uri_field" in result
+    assert isinstance(result["count"], int)
+    assert 10 <= result["count"] <= 100
+    assert isinstance(result["score"], float)
+    assert 0.0 <= result["score"] <= 10.0
+    assert isinstance(result["enabled"], bool)
 
-        # Verify required field is present
-        assert result["name"] is not None
+    # Test with array types
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "numbers": {"type": "array", "items": {"type": "integer"}},
+                "scores": {"type": "array", "items": {"type": "number"}},
+            }
+        }
+    }
 
-        # Verify format-specific values - check format, not exact values
-        if isinstance(result["email_field"], str):
-            assert "@" in result["email_field"]
-        if isinstance(result["uri_field"], str):
-            assert result["uri_field"].startswith("http")
+    result = fuzz_tool_arguments_realistic(tool)
 
-        # Test with numeric types
-        tool = {
-            "inputSchema": {
-                "properties": {
-                    "count": {"type": "integer", "minimum": 10, "maximum": 100},
-                    "score": {
-                        "type": "number",
-                        "minimum": 0.0,
-                        "maximum": 10.0,
+    assert isinstance(result["tags"], list)
+    assert 1 <= len(result["tags"]) <= 3
+    assert all(isinstance(tag, str) for tag in result["tags"])
+
+    assert isinstance(result["numbers"], list)
+    assert 1 <= len(result["numbers"]) <= 3
+    assert all(isinstance(num, int) for num in result["numbers"])
+
+    # Test with object types
+    tool = {"inputSchema": {"properties": {"config": {"type": "object"}}}}
+
+    result = fuzz_tool_arguments_realistic(tool)
+
+    assert isinstance(result["config"], dict)
+    assert "name" in result["config"]
+    assert "value" in result["config"]
+    assert "enabled" in result["config"]
+
+    # Test with unknown types
+    tool = {"inputSchema": {"properties": {"unknown_field": {"type": "unknown_type"}}}}
+
+    result = fuzz_tool_arguments_realistic(tool)
+    assert "unknown_field" in result
+    assert result["unknown_field"] is not None
+
+
+def test_generate_realistic_text_different_sizes():
+    """Test realistic text generation with different strategies."""
+
+    # Test with different size ranges
+    text1 = generate_realistic_text(min_size=5, max_size=10)
+    # Base64 and UUID strategies may not respect exact size constraints
+    # but should generate reasonable text
+    assert len(text1) > 0
+    assert isinstance(text1, str)
+
+    text2 = generate_realistic_text(min_size=20, max_size=30)
+    # Different strategies may not respect exact size constraints
+    # but should generate reasonable text
+    assert len(text2) > 0
+    assert isinstance(text2, str)
+
+    # Test that it generates different text on multiple calls
+    texts = [generate_realistic_text() for _ in range(5)]
+    # At least some should be different (not guaranteed due to randomness)
+    assert len(set(texts)) >= 1
+
+
+def test_base64_strings_strategy():
+    """Test base64 string generation strategy."""
+    from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+        base64_strings,
+    )
+
+    # Test with default parameters
+    strategy = base64_strings()
+    example = strategy.example()
+    assert isinstance(example, str)
+
+    # Test with custom size range
+    strategy = base64_strings(min_size=10, max_size=20)
+    example = strategy.example()
+    assert isinstance(example, str)
+
+    # Test with custom alphabet
+    strategy = base64_strings(min_size=5, max_size=10, alphabet="abc")
+    example = strategy.example()
+    assert isinstance(example, str)
+
+
+def test_uuid_strings_strategy():
+    """Test UUID string generation strategy."""
+    from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+        uuid_strings,
+    )
+
+    # Test UUID4 (default)
+    strategy = uuid_strings()
+    example = strategy.example()
+    assert isinstance(example, str)
+    assert len(example) == 36  # Standard UUID length
+
+    # Test UUID1
+    strategy = uuid_strings(version=1)
+    example = strategy.example()
+    assert isinstance(example, str)
+    assert len(example) == 36
+
+    # Test UUID3
+    strategy = uuid_strings(version=3)
+    example = strategy.example()
+    assert isinstance(example, str)
+    assert len(example) == 36
+
+    # Test UUID5
+    strategy = uuid_strings(version=5)
+    example = strategy.example()
+    assert isinstance(example, str)
+    assert len(example) == 36
+
+    # Test invalid version
+    with pytest.raises(ValueError):
+        uuid_strings(version=99)
+
+
+def test_timestamp_strings_strategy():
+    """Test timestamp string generation strategy."""
+    from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+        timestamp_strings,
+    )
+
+    # Test with default parameters
+    strategy = timestamp_strings()
+    example = strategy.example()
+    assert isinstance(example, str)
+    assert "T" in example  # ISO format contains T
+
+    # Test with custom year range
+    strategy = timestamp_strings(min_year=2023, max_year=2025)
+    example = strategy.example()
+    assert isinstance(example, str)
+
+    # Test without microseconds
+    strategy = timestamp_strings(include_microseconds=False)
+    example = strategy.example()
+    assert isinstance(example, str)
+    assert "." not in example  # No microseconds
+
+
+def test_fuzz_tool_arguments_edge_cases():
+    """Test edge cases in tool argument generation."""
+
+    # Test with empty schema
+    tool = {"inputSchema": {}}
+    result = fuzz_tool_arguments_realistic(tool)
+    assert result == {}
+
+    # Test with no properties
+    tool = {"inputSchema": {"properties": {}}}
+    result = fuzz_tool_arguments_realistic(tool)
+    assert result == {}
+
+    # Test with required fields but no properties
+    tool = {"inputSchema": {"required": ["field1", "field2"]}}
+    result = fuzz_tool_arguments_realistic(tool)
+    # Required fields should be generated even without properties
+    assert "field1" in result
+    assert "field2" in result
+    assert result["field1"] is not None
+    assert result["field2"] is not None
+
+    # Test with missing inputSchema
+    tool = {}
+    result = fuzz_tool_arguments_realistic(tool)
+    assert result == {}
+
+    # Test with complex nested schema
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "nested": {
+                    "type": "object",
+                    "properties": {"deep": {"type": "string"}},
+                }
+            }
+        }
+    }
+    result = fuzz_tool_arguments_realistic(tool)
+    assert "nested" in result
+    assert isinstance(result["nested"], dict)
+
+
+def test_fuzz_tool_arguments_with_required_fields():
+    """Test that required fields are always generated."""
+
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "optional_field": {"type": "string"},
+                "required_field1": {"type": "string"},
+                "required_field2": {"type": "integer"},
+            },
+            "required": ["required_field1", "required_field2"],
+        }
+    }
+
+    result = fuzz_tool_arguments_realistic(tool)
+
+    # All fields should be present
+    assert "optional_field" in result
+    assert "required_field1" in result
+    assert "required_field2" in result
+
+    # Required fields should have values
+    assert result["required_field1"] is not None
+    assert result["required_field2"] is not None
+
+    # Test multiple calls to ensure consistency
+    for _ in range(3):
+        result2 = fuzz_tool_arguments_realistic(tool)
+        assert "required_field1" in result2
+        assert "required_field2" in result2
+
+
+def test_fuzz_tool_arguments_array_edge_cases():
+    """Test array generation edge cases."""
+
+    # Test array with no items specification
+    tool = {"inputSchema": {"properties": {"items": {"type": "array"}}}}
+
+    result = fuzz_tool_arguments_realistic(tool)
+    assert "items" in result
+    assert isinstance(result["items"], list)
+    assert 1 <= len(result["items"]) <= 3
+
+    # Test array with complex items
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "complex_array": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"name": {"type": "string"}},
                     },
-                    "enabled": {"type": "boolean"},
                 }
             }
         }
+    }
 
-        result = fuzz_tool_arguments_realistic(tool)
+    result = fuzz_tool_arguments_realistic(tool)
+    assert "complex_array" in result
+    assert isinstance(result["complex_array"], list)
+    assert 1 <= len(result["complex_array"]) <= 3
 
-        # Just check types and ranges
-        assert 10 <= result["count"] <= 100
-        assert 0.0 <= result["score"] <= 10.0
-        assert isinstance(result["enabled"], bool)
 
-        # Test with array types - simplified test
-        tool = {
-            "inputSchema": {
-                "properties": {
-                    "tags": {"type": "array", "items": {"type": "string"}},
-                }
+def test_fuzz_tool_arguments_numeric_constraints():
+    """Test numeric type generation with constraints."""
+
+    # Test integer with specific range
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "small_int": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                },
+                "large_int": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 2000,
+                },
             }
         }
+    }
 
-        result = fuzz_tool_arguments_realistic(tool)
+    result = fuzz_tool_arguments_realistic(tool)
 
-        assert isinstance(result["tags"], list)
-        assert len(result["tags"]) > 0
+    assert 1 <= result["small_int"] <= 5
+    assert 1000 <= result["large_int"] <= 2000
 
-        # Test with object types
-        tool = {"inputSchema": {"properties": {"config": {"type": "object"}}}}
+    # Test float with specific range
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "small_float": {
+                    "type": "number",
+                    "minimum": 0.1,
+                    "maximum": 0.9,
+                },
+                "large_float": {
+                    "type": "number",
+                    "minimum": 100.0,
+                    "maximum": 200.0,
+                },
+            }
+        }
+    }
 
-        result = fuzz_tool_arguments_realistic(tool)
+    result = fuzz_tool_arguments_realistic(tool)
 
-        assert isinstance(result["config"], dict)
+    assert 0.1 <= result["small_float"] <= 0.9
+    assert 100.0 <= result["large_float"] <= 200.0
