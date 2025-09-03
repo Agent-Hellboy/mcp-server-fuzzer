@@ -87,7 +87,8 @@ markers = [
     "strategy: tests for the strategy subcomponent",
     "safety_system: tests for the safety_system component",
     "transport: tests for the transport component",
-    "integration: integration tests"
+    "integration: integration tests",
+    "unit: unit tests"
 ]
 
 [tool.coverage.run]

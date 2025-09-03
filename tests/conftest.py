@@ -70,7 +70,41 @@ def pytest_collection_modifyitems(config, items):
 
     # Apply skip marker to tests not matching the selected components
     for item in items:
+        # Get explicit markers
         markers = {m.name for m in item.iter_markers()}
+
+        # For unittest TestCase classes, add implicit markers based on file path
+        if not markers:
+            # Detect component from file path
+            test_path = str(item.path)
+            if "/unit/" in test_path:
+                if "/auth/" in test_path:
+                    markers.add("auth")
+                elif "/cli/" in test_path:
+                    markers.add("cli")
+                elif "/client/" in test_path:
+                    markers.add("client")
+                elif "/config/" in test_path:
+                    markers.add("config")
+                elif "/fuzz_engine/fuzzer/" in test_path:
+                    markers.add("fuzz_engine")
+                    markers.add("fuzzer")
+                elif "/fuzz_engine/runtime/" in test_path:
+                    markers.add("fuzz_engine")
+                    markers.add("runtime")
+                elif "/fuzz_engine/strategy/" in test_path:
+                    markers.add("fuzz_engine")
+                    markers.add("strategy")
+                elif "/fuzz_engine/" in test_path:
+                    markers.add("fuzz_engine")
+                elif "/safety_system/" in test_path:
+                    markers.add("safety_system")
+                elif "/transport/" in test_path:
+                    markers.add("transport")
+            elif "/integration/" in test_path:
+                markers.add("integration")
+
+        # Skip if no matching markers
         if not markers.intersection(selected_markers) and "integration" not in markers:
             item.add_marker(skip_marker)
 

@@ -28,6 +28,8 @@ from mcp_fuzzer.auth import (
 pytestmark = [pytest.mark.unit, pytest.mark.auth]
 
 
+@pytest.mark.unit
+@pytest.mark.auth
 class TestAuthProvider(unittest.TestCase):
     """Test cases for AuthProvider base class."""
 

@@ -35,10 +35,15 @@ def add_markers_to_file(file_path):
 
     # Determine which markers to apply based on directory
     markers = []
-    for path_prefix, path_markers in COMPONENT_MARKERS.items():
-        if parent_dir.startswith(path_prefix):
-            markers = path_markers
-            break
+    # Choose the most specific (longest) matching prefix
+    best_prefix = None
+    for path_prefix in COMPONENT_MARKERS.keys():
+        if parent_dir.startswith(path_prefix) and (
+            best_prefix is None or len(path_prefix) > len(best_prefix)
+        ):
+            best_prefix = path_prefix
+    if best_prefix:
+        markers = COMPONENT_MARKERS[best_prefix]
 
     if not markers:
         print(f"Could not determine markers for {file_path}")
