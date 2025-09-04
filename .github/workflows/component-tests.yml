@@ -1,0 +1,130 @@
+name: Component Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      components:
+        description: "Comma-separated components to run (auth,cli,client,fuzz_engine,safety[safety_system],transport)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
+jobs:
+  component-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Determine changed components
+        id: changes
+        run: |
+          # If manual input is provided, use that. Otherwise, run all components.
+          INPUTS="${{ github.event.inputs.components }}"
+          if [ -n "$INPUTS" ]; then
+            AUTH_CHANGES=false
+            CLI_CHANGES=false
+            CLIENT_CHANGES=false
+            FUZZ_ENGINE_CHANGES=false
+            SAFETY_CHANGES=false
+            TRANSPORT_CHANGES=false
+            IFS=',' read -ra TOKENS <<< "$INPUTS"
+            for t in "${TOKENS[@]}"; do
+              t="${t//[[:space:]]/}"
+              case "$t" in
+                auth) AUTH_CHANGES=true ;;
+                cli) CLI_CHANGES=true ;;
+                client) CLIENT_CHANGES=true ;;
+                fuzz_engine) FUZZ_ENGINE_CHANGES=true ;;
+                safety|safety_system) SAFETY_CHANGES=true ;;
+                transport) TRANSPORT_CHANGES=true ;;
+              esac
+            done
+          else
+            # Default to running all components on manual trigger
+            AUTH_CHANGES=true
+            CLI_CHANGES=true
+            CLIENT_CHANGES=true
+            FUZZ_ENGINE_CHANGES=true
+            SAFETY_CHANGES=true
+            TRANSPORT_CHANGES=true
+          fi
+
+          echo "auth=$AUTH_CHANGES" >> $GITHUB_OUTPUT
+          echo "cli=$CLI_CHANGES" >> $GITHUB_OUTPUT
+          echo "client=$CLIENT_CHANGES" >> $GITHUB_OUTPUT
+          echo "fuzz_engine=$FUZZ_ENGINE_CHANGES" >> $GITHUB_OUTPUT
+          echo "safety=$SAFETY_CHANGES" >> $GITHUB_OUTPUT
+          echo "transport=$TRANSPORT_CHANGES" >> $GITHUB_OUTPUT
+
+      - name: Run auth tests
+        if: steps.changes.outputs.auth == 'true'
+        run: pytest -vv tests/unit/auth --cov=mcp_fuzzer.auth --cov-report=xml:coverage.auth.xml
+
+      - name: Run CLI tests
+        if: steps.changes.outputs.cli == 'true'
+        run: pytest -vv tests/unit/cli --cov=mcp_fuzzer.cli --cov-report=xml:coverage.cli.xml
+
+      - name: Run client tests
+        if: steps.changes.outputs.client == 'true'
+        run: pytest -vv tests/unit/client --cov=mcp_fuzzer.client --cov-report=xml:coverage.client.xml
+
+      - name: Run fuzz engine tests
+        if: steps.changes.outputs.fuzz_engine == 'true'
+        run: pytest -vv tests/unit/fuzz_engine --cov=mcp_fuzzer.fuzz_engine --cov-report=xml:coverage.fuzz_engine.xml
+
+      - name: Run safety system tests
+        if: steps.changes.outputs.safety == 'true'
+        run: pytest -vv tests/unit/safety_system --cov=mcp_fuzzer.safety_system --cov-report=xml:coverage.safety_system.xml
+
+      - name: Run transport tests
+        if: steps.changes.outputs.transport == 'true'
+        run: pytest -vv tests/unit/transport --cov=mcp_fuzzer.transport --cov-report=xml:coverage.transport.xml
+
+      - name: Run integration tests
+        if: ${{ steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true' }}
+        run: |
+          pytest -vv tests/integration --cov=mcp_fuzzer --cov-report=xml:coverage.integration.xml
+
+      - name: Check for coverage files
+        id: coverage_check
+        run: |
+          if ls coverage.*.xml 1> /dev/null 2>&1; then
+            echo "has_coverage=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_coverage=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check Codecov token
+        id: codecov_token
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          if [ -n "$CODECOV_TOKEN" ]; then
+            echo "has_token=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_token=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload coverage to Codecov
+        if: ${{ (steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true') && steps.coverage_check.outputs.has_coverage == 'true' && steps.codecov_token.outputs.has_token == 'true' }}
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.*.xml
+          fail_ci_if_error: true

@@ -244,10 +244,15 @@ def fuzz_tool_arguments_aggressive(tool: Dict[str, Any]) -> Dict[str, Any]:
     """Generate aggressive/malicious tool arguments."""
     from ..schema_parser import make_fuzz_strategy_from_jsonschema
 
-    schema = tool.get("inputSchema", {})
+    schema = tool.get("inputSchema")
+    if not isinstance(schema, dict):
+        schema = {}
 
     # Use the enhanced schema parser to generate aggressive values
-    args = make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
+    try:
+        args = make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
+    except Exception:
+        args = {}
 
     # If the schema parser returned something other than a dict, create a default dict
     if not isinstance(args, dict):
@@ -283,6 +288,12 @@ def fuzz_tool_arguments_aggressive(tool: Dict[str, Any]) -> Dict[str, Any]:
                     }
                 else:
                     args[prop_name] = generate_aggressive_text()
+
+    # Ensure required keys exist (values may still be adversarial)
+    required = schema.get("required", [])
+    for key in required or []:
+        if key not in args:
+            args[key] = generate_aggressive_text()
 
     # Add some extra malicious fields that shouldn't be there
     malicious_extras = {

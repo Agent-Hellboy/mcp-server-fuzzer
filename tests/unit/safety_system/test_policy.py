@@ -49,13 +49,13 @@ def test_sanitize_headers_drops_auth():
 def test_configure_network_policy_reset_hosts():
     # Add a host to allowed list
     configure_network_policy(extra_allowed_hosts=["example.com"])
-    
+
     # Check that host is allowed when deny_network=True
     url = "http://example.com"
     assert is_host_allowed(url, deny_network_by_default=True) is True
-    
+
     # Reset the allowed hosts list
     configure_network_policy(reset_allowed_hosts=True)
-    
+
     # Check that host is no longer allowed
     assert is_host_allowed(url, deny_network_by_default=True) is False

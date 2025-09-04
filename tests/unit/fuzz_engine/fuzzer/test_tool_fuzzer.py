@@ -6,9 +6,10 @@ Unit tests for ToolFuzzer
 import logging
 import unittest
 import pytest
-from unittest.mock import MagicMock, call, patch
-
+from unittest.mock import MagicMock, call, patch, AsyncMock
 from mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer import ToolFuzzer
+
+pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.fuzzer]
 
 
 class TestToolFuzzer(unittest.TestCase):
@@ -127,9 +128,11 @@ class TestToolFuzzer(unittest.TestCase):
         ]
 
         # Mock one of the fuzzer methods to raise an exception
-        with patch.object(self.fuzzer, "fuzz_tool") as mock_fuzz:
+        with patch.object(
+            self.fuzzer, "fuzz_tool", new_callable=AsyncMock
+        ) as mock_fuzz:
 
-            def side_effect(tool, runs, phase="aggressive"):
+            async def side_effect(tool, runs, phase="aggressive"):
                 if tool["name"] == "tool1":
                     raise Exception("Test exception")
                 else:
@@ -158,8 +161,9 @@ class TestToolFuzzer(unittest.TestCase):
 
     @pytest.mark.asyncio
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging")
-    @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call",
-    return_value=True)
+    @patch(
+        "mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call", return_value=True
+    )
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
     async def test_fuzz_tool_complex_schema(
         self, mock_sanitize, mock_is_safe, mock_logging
@@ -176,24 +180,27 @@ class TestToolFuzzer(unittest.TestCase):
                 }
             },
         }
-        
+
         # Mock the sanitize_tool_call function to return predictable values
-        mock_sanitize.return_value = ("complex_tool", {
-            "strings": ["test1", "test2"],
-            "numbers": [1, 2, 3],
-            "metadata": {"key": "value"},
-            "enabled": True
-        })
-        
+        mock_sanitize.return_value = (
+            "complex_tool",
+            {
+                "strings": ["test1", "test2"],
+                "numbers": [1, 2, 3],
+                "metadata": {"key": "value"},
+                "enabled": True,
+            },
+        )
+
         # Mock the strategy to return a simple dict
         with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
             mock_fuzz.return_value = {
                 "strings": ["test1", "test2"],
                 "numbers": [1, 2, 3],
                 "metadata": {"key": "value"},
-                "enabled": True
+                "enabled": True,
             }
-            
+
             results = await self.fuzzer.fuzz_tool(tool, runs=1)
 
             self.assertEqual(len(results), 1)
@@ -231,7 +238,7 @@ class TestToolFuzzer(unittest.TestCase):
         """Test fuzzing a tool with empty schema."""
         tool = {"name": "empty_schema_tool", "inputSchema": {}}
 
-        results = await  self.fuzzer.fuzz_tool(tool, runs=1)
+        results = await self.fuzzer.fuzz_tool(tool, runs=1)
 
         self.assertEqual(len(results), 1)
         result = results[0]
@@ -295,8 +302,7 @@ class TestToolFuzzer(unittest.TestCase):
         self.assertEqual(len(results["tool1"]), 0)
 
     @patch(
-        "mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call",
-        return_value=True
+        "mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.is_safe_tool_call", return_value=True
     )
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.sanitize_tool_call")
     @patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.ToolStrategies")
@@ -308,19 +314,18 @@ class TestToolFuzzer(unittest.TestCase):
         # Setup mock strategy to return controlled values
         mock_strategies = MagicMock()
         mock_strategies_class.return_value = mock_strategies
-        
+
         # Make sanitizer a no-op for stable arg comparisons
         mock_sanitize.side_effect = lambda tool_name, args: (tool_name, args)
-        
+
         # Configure mock to return different args for each call
         mock_strategies.fuzz_tool_arguments.side_effect = [
-            {"name": f"test_{i}", "count": i, "enabled": i % 2 == 0}
-            for i in range(5)
+            {"name": f"test_{i}", "count": i, "enabled": i % 2 == 0} for i in range(5)
         ]
-        
+
         # Reinitialize fuzzer to use our mock
         self.fuzzer = ToolFuzzer()
-        
+
         tool = {
             "name": "test_tool",
             "inputSchema": {
@@ -336,7 +341,7 @@ class TestToolFuzzer(unittest.TestCase):
 
         # Check that we get the expected number of results
         self.assertEqual(len(results), 5)
-        
+
         # Verify the strategy was called the expected number of times
         self.assertEqual(mock_strategies.fuzz_tool_arguments.call_count, 5)
 
@@ -345,7 +350,7 @@ class TestToolFuzzer(unittest.TestCase):
             self.assertIn("success", result)
             self.assertTrue(result["success"], "Expected success=True for each run")
             self.assertIn("args", result)
-            
+
             # Test that we got the expected arguments from our mock
             args = result["args"]
             self.assertIsInstance(args, dict)
@@ -416,7 +421,7 @@ class TestToolFuzzer(unittest.TestCase):
         with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
             mock_fuzz.return_value = {"param1": "test_value"}
 
-            results = await  self.fuzzer.fuzz_tool(tool, runs=1)
+            results = await self.fuzzer.fuzz_tool(tool, runs=1)
 
             self.assertEqual(len(results), 1)
             result = results[0]
@@ -434,20 +439,12 @@ class TestToolFuzzer(unittest.TestCase):
             "inputSchema": {"properties": {"name": {"type": "string"}}},
         }
 
-        with patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging") as mock_logging:
+        with patch.object(self.fuzzer, "_logger") as mock_logger:
             await self.fuzzer.fuzz_tool(tool, runs=1)
-
-            # Check that logging.info was called
-            mock_logging.info.assert_called()
-
-            # Check that the log message contains expected information
-            call_args = mock_logging.info.call_args_list
-            found_tool = False
-            for call_args_tuple in call_args:
-                if "test_tool" in str(call_args_tuple):
-                    found_tool = True
-                    break
-            self.assertTrue(found_tool)
+            mock_logger.info.assert_called()
+            # Ensure the tool name made it into an info log
+            calls = [str(c) for c in mock_logger.info.call_args_list]
+            self.assertTrue(any("test_tool" in c for c in calls))
 
     @pytest.mark.asyncio
     async def test_strategy_integration(self):
@@ -461,7 +458,7 @@ class TestToolFuzzer(unittest.TestCase):
         with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
             mock_fuzz.return_value = {"name": "test_value"}
 
-            results = await  self.fuzzer.fuzz_tool(tool, runs=1)
+            results = await self.fuzzer.fuzz_tool(tool, runs=1)
 
             mock_fuzz.assert_called_with(tool, phase="aggressive")
             self.assertEqual(len(results), 1)
@@ -520,8 +517,8 @@ class TestToolFuzzer(unittest.TestCase):
         }
 
         # Both fuzzers should work independently
-        results1 = fuzzer1.fuzz_tool(tool, runs=1)
-        results2 = fuzzer2.fuzz_tool(tool, runs=1)
+        results1 = await fuzzer1.fuzz_tool(tool, runs=1)
+        results2 = await fuzzer2.fuzz_tool(tool, runs=1)
 
         self.assertEqual(len(results1), 1)
         self.assertEqual(len(results2), 1)

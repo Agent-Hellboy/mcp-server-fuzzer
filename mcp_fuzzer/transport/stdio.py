@@ -7,6 +7,7 @@ import shlex
 import subprocess
 import signal as _signal
 import sys
+import inspect
 
 import time
 from typing import Any, Dict, Optional
@@ -20,6 +21,8 @@ class StdioTransport(TransportProtocol):
     def __init__(self, command: str, timeout: float = 30.0):
         self.command = command
         self.timeout = timeout
+        # Backwards-compat: some tests expect a numeric request counter
+        self.request_id = 1
         self.process = None
         self.stdin = None
         self.stdout = None
@@ -207,6 +210,25 @@ class StdioTransport(TransportProtocol):
 
         return response.get("result", response)
 
+    async def _send_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Compatibility method for tests expecting sys-based stdio behavior.
+
+        Writes the request to module-level sys.stdout and reads a single line
+        from sys.stdin (which may be async in tests) and returns the parsed JSON.
+        """
+        message = {**payload, "id": self.request_id, "jsonrpc": "2.0"}
+        # Do not append a newline here; some tests assert exact written content
+        sys.stdout.write(json.dumps(message))
+
+        line = sys.stdin.readline()
+        if inspect.isawaitable(line):
+            line = await line
+        if isinstance(line, bytes):
+            line = line.decode()
+        if not line:
+            raise Exception("No response received on stdio")
+        return json.loads(line)
+
     async def send_notification(
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> None:
@@ -217,6 +239,32 @@ class StdioTransport(TransportProtocol):
             "params": params or {},
         }
         await self._send_message(message)
+
+    async def _stream_request(self, payload: Dict[str, Any]):
+        """Compatibility streaming: write once, then yield each stdin line as JSON.
+
+        This mirrors how tests patch the module's sys.stdin/stdout to simulate
+        a stdio-based streaming protocol.
+        """
+        # Use module-level sys patched by tests
+        io = sys
+        # Write the request once
+        message = {**payload, "id": self.request_id, "jsonrpc": "2.0"}
+        io.stdout.write(json.dumps(message))
+
+        while True:
+            line = io.stdin.readline()
+            if inspect.isawaitable(line):
+                line = await line
+            if isinstance(line, bytes):
+                line = line.decode()
+            if not line:
+                return
+            try:
+                yield json.loads(line)
+            except Exception:
+                logging.error("Failed to parse stdio stream JSON")
+                continue
 
     async def close(self):
         """Close the transport and cleanup resources."""

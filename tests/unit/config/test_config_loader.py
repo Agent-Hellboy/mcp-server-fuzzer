@@ -21,7 +21,7 @@ def config_files():
     """Create temporary YAML files for testing."""
     # Create temporary directory
     temp_dir = tempfile.TemporaryDirectory()
-    
+
     # YAML content
     yaml_content = """
 timeout: 60.0
@@ -37,28 +37,29 @@ safety:
     yml_path = os.path.join(temp_dir.name, "mcp-fuzzer.yml")
     with open(yml_path, "w") as f:
         f.write(yaml_content)
-        
+
     # Create .yaml file
     yaml_path = os.path.join(temp_dir.name, "mcp-fuzzer.yaml")
     with open(yaml_path, "w") as f:
         f.write(yaml_content)
-    
+
     # Return paths
     yield {
         "temp_dir": temp_dir,
         "yml_path": yml_path,
         "yaml_path": yaml_path,
     }
-    
+
     # Cleanup
     temp_dir.cleanup()
+
 
 def test_find_config_file_explicit_path(config_files):
     """Test finding a config file with an explicit path."""
     # Test with explicit path
     found_path = find_config_file(config_path=config_files["yaml_path"])
     assert found_path == config_files["yaml_path"]
-    
+
     # Test with non-existent path
     found_path = find_config_file(config_path="/non/existent/path")
     assert found_path is None
@@ -69,7 +70,7 @@ def test_find_config_file_search_paths(config_files):
     # Test with search paths
     found_path = find_config_file(search_paths=[config_files["temp_dir"].name])
     assert found_path in [config_files["yml_path"], config_files["yaml_path"]]
-    
+
     # Test with empty search paths
     found_path = find_config_file(search_paths=["/non/existent/path"])
     assert found_path is None
@@ -101,7 +102,7 @@ def test_load_config_file_invalid_format(config_files):
     invalid_path = os.path.join(config_files["temp_dir"].name, "invalid.txt")
     with open(invalid_path, "w") as f:
         f.write("invalid content")
-        
+
     with pytest.raises(ConfigFileError):
         load_config_file(invalid_path)
 
@@ -117,7 +118,7 @@ def test_load_config_file_invalid_yaml(config_files):
     invalid_yaml_path = os.path.join(config_files["temp_dir"].name, "invalid.yaml")
     with open(invalid_yaml_path, "w") as f:
         f.write("invalid: yaml: content:")
-        
+
     with pytest.raises(ConfigFileError):
         load_config_file(invalid_yaml_path)
 
@@ -127,7 +128,7 @@ def test_load_config_file_invalid_extension(config_files):
     invalid_ext_path = os.path.join(config_files["temp_dir"].name, "config.txt")
     with open(invalid_ext_path, "w") as f:
         f.write("valid: yaml")
-        
+
     with pytest.raises(ConfigFileError):
         load_config_file(invalid_ext_path)
 
@@ -139,18 +140,18 @@ def test_apply_config_file(mock_config, config_files):
     result = apply_config_file(config_path=config_files["yaml_path"])
     assert result is True
     mock_config.update.assert_called_once()
-    
+
     # Reset mock
     mock_config.reset_mock()
-    
+
     # Test with search paths
     result = apply_config_file(search_paths=[config_files["temp_dir"].name])
     assert result is True
     mock_config.update.assert_called_once()
-    
+
     # Reset mock
     mock_config.reset_mock()
-    
+
     # Test with non-existent path
     result = apply_config_file(config_path="/non/existent/path")
     assert result is False

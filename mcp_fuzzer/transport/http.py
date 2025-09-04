@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 import time
+import inspect
 from typing import Any, Dict, Optional
 
 import httpx
@@ -60,8 +61,6 @@ class HTTPTransport(TransportProtocol):
         if response.status_code not in (307, 308):
             return None
         location = response.headers.get("location")
-        if not location and not self.url.endswith("/"):
-            location = self.url + "/"
         if not location:
             return None
         resolved = resolve_redirect_safely(self.url, location)
@@ -124,7 +123,7 @@ class HTTPTransport(TransportProtocol):
             return {"result": data}
 
     async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        self._update_activity()
+        await self._update_activity()
 
         async with httpx.AsyncClient(
             timeout=self.timeout,
@@ -193,6 +192,65 @@ class HTTPTransport(TransportProtocol):
     ) -> Dict[int, bool]:
         """Send timeout signals to all managed processes."""
         return await self.process_manager.send_timeout_signal_to_all(signal_type)
+
+    async def _stream_request(self, payload: Dict[str, Any]):
+        """Stream a request to the transport.
+
+        Args:
+            payload: The request payload
+
+        Yields:
+            Response chunks from the transport
+        """
+        await self._update_activity()
+
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+            trust_env=False,
+        ) as client:
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(self.headers)
+
+            # First request
+            response = await client.post(
+                self.url, json=payload, headers=safe_headers, stream=True
+            )
+
+            # Handle redirect if needed
+            redirect_url = self._resolve_redirect_url(response)
+            if redirect_url:
+                await response.aclose()  # Close the first response
+                response = await client.post(
+                    redirect_url, json=payload, headers=safe_headers, stream=True
+                )
+
+            try:
+                response.raise_for_status()
+
+                # Iterate over streamed lines; support coroutine-returning aiter_lines
+                lines_iter = response.aiter_lines()
+                if inspect.iscoroutine(lines_iter):
+                    lines_iter = await lines_iter
+                async for line in lines_iter:
+                    if line.strip():
+                        try:
+                            data = json.loads(line)
+                            yield data
+                        except json.JSONDecodeError:
+                            # Try to handle SSE format
+                            if line.startswith("data:"):
+                                try:
+                                    data = json.loads(line[len("data:") :].strip())
+                                    yield data
+                                except json.JSONDecodeError:
+                                    logging.error("Failed to parse SSE data as JSON")
+                                    continue
+            finally:
+                await response.aclose()  # Ensure response is closed
 
     async def close(self):
         """Close the transport and cleanup resources."""

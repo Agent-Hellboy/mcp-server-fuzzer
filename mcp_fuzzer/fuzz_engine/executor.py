@@ -169,9 +169,8 @@ class AsyncFuzzExecutor:
         """
 
         async def _bounded_execute_and_track(op, args, kwargs):
-            # Acquire semaphore before execution and release after
-            async with self._semaphore:
-                return await self._execute_and_track(op, args, kwargs)
+            # Concurrency is enforced inside execute(); avoid double-acquire deadlock
+            return await self._execute_and_track(op, args, kwargs)
 
         # Create bounded tasks that respect the semaphore limit
         tasks = []
@@ -242,3 +241,12 @@ class AsyncFuzzExecutor:
                 "Shutdown timed out with %d tasks still running",
                 len(self._running_tasks),
             )
+            # Proactively cancel outstanding tasks and wait for them to finish
+            for task in list(self._running_tasks):
+                task.cancel()
+            await asyncio.gather(*self._running_tasks, return_exceptions=True)
+        finally:
+            # Ensure the set is cleaned up
+            self._running_tasks = {
+                t for t in self._running_tasks if not t.cancelled() and not t.done()
+            }

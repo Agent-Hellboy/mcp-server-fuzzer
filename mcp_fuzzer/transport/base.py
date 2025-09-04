@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, AsyncIterator
 
 from ..safety_system.safety import (
     safety_filter,
@@ -25,6 +25,35 @@ class TransportProtocol(ABC):
     async def send_notification(
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> None:
+        pass
+
+    async def connect(self) -> None:
+        """Connect to the transport. Default implementation does nothing."""
+        pass
+
+    async def disconnect(self) -> None:
+        """Disconnect from the transport. Default implementation does nothing."""
+        pass
+
+    async def stream_request(
+        self, payload: Dict[str, Any]
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Stream a request to the transport.
+
+        Args:
+            payload: The request payload
+
+        Yields:
+            Response chunks from the transport
+        """
+        async for response in self._stream_request(payload):
+            yield response
+
+    @abstractmethod
+    async def _stream_request(
+        self, payload: Dict[str, Any]
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Subclasses must implement streaming of requests."""
         pass
 
     async def get_tools(self) -> List[Dict[str, Any]]:

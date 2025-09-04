@@ -8,7 +8,7 @@ This module contains the orchestration logic for fuzzing MCP protocol types.
 import asyncio
 import inspect
 import logging
-from typing import Any, Dict, List, ClassVar, Optional, Tuple, Callable
+from typing import Any, Dict, List, ClassVar, Optional, Tuple, Callable, Union
 
 from ...types import FuzzDataResult
 
@@ -41,6 +41,8 @@ class ProtocolFuzzer:
         "UnsubscribeRequest",
         "CompleteRequest",
     )
+    # Seconds to wait for invariant validation of batch responses
+    BATCH_VALIDATION_TIMEOUT: ClassVar[float] = 5.0
 
     def __init__(self, transport: Optional[Any] = None, max_concurrency: int = 5):
         """
@@ -225,10 +227,8 @@ class ProtocolFuzzer:
                         try:
                             # Handle batch responses with timeout to prevent hanging
                             batch = await asyncio.wait_for(
-                                asyncio.create_task(
-                                    verify_batch_responses(server_response)
-                                ),
-                                timeout=5.0,  # 5 second timeout for batch validation
+                                verify_batch_responses(server_response),
+                                timeout=self.BATCH_VALIDATION_TIMEOUT,
                             )
                             viols = [str(v) for k, v in batch.items() if v is not True]
                             invariant_violations.extend(viols)
@@ -308,7 +308,7 @@ class ProtocolFuzzer:
 
     async def _send_fuzzed_request(
         self, protocol_type: str, fuzz_data: Dict[str, Any], generate_only: bool
-    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    ) -> Tuple[Optional[Union[Dict[str, Any], List[Any]]], Optional[str]]:
         """
         Send fuzzed request to server if appropriate.
 
@@ -344,7 +344,7 @@ class ProtocolFuzzer:
         protocol_type: str,
         run_index: int,
         fuzz_data: Dict[str, Any],
-        server_response: Optional[Dict[str, Any]],
+        server_response: Optional[Union[Dict[str, Any], List[Any]]],
         server_error: Optional[str],
     ) -> FuzzDataResult:
         """
