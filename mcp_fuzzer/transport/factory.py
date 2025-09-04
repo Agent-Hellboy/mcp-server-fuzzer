@@ -36,14 +36,32 @@ def create_transport(
     if scheme in ("http", "https"):
         return HTTPTransport(url_or_protocol, **kwargs)
     if scheme == "sse":
-        # Convert sse://host/path to http://host/path (as expected by tests)
-        http_url = urlunparse(("http", parsed.netloc, parsed.path, "", "", ""))
+        # Convert sse://host/path to http://host/path (preserve params/query/fragment)
+        http_url = urlunparse(
+            (
+                "http",
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
         return SSETransport(http_url, **kwargs)
     if scheme == "stdio":
         # Use empty command by default; tests only assert type
         return StdioTransport("", **kwargs)
     if scheme == "streamablehttp":
-        http_url = urlunparse(("http", parsed.netloc, parsed.path, "", "", ""))
+        http_url = urlunparse(
+            (
+                "http",
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
         return StreamableHTTPTransport(http_url, **kwargs)
 
     raise ValueError(f"Unsupported URL scheme: {scheme or 'none'}")

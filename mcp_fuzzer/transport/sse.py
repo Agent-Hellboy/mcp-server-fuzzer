@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 import httpx
 
 from .base import TransportProtocol
+from ..safety_system.policy import is_host_allowed, sanitize_headers
 
 
 class SSETransport(TransportProtocol):
@@ -25,7 +26,12 @@ class SSETransport(TransportProtocol):
 
     async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(self.url, json=payload, headers=self.headers)
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(self.headers)
+            response = await client.post(self.url, json=payload, headers=safe_headers)
             response.raise_for_status()
             for line in response.text.splitlines():
                 if line.startswith("data:"):
@@ -51,7 +57,12 @@ class SSETransport(TransportProtocol):
     ) -> None:
         payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(self.url, json=payload, headers=self.headers)
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(self.headers)
+            response = await client.post(self.url, json=payload, headers=safe_headers)
             response.raise_for_status()
 
     async def _stream_request(self, payload: Dict[str, Any]):
@@ -64,11 +75,16 @@ class SSETransport(TransportProtocol):
             Parsed JSON objects from SSE events
         """
         async with httpx.AsyncClient(timeout=self.timeout) as client:
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(self.headers)
             async with client.stream(
                 "POST",
                 self.url,
                 json=payload,
-                headers=self.headers,
+                headers=safe_headers,
             ) as response:
                 response.raise_for_status()
 

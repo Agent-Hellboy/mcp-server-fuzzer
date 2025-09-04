@@ -1,15 +1,12 @@
 name: Component Tests
 
 on:
-  pull_request:
-    branches: [main, master]
-    paths:
-      - 'mcp_fuzzer/auth/**'
-      - 'mcp_fuzzer/cli/**'
-      - 'mcp_fuzzer/client/**'
-      - 'mcp_fuzzer/fuzz_engine/**'
-      - 'mcp_fuzzer/safety_system/**'
-      - 'mcp_fuzzer/transport/**'
+  workflow_dispatch:
+    inputs:
+      components:
+        description: "Comma-separated components to run (auth,cli,client,fuzz_engine,safety,transport)"
+        required: false
+        default: ""
 
 jobs:
   component-tests:
@@ -33,16 +30,24 @@ jobs:
       - name: Determine changed components
         id: changes
         run: |
-          # Get base branch for the PR
-          BASE_BRANCH=${{ github.base_ref }}
-
-          # Check which components have changes
-          AUTH_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/auth/" && echo "true" || echo "false")
-          CLI_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/cli/" && echo "true" || echo "false")
-          CLIENT_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/client/" && echo "true" || echo "false")
-          FUZZ_ENGINE_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/fuzz_engine/" && echo "true" || echo "false")
-          SAFETY_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/safety_system/" && echo "true" || echo "false")
-          TRANSPORT_CHANGES=$(git diff --name-only origin/$BASE_BRANCH HEAD | grep -q "mcp_fuzzer/transport/" && echo "true" || echo "false")
+          # If manual input is provided, use that. Otherwise, run all components.
+          INPUTS="${{ github.event.inputs.components }}"
+          if [ -n "$INPUTS" ]; then
+            AUTH_CHANGES=$(echo "$INPUTS" | grep -q "auth" && echo "true" || echo "false")
+            CLI_CHANGES=$(echo "$INPUTS" | grep -q "cli" && echo "true" || echo "false")
+            CLIENT_CHANGES=$(echo "$INPUTS" | grep -q "client" && echo "true" || echo "false")
+            FUZZ_ENGINE_CHANGES=$(echo "$INPUTS" | grep -q "fuzz_engine" && echo "true" || echo "false")
+            SAFETY_CHANGES=$(echo "$INPUTS" | grep -q "safety" && echo "true" || echo "false")
+            TRANSPORT_CHANGES=$(echo "$INPUTS" | grep -q "transport" && echo "true" || echo "false")
+          else
+            # Default to running all components on manual trigger
+            AUTH_CHANGES=true
+            CLI_CHANGES=true
+            CLIENT_CHANGES=true
+            FUZZ_ENGINE_CHANGES=true
+            SAFETY_CHANGES=true
+            TRANSPORT_CHANGES=true
+          fi
 
           echo "auth=$AUTH_CHANGES" >> $GITHUB_OUTPUT
           echo "cli=$CLI_CHANGES" >> $GITHUB_OUTPUT
@@ -76,7 +81,7 @@ jobs:
         run: pytest -vv tests/unit/transport --cov=mcp_fuzzer.transport --cov-report=xml:coverage.transport.xml
 
       - name: Upload coverage to Codecov
-        if: ${{ (steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true') && github.event.pull_request.head.repo.fork == false }}
+        if: ${{ steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true' }}
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 import time
+import inspect
 from typing import Any, Dict, Optional
 
 import httpx
@@ -60,8 +61,6 @@ class HTTPTransport(TransportProtocol):
         if response.status_code not in (307, 308):
             return None
         location = response.headers.get("location")
-        if not location and not self.url.endswith("/"):
-            location = self.url + "/"
         if not location:
             return None
         resolved = resolve_redirect_safely(self.url, location)
@@ -124,7 +123,7 @@ class HTTPTransport(TransportProtocol):
             return {"result": data}
 
     async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        self._update_activity()
+        await self._update_activity()
 
         async with httpx.AsyncClient(
             timeout=self.timeout,
@@ -232,8 +231,10 @@ class HTTPTransport(TransportProtocol):
             try:
                 response.raise_for_status()
 
-                # Get the async iterator from aiter_lines (which returns a coroutine)
-                lines_iter = await response.aiter_lines()
+                # Iterate over streamed lines; support coroutine-returning aiter_lines
+                lines_iter = response.aiter_lines()
+                if inspect.iscoroutine(lines_iter):
+                    lines_iter = await lines_iter
                 async for line in lines_iter:
                     if line.strip():
                         try:

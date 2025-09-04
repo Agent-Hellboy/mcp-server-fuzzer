@@ -368,3 +368,48 @@ class StreamableHTTPTransport(TransportProtocol):
                 await asyncio.sleep(delay)
                 delay *= 2
                 attempt += 1
+
+    async def _stream_request(self, payload: Dict[str, Any]):
+        """Stream a request and yield parsed JSON or SSE data lines.
+
+        This mirrors the logic used in HTTPTransport._stream_request but adapted
+        for the streamable transport and its header/session handling.
+        """
+        headers = self._prepare_headers()
+        async with httpx.AsyncClient(
+            timeout=self.timeout, follow_redirects=False, trust_env=False
+        ) as client:
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(headers)
+            response = await client.post(
+                self.url, json=payload, headers=safe_headers, stream=True
+            )
+
+            redirect_url = self._resolve_redirect(response)
+            if redirect_url:
+                await response.aclose()
+                response = await client.post(
+                    redirect_url, json=payload, headers=safe_headers, stream=True
+                )
+
+            try:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        data = json.loads(line)
+                        yield data
+                    except json.JSONDecodeError:
+                        if line.startswith("data:"):
+                            try:
+                                data = json.loads(line[len("data:") :].strip())
+                                yield data
+                            except json.JSONDecodeError:
+                                self._logger.error("Failed to parse SSE data as JSON")
+                                continue
+            finally:
+                await response.aclose()

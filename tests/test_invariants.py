@@ -37,7 +37,7 @@ class TestInvariants(unittest.TestCase):
 
     def test_check_response_validity_valid_notification(self):
         """Test that a valid JSON-RPC notification passes validation."""
-        response = {"jsonrpc": "2.0"}
+        response = {"jsonrpc": "2.0", "method": "notify", "params": {}}
         self.assertTrue(check_response_validity(response))
 
     def test_check_response_validity_none(self):
