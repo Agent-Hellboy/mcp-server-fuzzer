@@ -244,7 +244,9 @@ def fuzz_tool_arguments_aggressive(tool: Dict[str, Any]) -> Dict[str, Any]:
     """Generate aggressive/malicious tool arguments."""
     from ..schema_parser import make_fuzz_strategy_from_jsonschema
 
-    schema = tool.get("inputSchema", {})
+    schema = tool.get("inputSchema")
+    if not isinstance(schema, dict):
+        schema = {}
 
     # Use the enhanced schema parser to generate aggressive values
     try:

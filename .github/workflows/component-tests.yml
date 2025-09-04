@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       components:
-        description: "Comma-separated components to run (auth,cli,client,fuzz_engine,safety,transport)"
+        description: "Comma-separated components to run (auth,cli,client,fuzz_engine,safety[safety_system],transport)"
         required: false
         default: ""
 
@@ -20,6 +20,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -33,12 +34,24 @@ jobs:
           # If manual input is provided, use that. Otherwise, run all components.
           INPUTS="${{ github.event.inputs.components }}"
           if [ -n "$INPUTS" ]; then
-            AUTH_CHANGES=$(echo "$INPUTS" | grep -q "auth" && echo "true" || echo "false")
-            CLI_CHANGES=$(echo "$INPUTS" | grep -q "cli" && echo "true" || echo "false")
-            CLIENT_CHANGES=$(echo "$INPUTS" | grep -q "client" && echo "true" || echo "false")
-            FUZZ_ENGINE_CHANGES=$(echo "$INPUTS" | grep -q "fuzz_engine" && echo "true" || echo "false")
-            SAFETY_CHANGES=$(echo "$INPUTS" | grep -q "safety" && echo "true" || echo "false")
-            TRANSPORT_CHANGES=$(echo "$INPUTS" | grep -q "transport" && echo "true" || echo "false")
+            AUTH_CHANGES=false
+            CLI_CHANGES=false
+            CLIENT_CHANGES=false
+            FUZZ_ENGINE_CHANGES=false
+            SAFETY_CHANGES=false
+            TRANSPORT_CHANGES=false
+            IFS=',' read -ra TOKENS <<< "$INPUTS"
+            for t in "${TOKENS[@]}"; do
+              t="${t//[[:space:]]/}"
+              case "$t" in
+                auth) AUTH_CHANGES=true ;;
+                cli) CLI_CHANGES=true ;;
+                client) CLIENT_CHANGES=true ;;
+                fuzz_engine) FUZZ_ENGINE_CHANGES=true ;;
+                safety|safety_system) SAFETY_CHANGES=true ;;
+                transport) TRANSPORT_CHANGES=true ;;
+              esac
+            done
           else
             # Default to running all components on manual trigger
             AUTH_CHANGES=true
@@ -80,8 +93,13 @@ jobs:
         if: steps.changes.outputs.transport == 'true'
         run: pytest -vv tests/unit/transport --cov=mcp_fuzzer.transport --cov-report=xml:coverage.transport.xml
 
-      - name: Upload coverage to Codecov
+      - name: Run integration tests
         if: ${{ steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true' }}
+        run: |
+          pytest -vv tests/integration --cov-report=xml:coverage.integration.xml
+
+      - name: Upload coverage to Codecov
+        if: ${{ (steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true') && secrets.CODECOV_TOKEN != '' && hashFiles('coverage.*.xml') != '' }}
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

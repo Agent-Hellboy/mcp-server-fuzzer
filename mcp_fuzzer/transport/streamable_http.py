@@ -397,6 +397,8 @@ class StreamableHTTPTransport(TransportProtocol):
 
             try:
                 response.raise_for_status()
+                # Update session headers from streaming response
+                self._maybe_extract_session_headers(response)
                 async for line in response.aiter_lines():
                     if not line.strip():
                         continue

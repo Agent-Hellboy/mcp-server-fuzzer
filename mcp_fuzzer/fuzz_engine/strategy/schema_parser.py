@@ -11,7 +11,7 @@ all standard JSON Schema types, constraints, and combinations including:
 - Number/Integer constraints: minimum, maximum, exclusiveMinimum,
   exclusiveMaximum, multipleOf
 - Array constraints: minItems, maxItems, uniqueItems
-- Object constraints: required properties, minProperties, maxProperties
+- Object constraints: required properties and minProperties
 - Schema combinations: oneOf, anyOf, allOf
 - Enums and constants
 
@@ -209,14 +209,20 @@ def _handle_object_type(
 
     # Ensure we meet minProperties constraint
     if len(result) < min_properties:
-        # Add additional properties if needed
-        additional_count = min_properties - len(result)
-        for i in range(additional_count):
-            prop_name = f"additional_prop_{i}"
-            result[prop_name] = _generate_default_value(phase)
+        # Respect additionalProperties; if false, do not synthesize extras
+        allow_additional = schema.get("additionalProperties", True) is not False
+        if allow_additional:
+            additional_count = min_properties - len(result)
+            for i in range(additional_count):
+                prop_name = f"additional_prop_{i}"
+                result[prop_name] = _generate_default_value(phase)
 
-    # In aggressive mode, sometimes add extra properties
-    if phase == "aggressive" and random.random() < 0.3:
+    # In aggressive mode, sometimes add extra properties (if allowed)
+    if (
+        phase == "aggressive"
+        and random.random() < 0.3
+        and schema.get("additionalProperties", True) is not False
+    ):
         # Add some potentially problematic properties
         extra_props = {
             "__proto__": {"isAdmin": True},

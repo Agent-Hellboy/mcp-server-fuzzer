@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import httpx
 
@@ -25,7 +25,11 @@ class SSETransport(TransportProtocol):
         raise NotImplementedError("SSETransport does not support send_request")
 
     async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+            trust_env=False,
+        ) as client:
             if not is_host_allowed(self.url):
                 raise Exception(
                     "Network to non-local host is disallowed by safety policy"
@@ -56,7 +60,11 @@ class SSETransport(TransportProtocol):
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> None:
         payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+            trust_env=False,
+        ) as client:
             if not is_host_allowed(self.url):
                 raise Exception(
                     "Network to non-local host is disallowed by safety policy"
@@ -74,7 +82,11 @@ class SSETransport(TransportProtocol):
         Yields:
             Parsed JSON objects from SSE events
         """
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+            trust_env=False,
+        ) as client:
             if not is_host_allowed(self.url):
                 raise Exception(
                     "Network to non-local host is disallowed by safety policy"
@@ -128,7 +140,7 @@ class SSETransport(TransportProtocol):
         if not event_text:
             return None
 
-        data_parts: list[str] = []
+        data_parts: List[str] = []
         for raw_line in event_text.splitlines():
             line = raw_line.strip()
             if not line:
@@ -140,6 +152,6 @@ class SSETransport(TransportProtocol):
         if not data_parts:
             return None
 
-        data_str = "".join(data_parts)
+        data_str = "\n".join(data_parts)
         # May raise JSONDecodeError if invalid, as intended by tests
         return json.loads(data_str)
