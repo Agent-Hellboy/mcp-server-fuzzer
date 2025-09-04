@@ -37,16 +37,34 @@ class SSETransport(TransportProtocol):
             safe_headers = sanitize_headers(self.headers)
             response = await client.post(self.url, json=payload, headers=safe_headers)
             response.raise_for_status()
+            buffer: List[str] = []
+
+            def flush_once() -> Optional[Dict[str, Any]]:
+                if not buffer:
+                    return None
+                event_text = "\n".join(buffer)
+                buffer.clear()
+                try:
+                    data = SSETransport._parse_sse_event(event_text)
+                except json.JSONDecodeError:
+                    logging.error("Failed to parse SSE data as JSON")
+                    return None
+                if data is None:
+                    return None
+                if "error" in data:
+                    raise Exception(f"Server error: {data['error']}")
+                return data.get("result", data)
+
             for line in response.text.splitlines():
-                if line.startswith("data:"):
-                    try:
-                        data = json.loads(line[len("data:") :].strip())
-                        if "error" in data:
-                            raise Exception(f"Server error: {data['error']}")
-                        return data.get("result", data)
-                    except json.JSONDecodeError:
-                        logging.error("Failed to parse SSE data line as JSON")
-                        continue
+                if not line.strip():
+                    result = flush_once()
+                    if result is not None:
+                        return result
+                    continue
+                buffer.append(line)
+            result = flush_once()
+            if result is not None:
+                return result
             try:
                 data = response.json()
                 if "error" in data:

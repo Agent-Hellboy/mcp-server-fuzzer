@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  actions: read
 
 jobs:
   component-tests:
@@ -124,5 +125,6 @@ jobs:
         if: ${{ (steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true') && steps.coverage_check.outputs.has_coverage == 'true' && steps.codecov_token.outputs.has_token == 'true' }}
         uses: codecov/codecov-action@v4
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.*.xml
           fail_ci_if_error: true

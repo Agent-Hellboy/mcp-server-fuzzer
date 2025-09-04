@@ -169,9 +169,8 @@ class AsyncFuzzExecutor:
         """
 
         async def _bounded_execute_and_track(op, args, kwargs):
-            # Acquire semaphore before execution and release after
-            async with self._semaphore:
-                return await self._execute_and_track(op, args, kwargs)
+            # Concurrency is enforced inside execute(); avoid double-acquire deadlock
+            return await self._execute_and_track(op, args, kwargs)
 
         # Create bounded tasks that respect the semaphore limit
         tasks = []
