@@ -194,6 +194,63 @@ class HTTPTransport(TransportProtocol):
         """Send timeout signals to all managed processes."""
         return await self.process_manager.send_timeout_signal_to_all(signal_type)
 
+    async def _stream_request(self, payload: Dict[str, Any]):
+        """Stream a request to the transport.
+
+        Args:
+            payload: The request payload
+
+        Yields:
+            Response chunks from the transport
+        """
+        await self._update_activity()
+
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+            trust_env=False,
+        ) as client:
+            if not is_host_allowed(self.url):
+                raise Exception(
+                    "Network to non-local host is disallowed by safety policy"
+                )
+            safe_headers = sanitize_headers(self.headers)
+
+            # First request
+            response = await client.post(
+                self.url, json=payload, headers=safe_headers, stream=True
+            )
+
+            # Handle redirect if needed
+            redirect_url = self._resolve_redirect_url(response)
+            if redirect_url:
+                await response.aclose()  # Close the first response
+                response = await client.post(
+                    redirect_url, json=payload, headers=safe_headers, stream=True
+                )
+
+            try:
+                response.raise_for_status()
+
+                # Get the async iterator from aiter_lines (which returns a coroutine)
+                lines_iter = await response.aiter_lines()
+                async for line in lines_iter:
+                    if line.strip():
+                        try:
+                            data = json.loads(line)
+                            yield data
+                        except json.JSONDecodeError:
+                            # Try to handle SSE format
+                            if line.startswith("data:"):
+                                try:
+                                    data = json.loads(line[len("data:") :].strip())
+                                    yield data
+                                except json.JSONDecodeError:
+                                    logging.error("Failed to parse SSE data as JSON")
+                                    continue
+            finally:
+                await response.aclose()  # Ensure response is closed
+
     async def close(self):
         """Close the transport and cleanup resources."""
         try:

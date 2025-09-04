@@ -27,6 +27,26 @@ class TransportProtocol(ABC):
     ) -> None:
         pass
 
+    async def connect(self) -> None:
+        """Connect to the transport. Default implementation does nothing."""
+        pass
+
+    async def disconnect(self) -> None:
+        """Disconnect from the transport. Default implementation does nothing."""
+        pass
+
+    async def stream_request(self, payload: Dict[str, Any]):
+        """Stream a request to the transport.
+
+        Args:
+            payload: The request payload
+
+        Yields:
+            Response chunks from the transport
+        """
+        async for response in self._stream_request(payload):
+            yield response
+
     async def get_tools(self) -> List[Dict[str, Any]]:
         try:
             response = await self.send_request("tools/list")

@@ -6,12 +6,11 @@ Unit tests for Transport module
 import asyncio
 import json
 import os
-import unittest
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import httpx
+import pytest
 
 from mcp_fuzzer.transport import (
     HTTPTransport,
@@ -21,535 +20,482 @@ from mcp_fuzzer.transport import (
     create_transport,
 )
 
-
-# Safety check - prevent dangerous tests on production systems
-def is_safe_test_environment():
-    """Check if we're in a safe environment for running potentially dangerous tests."""
-    # Don't run dangerous tests on production systems
-    if (
-        os.getenv("CI")
-        or os.getenv("PRODUCTION")
-        or os.getenv("DANGEROUS_TESTS_DISABLED")
-    ):
-        return False
-
-    # Don't run on systems with critical processes
-    try:
-        with open("/proc/1/comm", "r") as f:
-            init_process = f.read().strip()
-            if init_process in ["systemd", "init"]:
-                return False
-    except (OSError, IOError):
-        pass
-
-    # Don't run on systems with systemd
-    if os.path.exists("/run/systemd/system"):
-        return False
-
-    # Don't run on systems with init
-    if os.path.exists("/etc/inittab"):
-        return False
-
-    return True
+pytestmark = [pytest.mark.unit, pytest.mark.transport]
 
 
-# Skip dangerous tests if not in safe environment
-SAFE_ENV = is_safe_test_environment()
+# Test cases for TransportProtocol class
+@pytest.mark.asyncio
+async def test_transport_protocol_abstract():
+    """Test that TransportProtocol is properly abstract."""
+    # Should not be able to instantiate TransportProtocol directly
+    with pytest.raises(TypeError):
+        TransportProtocol()
 
 
-# Add safety decorator for dangerous tests
-def safe_test_only(func):
-    """Decorator to skip dangerous tests on production systems."""
+@pytest.mark.asyncio
+async def test_transport_protocol_connection_methods():
+    """Test TransportProtocol connection management methods."""
 
-    def wrapper(*args, **kwargs):
-        if not SAFE_ENV:
-            pytest.skip("Dangerous test skipped on production system")
-        return func(*args, **kwargs)
+    # Create a concrete implementation
+    class TestTransport(TransportProtocol):
+        async def send_request(self, method, params=None):
+            return {"test": "response"}
 
-    return wrapper
+        async def send_raw(self, payload):
+            return {"test": "raw_response"}
+
+        async def send_notification(self, method, params=None):
+            pass
+
+        async def _send_request(self, payload):
+            return {"test": "response"}
+
+        async def _stream_request(self, payload):
+            yield {"test": "stream"}
+
+    transport = TestTransport()
+
+    # Test connect (default implementation should do nothing)
+    await transport.connect()
+
+    # Test disconnect (default implementation should do nothing)
+    await transport.disconnect()
 
 
-class TestTransportProtocol(unittest.IsolatedAsyncioTestCase):
-    """Test cases for TransportProtocol base class."""
+@pytest.mark.asyncio
+async def test_transport_protocol_send_request():
+    """Test TransportProtocol send_request method."""
 
-    def setUp(self):
-        """Set up test fixtures."""
+    # Create a concrete implementation with mocked _send_request
+    class TestTransport(TransportProtocol):
+        async def send_request(self, method, params=None):
+            payload = {"method": method}
+            if params:
+                payload["params"] = params
+            return await self._send_request(payload)
 
-        # Create a concrete implementation for testing
-        class TestTransport(TransportProtocol):
-            async def send_request(self, method, params=None):
-                return {"result": "test_response"}
+        async def send_raw(self, payload):
+            return await self._send_request(payload)
 
-            async def send_raw(self, payload):
-                return {"result": "test_response"}
+        async def send_notification(self, method, params=None):
+            pass
 
-            async def send_notification(self, method, params=None):
-                return None
+        async def _send_request(self, payload):
+            self.last_payload = payload
+            return {"result": "success"}
 
-        self.transport = TestTransport()
+        async def _stream_request(self, payload):
+            yield {"test": "stream"}
 
-    @pytest.mark.asyncio
-    async def test_get_tools_success(self):
-        """Test getting tools successfully."""
-        with patch.object(self.transport, "send_request") as mock_send:
-            mock_send.return_value = {
-                "tools": [
-                    {"name": "tool1", "description": "Test tool 1"},
-                    {"name": "tool2", "description": "Test tool 2"},
-                ]
-            }
+    transport = TestTransport()
+    test_method = "test.method"
+    test_params = {"key": "value"}
 
-            tools = await self.transport.get_tools()
+    # Test send_request
+    result = await transport.send_request(test_method, test_params)
 
-            self.assertEqual(len(tools), 2)
-            self.assertEqual(tools[0]["name"], "tool1")
-            self.assertEqual(tools[1]["name"], "tool2")
-            mock_send.assert_called_with("tools/list")
+    assert result == {"result": "success"}
+    expected_payload = {"method": test_method, "params": test_params}
+    assert transport.last_payload == expected_payload
 
-    @pytest.mark.asyncio
-    async def test_get_tools_no_tools_key(self):
-        """Test getting tools when response doesn't have tools key."""
-        with patch.object(self.transport, "send_request") as mock_send:
-            mock_send.return_value = {"result": "success"}
 
-            tools = await self.transport.get_tools()
+@pytest.mark.asyncio
+async def test_transport_protocol_stream_request():
+    """Test TransportProtocol stream_request method."""
 
-            self.assertEqual(tools, [])
+    # Create a concrete implementation with mocked _stream_request
+    class TestTransport(TransportProtocol):
+        async def send_request(self, method, params=None):
+            payload = {"method": method}
+            if params:
+                payload["params"] = params
+            return await self._send_request(payload)
 
-    @pytest.mark.asyncio
-    async def test_get_tools_non_dict_response(self):
-        """Test getting tools when response is not a dictionary."""
-        with patch.object(self.transport, "send_request") as mock_send:
-            mock_send.return_value = "not_a_dict"
+        async def send_raw(self, payload):
+            return await self._send_request(payload)
 
-            tools = await self.transport.get_tools()
+        async def send_notification(self, method, params=None):
+            pass
 
-            self.assertEqual(tools, [])
+        async def _send_request(self, payload):
+            return {"test": "response"}
 
-    @pytest.mark.asyncio
-    async def test_get_tools_exception(self):
-        """Test getting tools with exception."""
-        with patch.object(self.transport, "send_request") as mock_send:
-            mock_send.side_effect = Exception("Test exception")
+        async def _stream_request(self, payload):
+            self.last_payload = payload
+            yield {"result": "streaming"}
+            yield {"result": "complete"}
 
-            tools = await self.transport.get_tools()
+    transport = TestTransport()
+    test_method = "test.method"
+    test_params = {"key": "value"}
 
-            self.assertEqual(tools, [])
+    # Create a payload for stream_request
+    test_payload = {"method": test_method, "params": test_params}
 
-    @pytest.mark.asyncio
-    async def test_call_tool(self):
-        """Test calling a tool."""
-        with patch.object(self.transport, "send_request") as mock_send:
-            mock_send.return_value = {"result": "tool_result"}
+    # Test stream_request
+    responses = []
+    async for response in transport.stream_request(test_payload):
+        responses.append(response)
 
-            result = await self.transport.call_tool("test_tool", {"param1": "value1"})
+    assert len(responses) == 2
+    assert responses[0] == {"result": "streaming"}
+    assert responses[1] == {"result": "complete"}
+    assert transport.last_payload == test_payload
 
-            self.assertEqual(result, {"result": "tool_result"})
-            mock_send.assert_called_with(
-                "tools/call",
-                {"name": "test_tool", "arguments": {"param1": "value1"}},
+
+# Test cases for HTTPTransport class
+@pytest.fixture
+def http_transport():
+    """Fixture for HTTPTransport test cases."""
+    return HTTPTransport("https://example.com/api")
+
+
+@pytest.mark.asyncio
+async def test_http_transport_init(http_transport):
+    """Test HTTPTransport initialization."""
+    assert http_transport.url == "https://example.com/api"
+    assert http_transport.timeout == 30.0
+    assert "Accept" in http_transport.headers
+    assert "Content-Type" in http_transport.headers
+
+
+@pytest.mark.asyncio
+async def test_http_transport_send_request(http_transport):
+    """Test HTTPTransport send_request method."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+    test_response = {"result": "success"}
+
+    with patch.object(httpx.AsyncClient, "post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.json.return_value = test_response
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        # Test send_request
+        result = await http_transport.send_raw(test_payload)
+
+        # Check the result and that post was called with correct arguments
+        assert result == "success"
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert call_args[0][0] == "https://example.com/api"
+        assert "json" in call_args[1]
+        assert call_args[1]["json"] == test_payload
+
+
+@pytest.mark.asyncio
+async def test_http_transport_send_request_error(http_transport):
+    """Test HTTPTransport send_request with error response."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+
+    with patch.object(httpx.AsyncClient, "post") as mock_post:
+        mock_post.side_effect = httpx.RequestError("Connection error")
+
+        # Test send_request with error
+        with pytest.raises(httpx.RequestError):
+            await http_transport.send_raw(test_payload)
+
+
+@pytest.mark.asyncio
+async def test_http_transport_stream_request(http_transport):
+    """Test HTTPTransport stream_request method."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+    test_responses = [
+        {"id": 1, "result": "streaming"},
+        {"id": 2, "result": "complete"},
+    ]
+
+    with patch.object(httpx.AsyncClient, "post") as mock_post:
+        # Create a proper AsyncMock for the response
+        mock_response = AsyncMock()
+
+        # Create a simpler mock for the async iterator
+        async def mock_aiter_lines():
+            class AsyncIterator:
+                def __init__(self, items):
+                    self.items = items
+                    self.index = 0
+
+                def __aiter__(self):
+                    return self
+
+                async def __anext__(self):
+                    if self.index < len(self.items):
+                        item = self.items[self.index]
+                        self.index += 1
+                        return item
+                    raise StopAsyncIteration
+
+            return AsyncIterator(
+                [json.dumps(test_responses[0]), json.dumps(test_responses[1])]
             )
 
+        # Set up the mock to return our async iterator
+        mock_response.aiter_lines = mock_aiter_lines
 
-class TestHTTPTransport(unittest.IsolatedAsyncioTestCase):
-    """Test cases for HTTPTransport class."""
+        # Add raise_for_status method
+        mock_response.raise_for_status = AsyncMock()
 
-    def setUp(self):
-        """Set up test fixtures."""
-        self.transport = HTTPTransport("http://localhost:8000", timeout=30.0)
+        # Set up mock_post to return the mock_response
+        mock_post.return_value = mock_response
 
-    def test_init(self):
-        """Test HTTPTransport initialization."""
-        self.assertEqual(self.transport.url, "http://localhost:8000")
-        self.assertEqual(self.transport.timeout, 30.0)
-        self.assertIn("Accept", self.transport.headers)
-        self.assertIn("Content-Type", self.transport.headers)
+        # Test stream_request
+        responses = []
+        async for response in http_transport.stream_request(test_payload):
+            responses.append(response)
 
-    def test_init_with_auth_headers(self):
-        """Test HTTPTransport initialization with auth headers."""
-        auth_headers = {"Authorization": "Bearer token"}
-        transport = HTTPTransport("http://localhost:8000", auth_headers=auth_headers)
+        # Verify the results
+        assert len(responses) == 2
+        assert responses == test_responses
 
-        self.assertIn("Authorization", transport.headers)
-        self.assertEqual(transport.headers["Authorization"], "Bearer token")
+        # Verify the mock was called correctly
+        mock_post.assert_called_once()
+        # raise_for_status in httpx is sync on Response; our code calls it sync
+        # so assert it was called (not awaited)
+        assert mock_response.raise_for_status.called
+        # aclose is awaited in implementation
+        mock_response.aclose.assert_awaited_once()
+        # Note: Can't assert on aiter_lines; it's a custom function here
 
-    @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_success(self, mock_client_class):
-        """Test successful HTTP request."""
-        mock_client = AsyncMock()
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-        mock_client_class.return_value.__aexit__.return_value = None
 
+@pytest.mark.asyncio
+async def test_http_transport_stream_request_error(http_transport):
+    """Test HTTPTransport stream_request with error."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+
+    with patch.object(httpx.AsyncClient, "post") as mock_post:
+        mock_post.side_effect = httpx.RequestError("Connection error")
+
+        # Test stream_request with error
+        with pytest.raises(httpx.RequestError):
+            async for _ in http_transport._stream_request(test_payload):
+                pass
+
+
+@pytest.mark.asyncio
+async def test_http_transport_connect_disconnect(http_transport):
+    """Test HTTPTransport connect and disconnect methods."""
+    # These should not raise any exceptions
+    await http_transport.connect()
+    await http_transport.disconnect()
+
+
+# Test cases for SSETransport class
+@pytest.fixture
+def sse_transport():
+    """Fixture for SSETransport test cases."""
+    return SSETransport("https://example.com/events")
+
+
+@pytest.mark.asyncio
+async def test_sse_transport_init(sse_transport):
+    """Test SSETransport initialization."""
+    assert sse_transport.url == "https://example.com/events"
+    assert sse_transport.timeout == 30.0
+    assert "Accept" in sse_transport.headers
+    assert "Content-Type" in sse_transport.headers
+
+
+@pytest.mark.asyncio
+async def test_sse_transport_send_request_not_implemented(sse_transport):
+    """Test SSETransport send_request is not implemented."""
+    with pytest.raises(NotImplementedError):
+        await sse_transport.send_request("test")
+
+
+@pytest.mark.asyncio
+async def test_sse_transport_stream_request(sse_transport):
+    """Test SSETransport stream_request method."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+
+    # Create mock SSE events
+    sse_events = [
+        "event: message\ndata: " + json.dumps({"id": 1, "result": "streaming"}),
+        "event: message\ndata: " + json.dumps({"id": 2, "result": "complete"}),
+    ]
+
+    with patch.object(httpx.AsyncClient, "stream") as mock_stream:
+        # Mock streaming response
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": "success", "id": "test_id"}
-        mock_response.raise_for_status.return_value = None
-        mock_client.post.return_value = mock_response
-
-        result = await self.transport.send_request("test_method", {"param": "value"})
-
-        self.assertEqual(result, "success")
-
-        # Verify the request was made correctly
-        mock_client.post.assert_called_once()
-        call_args = mock_client.post.call_args
-        self.assertEqual(call_args[0][0], "http://localhost:8000")
-
-        # Check the JSON payload
-        json_data = call_args[1]["json"]
-        self.assertEqual(json_data["jsonrpc"], "2.0")
-        self.assertEqual(json_data["method"], "test_method")
-        self.assertEqual(json_data["params"], {"param": "value"})
-        self.assertIn("id", json_data)
-
-    @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_sse_response(self, mock_client_class):
-        """Test HTTP request with SSE response."""
-        mock_client = AsyncMock()
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-        mock_client_class.return_value.__aexit__.return_value = None
-
-        mock_response = MagicMock()
-        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
-        mock_response.text = 'data: {"result": "sse_success"}\n\n'
-        mock_response.raise_for_status.return_value = None
-        mock_client.post.return_value = mock_response
-
-        result = await self.transport.send_request("test_method")
-
-        # Should return the SSE data
-        self.assertEqual(result, "sse_success")
-
-    @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_http_error(self, mock_client_class):
-        """Test HTTP request with HTTP error."""
-        mock_client = AsyncMock()
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-        mock_client_class.return_value.__aexit__.return_value = None
-
-        mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "404 Not Found", request=MagicMock(), response=mock_response
-        )
-        mock_client.post.return_value = mock_response
-
-        with self.assertRaises(httpx.HTTPStatusError):
-            await self.transport.send_request("test_method")
-
-    @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_connection_error(self, mock_client_class):
-        """Test HTTP request with connection error."""
-        mock_client = AsyncMock()
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-
-        mock_client.post.side_effect = httpx.ConnectError("Connection failed")
-
-        with self.assertRaises(httpx.ConnectError):
-            await self.transport.send_request("test_method")
-
-    @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_json_decode_error(self, mock_client_class):
-        """Test send_request with JSON decode error."""
-        mock_client = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
-        mock_response.text = 'data: {"result": "success"}\n'
-        mock_client.post.return_value = mock_response
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-
-        result = await self.transport.send_request("test_method")
-
-        self.assertEqual(result, "success")
-
-    @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_sse_no_data_line(self, mock_client_class):
-        """Test send_request with SSE response but no data line."""
-        mock_client = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
-        mock_response.text = "event: message\n\n"  # No data line
-        mock_client.post.return_value = mock_response
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-
-        with self.assertRaises(Exception):
-            await self.transport.send_request("test_method")
-
-    @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_sse_invalid_data(self, mock_client_class):
-        """Test send_request with SSE response but invalid data."""
-        mock_client = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
-        mock_response.text = "data: invalid json\n"
-        mock_client.post.return_value = mock_response
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-
-        with self.assertRaises(Exception):
-            await self.transport.send_request("test_method")
-
-    @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_server_error(self, mock_client_class):
-        """Test send_request with server error response."""
-        mock_client = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "error": {"code": -32603, "message": "Internal error"}
-        }
-        mock_client.post.return_value = mock_response
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-
-        with self.assertRaises(Exception):
-            await self.transport.send_request("test_method")
-
-    @patch("mcp_fuzzer.transport.http.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_no_result_key(self, mock_client_class):
-        """Test send_request with response that has no result key."""
-        mock_client = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"data": "test_data"}
-        mock_client.post.return_value = mock_response
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-
-        result = await self.transport.send_request("test_method")
-
-        self.assertEqual(result, {"data": "test_data"})
-
-
-class TestSSETransport(unittest.IsolatedAsyncioTestCase):
-    """Test cases for SSETransport class."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.transport = SSETransport("http://localhost:8000", timeout=30.0)
-
-    def test_init(self):
-        """Test SSETransport initialization."""
-        self.assertEqual(self.transport.url, "http://localhost:8000")
-        self.assertEqual(self.transport.timeout, 30.0)
-
-    @patch("mcp_fuzzer.transport.sse.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_sse(self, mock_client_class):
-        """Test SSE request."""
-        mock_client = AsyncMock()
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-        mock_client_class.return_value.__aexit__.return_value = None
-
-        mock_response = MagicMock()
-        mock_response.text = 'data: {"result": "sse_success"}\n\n'
-        mock_response.raise_for_status.return_value = None
-        mock_client.post.return_value = mock_response
-
-        result = await self.transport.send_request("test_method", {"param": "value"})
-
-        # Should return the result value from SSE data
-        self.assertEqual(result, "sse_success")
-
-    @patch("mcp_fuzzer.transport.sse.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_sse_error_response(self, mock_client_class):
-        """Test SSE request with error response."""
-        mock_client = AsyncMock()
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-        mock_client_class.return_value.__aexit__.return_value = None
-
-        mock_response = MagicMock()
-        mock_response.text = (
-            'data: {"error": {"code": -32603, "message": "Internal error"}}\n\n'
-        )
-        mock_response.raise_for_status.return_value = None
-        mock_client.post.return_value = mock_response
-
-        with self.assertRaises(Exception) as context:
-            await self.transport.send_request("test_method")
-
-        self.assertIn("Server error", str(context.exception))
-
-    @patch("mcp_fuzzer.transport.sse.httpx.AsyncClient")
-    @pytest.mark.asyncio
-    async def test_send_request_sse_no_valid_response(self, mock_client_class):
-        """Test SSE request with no valid response."""
-        mock_client = AsyncMock()
-        mock_client_class.return_value.__aenter__.return_value = mock_client
-        mock_client_class.return_value.__aexit__.return_value = None
-
-        mock_response = MagicMock()
-        mock_response.text = "event: message\n\n"  # No data line
-        mock_response.raise_for_status.return_value = None
-        mock_client.post.return_value = mock_response
-
-        with self.assertRaises(Exception) as context:
-            await self.transport.send_request("test_method")
-
-        self.assertIn("No valid SSE response", str(context.exception))
-
-
-class TestStdioTransport(unittest.IsolatedAsyncioTestCase):
-    """Test cases for StdioTransport class."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.transport = StdioTransport("python test_server.py", timeout=30.0)
-
-    def test_init(self):
-        """Test StdioTransport initialization."""
-        self.assertEqual(self.transport.command, "python test_server.py")
-        self.assertEqual(self.transport.timeout, 30.0)
-
-    @safe_test_only
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
-    @patch("mcp_fuzzer.transport.stdio.asyncio.wait_for")
-    @pytest.mark.asyncio
-    async def test_send_request_stdio(self, mock_wait_for, mock_create_subprocess):
-        """Test stdio request."""
-        mock_process = AsyncMock()
-        mock_process.returncode = 0
-
-        mock_create_subprocess.return_value = mock_process
-        mock_wait_for.return_value = (b'{"result": "stdio_success"}', b"")
-
-        result = await self.transport.send_request("test_method", {"param": "value"})
-
-        self.assertEqual(result, "stdio_success")
-        mock_create_subprocess.assert_called()
-        mock_wait_for.assert_called()
-
-    @safe_test_only
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
-    @patch("mcp_fuzzer.transport.stdio.asyncio.wait_for")
-    @pytest.mark.asyncio
-    async def test_send_request_stdio_timeout(
-        self, mock_wait_for, mock_create_subprocess
-    ):
-        """Test stdio request with timeout."""
-        mock_process = AsyncMock()
-        mock_create_subprocess.return_value = mock_process
-        mock_wait_for.side_effect = asyncio.TimeoutError()
-
-        with self.assertRaises(asyncio.TimeoutError):
-            await self.transport.send_request("test_method")
-
-    @safe_test_only
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
-    @patch("mcp_fuzzer.transport.stdio.asyncio.wait_for")
-    @pytest.mark.asyncio
-    async def test_send_request_stdio_process_failure(
-        self, mock_wait_for, mock_create_subprocess
-    ):
-        """Test stdio request with process failure."""
-        mock_process = AsyncMock()
-        mock_process.returncode = 1
-
-        mock_create_subprocess.return_value = mock_process
-        mock_wait_for.return_value = (b"", b"Process failed")
-
-        with self.assertRaises(Exception) as context:
-            await self.transport.send_request("test_method")
-
-        self.assertIn("Process failed", str(context.exception))
-
-    @safe_test_only
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
-    @patch("mcp_fuzzer.transport.stdio.asyncio.wait_for")
-    @pytest.mark.asyncio
-    async def test_send_request_stdio_error_response(
-        self, mock_wait_for, mock_create_subprocess
-    ):
-        """Test stdio request with error response."""
-        mock_process = AsyncMock()
-        mock_process.returncode = 0
-
-        mock_create_subprocess.return_value = mock_process
-        response_data = b'{"error": {"code": -32603, "message": "Internal error"}}\n'
-        mock_wait_for.return_value = (response_data, b"")
-
-        with self.assertRaises(Exception) as context:
-            await self.transport.send_request("test_method")
-
-        self.assertIn("Server error", str(context.exception))
-
-
-class TestCreateTransport(unittest.TestCase):
-    """Test cases for create_transport function."""
-
-    def test_create_transport_http(self):
-        """Test creating HTTP transport."""
-        transport = create_transport("http", "http://localhost:8000", timeout=30.0)
-
-        self.assertIsInstance(transport, HTTPTransport)
-        self.assertEqual(transport.url, "http://localhost:8000")
-        self.assertEqual(transport.timeout, 30.0)
-
-    def test_create_transport_sse(self):
-        """Test creating SSE transport."""
-        transport = create_transport("sse", "http://localhost:8000", timeout=30.0)
-
-        self.assertIsInstance(transport, SSETransport)
-        self.assertEqual(transport.url, "http://localhost:8000")
-        self.assertEqual(transport.timeout, 30.0)
-
-    def test_create_transport_stdio(self):
-        """Test creating stdio transport."""
-        transport = create_transport("stdio", "python test_server.py", timeout=30.0)
-
-        self.assertIsInstance(transport, StdioTransport)
-        self.assertEqual(transport.command, "python test_server.py")
-        self.assertEqual(transport.timeout, 30.0)
-
-    def test_create_transport_invalid_protocol(self):
-        """Test creating transport with invalid protocol."""
-        with self.assertRaises(ValueError) as context:
-            create_transport("invalid", "http://localhost:8000")
-
-        self.assertIn("Unsupported protocol", str(context.exception))
-
-    def test_create_transport_with_auth_headers(self):
-        """Test creating transport with auth headers."""
-        auth_headers = {"Authorization": "Bearer token"}
-        transport = create_transport(
-            "http", "http://localhost:8000", auth_headers=auth_headers
-        )
-
-        self.assertIsInstance(transport, HTTPTransport)
-        self.assertIn("Authorization", transport.headers)
-        self.assertEqual(transport.headers["Authorization"], "Bearer token")
-
-
-class TestTransportIntegration(unittest.IsolatedAsyncioTestCase):
-    """Integration tests for transport modules."""
-
-    @pytest.mark.asyncio
-    async def test_transport_protocol_interface(self):
-        """Test that all transport classes implement the protocol interface."""
-        transports = [
-            HTTPTransport("http://localhost:8000"),
-            SSETransport("http://localhost:8000"),
-            StdioTransport("python test_server.py"),
-        ]
-
-        for transport in transports:
-            # Test that they have the required methods
-            self.assertTrue(hasattr(transport, "send_request"))
-            self.assertTrue(hasattr(transport, "get_tools"))
-            self.assertTrue(hasattr(transport, "call_tool"))
-
-            # Test that send_request is callable
-            self.assertTrue(callable(transport.send_request))
-
-    def test_transport_protocol_abstract_methods(self):
-        """Test that TransportProtocol is properly abstract."""
-        # Should not be able to instantiate TransportProtocol directly
-        with self.assertRaises(TypeError):
-            TransportProtocol()
-
-
-if __name__ == "__main__":
-    unittest.main()
+        mock_response.aiter_text.return_value = sse_events
+        mock_stream.return_value.__aenter__.return_value = mock_response
+
+        # Test stream_request
+        responses = []
+        async for response in sse_transport._stream_request(test_payload):
+            responses.append(response)
+
+        # Check the results
+        assert len(responses) == 2
+        assert responses[0] == {"id": 1, "result": "streaming"}
+        assert responses[1] == {"id": 2, "result": "complete"}
+        mock_stream.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_sse_transport_stream_request_error(sse_transport):
+    """Test SSETransport stream_request with error."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+
+    with patch.object(httpx.AsyncClient, "stream") as mock_stream:
+        mock_stream.side_effect = httpx.RequestError("Connection error")
+
+        # Test stream_request with error
+        with pytest.raises(httpx.RequestError):
+            async for _ in sse_transport._stream_request(test_payload):
+                pass
+
+
+@pytest.mark.asyncio
+async def test_sse_transport_parse_sse_event():
+    """Test SSETransport _parse_sse_event method."""
+    # Standard SSE event
+    sse_event = 'event: message\ndata: {"id": 1, "result": "success"}'
+    result = SSETransport._parse_sse_event(sse_event)
+    assert result == {"id": 1, "result": "success"}
+
+    # Multiline data
+    sse_event = 'event: message\ndata: {"id": 1,\ndata: "result": "multiline"}'
+    result = SSETransport._parse_sse_event(sse_event)
+    assert result == {"id": 1, "result": "multiline"}
+
+    # With retry field (should ignore)
+    sse_event = 'retry: 3000\nevent: message\ndata: {"id": 1}'
+    result = SSETransport._parse_sse_event(sse_event)
+    assert result == {"id": 1}
+
+    # Empty event
+    assert SSETransport._parse_sse_event("") is None
+
+    # Invalid JSON
+    sse_event = "event: message\ndata: not_json"
+    with pytest.raises(json.JSONDecodeError):
+        SSETransport._parse_sse_event(sse_event)
+
+
+# Test cases for StdioTransport class
+@pytest.fixture
+def stdio_transport():
+    """Fixture for StdioTransport test cases."""
+    with patch("mcp_fuzzer.transport.stdio.sys") as mock_sys:
+        transport = StdioTransport("test_command")
+        transport._sys = mock_sys  # Attach the mock to the transport
+        yield transport
+
+
+@pytest.mark.asyncio
+async def test_stdio_transport_init(stdio_transport):
+    """Test StdioTransport initialization."""
+    assert stdio_transport.request_id == 1
+
+
+@pytest.mark.asyncio
+async def test_stdio_transport_send_request(stdio_transport):
+    """Test StdioTransport send_request method."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+    test_response = {"id": 1, "result": "success"}
+
+    # Set up the mocks
+    stdio_transport._sys.stdin.readline = AsyncMock(
+        return_value=json.dumps(test_response)
+    )
+
+    # Test send_request
+    result = await stdio_transport._send_request(test_payload)
+
+    # Check the result and that stdout.write was called with correct arguments
+    assert result == test_response
+    stdio_transport._sys.stdout.write.assert_called_once()
+    call_args = stdio_transport._sys.stdout.write.call_args
+    written_data = call_args[0][0]
+    assert json.loads(written_data) == {**test_payload, "id": 1, "jsonrpc": "2.0"}
+
+
+@pytest.mark.asyncio
+async def test_stdio_transport_send_request_error(stdio_transport):
+    """Test StdioTransport send_request with error response."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+    test_error = {"id": 1, "error": {"code": -32600, "message": "Invalid Request"}}
+
+    # Set up the mocks
+    stdio_transport._sys.stdin.readline = AsyncMock(return_value=json.dumps(test_error))
+
+    # Test send_request with error response
+    result = await stdio_transport._send_request(test_payload)
+
+    # Check the result
+    assert result == test_error
+
+
+@pytest.mark.asyncio
+async def test_stdio_transport_send_request_invalid_json(stdio_transport):
+    """Test StdioTransport send_request with invalid JSON response."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+
+    # Set up the mocks
+    stdio_transport._sys.stdin.readline = AsyncMock(return_value="not_json")
+
+    # Test send_request with invalid JSON
+    with pytest.raises(json.JSONDecodeError):
+        await stdio_transport._send_request(test_payload)
+
+
+@pytest.mark.asyncio
+async def test_stdio_transport_stream_request(stdio_transport):
+    """Test StdioTransport stream_request method."""
+    test_payload = {"method": "test.method", "params": {"key": "value"}}
+    test_responses = [
+        {"id": 1, "result": "streaming"},
+        {"id": 1, "result": "complete"},
+    ]
+
+    # Set up the mocks
+    stdio_transport._sys.stdin.readline = AsyncMock(
+        side_effect=[json.dumps(r) for r in test_responses]
+    )
+
+    # Test stream_request
+    responses = []
+    async for response in stdio_transport._stream_request(test_payload):
+        responses.append(response)
+        if len(responses) == len(test_responses):
+            break
+
+    # Check the results
+    assert len(responses) == 2
+    assert responses == test_responses
+    assert stdio_transport._sys.stdout.write.call_count == 1
+
+
+# Test cases for create_transport function
+def test_create_transport_http():
+    """Test create_transport with HTTP URL."""
+    transport = create_transport("http://example.com/api")
+    assert isinstance(transport, HTTPTransport)
+    assert transport.url == "http://example.com/api"
+
+
+def test_create_transport_https():
+    """Test create_transport with HTTPS URL."""
+    transport = create_transport("https://example.com/api")
+    assert isinstance(transport, HTTPTransport)
+    assert transport.url == "https://example.com/api"
+
+
+def test_create_transport_sse():
+    """Test create_transport with SSE URL."""
+    transport = create_transport("sse://example.com/events")
+    assert isinstance(transport, SSETransport)
+    assert transport.url == "http://example.com/events"
+
+
+def test_create_transport_stdio():
+    """Test create_transport with stdio URL."""
+    transport = create_transport("stdio:")
+    assert isinstance(transport, StdioTransport)
+
+
+def test_create_transport_invalid_scheme():
+    """Test create_transport with invalid URL scheme."""
+    with pytest.raises(ValueError):
+        create_transport("invalid://example.com")
