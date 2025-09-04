@@ -11,12 +11,17 @@ on:
         description: "Why are you running the test workflow?"
         required: false
         default: "manual run"
+      pytest_args:
+        description: "Optional pytest args (e.g., -m 'unit and fuzz_engine')"
+        required: false
+        default: ""
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
-  group: tests-${{ github.workflow }}-${{ github.ref }}
+  group: tests-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -24,10 +29,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -35,10 +43,10 @@ jobs:
           pip install pytest pytest-cov pytest-asyncio
       - name: Run tests with coverage
         run: |
-          pytest -vv --cov=mcp_fuzzer --cov-report=xml
+          pytest -vv --cov=mcp_fuzzer --cov-report=xml ${{ github.event.inputs.pytest_args }}
       - name: Upload coverage to Codecov
+        if: ${{ always() }}
         uses: codecov/codecov-action@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           fail_ci_if_error: true

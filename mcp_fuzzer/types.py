@@ -6,7 +6,7 @@ This module provides TypedDict definitions and other type structures
 to improve type safety throughout the codebase.
 """
 
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict, Union
 
 
 class FuzzDataResult(TypedDict, total=False):
@@ -14,12 +14,13 @@ class FuzzDataResult(TypedDict, total=False):
 
     fuzz_data: Dict[str, Any]
     success: bool
-    server_response: Optional[Dict[str, Any]]
+    server_response: Optional[Union[Dict[str, Any], List[Any]]]
     server_error: Optional[str]
     server_rejected_input: bool
     run: int
     protocol_type: str
     exception: Optional[str]
+    invariant_violations: List[str]
 
 
 class ProtocolFuzzResult(TypedDict, total=False):

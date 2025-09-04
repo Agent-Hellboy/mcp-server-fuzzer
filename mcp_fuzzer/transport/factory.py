@@ -49,8 +49,11 @@ def create_transport(
         )
         return SSETransport(http_url, **kwargs)
     if scheme == "stdio":
-        # Use empty command by default; tests only assert type
-        return StdioTransport("", **kwargs)
+        # Allow stdio:cmd or stdio://cmd; default empty if none
+        has_parts = parsed.netloc or parsed.path
+        cmd_source = (parsed.netloc + parsed.path) if has_parts else ""
+        cmd = cmd_source.lstrip("/")
+        return StdioTransport(cmd, **kwargs)
     if scheme == "streamablehttp":
         http_url = urlunparse(
             (
@@ -64,4 +67,9 @@ def create_transport(
         )
         return StreamableHTTPTransport(http_url, **kwargs)
 
-    raise ValueError(f"Unsupported URL scheme: {scheme or 'none'}")
+    raise ValueError(
+        (
+            f"Unsupported URL scheme: {scheme or 'none'}. "
+            "Supported: http, https, sse, stdio, streamablehttp"
+        )
+    )
