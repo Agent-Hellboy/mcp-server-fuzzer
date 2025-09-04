@@ -53,15 +53,31 @@ def add_markers_to_file(file_path):
     with open(file_path, "r") as f:
         content = f.read()
 
-    # Check if markers already exist
+    # Check if markers already exist; if so, try to merge missing markers
     if "pytestmark =" in content:
-        print(f"Markers already exist in {file_path}")
-        return True
+        mark_line_match = re.search(r"pytestmark\s*=\s*\[(.*?)\]", content, re.DOTALL)
+        if mark_line_match:
+            existing_segment = mark_line_match.group(1)
+            existing = set(
+                m.strip().replace("pytest.mark.", "")
+                for m in existing_segment.split(",")
+                if m.strip()
+            )
+            missing = [m for m in markers if m not in existing]
+            if missing:
+                merged = list(existing) + missing
+                merged_str = ", ".join([f"pytest.mark.{m}" for m in merged])
+                new_line = f"pytestmark = [{merged_str}]"
+                start, end = mark_line_match.span()
+                content = content[:start] + new_line + content[end:]
+            else:
+                print(f"Markers already exist in {file_path}")
+                return True
 
     # Add pytest import if needed
     if "import pytest" not in content:
-        # Find the end of the imports or docstring
-        module_header_end = re.search(r'""".*?"""\s*', content, re.DOTALL)
+        # Find the end of the imports or docstring (support both quote styles)
+        module_header_end = re.search(r'("""|\'\'\').*?\1\s*', content, re.DOTALL)
         if module_header_end:
             insert_position = module_header_end.end()
             content = (
@@ -119,7 +135,7 @@ def add_markers_to_file(file_path):
             )
         else:
             # Otherwise, add after docstring
-            module_header_end = re.search(r'""".*?"""\s*', content, re.DOTALL)
+            module_header_end = re.search(r'("""|\'\'\').*?\1\s*', content, re.DOTALL)
             if module_header_end:
                 insert_position = module_header_end.end()
                 content = (

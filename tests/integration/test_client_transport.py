@@ -1,11 +1,8 @@
-#!/usr/bin/env python3
 """
 Integration tests for client and transport interactions
 """
 
-import asyncio
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -20,6 +17,11 @@ def client_setup():
     """Fixture for client and transport setup."""
     base_url = "http://localhost:8000"
     transport = StreamableHTTPTransport(base_url)
+    # Skip initialize handshake in tests to avoid mocking extra POSTs
+    try:
+        transport._initialized = True
+    except Exception:
+        pass
     client = ProtocolClient(transport)
     return {"base_url": base_url, "transport": transport, "client": client}
 

@@ -34,11 +34,16 @@ def _merge_allOf(schemas: List[Dict[str, Any]]) -> Dict[str, Any]:
     merged: Dict[str, Any] = {}
     props: Dict[str, Any] = {}
     required: List[str] = []
+    merged_types = None  # track intersection of declared types
     for s in schemas:
         if "properties" in s and isinstance(s["properties"], dict):
             props.update(s["properties"])
         if "required" in s and isinstance(s["required"], list):
             required.extend([r for r in s["required"] if isinstance(r, str)])
+        t = s.get("type")
+        if t is not None:
+            tset = set(t if isinstance(t, list) else [t])
+            merged_types = tset if merged_types is None else (merged_types & tset)
         for k, v in s.items():
             if k not in ("properties", "required"):
                 merged[k] = v if k not in merged else merged[k]
@@ -46,6 +51,11 @@ def _merge_allOf(schemas: List[Dict[str, Any]]) -> Dict[str, Any]:
         merged["properties"] = props
     if required:
         merged["required"] = sorted(set(required))
+    if merged_types:
+        if len(merged_types) > 1:
+            merged["type"] = list(merged_types)
+        else:
+            merged["type"] = next(iter(merged_types))
     return merged
 
 
@@ -65,9 +75,21 @@ def make_fuzz_strategy_from_jsonschema(
     Returns:
         Generated object based on the schema
     """
-    # Prevent excessive recursion
+    # Prevent excessive recursion (respect declared type when possible)
     if recursion_depth > MAX_RECURSION_DEPTH:
-        return {} if random.random() < 0.5 else []
+        t = schema.get("type")
+        fallback_by_type = {
+            "object": {},
+            "array": [],
+            "string": "",
+            "integer": 0,
+            "number": 0.0,
+            "boolean": False,
+            "null": None,
+        }
+        if isinstance(t, list) and t:
+            t = t[0]
+        return fallback_by_type.get(t, None)
 
     # Handle schema combinations (oneOf, anyOf, allOf)
     if "oneOf" in schema and isinstance(schema["oneOf"], list):
@@ -97,6 +119,15 @@ def make_fuzz_strategy_from_jsonschema(
     # Handle enums first as they override other type constraints
     if "enum" in schema and isinstance(schema["enum"], list) and schema["enum"]:
         return _handle_enum(schema["enum"], phase)
+
+    # Handle const values
+    if "const" in schema:
+        const_val = schema["const"]
+        if phase == "realistic" or random.random() < 0.7:
+            return const_val
+        # Aggressive: sometimes violate const intentionally
+        alt = _generate_default_value("aggressive")
+        return alt if alt != const_val else _generate_default_value("aggressive")
 
     # Handle different types
     if schema_type == "object":
@@ -207,6 +238,13 @@ def _handle_array_type(
     """Handle array type schema."""
     items_schema = schema.get("items", {})
 
+    # Tuple validation: items is a list of schemas (positional)
+    if isinstance(items_schema, list):
+        return [
+            make_fuzz_strategy_from_jsonschema(sub, phase, recursion_depth + 1)
+            for sub in items_schema
+        ]
+
     # If this is an array property without items specification,
     # generate an array of simple values
     if not items_schema:
@@ -252,19 +290,22 @@ def _handle_array_type(
         # Handle uniqueItems constraint
         if unique_items:
             # For simple types, ensure uniqueness
-            try:
-                item_hash = str(item)
-                attempts = 0
-                while item_hash in seen_values and attempts < 10:
-                    item = make_fuzz_strategy_from_jsonschema(
-                        items_schema, phase, recursion_depth + 1
-                    )
-                    item_hash = str(item)
-                    attempts += 1
-                seen_values.add(item_hash)
-            except Exception:  # Handle specific exceptions when possible
-                # If item is not hashable, just add it
-                pass
+            import json as _json
+
+            attempts = 0
+            while attempts < 10:
+                try:
+                    item_hash = _json.dumps(item, sort_keys=True, default=str)
+                except Exception:
+                    # Fallback to repr if dumps fails
+                    item_hash = repr(item)
+                if item_hash not in seen_values:
+                    seen_values.add(item_hash)
+                    break
+                item = make_fuzz_strategy_from_jsonschema(
+                    items_schema, phase, recursion_depth + 1
+                )
+                attempts += 1
 
         result.append(item)
 

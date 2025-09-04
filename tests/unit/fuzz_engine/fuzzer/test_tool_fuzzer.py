@@ -6,9 +6,10 @@ Unit tests for ToolFuzzer
 import logging
 import unittest
 import pytest
-from unittest.mock import MagicMock, call, patch
-
+from unittest.mock import MagicMock, call, patch, AsyncMock
 from mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer import ToolFuzzer
+
+pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.fuzzer]
 
 
 class TestToolFuzzer(unittest.TestCase):
@@ -127,9 +128,11 @@ class TestToolFuzzer(unittest.TestCase):
         ]
 
         # Mock one of the fuzzer methods to raise an exception
-        with patch.object(self.fuzzer, "fuzz_tool") as mock_fuzz:
+        with patch.object(
+            self.fuzzer, "fuzz_tool", new_callable=AsyncMock
+        ) as mock_fuzz:
 
-            def side_effect(tool, runs, phase="aggressive"):
+            async def side_effect(tool, runs, phase="aggressive"):
                 if tool["name"] == "tool1":
                     raise Exception("Test exception")
                 else:
@@ -522,8 +525,8 @@ class TestToolFuzzer(unittest.TestCase):
         }
 
         # Both fuzzers should work independently
-        results1 = fuzzer1.fuzz_tool(tool, runs=1)
-        results2 = fuzzer2.fuzz_tool(tool, runs=1)
+        results1 = await fuzzer1.fuzz_tool(tool, runs=1)
+        results2 = await fuzzer2.fuzz_tool(tool, runs=1)
 
         self.assertEqual(len(results1), 1)
         self.assertEqual(len(results2), 1)

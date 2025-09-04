@@ -99,6 +99,13 @@ def check_response_validity(response: Any) -> bool:
                     response,
                 )
 
+            # If it has both method and id, this is a request; reject here
+            if has_method and has_id and not (has_result or has_error):
+                raise InvariantViolation(
+                    "Received a JSON-RPC request where a response was expected",
+                    response,
+                )
+
             # id is required for any response (result or error)
             # but not for notifications (which have method but no id)
             if (has_result or has_error) and not has_method:
