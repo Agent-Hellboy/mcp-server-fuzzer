@@ -242,3 +242,12 @@ class AsyncFuzzExecutor:
                 "Shutdown timed out with %d tasks still running",
                 len(self._running_tasks),
             )
+            # Proactively cancel outstanding tasks and wait for them to finish
+            for task in list(self._running_tasks):
+                task.cancel()
+            await asyncio.gather(*self._running_tasks, return_exceptions=True)
+        finally:
+            # Ensure the set is cleaned up
+            self._running_tasks = {
+                t for t in self._running_tasks if not t.cancelled() and not t.done()
+            }

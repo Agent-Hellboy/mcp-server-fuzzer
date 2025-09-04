@@ -8,6 +8,10 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   component-tests:
     runs-on: ubuntu-latest
@@ -94,10 +98,30 @@ jobs:
       - name: Run integration tests
         if: ${{ steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true' }}
         run: |
-          pytest -vv tests/integration --cov-report=xml:coverage.integration.xml
+          pytest -vv tests/integration --cov=mcp_fuzzer --cov-report=xml:coverage.integration.xml
+
+      - name: Check for coverage files
+        id: coverage_check
+        run: |
+          if ls coverage.*.xml 1> /dev/null 2>&1; then
+            echo "has_coverage=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_coverage=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check Codecov token
+        id: codecov_token
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          if [ -n "$CODECOV_TOKEN" ]; then
+            echo "has_token=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_token=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Upload coverage to Codecov
-        if: ${{ (steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true') && hashFiles('coverage.*.xml') != '' }}
+        if: ${{ (steps.changes.outputs.auth == 'true' || steps.changes.outputs.cli == 'true' || steps.changes.outputs.client == 'true' || steps.changes.outputs.fuzz_engine == 'true' || steps.changes.outputs.safety == 'true' || steps.changes.outputs.transport == 'true') && steps.coverage_check.outputs.has_coverage == 'true' && steps.codecov_token.outputs.has_token == 'true' }}
         uses: codecov/codecov-action@v4
         with:
           files: coverage.*.xml

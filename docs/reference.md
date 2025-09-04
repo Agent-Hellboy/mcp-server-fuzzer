@@ -155,9 +155,9 @@ The schema parser module (`mcp_fuzzer.fuzz_engine.strategy.schema_parser`) provi
 - **String Constraints**: Supports minLength, maxLength, pattern, and format validations
 - **Number/Integer Constraints**: Handles minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf
 - **Array Constraints**: Supports minItems, maxItems, uniqueItems
-- **Object Constraints**: Handles required properties, minProperties, maxProperties
-- **Schema Combinations**: Processes oneOf, anyOf, allOf schema combinations
-- **Enums and Constants**: Supports enum values and constants
+- **Object Constraints**: Handles required properties, minProperties, additionalProperties (false blocks extra properties)
+- **Schema Combinations**: Processes oneOf, anyOf, allOf schema combinations with proper constraint merging
+- **Enums and Constants**: Supports enum values and const keyword (both in realistic and aggressive modes)
 - **Fuzzing Phases**: Supports both "realistic" (valid) and "aggressive" (edge cases) modes
 
 ### Example Usage

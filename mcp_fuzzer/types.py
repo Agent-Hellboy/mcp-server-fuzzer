@@ -8,13 +8,17 @@ to improve type safety throughout the codebase.
 
 from typing import Any, Dict, List, Optional, TypedDict, Union
 
+# JSON container types
+JSONContainer = Union[Dict[str, Any], List[Any]]
+
 
 class FuzzDataResult(TypedDict, total=False):
     """TypedDict for fuzzing results data structure."""
 
     fuzz_data: Dict[str, Any]
     success: bool
-    server_response: Optional[Union[Dict[str, Any], List[Any]]]
+    # Absent when no response was captured; None when explicitly captured as null
+    server_response: Optional[JSONContainer]
     server_error: Optional[str]
     server_rejected_input: bool
     run: int

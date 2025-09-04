@@ -439,20 +439,12 @@ class TestToolFuzzer(unittest.TestCase):
             "inputSchema": {"properties": {"name": {"type": "string"}}},
         }
 
-        with patch("mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer.logging") as mock_logging:
+        with patch.object(self.fuzzer, "_logger") as mock_logger:
             await self.fuzzer.fuzz_tool(tool, runs=1)
-
-            # Check that logging.info was called
-            mock_logging.info.assert_called()
-
-            # Check that the log message contains expected information
-            call_args = mock_logging.info.call_args_list
-            found_tool = False
-            for call_args_tuple in call_args:
-                if "test_tool" in str(call_args_tuple):
-                    found_tool = True
-                    break
-            self.assertTrue(found_tool)
+            mock_logger.info.assert_called()
+            # Ensure the tool name made it into an info log
+            calls = [str(c) for c in mock_logger.info.call_args_list]
+            self.assertTrue(any("test_tool" in c for c in calls))
 
     @pytest.mark.asyncio
     async def test_strategy_integration(self):

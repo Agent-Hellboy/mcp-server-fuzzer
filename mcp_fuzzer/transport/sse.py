@@ -101,30 +101,71 @@ class SSETransport(TransportProtocol):
                 response.raise_for_status()
 
                 chunks = response.aiter_text()
+                buffer = []  # Buffer to accumulate SSE event data
 
                 # Support both async and sync iterables (tests may provide a list)
                 if hasattr(chunks, "__aiter__"):
                     async for chunk in chunks:  # type: ignore[func-returns-value]
                         if not chunk:
                             continue
-                        try:
-                            parsed = SSETransport._parse_sse_event(chunk)
-                        except json.JSONDecodeError:
-                            logging.error("Failed to parse SSE event payload as JSON")
-                            continue
-                        if parsed is not None:
-                            yield parsed
+
+                        # Process each line in the chunk
+                        for line in chunk.splitlines():
+                            if line.strip():
+                                # Non-empty line: add to current event buffer
+                                buffer.append(line)
+                            else:
+                                # Empty line: marks end of an event, process the buffer
+                                if buffer:
+                                    try:
+                                        event_text = "\n".join(buffer)
+                                        parsed = SSETransport._parse_sse_event(
+                                            event_text
+                                        )
+                                        if parsed is not None:
+                                            yield parsed
+                                    except json.JSONDecodeError:
+                                        logging.error(
+                                            "Failed to parse SSE event payload as JSON"
+                                        )
+                                    finally:
+                                        buffer = []  # Clear buffer for next event
                 else:
                     for chunk in chunks:  # type: ignore[assignment]
                         if not chunk:
                             continue
-                        try:
-                            parsed = SSETransport._parse_sse_event(chunk)
-                        except json.JSONDecodeError:
-                            logging.error("Failed to parse SSE event payload as JSON")
-                            continue
+
+                        # Process each line in the chunk
+                        for line in chunk.splitlines():
+                            if line.strip():
+                                # Non-empty line: add to current event buffer
+                                buffer.append(line)
+                            else:
+                                # Empty line: marks end of an event, process the buffer
+                                if buffer:
+                                    try:
+                                        event_text = "\n".join(buffer)
+                                        parsed = SSETransport._parse_sse_event(
+                                            event_text
+                                        )
+                                        if parsed is not None:
+                                            yield parsed
+                                    except json.JSONDecodeError:
+                                        logging.error(
+                                            "Failed to parse SSE event payload as JSON"
+                                        )
+                                    finally:
+                                        buffer = []  # Clear buffer for next event
+
+                # Process any remaining buffered data at the end of the stream
+                if buffer:
+                    try:
+                        event_text = "\n".join(buffer)
+                        parsed = SSETransport._parse_sse_event(event_text)
                         if parsed is not None:
                             yield parsed
+                    except json.JSONDecodeError:
+                        logging.error("Failed to parse SSE event payload as JSON")
 
     @staticmethod
     def _parse_sse_event(event_text: str) -> Optional[Dict[str, Any]]:

@@ -308,10 +308,18 @@ async def test_sse_transport_stream_request(sse_transport):
     """Test SSETransport stream_request method."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
 
-    # Create mock SSE events
+    # Create mock SSE events - each event needs to end with a blank line
     sse_events = [
-        "event: message\ndata: " + json.dumps({"id": 1, "result": "streaming"}),
-        "event: message\ndata: " + json.dumps({"id": 2, "result": "complete"}),
+        (
+            "event: message\ndata: "
+            + json.dumps({"id": 1, "result": "streaming"})
+            + "\n\n"
+        ),
+        (
+            "event: message\ndata: "
+            + json.dumps({"id": 2, "result": "complete"})
+            + "\n\n"
+        ),
     ]
 
     with patch.object(httpx.AsyncClient, "stream") as mock_stream:

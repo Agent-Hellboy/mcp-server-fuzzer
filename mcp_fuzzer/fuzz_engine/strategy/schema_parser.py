@@ -30,32 +30,102 @@ MAX_RECURSION_DEPTH = 5
 
 
 def _merge_allOf(schemas: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Deep merge for allOf schemas."""
+    """
+    Deep merge for allOf schemas.
+
+    Combines properties and required fields, intersects types,
+    and applies the most restrictive constraints (max of minimums, min of maximums).
+    """
     merged: Dict[str, Any] = {}
     props: Dict[str, Any] = {}
     required: List[str] = []
     merged_types = None  # track intersection of declared types
+
+    # Track min/max constraint values
+    min_constraints = {
+        "minLength": None,
+        "minItems": None,
+        "minProperties": None,
+        "minimum": None,
+        "exclusiveMinimum": None,
+    }
+    max_constraints = {
+        "maxLength": None,
+        "maxItems": None,
+        "maxProperties": None,
+        "maximum": None,
+        "exclusiveMaximum": None,
+    }
+
     for s in schemas:
+        # Merge properties
         if "properties" in s and isinstance(s["properties"], dict):
             props.update(s["properties"])
+
+        # Merge required fields
         if "required" in s and isinstance(s["required"], list):
             required.extend([r for r in s["required"] if isinstance(r, str)])
+
+        # Intersect types
         t = s.get("type")
         if t is not None:
             tset = set(t if isinstance(t, list) else [t])
             merged_types = tset if merged_types is None else (merged_types & tset)
+
+        # Handle const values
+        if "const" in s:
+            merged["const"] = s["const"]
+
+        # Track min constraints (take maximum value)
+        for key in min_constraints:
+            if key in s:
+                current = min_constraints[key]
+                new_val = s[key]
+                if current is None or (new_val is not None and new_val > current):
+                    min_constraints[key] = new_val
+
+        # Track max constraints (take minimum value)
+        for key in max_constraints:
+            if key in s:
+                current = max_constraints[key]
+                new_val = s[key]
+                if current is None or (new_val is not None and new_val < current):
+                    max_constraints[key] = new_val
+
+        # Copy other fields (non-constraint)
         for k, v in s.items():
-            if k not in ("properties", "required"):
+            if (
+                k not in ("properties", "required", "type", "const")
+                and k not in min_constraints
+                and k not in max_constraints
+            ):
                 merged[k] = v if k not in merged else merged[k]
+
+    # Apply merged properties
     if props:
         merged["properties"] = props
+
+    # Apply merged required fields
     if required:
         merged["required"] = sorted(set(required))
+
+    # Apply merged types
     if merged_types:
         if len(merged_types) > 1:
             merged["type"] = list(merged_types)
         else:
             merged["type"] = next(iter(merged_types))
+
+    # Apply min constraints
+    for key, value in min_constraints.items():
+        if value is not None:
+            merged[key] = value
+
+    # Apply max constraints
+    for key, value in max_constraints.items():
+        if value is not None:
+            merged[key] = value
+
     return merged
 
 
