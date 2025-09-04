@@ -44,9 +44,20 @@ jobs:
       - name: Run tests with coverage
         run: |
           pytest -vv --cov=mcp_fuzzer --cov-report=xml ${{ github.event.inputs.pytest_args }}
+      - name: Check Codecov token
+        id: codecov_token
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          if [ -n "$CODECOV_TOKEN" ]; then
+            echo "has_token=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_token=false" >> $GITHUB_OUTPUT
+          fi
       - name: Upload coverage to Codecov
-        if: ${{ always() }}
+        if: ${{ steps.codecov_token.outputs.has_token == 'true' && hashFiles('coverage.xml') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
         uses: codecov/codecov-action@v4
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           fail_ci_if_error: true
