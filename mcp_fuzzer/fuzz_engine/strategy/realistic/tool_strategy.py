@@ -172,70 +172,97 @@ def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
             # Special handling for array type properties
             if prop_spec.get("type") == "array":
                 if prop_name not in args or not isinstance(args[prop_name], list):
-                    # Generate a simple array with 1-3 items
-                    if prop_spec.get("items", {}).get("type") == "object":
-                        # For object arrays, create objects with properties
-                        item_props = prop_spec.get("items", {}).get("properties", {})
-                        items = []
-                        for _ in range(random.randint(1, 3)):
-                            item = {}
-                            for item_prop, item_spec in item_props.items():
-                                item[item_prop] = generate_realistic_text()
-                            items.append(item)
-                        args[prop_name] = items
-                    else:
-                        # For simple arrays, generate simple items
-                        args[prop_name] = [
-                            generate_realistic_text()
-                            for _ in range(random.randint(1, 3))
+                    items_schema = prop_spec.get("items", {})
+                    count = random.randint(1, 3)
+                    item_type = items_schema.get("type")
+                    values: list[Any] = []
+                    if item_type == "object":
+                        # Generate each object via schema parser to honor constraints
+                        for _ in range(count):
+                            try:
+                                from ..schema_parser import (
+                                    make_fuzz_strategy_from_jsonschema as _mk,
+                                )
+
+                                val = _mk(items_schema, phase="realistic")
+                                values.append(val if isinstance(val, dict) else {})
+                            except Exception:
+                                values.append({})
+                    elif item_type == "integer":
+                        minimum = items_schema.get("minimum", -100)
+                        maximum = items_schema.get("maximum", 100)
+                        values = [
+                            random.randint(minimum, maximum) for _ in range(count)
                         ]
+                    elif item_type == "number":
+                        minimum = items_schema.get("minimum", -100.0)
+                        maximum = items_schema.get("maximum", 100.0)
+                        values = [
+                            round(random.uniform(minimum, maximum), 2)
+                            for _ in range(count)
+                        ]
+                    else:
+                        values = [generate_realistic_text() for _ in range(count)]
+                    args[prop_name] = values
             # Special handling for object type properties
             elif prop_spec.get("type") == "object":
                 if prop_name not in args or not isinstance(args[prop_name], dict):
-                    # Generate a nested object with its properties
-                    nested_props = prop_spec.get("properties", {})
-                    nested_obj = {}
-                    for nested_prop, nested_spec in nested_props.items():
-                        nested_obj[nested_prop] = generate_realistic_text()
-                    args[prop_name] = nested_obj
+                    # Generate nested object via schema parser to honor constraints
+                    try:
+                        from ..schema_parser import (
+                            make_fuzz_strategy_from_jsonschema as _mk,
+                        )
+
+                        nested = _mk(prop_spec, phase="realistic")
+                        args[prop_name] = nested if isinstance(nested, dict) else {}
+                    except Exception:
+                        args[prop_name] = {}
             # Special handling for integer type properties
             elif prop_spec.get("type") == "integer":
                 # Generate an integer within the specified range
-                minimum = prop_spec.get("minimum", -100)
-                maximum = prop_spec.get("maximum", 100)
-                args[prop_name] = random.randint(minimum, maximum)
+                if prop_name not in args:
+                    minimum = prop_spec.get("minimum", -100)
+                    maximum = prop_spec.get("maximum", 100)
+                    args[prop_name] = random.randint(minimum, maximum)
             # Special handling for number type properties
             elif prop_spec.get("type") == "number":
                 # Generate a float within the specified range
-                minimum = prop_spec.get("minimum", -100.0)
-                maximum = prop_spec.get("maximum", 100.0)
-                args[prop_name] = round(random.uniform(minimum, maximum), 2)
+                if prop_name not in args:
+                    minimum = prop_spec.get("minimum", -100.0)
+                    maximum = prop_spec.get("maximum", 100.0)
+                    args[prop_name] = round(random.uniform(minimum, maximum), 2)
             # Special handling for boolean type properties
             elif prop_spec.get("type") == "boolean":
-                args[prop_name] = random.choice([True, False])
+                if prop_name not in args:
+                    args[prop_name] = random.choice([True, False])
             # Special handling for string format types
             elif prop_spec.get("type") == "string" and prop_spec.get("format"):
                 # Generate a formatted string based on the format type
                 format_type = prop_spec.get("format")
-                if format_type == "email":
-                    domains = ["example.com", "test.org", "mail.net", "domain.io"]
-                    username = "".join(random.choices(string.ascii_lowercase, k=8))
-                    domain = random.choice(domains)
-                    args[prop_name] = f"{username}@{domain}"
-                elif format_type == "uri":
-                    schemes = ["http", "https"]
-                    domains = ["example.com", "test.org", "api.domain.io"]
-                    paths = ["", "/api", "/v1/resources", "/users/123"]
-                    scheme = random.choice(schemes)
-                    domain = random.choice(domains)
-                    path = random.choice(paths)
-                    args[prop_name] = f"{scheme}://{domain}{path}"
-                elif format_type == "date-time":
-                    args[prop_name] = datetime.now(timezone.utc).isoformat()
-                elif format_type == "uuid":
-                    args[prop_name] = str(uuid.uuid4())
-                else:
-                    args[prop_name] = generate_realistic_text()
+                if prop_name not in args:
+                    if format_type == "email":
+                        domains = ["example.com", "test.org", "mail.net", "domain.io"]
+                        username = "".join(random.choices(string.ascii_lowercase, k=8))
+                        domain = random.choice(domains)
+                        args[prop_name] = f"{username}@{domain}"
+                    elif format_type == "uri":
+                        schemes = ["http", "https"]
+                        domains = ["example.com", "test.org", "api.domain.io"]
+                        paths = ["", "/api", "/v1/resources", "/users/123"]
+                        scheme = random.choice(schemes)
+                        domain = random.choice(domains)
+                        path = random.choice(paths)
+                        args[prop_name] = f"{scheme}://{domain}{path}"
+                    elif format_type == "date-time":
+                        args[prop_name] = (
+                            datetime.now(timezone.utc)
+                            .isoformat(timespec="seconds")
+                            .replace("+00:00", "Z")
+                        )
+                    elif format_type == "uuid":
+                        args[prop_name] = str(uuid.uuid4())
+                    else:
+                        args[prop_name] = generate_realistic_text()
             # In realistic mode, generate all properties
             elif prop_name not in args:
                 args[prop_name] = generate_realistic_text()
