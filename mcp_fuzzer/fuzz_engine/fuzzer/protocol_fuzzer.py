@@ -33,6 +33,8 @@ class ProtocolFuzzer:
         "ReadResourceRequest",
         "SetLevelRequest",
         "GenericJSONRPCRequest",
+        "CallToolResult",
+        "SamplingMessage",
         "CreateMessageRequest",
         "ListPromptsRequest",
         "GetPromptRequest",

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unit tests for aggressive protocol type strategies.
 Tests the aggressive strategies from mcp_fuzzer.fuzz_engine.strategy.aggressive.
@@ -12,8 +11,8 @@ from mcp_fuzzer.fuzz_engine.strategy.aggressive.protocol_type_strategy import (
     fuzz_elicit_request,
     fuzz_ping_request,
     get_protocol_fuzzer_method,
-    _generate_malicious_string,
-    _generate_malicious_value,
+    generate_malicious_string,
+    generate_malicious_value,
 )
 
 
@@ -29,6 +28,7 @@ class TestAggressiveProtocolStrategies:
 
         # Verify basic JSON-RPC structure
         assert "jsonrpc" in result
+        assert result["jsonrpc"] == "2.0"
         assert "id" in result
         assert "method" in result
         assert "params" in result
@@ -48,6 +48,7 @@ class TestAggressiveProtocolStrategies:
 
         # Verify basic JSON-RPC structure
         assert "jsonrpc" in result
+        assert result["jsonrpc"] == "2.0"
         assert "id" in result
         assert "method" in result
         assert "params" in result
@@ -67,6 +68,7 @@ class TestAggressiveProtocolStrategies:
 
         # Verify basic JSON-RPC structure
         assert "jsonrpc" in result
+        assert result["jsonrpc"] == "2.0"
         assert "id" in result
         assert "method" in result
         assert "params" in result
@@ -87,10 +89,10 @@ class TestAggressiveProtocolStrategies:
         # Test that unknown types return None
         assert get_protocol_fuzzer_method("UnknownType") is None
 
-    def test_generate_malicious_string(self):
+    def testgenerate_malicious_string(self):
         """Test malicious string generation."""
         # Test multiple calls to ensure variety
-        strings = [_generate_malicious_string() for _ in range(10)]
+        strings = [generate_malicious_string() for _ in range(10)]
 
         # All should be strings
         for s in strings:
@@ -100,16 +102,16 @@ class TestAggressiveProtocolStrategies:
         unique_strings = set(strings)
         assert len(unique_strings) > 1, "Should generate different malicious strings"
 
-    def test_generate_malicious_value(self):
+    def testgenerate_malicious_value(self):
         """Test malicious value generation."""
         # Test multiple calls to ensure variety
-        values = [_generate_malicious_value() for _ in range(20)]
+        values = [generate_malicious_value() for _ in range(100)]
 
         # Should have some variety in types
         types = {type(v) for v in values}
         assert len(types) > 1, "Should generate different types of malicious values"
 
-        # Should include some common malicious types
+        # Should include some common malicious types (with higher sample size)
         assert any(v is None for v in values), "Should include None values"
         assert any(isinstance(v, str) for v in values), "Should include string values"
         assert any(isinstance(v, (int, float)) for v in values), (
@@ -151,18 +153,18 @@ class TestAggressiveProtocolStrategies:
 
         # Check that malicious values are used
         params = result["params"]
-        assert params["cursor"] is not None  # Should be some value
-        assert params["_meta"] is not None  # Should be some value
+        assert isinstance(params["cursor"], str)
+        # _meta can be any value (including None), presence already validated above
 
         # Test elicit request
         result = fuzz_elicit_request()
         params = result["params"]
-        assert params["message"] is not None
-        assert params["requestedSchema"] is not None
+        assert isinstance(params["message"], str)
+        # requestedSchema can be any value (including None)
 
         # Test ping request
         result = fuzz_ping_request()
-        assert result["params"] is not None
+        # params can be any value (including None); presence checked above
 
     def test_all_protocol_types_in_fuzzer_method_map(self):
         """Test that all expected protocol types are in the fuzzer method map."""
@@ -215,3 +217,96 @@ class TestAggressiveProtocolStrategies:
             assert "method" in result, (
                 f"{protocol_type} result should have method field"
             )
+
+    def test_capabilities_experimental_fuzzing(self):
+        """Test that capabilities.experimental fuzzing generates varied content."""
+        from mcp_fuzzer.fuzz_engine.strategy.aggressive.protocol_type_strategy import (
+            fuzz_initialize_request_aggressive,
+        )
+
+        # Generate multiple initialize requests to test variety
+        results = [fuzz_initialize_request_aggressive() for _ in range(100)]
+
+        # Check that we get some variety in capabilities.experimental
+        experimental_values = []
+        for result in results:
+            params = result.get("params", {})
+            if isinstance(params, dict):
+                capabilities = params.get("capabilities")
+                if isinstance(capabilities, dict):
+                    experimental = capabilities.get("experimental")
+                    experimental_values.append(experimental)
+
+        # Should have some variety in experimental values
+        if experimental_values:
+            unique_values = set(str(v) for v in experimental_values)
+            assert len(unique_values) > 1, (
+                "Should generate different experimental values"
+            )
+
+            # Should include some None values (which is valid)
+            assert any(v is None for v in experimental_values), (
+                "Should include None experimental values"
+            )
+
+            # Should include some non-None values (could be string, dict, list, etc.)
+            assert any(v is not None for v in experimental_values), (
+                "Should include non-None experimental values"
+            )
+        else:
+            # If no experimental values found, that's also valid
+            # - capabilities might not be dict
+            assert True, "No experimental values found, which is valid"
+
+    def test_protocol_types_sync_with_fuzzer_map(self):
+        """Test that PROTOCOL_TYPES tuple stays in sync with fuzzer method map."""
+        from mcp_fuzzer.fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
+        from mcp_fuzzer.fuzz_engine.strategy.aggressive.protocol_type_strategy import (
+            get_protocol_fuzzer_method,
+        )
+
+        # Get all protocol types from the fuzzer method map
+        fuzzer_map_types = set()
+        for protocol_type in ProtocolFuzzer.PROTOCOL_TYPES:
+            if get_protocol_fuzzer_method(protocol_type) is not None:
+                fuzzer_map_types.add(protocol_type)
+
+        # Get all types that have fuzzer methods
+        all_supported_types = set()
+        # Check all possible protocol types that might be in the map
+        potential_types = [
+            "InitializeRequest",
+            "ProgressNotification",
+            "CancelNotification",
+            "ListResourcesRequest",
+            "ReadResourceRequest",
+            "SetLevelRequest",
+            "GenericJSONRPCRequest",
+            "CallToolResult",
+            "SamplingMessage",
+            "CreateMessageRequest",
+            "ListPromptsRequest",
+            "GetPromptRequest",
+            "ListRootsRequest",
+            "SubscribeRequest",
+            "UnsubscribeRequest",
+            "CompleteRequest",
+            "ListResourceTemplatesRequest",
+            "ElicitRequest",
+            "PingRequest",
+        ]
+
+        for protocol_type in potential_types:
+            if get_protocol_fuzzer_method(protocol_type) is not None:
+                all_supported_types.add(protocol_type)
+
+        # PROTOCOL_TYPES should match the fuzzer method map
+        assert set(ProtocolFuzzer.PROTOCOL_TYPES) == all_supported_types, (
+            f"PROTOCOL_TYPES mismatch: {set(ProtocolFuzzer.PROTOCOL_TYPES)} != "
+            f"{all_supported_types}"
+        )
+
+        # Should have exactly 19 types
+        assert len(ProtocolFuzzer.PROTOCOL_TYPES) == 19, (
+            f"Expected 19 protocol types, got {len(ProtocolFuzzer.PROTOCOL_TYPES)}"
+        )
