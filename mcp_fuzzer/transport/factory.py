@@ -3,7 +3,11 @@ from .http import HTTPTransport
 from .sse import SSETransport
 from .stdio import StdioTransport
 from .streamable_http import StreamableHTTPTransport
+from .custom import registry as custom_registry
 from urllib.parse import urlparse, urlunparse
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def create_transport(
@@ -32,6 +36,20 @@ def create_transport(
     # Single-URL usage
     parsed = urlparse(url_or_protocol)
     scheme = (parsed.scheme or "").lower()
+
+    # Handle custom schemes that urlparse doesn't recognize
+    if not scheme and "://" in url_or_protocol:
+        # Extract scheme manually for custom transports
+        scheme_part = url_or_protocol.split("://")[0].lower()
+        if custom_registry.list_transports().get(scheme_part):
+            scheme = scheme_part
+
+    # Check for custom transport schemes first
+    if scheme:
+        try:
+            return custom_registry.create_transport(scheme, url_or_protocol, **kwargs)
+        except KeyError:
+            pass  # Fall through to built-in schemes
 
     if scheme in ("http", "https"):
         return HTTPTransport(url_or_protocol, **kwargs)
@@ -67,9 +85,14 @@ def create_transport(
         )
         return StreamableHTTPTransport(http_url, **kwargs)
 
+    # Check for custom transport protocols (backward compatibility)
+    try:
+        return custom_registry.create_transport(url_or_protocol, endpoint, **kwargs)
+    except KeyError:
+        pass  # Fall through to error
+
     raise ValueError(
-        (
-            f"Unsupported URL scheme: {scheme or 'none'}. "
-            "Supported: http, https, sse, stdio, streamablehttp"
-        )
+        f"Unsupported URL scheme: {scheme or 'none'}. "
+        f"Supported: http, https, sse, stdio, streamablehttp, "
+        f"custom: {', '.join(custom_registry.list_transports().keys())}"
     )

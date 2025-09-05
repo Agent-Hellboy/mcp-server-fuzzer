@@ -1,0 +1,43 @@
+# Example configuration file demonstrating custom transport setup
+# This file shows how to configure custom transports in MCP Server Fuzzer
+
+# Custom transport definitions
+custom_transports:
+  # WebSocket transport example
+  websocket_example:
+    module: "examples.custom_websocket_transport"
+    class: "WebSocketTransport"
+    description: "WebSocket transport for real-time MCP communication"
+    config:
+      timeout: 30
+      headers:
+        Authorization: "Bearer your-token-here"
+        X-API-Key: "your-api-key"
+
+  # Another custom transport (example)
+  custom_protocol:
+    module: "my_custom_transports"
+    class: "MyCustomTransport"
+    description: "Custom protocol transport for specialized MCP server"
+    config:
+      host: "localhost"
+      port: 9000
+      secure: true
+
+# Fuzzer configuration using custom transport
+protocol: websocket_example
+endpoint: "ws://localhost:8080/mcp"
+
+# Other fuzzer settings
+mode: tools
+runs: 10
+timeout: 30.0
+
+# Logging
+log_level: INFO
+
+# Safety settings
+safety:
+  enabled: true
+  local_hosts: ["localhost", "127.0.0.1"]
+  no_network: false

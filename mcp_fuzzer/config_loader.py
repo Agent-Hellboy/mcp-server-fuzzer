@@ -13,6 +13,8 @@ import yaml
 
 from .config import config
 from .exceptions import ConfigFileError
+from .transport.custom import register_custom_transport
+import importlib
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +53,7 @@ def find_config_file(
     for path in search_paths:
         if not os.path.isdir(path):
             continue
-        
+
         for name in file_names:
             file_path = os.path.join(path, name)
             if os.path.isfile(file_path):
@@ -100,7 +102,7 @@ def load_config_file(file_path: str) -> Dict[str, Any]:
 
 
 def apply_config_file(
-    config_path: Optional[str] = None, 
+    config_path: Optional[str] = None,
     search_paths: Optional[list[str]] = None,
     file_names: Optional[list[str]] = None,
 ) -> bool:
@@ -124,7 +126,10 @@ def apply_config_file(
         # Load config file
         logger.info(f"Loading configuration from {file_path}")
         config_data = load_config_file(file_path)
-        
+
+        # Load custom transports if configured
+        load_custom_transports(config_data)
+
         # Apply configuration
         config.update(config_data)
         return True
@@ -144,55 +149,58 @@ def get_config_schema() -> Dict[str, Any]:
         "properties": {
             "timeout": {"type": "number", "description": "Default timeout in seconds"},
             "tool_timeout": {
-                "type": "number", 
-                "description": "Tool-specific timeout in seconds"
+                "type": "number",
+                "description": "Tool-specific timeout in seconds",
             },
             "log_level": {
-                "type": "string", 
-                "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+                "type": "string",
+                "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
             },
             "safety_enabled": {
-                "type": "boolean", 
-                "description": "Whether safety features are enabled"
+                "type": "boolean",
+                "description": "Whether safety features are enabled",
             },
             "fs_root": {
-                "type": "string", 
-                "description": "Root directory for file operations"
+                "type": "string",
+                "description": "Root directory for file operations",
             },
             "http_timeout": {
-                "type": "number", 
-                "description": "HTTP transport timeout in seconds"
+                "type": "number",
+                "description": "HTTP transport timeout in seconds",
             },
             "sse_timeout": {
-                "type": "number", 
-                "description": "SSE transport timeout in seconds"
+                "type": "number",
+                "description": "SSE transport timeout in seconds",
             },
             "stdio_timeout": {
-                "type": "number", 
-                "description": "STDIO transport timeout in seconds"
+                "type": "number",
+                "description": "STDIO transport timeout in seconds",
             },
             "mode": {"type": "string", "enum": ["tools", "protocol", "both"]},
             "phase": {"type": "string", "enum": ["realistic", "aggressive", "both"]},
-            "protocol": {"type": "string", "enum": ["http", "sse", "stdio"]},
+            "protocol": {
+                "type": "string",
+                "enum": ["http", "sse", "stdio", "streamablehttp"],
+            },
             "endpoint": {"type": "string", "description": "Server endpoint URL"},
             "runs": {"type": "integer", "description": "Number of fuzzing runs"},
             "runs_per_type": {
-                "type": "integer", 
-                "description": "Number of runs per protocol type"
+                "type": "integer",
+                "description": "Number of runs per protocol type",
             },
             "protocol_type": {
-                "type": "string", 
-                "description": "Specific protocol type to fuzz"
+                "type": "string",
+                "description": "Specific protocol type to fuzz",
             },
             "no_network": {"type": "boolean", "description": "Disable network access"},
             "allow_hosts": {
-                "type": "array", 
-                "items": {"type": "string"}, 
-                "description": "List of allowed hosts"
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "List of allowed hosts",
             },
             "max_concurrency": {
-                "type": "integer", 
-                "description": "Maximum concurrent operations"
+                "type": "integer",
+                "description": "Maximum concurrent operations",
             },
             "auth": {
                 "type": "object",
@@ -203,43 +211,102 @@ def get_config_schema() -> Dict[str, Any]:
                             "type": "object",
                             "properties": {
                                 "type": {
-                                    "type": "string", 
-                                    "enum": ["api_key", "basic", "oauth", "custom"]
+                                    "type": "string",
+                                    "enum": ["api_key", "basic", "oauth", "custom"],
                                 },
                                 "id": {"type": "string"},
-                                "config": {"type": "object"}
+                                "config": {"type": "object"},
                             },
-                            "required": ["type", "id"]
-                        }
+                            "required": ["type", "id"],
+                        },
                     },
                     "mappings": {
                         "type": "object",
-                        "additionalProperties": {"type": "string"}
+                        "additionalProperties": {"type": "string"},
+                    },
+                },
+            },
+            "custom_transports": {
+                "type": "object",
+                "description": "Configuration for custom transport mechanisms",
+                "patternProperties": {
+                    "^[a-zA-Z][a-zA-Z0-9_]*$": {
+                        "type": "object",
+                        "properties": {
+                            "module": {
+                                "type": "string",
+                                "description": "Python module path containing transport"
+                            },
+                            "class": {
+                                "type": "string",
+                                "description": "Transport class name",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Human-readable description",
+                            },
+                            "config": {
+                                "type": "object",
+                                "description": "Transport-specific configuration",
+                            },
+                        },
+                        "required": ["module", "class"],
                     }
-                }
+                },
             },
             "safety": {
                 "type": "object",
                 "properties": {
                     "enabled": {"type": "boolean"},
-                    "local_hosts": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    },
+                    "local_hosts": {"type": "array", "items": {"type": "string"}},
                     "no_network": {"type": "boolean"},
-                    "header_denylist": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    },
+                    "header_denylist": {"type": "array", "items": {"type": "string"}},
                     "proxy_env_denylist": {
                         "type": "array",
-                        "items": {"type": "string"}
+                        "items": {"type": "string"},
                     },
-                    "env_allowlist": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    }
-                }
-            }
-        }
+                    "env_allowlist": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        },
     }
+
+
+def load_custom_transports(config_data: Dict[str, Any]) -> None:
+    """Load and register custom transports from configuration.
+
+    Args:
+        config_data: Configuration dictionary containing custom_transports section
+    """
+    custom_transports = config_data.get("custom_transports", {})
+
+    for transport_name, transport_config in custom_transports.items():
+        try:
+            # Import the module
+            module_path = transport_config["module"]
+            class_name = transport_config["class"]
+
+            module = importlib.import_module(module_path)
+            transport_class = getattr(module, class_name)
+
+            # Register the transport
+            description = transport_config.get("description", "")
+            config_schema = transport_config.get("config_schema")
+
+            register_custom_transport(
+                name=transport_name,
+                transport_class=transport_class,
+                description=description,
+                config_schema=config_schema,
+            )
+
+            logger.info(
+                f"Loaded custom transport '{transport_name}' from "
+                f"{module_path}.{class_name}"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to load custom transport '{transport_name}': {e}")
+            raise ConfigFileError(
+                f"Failed to load custom transport '{transport_name}': {e}"
+            )
