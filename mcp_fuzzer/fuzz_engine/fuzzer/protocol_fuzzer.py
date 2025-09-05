@@ -40,6 +40,11 @@ class ProtocolFuzzer:
         "SubscribeRequest",
         "UnsubscribeRequest",
         "CompleteRequest",
+        "ListResourceTemplatesRequest",
+        "ElicitRequest",
+        "PingRequest",
+        "CallToolResult",
+        "SamplingMessage",
     )
     # Seconds to wait for invariant validation of batch responses
     BATCH_VALIDATION_TIMEOUT: ClassVar[float] = 5.0

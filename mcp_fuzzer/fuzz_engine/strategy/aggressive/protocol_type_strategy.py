@@ -185,6 +185,25 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                         {"__proto__": {"isAdmin": True}},
                         {"constructor": {"prototype": {"isAdmin": True}}},
                         {"evil": _generate_malicious_string()},
+                        # Add varied experimental capabilities
+                        {"experimental": _generate_malicious_value()},
+                        {"experimental": _generate_malicious_string()},
+                        {"experimental": {"evil": _generate_malicious_string()}},
+                        {"experimental": None},
+                        {"experimental": ""},
+                        {"experimental": []},
+                        {"experimental": True},
+                        {"experimental": False},
+                        {"experimental": 0},
+                        {"experimental": 1},
+                        {"experimental": -1},
+                        {"experimental": float("inf")},
+                        {"experimental": float("-inf")},
+                        {
+                            "experimental": {
+                                "nested": {"evil": _generate_malicious_string()}
+                            }
+                        },
                     ]
                 ),
                 "clientInfo": random.choice(
@@ -452,6 +471,54 @@ def fuzz_complete_request() -> Dict[str, Any]:
     }
 
 
+def fuzz_list_resource_templates_request() -> Dict[str, Any]:
+    """Generate aggressive ListResourceTemplatesRequest."""
+    return {
+        "jsonrpc": "2.0",
+        "id": _generate_malicious_value(),
+        "method": "resources/templates/list",
+        "params": {
+            "cursor": _generate_malicious_string(),
+            "_meta": _generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_elicit_request() -> Dict[str, Any]:
+    """Generate aggressive ElicitRequest."""
+    return {
+        "jsonrpc": "2.0",
+        "id": _generate_malicious_value(),
+        "method": "elicitation/create",
+        "params": {
+            "ref": _generate_malicious_value(),
+            "argument": _generate_malicious_value(),
+            "message": _generate_malicious_string(),
+            "requestedSchema": _generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_ping_request() -> Dict[str, Any]:
+    """Generate aggressive PingRequest."""
+    return {
+        "jsonrpc": "2.0",
+        "id": _generate_malicious_value(),
+        "method": "ping",
+        "params": {},
+    }
+
+
+def generate_malicious_string() -> str:
+    """Generate malicious string for testing."""
+    return _generate_malicious_string()
+
+
+def generate_malicious_value() -> Any:
+    """Generate malicious value for testing."""
+    return _generate_malicious_value()
+
+
 def get_protocol_fuzzer_method(protocol_type: str):
     """Get the fuzzer method for a specific protocol type."""
     fuzzer_methods = {
@@ -471,6 +538,9 @@ def get_protocol_fuzzer_method(protocol_type: str):
         "SubscribeRequest": fuzz_subscribe_request,
         "UnsubscribeRequest": fuzz_unsubscribe_request,
         "CompleteRequest": fuzz_complete_request,
+        "ListResourceTemplatesRequest": fuzz_list_resource_templates_request,
+        "ElicitRequest": fuzz_elicit_request,
+        "PingRequest": fuzz_ping_request,
     }
 
     return fuzzer_methods.get(protocol_type)
