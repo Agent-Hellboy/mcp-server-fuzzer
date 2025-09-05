@@ -256,7 +256,28 @@ The fuzzing engine orchestrates the testing process and manages test execution.
 5. **Invariant Verification**: Verify responses against property-based invariants
 6. **Analysis**: Analyze results and generate reports
 
-### 4. Strategy System
+### 4. Runtime Management System
+
+The runtime management system provides robust, asynchronous subprocess lifecycle management for transports and target servers under test.
+
+**Key Components:**
+
+- `manager.py`: Fully async ProcessManager for start/stop processes, send signals, await exit, collect stats
+- `watchdog.py`: ProcessWatchdog for monitoring registered PIDs for hangs/inactivity and terminating them based on policy
+- `executor.py`: AsyncFuzzExecutor providing concurrency control, error handling, and result aggregation
+
+**Runtime Features:**
+
+- **Fully Async API**: All operations use native asyncio; blocking calls run in thread executors
+- **Process-Group Signaling**: On POSIX systems, uses process-group signaling to prevent orphan children
+- **Safe Stop Flow**: TERM (grace window) → KILL on timeout if needed
+- **Watchdog Auto-Management**: Auto-starts on first registration/start; auto-unregisters on stop
+- **Activity Monitoring**: Supports activity callbacks for hang detection
+- **Concurrency Control**: Bounded concurrency with semaphore-based limiting
+- **Retry Mechanisms**: Configurable retry with exponential backoff
+- **Batch Operations**: Execute multiple operations concurrently with result collection
+
+### 5. Strategy System
 
 The strategy system generates test data using different approaches.
 
@@ -318,7 +339,7 @@ The safety system provides multiple layers of protection against dangerous opera
 - **Process Isolation**: Safe subprocess handling with timeouts
 - **Input Sanitization**: Filters potentially dangerous input
 
-### 6. Authentication System
+### 7. Authentication System
 
 The authentication system manages various authentication methods for MCP servers.
 
@@ -335,7 +356,7 @@ The authentication system manages various authentication methods for MCP servers
 - **OAuth token authentication**
 - **Custom header authentication**
 
-### 7. Reporting System
+### 8. Reporting System
 
 The reporting system provides centralized output management and comprehensive result reporting.
 
@@ -364,6 +385,79 @@ The reporting system provides centralized output management and comprehensive re
 - **Fuzzing Reports**: Complete tool and protocol testing results
 - **Safety Reports**: Detailed safety system data and blocked operations
 - **Session Reports**: Metadata, configuration, and execution statistics
+
+## Runtime Management Details
+
+### ProcessManager
+
+The `ProcessManager` provides fully asynchronous subprocess lifecycle management with the following capabilities:
+
+**Core Features:**
+- **Async Process Creation**: Uses `asyncio.create_subprocess_exec` for non-blocking process spawning
+- **Process Registration**: Automatically registers processes with the watchdog for monitoring
+- **Signal Handling**: Supports graceful termination (SIGTERM) and force kill (SIGKILL) with process-group signaling
+- **Status Tracking**: Maintains comprehensive process state including start time, status, and configuration
+- **Cleanup Management**: Automatic cleanup of finished processes to prevent resource leaks
+
+**Process Lifecycle:**
+1. **Start**: Process is created with asyncio, registered with watchdog, and tracked in manager
+2. **Monitor**: Watchdog monitors for hangs and inactivity using activity callbacks
+3. **Stop**: Graceful termination with escalation to force kill if needed
+4. **Cleanup**: Process is unregistered from watchdog and removed from tracking
+
+**Configuration Options:**
+- `command`: List of command and arguments
+- `cwd`: Working directory for the process
+- `env`: Environment variables (merged with current environment)
+- `timeout`: Default timeout for process operations
+- `auto_kill`: Whether to automatically kill hanging processes
+- `name`: Human-readable name for logging and identification
+- `activity_callback`: Optional callback to report process activity
+
+### ProcessWatchdog
+
+The `ProcessWatchdog` provides automated monitoring and termination of hanging processes:
+
+**Monitoring Features:**
+- **Activity Tracking**: Monitors process activity through callbacks or timestamps
+- **Hang Detection**: Identifies processes that haven't been active for configured timeout periods
+- **Automatic Termination**: Can automatically kill hanging processes based on policy
+- **Configurable Thresholds**: Separate thresholds for warning, timeout, and force kill
+
+**Configuration Options:**
+- `check_interval`: How often to check processes (default: 1.0 seconds)
+- `process_timeout`: Time before process is considered hanging (default: 30.0 seconds)
+- `extra_buffer`: Extra time before auto-kill (default: 5.0 seconds)
+- `max_hang_time`: Maximum time before force kill (default: 60.0 seconds)
+- `auto_kill`: Whether to automatically kill hanging processes (default: true)
+
+**Activity Callbacks:**
+Processes can register activity callbacks that return timestamps indicating when they were last active. This allows for more sophisticated hang detection based on actual process activity rather than just time elapsed.
+
+### AsyncFuzzExecutor
+
+The `AsyncFuzzExecutor` provides controlled concurrency and robust error handling for fuzzing operations:
+
+**Concurrency Control:**
+- **Bounded Concurrency**: Uses semaphore to limit concurrent operations
+- **Task Tracking**: Maintains set of running tasks for proper shutdown
+- **Batch Operations**: Execute multiple operations concurrently with result collection
+
+**Error Handling:**
+- **Timeout Management**: Configurable timeouts for individual operations
+- **Retry Logic**: Exponential backoff retry mechanism for failed operations
+- **Exception Collection**: Collects and categorizes errors from batch operations
+
+**Configuration Options:**
+- `max_concurrency`: Maximum number of concurrent operations (default: 5)
+- `timeout`: Default timeout for operations (default: 30.0 seconds)
+- `retry_count`: Number of retries for failed operations (default: 1)
+- `retry_delay`: Delay between retries (default: 1.0 seconds)
+
+**Usage Patterns:**
+- **Single Operations**: Execute individual operations with timeout and error handling
+- **Retry Operations**: Execute operations with automatic retry on failure
+- **Batch Operations**: Execute multiple operations concurrently with bounded concurrency
 
 ## Execution Flow
 
