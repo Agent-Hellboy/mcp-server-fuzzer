@@ -108,8 +108,10 @@ See [Architecture](architecture.md) for detailed diagrams and flow charts.
 ## Documentation
 
 - **[Getting Started](getting-started.md)** - Installation and basic usage
-- **[Configuration](configuration.md)** - Configuration options and file formats
+- **[Configuration](configuration.md)** - Configuration options and file formats (YAML/TOML)
 - **[Architecture](architecture.md)** - System design and components
+- **[Runtime Management](runtime-management.md)** - Process management, watchdog system, and async executor
+- **[Process Management Guide](process-management-guide.md)** - Process management best practices and troubleshooting
 - **[Client Architecture](client-architecture.md)** - Client package structure
 - **[Code Structure](code-structure.md)** - Code organization and patterns
 - **[Examples](examples.md)** - Working examples and configurations

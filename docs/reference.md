@@ -100,6 +100,659 @@ Notes:
 | `MCP_PASSWORD` | Password for basic authentication |
 | `MCP_OAUTH_TOKEN` | OAuth token for authentication |
 
+## Runtime Management API Reference
+
+The runtime management system provides robust, asynchronous subprocess lifecycle management for transports and target servers under test.
+
+### ProcessManager
+
+The `ProcessManager` provides fully asynchronous subprocess lifecycle management with comprehensive process tracking and signal handling.
+
+#### Class Definition
+
+```python
+class ProcessManager:
+    def __init__(self, config: Optional[WatchdogConfig] = None):
+        """Initialize the async process manager."""
+```
+
+#### Configuration
+
+```python
+@dataclass
+class ProcessConfig:
+    command: List[str]                    # Command and arguments to execute
+    cwd: Optional[Union[str, Path]] = None  # Working directory
+    env: Optional[Dict[str, str]] = None     # Environment variables
+    timeout: float = 30.0                    # Default timeout for operations
+    auto_kill: bool = True                  # Whether to auto-kill hanging processes
+    name: str = "unknown"                   # Human-readable name for logging
+    activity_callback: Optional[Callable[[], float]] = None  # Activity callback
+```
+
+#### Methods
+
+- `async start_process(config: ProcessConfig) -> asyncio.subprocess.Process`
+  - Start a new process asynchronously
+  - Returns the created subprocess object
+  - Automatically registers process with watchdog
+
+- `async stop_process(pid: int, force: bool = False) -> bool`
+  - Stop a running process gracefully or forcefully
+  - Returns True if process was stopped successfully
+  - Uses SIGTERM for graceful, SIGKILL for force
+
+- `async stop_all_processes(force: bool = False) -> None`
+  - Stop all running processes
+  - Can be graceful or forceful
+  - Executes concurrently for all processes
+
+- `async get_process_status(pid: int) -> Optional[Dict[str, Any]]`
+  - Get detailed status information for a specific process
+  - Returns None if process is not managed
+  - Includes start time, status, and configuration
+
+- `async list_processes() -> List[Dict[str, Any]]`
+  - Get list of all managed processes with their status
+  - Returns comprehensive process information
+
+- `async wait_for_process(pid: int, timeout: Optional[float] = None) -> Optional[int]`
+  - Wait for a process to complete
+  - Returns exit code or None if timeout
+  - Non-blocking with configurable timeout
+
+- `async update_activity(pid: int) -> None`
+  - Update activity timestamp for a process
+  - Used for hang detection by watchdog
+
+- `async get_stats() -> Dict[str, Any]`
+  - Get overall statistics about managed processes
+  - Includes process counts by status and watchdog stats
+
+- `async cleanup_finished_processes() -> int`
+  - Remove finished processes from tracking
+  - Returns count of cleaned processes
+  - Prevents resource leaks
+
+- `async shutdown() -> None`
+  - Shutdown the process manager and stop all processes
+  - Ensures proper cleanup of all resources
+
+- `async send_timeout_signal(pid: int, signal_type: str = "timeout") -> bool`
+  - Send a timeout signal to a running process
+  - Signal types: "timeout", "force", "interrupt"
+  - Returns True if signal was sent successfully
+
+- `async register_existing_process(pid: int, process: asyncio.subprocess.Process, name: str, activity_callback: Optional[Callable[[], float]] = None) -> None`
+  - Register an already-started subprocess with the manager
+  - Useful for integrating with existing process management
+
+#### Usage Examples
+
+```python
+from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
+
+async def process_manager_example():
+    manager = ProcessManager()
+
+    # Start a process
+    config = ProcessConfig(
+        command=["python", "test_server.py"],
+        name="test_server",
+        timeout=60.0
+    )
+    process = await manager.start_process(config)
+
+    # Monitor process
+    status = await manager.get_process_status(process.pid)
+    print(f"Process {process.pid} status: {status['status']}")
+
+    # Update activity
+    await manager.update_activity(process.pid)
+
+    # Get statistics
+    stats = await manager.get_stats()
+    print(f"Managing {stats['total_managed']} processes")
+
+    # Stop process
+    await manager.stop_process(process.pid)
+
+    # Cleanup
+    await manager.shutdown()
+```
+
+### ProcessWatchdog
+
+The `ProcessWatchdog` provides automated monitoring and termination of hanging processes with configurable thresholds and activity tracking.
+
+#### Class Definition
+
+```python
+class ProcessWatchdog:
+    def __init__(self, config: Optional[WatchdogConfig] = None):
+        """Initialize the process watchdog."""
+```
+
+#### Configuration
+
+```python
+@dataclass
+class WatchdogConfig:
+    check_interval: float = 1.0      # How often to check processes (seconds)
+    process_timeout: float = 30.0    # Time before process is considered hanging (seconds)
+    extra_buffer: float = 5.0        # Extra time before auto-kill (seconds)
+    max_hang_time: float = 60.0      # Maximum time before force kill (seconds)
+    auto_kill: bool = True          # Whether to automatically kill hanging processes
+```
+
+#### Methods
+
+- `async start() -> None`
+  - Start the watchdog monitoring loop
+  - Creates background task for process monitoring
+
+- `async stop() -> None`
+  - Stop the watchdog monitoring loop
+  - Cancels monitoring task and cleans up
+
+- `async register_process(pid: int, process: Any, activity_callback: Optional[Callable[[], float]], name: str) -> None`
+  - Register a process for monitoring
+  - Activity callback should return timestamp of last activity
+  - Auto-starts watchdog if not already running
+
+- `async unregister_process(pid: int) -> None`
+  - Unregister a process from monitoring
+  - Removes process from monitoring loop
+
+- `async update_activity(pid: int) -> None`
+  - Update activity timestamp for a process
+  - Used to indicate process is still active
+
+- `async is_process_registered(pid: int) -> bool`
+  - Check if a process is registered for monitoring
+  - Returns True if process is being monitored
+
+- `async get_stats() -> dict`
+  - Get statistics about monitored processes
+  - Includes total, running, and finished process counts
+
+#### Context Manager Support
+
+```python
+async with ProcessWatchdog(config) as watchdog:
+    # Watchdog automatically starts and stops
+    await watchdog.register_process(pid, process, callback, name)
+    # ... use watchdog
+```
+
+#### Usage Examples
+
+```python
+from mcp_fuzzer.fuzz_engine.runtime.watchdog import ProcessWatchdog, WatchdogConfig
+
+async def watchdog_example():
+    config = WatchdogConfig(
+        check_interval=1.0,
+        process_timeout=30.0,
+        auto_kill=True
+    )
+
+    watchdog = ProcessWatchdog(config)
+    await watchdog.start()
+
+    # Register a process
+    process = await asyncio.create_subprocess_exec("python", "server.py")
+    await watchdog.register_process(
+        process.pid,
+        process,
+        None,  # No activity callback
+        "server"
+    )
+
+    # Update activity periodically
+    for _ in range(10):
+        await watchdog.update_activity(process.pid)
+        await asyncio.sleep(5)
+
+    # Get statistics
+    stats = await watchdog.get_stats()
+    print(f"Monitoring {stats['total_processes']} processes")
+
+    await watchdog.stop()
+```
+
+### AsyncFuzzExecutor
+
+The `AsyncFuzzExecutor` provides controlled concurrency and robust error handling for fuzzing operations with configurable timeouts and retry mechanisms.
+
+#### Class Definition
+
+```python
+class AsyncFuzzExecutor:
+    def __init__(
+        self,
+        max_concurrency: int = 5,      # Maximum concurrent operations
+        timeout: float = 30.0,         # Default timeout for operations
+        retry_count: int = 1,          # Number of retries for failed operations
+        retry_delay: float = 1.0,      # Delay between retries
+    ):
+```
+
+#### Methods
+
+- `async execute(operation: Callable[..., Awaitable[Any]], *args, timeout: Optional[float] = None, **kwargs) -> Any`
+  - Execute a single operation with timeout and error handling
+  - Returns result of the operation
+  - Respects concurrency limits via semaphore
+
+- `async execute_with_retry(operation: Callable[..., Awaitable[Any]], *args, retry_count: Optional[int] = None, retry_delay: Optional[float] = None, **kwargs) -> Any`
+  - Execute an operation with retries on failure
+  - Uses exponential backoff for retry delays
+  - Does not retry on CancelledError
+
+- `async execute_batch(operations: List[Tuple[Callable[..., Awaitable[Any]], List, Dict]], collect_results: bool = True, collect_errors: bool = True) -> Dict[str, List]`
+  - Execute a batch of operations concurrently with bounded concurrency
+  - Returns dictionary with 'results' and 'errors' lists
+  - Operations are tuples of (callable, args, kwargs)
+
+- `async shutdown(timeout: float = 5.0) -> None`
+  - Shutdown the executor, waiting for running tasks to complete
+  - Cancels outstanding tasks if timeout is exceeded
+  - Ensures proper cleanup of task tracking
+
+#### Usage Examples
+
+```python
+from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
+
+async def executor_example():
+    executor = AsyncFuzzExecutor(
+        max_concurrency=3,
+        timeout=10.0,
+        retry_count=2
+    )
+
+    # Single operation
+    async def sample_operation():
+        await asyncio.sleep(1)
+        return "success"
+
+    result = await executor.execute(sample_operation)
+
+    # Operation with retry
+    async def unreliable_operation():
+        if random.random() < 0.5:
+            raise Exception("Random failure")
+        return "success"
+
+    result = await executor.execute_with_retry(unreliable_operation)
+
+    # Batch operations
+    operations = [
+        (sample_operation, [], {}),
+        (unreliable_operation, [], {}),
+        (sample_operation, [], {})
+    ]
+
+    results = await executor.execute_batch(operations)
+    print(f"Results: {len(results['results'])}, Errors: {len(results['errors'])}")
+
+    await executor.shutdown()
+```
+
+## CLI Improvements
+
+The MCP Server Fuzzer CLI has been enhanced with better user experience features:
+
+### Progress Indicators
+
+The CLI now provides clear progress indicators during fuzzing operations:
+
+```bash
+# Progress indicators show current status
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 100
+# Output: [████████████████████████████████████████] 100% Complete
+```
+
+### Enhanced Error Messages
+
+Error messages now include suggested fixes and context:
+
+```bash
+# Before: "Connection failed"
+# After: "Connection failed: Unable to connect to http://localhost:8000
+#         Suggested fixes:
+#         - Check if the server is running
+#         - Verify the endpoint URL is correct
+#         - Check firewall settings"
+```
+
+### Interactive Help
+
+The CLI provides interactive help for complex configurations:
+
+```bash
+# Show help for specific mode
+mcp-fuzzer --mode tools --help
+
+# Show help for specific protocol
+mcp-fuzzer --protocol stdio --help
+
+# Interactive configuration wizard
+mcp-fuzzer --interactive-config
+```
+
+### Argument Validation
+
+The CLI now validates argument combinations and provides helpful error messages:
+
+```bash
+# Invalid combination detection
+mcp-fuzzer --mode protocol --runs 10
+# Error: --runs is only valid for tool mode. Use --runs-per-type for protocol mode.
+
+# Missing required arguments
+mcp-fuzzer --mode tools
+# Error: --protocol and --endpoint are required for tool mode.
+```
+
+### Verbose Output Improvements
+
+Enhanced verbose output provides more detailed information:
+
+```bash
+# Verbose mode shows detailed execution information
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --verbose
+# Output includes:
+# - Tool discovery progress
+# - Individual test execution details
+# - Safety system actions
+# - Performance metrics
+```
+
+### Error Handling and Recovery
+
+#### Graceful Error Handling
+
+The CLI handles errors gracefully with proper cleanup:
+
+```bash
+# Interrupt handling (Ctrl+C)
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 100
+# Press Ctrl+C
+# Output: "Fuzzing interrupted. Cleaning up processes..."
+#         "Use --retry-with-safety-on-interrupt to retry with safety enabled"
+```
+
+#### Retry Mechanisms
+
+Built-in retry mechanisms for transient failures:
+
+```bash
+# Automatic retry on connection failures
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
+# If connection fails, automatically retries with exponential backoff
+```
+
+#### Safety Integration
+
+Enhanced safety integration with better user feedback:
+
+```bash
+# Safety system status reporting
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --enable-safety-system
+# Output: "Safety system enabled. Monitoring for dangerous operations..."
+#         "Blocked 3 file operations outside sandbox"
+#         "Safety report: 5 operations blocked, 2 warnings issued"
+```
+
+### Output Formatting Improvements
+
+#### Rich Console Output
+
+Enhanced console output with better formatting:
+
+```bash
+# Colorized output with better table formatting
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
+# Output includes:
+# - Color-coded success/failure indicators
+# - Progress bars for long operations
+# - Formatted tables with proper alignment
+# - Summary statistics with visual indicators
+```
+
+#### Report Generation
+
+Improved report generation with better organization:
+
+```bash
+# Enhanced report generation
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 20 \
+    --safety-report \
+    --export-safety-data \
+    --output-dir "detailed_reports"
+# Generates:
+# - Comprehensive JSON report with metadata
+# - Human-readable text summary
+# - Safety-specific report with risk analysis
+# - Session metadata and configuration
+```
+
+### Configuration Validation
+
+#### Environment Variable Validation
+
+The CLI validates environment variables and provides helpful messages:
+
+```bash
+# Invalid environment variable detection
+export MCP_FUZZER_TIMEOUT="invalid"
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000
+# Error: Invalid timeout value 'invalid'. Must be a positive number.
+#        Current value: MCP_FUZZER_TIMEOUT=invalid
+#        Suggested fix: export MCP_FUZZER_TIMEOUT=30.0
+```
+
+#### Configuration File Validation
+
+Enhanced configuration file validation:
+
+```bash
+# Configuration file validation
+mcp-fuzzer --mode tools --config invalid_config.yaml
+# Error: Configuration file validation failed:
+#        - Line 5: 'timeout' must be a number, got 'invalid'
+#        - Line 10: 'protocol' must be one of ['http', 'sse', 'stdio', 'streamablehttp']
+#        Suggested fixes:
+#        - Fix timeout value on line 5
+#        - Use valid protocol on line 10
+```
+
+### Performance Monitoring
+
+#### Real-time Performance Metrics
+
+The CLI provides real-time performance monitoring:
+
+```bash
+# Performance monitoring during execution
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 100 --verbose
+# Output includes:
+# - Requests per second
+# - Average response time
+# - Memory usage
+# - CPU usage
+# - Error rate trends
+```
+
+#### Resource Usage Reporting
+
+Enhanced resource usage reporting:
+
+```bash
+# Resource usage summary
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 50
+# Output: "Resource usage summary:"
+#         "  CPU usage: 15.2% average"
+#         "  Memory usage: 45.3 MB peak"
+#         "  Network I/O: 2.1 MB total"
+#         "  Process count: 3 managed"
+```
+
+### Debugging and Troubleshooting
+
+#### Enhanced Debug Output
+
+Improved debug output for troubleshooting:
+
+```bash
+# Debug mode with detailed information
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --log-level DEBUG
+# Output includes:
+# - Detailed request/response logging
+# - Safety system decision logging
+# - Process management events
+# - Performance timing information
+```
+
+#### Diagnostic Information
+
+Built-in diagnostic information for troubleshooting:
+
+```bash
+# System diagnostic information
+mcp-fuzzer --diagnostics
+# Output: "System Diagnostics:"
+#         "  Python version: 3.9.7"
+#         "  Platform: Linux x86_64"
+#         "  Available protocols: http, sse, stdio, streamablehttp"
+#         "  Safety system: available"
+#         "  Network connectivity: OK"
+```
+
+## Additional Export Formats
+
+The MCP Server Fuzzer supports multiple export formats for reports:
+
+### CSV Export
+
+Export fuzzing results to CSV format for analysis in spreadsheet applications:
+
+```bash
+# Export to CSV format
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-csv results.csv
+
+# Export with custom CSV configuration
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
+    --export-csv results.csv \
+    --csv-delimiter "," \
+    --csv-quote-char "\""
+```
+
+CSV output includes:
+- Tool name
+- Run number
+- Success status
+- Response time
+- Exception message (if any)
+- Arguments used
+- Timestamp
+
+### XML Export
+
+Export fuzzing results to XML format for integration with XML-based tools:
+
+```bash
+# Export to XML format
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-xml results.xml
+
+# Export with custom XML configuration
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
+    --export-xml results.xml \
+    --xml-indent 2 \
+    --xml-encoding "utf-8"
+```
+
+### HTML Export
+
+Export results to HTML format for web-based reporting:
+
+```bash
+# Export to HTML format
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-html results.html
+
+# Export with custom HTML template
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
+    --export-html results.html \
+    --html-template custom_template.html \
+    --html-title "Fuzzing Results Report"
+```
+
+### Markdown Export
+
+Export results to Markdown format for documentation:
+
+```bash
+# Export to Markdown format
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-markdown results.md
+
+# Export with custom Markdown configuration
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
+    --export-markdown results.md \
+    --markdown-style github \
+    --markdown-toc true
+```
+
+### Export Format Options
+
+#### CSV Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--csv-delimiter` | "," | Field delimiter |
+| `--csv-quote-char` | "\"" | Quote character |
+| `--csv-escape-char` | "\\" | Escape character |
+| `--csv-line-terminator` | "\\n" | Line terminator |
+
+#### XML Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--xml-indent` | 2 | Indentation spaces |
+| `--xml-encoding` | "utf-8" | Character encoding |
+| `--xml-root-name` | "fuzzing_results" | Root element name |
+| `--xml-attribute-quotes` | "double" | Attribute quote style |
+
+#### HTML Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--html-template` | "default" | HTML template to use |
+| `--html-title` | "Fuzzing Results" | Page title |
+| `--html-css` | "default" | CSS style to apply |
+| `--html-js` | "default" | JavaScript to include |
+
+#### Markdown Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--markdown-style` | "default" | Markdown style (github, gitlab, etc.) |
+| `--markdown-toc` | false | Include table of contents |
+| `--markdown-toc-depth` | 3 | TOC depth |
+| `--markdown-code-style` | "fenced" | Code block style |
+
+### Export Format Comparison
+
+| Format | Use Case | Pros | Cons |
+|--------|----------|------|------|
+| **JSON** | API integration, programmatic analysis | Structured, machine-readable | Verbose, not human-readable |
+| **CSV** | Spreadsheet analysis, data science | Simple, widely supported | Limited structure, no metadata |
+| **XML** | Enterprise integration, complex data | Structured, extensible | Verbose, complex parsing |
+| **HTML** | Web reporting, human-readable | Rich formatting, interactive | Not machine-readable |
+| **Markdown** | Documentation, GitHub integration | Human-readable, version control friendly | Limited formatting |
+| **Text** | Simple reporting, logs | Simple, universal | Limited structure |
+
 ## API Reference
 
 ## Package Layout and Fuzz Engine
