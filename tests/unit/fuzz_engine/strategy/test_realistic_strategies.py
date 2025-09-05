@@ -164,14 +164,16 @@ def test_uuid_strings_different_versions():
 
 
 # Realistic text generation tests
-def test_generate_realistic_text():
+@pytest.mark.asyncio
+async def test_generate_realistic_text():
     """Test generate_realistic_text returns a string."""
-    text = generate_realistic_text()
+    text = await generate_realistic_text()
     assert isinstance(text, str)
     assert len(text) > 0
 
 
-def test_fuzz_tool_arguments_realistic():
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_realistic():
     """Test realistic tool argument generation with various schema types."""
 
     # Test with string type properties
@@ -189,7 +191,7 @@ def test_fuzz_tool_arguments_realistic():
         }
     }
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
 
     # Verify all properties are generated
     assert "name" in result
@@ -228,7 +230,7 @@ def test_fuzz_tool_arguments_realistic():
         }
     }
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
 
     assert isinstance(result["count"], int)
     assert 10 <= result["count"] <= 100
@@ -247,7 +249,7 @@ def test_fuzz_tool_arguments_realistic():
         }
     }
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
 
     assert isinstance(result["tags"], list)
     assert 1 <= len(result["tags"]) <= 3
@@ -263,7 +265,7 @@ def test_fuzz_tool_arguments_realistic():
     # Test with object types
     tool = {"inputSchema": {"properties": {"config": {"type": "object"}}}}
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
 
     assert isinstance(result["config"], dict)
     # The object may be empty or have any properties, we just verify it's a dict
@@ -271,29 +273,32 @@ def test_fuzz_tool_arguments_realistic():
     # Test with unknown types
     tool = {"inputSchema": {"properties": {"unknown_field": {"type": "unknown_type"}}}}
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
     assert "unknown_field" in result
     assert result["unknown_field"] is not None
 
 
-def test_generate_realistic_text_different_sizes():
+@pytest.mark.asyncio
+async def test_generate_realistic_text_different_sizes():
     """Test realistic text generation with different strategies."""
 
     # Test with different size ranges
-    text1 = generate_realistic_text(min_size=5, max_size=10)
+    text1 = await generate_realistic_text(min_size=5, max_size=10)
     # Base64 and UUID strategies may not respect exact size constraints
     # but should generate reasonable text
     assert len(text1) > 0
     assert isinstance(text1, str)
 
-    text2 = generate_realistic_text(min_size=20, max_size=30)
+    text2 = await generate_realistic_text(min_size=20, max_size=30)
     # Different strategies may not respect exact size constraints
     # but should generate reasonable text
     assert len(text2) > 0
     assert isinstance(text2, str)
 
     # Test that it generates different text on multiple calls
-    texts = [generate_realistic_text() for _ in range(5)]
+    import asyncio
+
+    texts = await asyncio.gather(*[generate_realistic_text() for _ in range(5)])
     # At least some should be different (not guaranteed due to randomness)
     assert len(set(texts)) >= 1
 
@@ -379,22 +384,23 @@ def test_timestamp_strings_strategy():
     assert "." not in example  # No microseconds
 
 
-def test_fuzz_tool_arguments_edge_cases():
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_edge_cases():
     """Test edge cases in tool argument generation."""
 
     # Test with empty schema
     tool = {"inputSchema": {}}
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
     assert result == {}
 
     # Test with no properties
     tool = {"inputSchema": {"properties": {}}}
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
     assert result == {}
 
     # Test with required fields but no properties
     tool = {"inputSchema": {"required": ["field1", "field2"]}}
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
     # Required fields should be generated even without properties
     assert "field1" in result
     assert "field2" in result
@@ -403,7 +409,7 @@ def test_fuzz_tool_arguments_edge_cases():
 
     # Test with missing inputSchema
     tool = {}
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
     assert result == {}
 
     # Test with complex nested schema
@@ -417,12 +423,13 @@ def test_fuzz_tool_arguments_edge_cases():
             }
         }
     }
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
     assert "nested" in result
     assert isinstance(result["nested"], dict)
 
 
-def test_fuzz_tool_arguments_with_required_fields():
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_with_required_fields():
     """Test that required fields are always generated."""
 
     tool = {
@@ -436,7 +443,7 @@ def test_fuzz_tool_arguments_with_required_fields():
         }
     }
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
 
     # All fields should be present
     assert "optional_field" in result
@@ -449,18 +456,19 @@ def test_fuzz_tool_arguments_with_required_fields():
 
     # Test multiple calls to ensure consistency
     for _ in range(3):
-        result2 = fuzz_tool_arguments_realistic(tool)
+        result2 = await fuzz_tool_arguments_realistic(tool)
         assert "required_field1" in result2
         assert "required_field2" in result2
 
 
-def test_fuzz_tool_arguments_array_edge_cases():
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_array_edge_cases():
     """Test array generation edge cases."""
 
     # Test array with no items specification
     tool = {"inputSchema": {"properties": {"items": {"type": "array"}}}}
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
     assert "items" in result
     assert isinstance(result["items"], list)
     assert 1 <= len(result["items"]) <= 3
@@ -480,13 +488,14 @@ def test_fuzz_tool_arguments_array_edge_cases():
         }
     }
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
     assert "complex_array" in result
     assert isinstance(result["complex_array"], list)
     assert 1 <= len(result["complex_array"]) <= 3
 
 
-def test_fuzz_tool_arguments_numeric_constraints():
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_numeric_constraints():
     """Test numeric type generation with constraints."""
 
     # Test integer with specific range
@@ -507,7 +516,7 @@ def test_fuzz_tool_arguments_numeric_constraints():
         }
     }
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
 
     assert 1 <= result["small_int"] <= 5
     assert 1000 <= result["large_int"] <= 2000
@@ -530,7 +539,7 @@ def test_fuzz_tool_arguments_numeric_constraints():
         }
     }
 
-    result = fuzz_tool_arguments_realistic(tool)
+    result = await fuzz_tool_arguments_realistic(tool)
 
     assert 0.1 <= result["small_float"] <= 0.9
     assert 100.0 <= result["large_float"] <= 200.0

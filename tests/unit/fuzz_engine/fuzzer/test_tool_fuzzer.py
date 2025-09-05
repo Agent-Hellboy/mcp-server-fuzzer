@@ -69,7 +69,9 @@ class TestToolFuzzer(unittest.TestCase):
         }
 
         # Mock the strategy to raise an exception
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.side_effect = Exception("Test exception")
 
             results = await self.fuzzer.fuzz_tool(tool, runs=2)
@@ -193,7 +195,9 @@ class TestToolFuzzer(unittest.TestCase):
         )
 
         # Mock the strategy to return a simple dict
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.return_value = {
                 "strings": ["test1", "test2"],
                 "numbers": [1, 2, 3],
@@ -319,9 +323,12 @@ class TestToolFuzzer(unittest.TestCase):
         mock_sanitize.side_effect = lambda tool_name, args: (tool_name, args)
 
         # Configure mock to return different args for each call
-        mock_strategies.fuzz_tool_arguments.side_effect = [
-            {"name": f"test_{i}", "count": i, "enabled": i % 2 == 0} for i in range(5)
-        ]
+        mock_strategies.fuzz_tool_arguments = AsyncMock(
+            side_effect=[
+                {"name": f"test_{i}", "count": i, "enabled": i % 2 == 0}
+                for i in range(5)
+            ]
+        )
 
         # Reinitialize fuzzer to use our mock
         self.fuzzer = ToolFuzzer()
@@ -387,7 +394,9 @@ class TestToolFuzzer(unittest.TestCase):
         tool = {"inputSchema": {"properties": {"param1": {"type": "string"}}}}
 
         # Mock the strategy to return a simple dict
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.return_value = {"param1": "test_value"}
 
             results = await self.fuzzer.fuzz_tool(tool, runs=1)
@@ -418,7 +427,9 @@ class TestToolFuzzer(unittest.TestCase):
         }
 
         # Mock the strategy to return a simple dict
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.return_value = {"param1": "test_value"}
 
             results = await self.fuzzer.fuzz_tool(tool, runs=1)
@@ -455,7 +466,9 @@ class TestToolFuzzer(unittest.TestCase):
         }
 
         # Test that the fuzzer properly uses the strategy
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.return_value = {"name": "test_value"}
 
             results = await self.fuzzer.fuzz_tool(tool, runs=1)
