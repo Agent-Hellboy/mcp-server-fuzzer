@@ -46,7 +46,7 @@ def create_transport(
     # Handle custom schemes that urlparse doesn't recognize
     if not scheme and "://" in url_or_protocol:
         # Extract scheme manually for custom transports
-        scheme_part = url_or_protocol.split("://")[0].lower()
+        scheme_part = url_or_protocol.split("://", 1)[0].strip().lower()
         if custom_registry.list_transports().get(scheme_part):
             scheme = scheme_part
 
@@ -94,5 +94,5 @@ def create_transport(
     raise ValueError(
         f"Unsupported URL scheme: {scheme or 'none'}. "
         f"Supported: http, https, sse, stdio, streamablehttp, "
-        f"custom: {', '.join(custom_registry.list_transports().keys())}"
+        f"custom: {', '.join(sorted(custom_registry.list_transports().keys()))}"
     )

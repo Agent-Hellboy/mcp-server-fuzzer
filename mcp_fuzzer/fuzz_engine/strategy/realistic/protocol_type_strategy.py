@@ -52,7 +52,6 @@ def json_rpc_id_values() -> st.SearchStrategy:
         st.none(),
         st.text(min_size=1, max_size=50),
         st.integers(),
-        st.floats(allow_nan=False, allow_infinity=False),
     )
 
 
@@ -161,12 +160,9 @@ def fuzz_list_resources_request_realistic() -> Dict[str, Any]:
 def fuzz_read_resource_request_realistic() -> Dict[str, Any]:
     """Generate realistic ReadResourceRequest for testing valid behavior."""
     uri_options = [
-        "file:///home/user/documents/readme.txt",
-        "file:///etc/hosts",
-        "file:///var/log/application.log",
-        "file:///tmp/session-data.json",
-        "http://localhost:8080/api/data",
-        "https://api.example.com/v1/users",
+        "file:///tmp/mcp-fuzzer/readme.txt",
+        "file:///tmp/mcp-fuzzer/application.log",
+        "file:///tmp/mcp-fuzzer/session-data.json",
     ]
 
     return {
@@ -182,10 +178,8 @@ def fuzz_read_resource_request_realistic() -> Dict[str, Any]:
 def fuzz_subscribe_request_realistic() -> Dict[str, Any]:
     """Generate realistic SubscribeRequest for testing valid behavior."""
     uri_options = [
-        "file:///home/user/documents/",
-        "file:///var/log/",
-        "file:///tmp/notifications/",
-        "http://localhost:8080/api/events",
+        "file:///tmp/mcp-fuzzer/",
+        "file:///tmp/mcp-fuzzer/notifications/",
     ]
 
     return {
@@ -291,7 +285,7 @@ def fuzz_complete_request_realistic() -> Dict[str, Any]:
     """Generate realistic CompleteRequest for testing valid behavior."""
     ref_options = [
         {"type": "ref/prompt", "name": "code-review"},
-        {"type": "ref/resource", "uri": "file:///home/user/docs/"},
+        {"type": "ref/resource", "uri": "file:///tmp/mcp-fuzzer/docs/"},
         {"type": "ref/function", "name": "analyze_code"},
     ]
 
