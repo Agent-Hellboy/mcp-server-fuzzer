@@ -187,7 +187,6 @@ class TestCustomTransportLifecycle:
                 return {"tools": [{"name": "integration_tool"}]}
             return await original_send_request(method, params)
 
-        original_send_request = transport.send_request
         transport.send_request = mock_tools_request
         try:
             tools = await transport.get_tools()
