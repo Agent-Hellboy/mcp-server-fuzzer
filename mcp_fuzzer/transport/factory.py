@@ -43,6 +43,13 @@ def create_transport(
     parsed = urlparse(url_or_protocol)
     scheme = (parsed.scheme or "").lower()
 
+    # Handle custom schemes that urlparse doesn't recognize
+    if not scheme and "://" in url_or_protocol:
+        # Extract scheme manually for custom transports
+        scheme_part = url_or_protocol.split("://")[0].lower()
+        if custom_registry.list_transports().get(scheme_part):
+            scheme = scheme_part
+
     # Check for custom transport schemes first
     if scheme:
         try:
