@@ -123,6 +123,13 @@ class TransportProtocol(ABC):
                 else:
                     # Request - response expected
                     response = await self.send_raw(request)
+                    # Normalize to dict
+                    if not isinstance(response, dict):
+                        response = {"result": response}
+                    # Ensure ID is present for collation
+                    req_id = request.get("id")
+                    if req_id is not None and "id" not in response:
+                        response["id"] = req_id
                     responses.append(response)
             except Exception as e:
                 logging.warning(f"Failed to send batch request: {e}")

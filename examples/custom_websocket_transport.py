@@ -144,27 +144,27 @@ class WebSocketTransport(TransportProtocol):
             }
 
             try:
-                logger.debug(f"Sending WebSocket request: {method}")
+                logger.debug(f"Sending WebSocket request: {method} (id={request_id})")
                 await asyncio.wait_for(
                     self.websocket.send(json.dumps(payload)),
                     timeout=self.timeout
                 )
 
-                # Wait for response
-                response_text = await asyncio.wait_for(
-                    self.websocket.recv(),
-                    timeout=self.timeout
-                )
-
-                response = json.loads(response_text)
-                logger.debug(f"Received WebSocket response for {method}")
-
-                if "error" in response:
-                    error_msg = f"Server error: {response['error']}"
-                    logger.error(error_msg)
-                    raise Exception(error_msg)
-
-                return response
+                # Receive until matching id; ignore notifications and unrelated messages
+                while True:
+                    response_text = await asyncio.wait_for(
+                        self.websocket.recv(),
+                        timeout=self.timeout
+                    )
+                    response = json.loads(response_text)
+                    if isinstance(response, dict) and response.get("id") == request_id:
+                        logger.debug(f"Received WebSocket response for {method} (id={request_id})")
+                        if "error" in response:
+                            error_msg = f"Server error: {response['error']}"
+                            logger.error(error_msg)
+                            raise Exception(error_msg)
+                        return response
+                    logger.debug("Ignoring out-of-band WebSocket message: %s", response)
 
             except asyncio.TimeoutError:
                 logger.error(f"WebSocket request timeout for method: {method}")
@@ -197,12 +197,21 @@ class WebSocketTransport(TransportProtocol):
                     timeout=self.timeout
                 )
 
-                response_text = await asyncio.wait_for(
-                    self.websocket.recv(),
-                    timeout=self.timeout
-                )
+                # If this is a notification (no id), do not wait for a response
+                req_id = payload.get("id") if isinstance(payload, dict) else None
+                if req_id is None:
+                    return {}
 
-                return json.loads(response_text)
+                # Otherwise, wait for the matching response
+                while True:
+                    response_text = await asyncio.wait_for(
+                        self.websocket.recv(),
+                        timeout=self.timeout
+                    )
+                    response = json.loads(response_text)
+                    if isinstance(response, dict) and response.get("id") == req_id:
+                        return response
+                    logger.debug("Ignoring out-of-band WebSocket message: %s", response)
 
             except Exception as e:
                 logger.error(f"Raw WebSocket send failed: {e}")
@@ -267,7 +276,11 @@ class WebSocketTransport(TransportProtocol):
                             timeout=self.timeout
                         )
                         response = json.loads(response_text)
-                        yield response
+                        req_id = payload.get("id") if isinstance(payload, dict) else None
+                        if req_id is None or (isinstance(response, dict) and response.get("id") == req_id):
+                            yield response
+                        else:
+                            logger.debug("Ignoring out-of-band WebSocket message during stream: %s", response)
                     except asyncio.TimeoutError:
                         logger.debug("WebSocket stream timeout")
                         break

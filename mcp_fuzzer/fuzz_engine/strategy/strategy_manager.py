@@ -25,7 +25,7 @@ from .realistic import (
 from .aggressive import (
     fuzz_tool_arguments_aggressive,
     fuzz_initialize_request_aggressive,
-    get_protocol_fuzzer_method,
+    get_protocol_fuzzer_method as get_aggressive_fuzzer_method,
 )
 
 
@@ -43,39 +43,39 @@ class ProtocolStrategies:
         },
         "ListResourcesRequest": {
             "realistic": fuzz_list_resources_request_realistic,
-            "aggressive": lambda: get_protocol_fuzzer_method("ListResourcesRequest")(),
+            "aggressive": get_aggressive_fuzzer_method("ListResourcesRequest"),
         },
         "ReadResourceRequest": {
             "realistic": fuzz_read_resource_request_realistic,
-            "aggressive": lambda: get_protocol_fuzzer_method("ReadResourceRequest")(),
+            "aggressive": get_aggressive_fuzzer_method("ReadResourceRequest"),
         },
         "SubscribeRequest": {
             "realistic": fuzz_subscribe_request_realistic,
-            "aggressive": lambda: get_protocol_fuzzer_method("SubscribeRequest")(),
+            "aggressive": get_aggressive_fuzzer_method("SubscribeRequest"),
         },
         "UnsubscribeRequest": {
             "realistic": fuzz_unsubscribe_request_realistic,
-            "aggressive": lambda: get_protocol_fuzzer_method("UnsubscribeRequest")(),
+            "aggressive": get_aggressive_fuzzer_method("UnsubscribeRequest"),
         },
         "ListPromptsRequest": {
             "realistic": fuzz_list_prompts_request_realistic,
-            "aggressive": lambda: get_protocol_fuzzer_method("ListPromptsRequest")(),
+            "aggressive": get_aggressive_fuzzer_method("ListPromptsRequest"),
         },
         "GetPromptRequest": {
             "realistic": fuzz_get_prompt_request_realistic,
-            "aggressive": lambda: get_protocol_fuzzer_method("GetPromptRequest")(),
+            "aggressive": get_aggressive_fuzzer_method("GetPromptRequest"),
         },
         "ListRootsRequest": {
             "realistic": fuzz_list_roots_request_realistic,
-            "aggressive": lambda: get_protocol_fuzzer_method("ListRootsRequest")(),
+            "aggressive": get_aggressive_fuzzer_method("ListRootsRequest"),
         },
         "SetLevelRequest": {
             "realistic": fuzz_set_level_request_realistic,
-            "aggressive": lambda: get_protocol_fuzzer_method("SetLevelRequest")(),
+            "aggressive": get_aggressive_fuzzer_method("SetLevelRequest"),
         },
         "CompleteRequest": {
             "realistic": fuzz_complete_request_realistic,
-            "aggressive": lambda: get_protocol_fuzzer_method("CompleteRequest")(),
+            "aggressive": get_aggressive_fuzzer_method("CompleteRequest"),
         },
     }
 
@@ -100,7 +100,7 @@ class ProtocolStrategies:
                 return strategy_config[phase]
 
         # Fallback to aggressive strategies for any remaining protocol types
-        return get_protocol_fuzzer_method(protocol_type)
+        return get_aggressive_fuzzer_method(protocol_type)
 
     @staticmethod
     def generate_batch_request(

@@ -14,6 +14,7 @@ import yaml
 from .config import config
 from .exceptions import ConfigFileError
 from .transport.custom import register_custom_transport
+from .transport.base import TransportProtocol
 import importlib
 
 logger = logging.getLogger(__name__)
@@ -295,6 +296,12 @@ def load_custom_transports(config_data: Dict[str, Any]) -> None:
 
             module = importlib.import_module(module_path)
             transport_class = getattr(module, class_name)
+            if not isinstance(transport_class, type):
+                raise ConfigFileError(f"{module_path}.{class_name} is not a class")
+            if not issubclass(transport_class, TransportProtocol):
+                raise ConfigFileError(
+                    f"{module_path}.{class_name} must subclass TransportProtocol"
+                )
 
             # Register the transport
             description = transport_config.get("description", "")
@@ -310,6 +317,8 @@ def load_custom_transports(config_data: Dict[str, Any]) -> None:
                     ) from ve
                 fmod = importlib.import_module(mod_path)
                 factory_fn = getattr(fmod, attr)
+                if not callable(factory_fn):
+                    raise ConfigFileError(f"Factory '{factory_path}' is not callable")
 
             register_custom_transport(
                 name=transport_name,

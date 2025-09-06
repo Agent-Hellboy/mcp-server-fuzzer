@@ -13,6 +13,32 @@ from hypothesis import strategies as st
 from ....config import DEFAULT_PROTOCOL_VERSION
 
 
+# Helper to keep URIs local-only
+SAFE_FILE_URIS = [
+    "file:///tmp/mcp-fuzzer/",
+    "file:///tmp/mcp-fuzzer/notifications/",
+    "file:///tmp/mcp-fuzzer/readme.txt",
+    "file:///tmp/mcp-fuzzer/application.log",
+    "file:///tmp/mcp-fuzzer/session-data.json",
+    "file:///tmp/mcp-fuzzer/docs/",
+]
+
+
+def pick_safe_uri(prefix_only: bool = False) -> str:
+    """Pick a safe local URI for fuzzing.
+
+    Args:
+        prefix_only: If True, only return directory URIs (ending with /)
+
+    Returns:
+        A safe file:// URI under /tmp/mcp-fuzzer/
+    """
+    candidates = [
+        u for u in SAFE_FILE_URIS if (u.endswith("/") if prefix_only else True)
+    ]
+    return random.choice(candidates)
+
+
 def protocol_version_strings() -> st.SearchStrategy[str]:
     """
     Generate realistic protocol version strings.
@@ -159,52 +185,36 @@ def fuzz_list_resources_request_realistic() -> Dict[str, Any]:
 
 def fuzz_read_resource_request_realistic() -> Dict[str, Any]:
     """Generate realistic ReadResourceRequest for testing valid behavior."""
-    uri_options = [
-        "file:///tmp/mcp-fuzzer/readme.txt",
-        "file:///tmp/mcp-fuzzer/application.log",
-        "file:///tmp/mcp-fuzzer/session-data.json",
-    ]
-
     return {
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
         "method": "resources/read",
         "params": {
-            "uri": random.choice(uri_options),
+            "uri": pick_safe_uri(),
         },
     }
 
 
 def fuzz_subscribe_request_realistic() -> Dict[str, Any]:
     """Generate realistic SubscribeRequest for testing valid behavior."""
-    uri_options = [
-        "file:///tmp/mcp-fuzzer/",
-        "file:///tmp/mcp-fuzzer/notifications/",
-    ]
-
     return {
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
         "method": "resources/subscribe",
         "params": {
-            "uri": random.choice(uri_options),
+            "uri": pick_safe_uri(prefix_only=True),
         },
     }
 
 
 def fuzz_unsubscribe_request_realistic() -> Dict[str, Any]:
     """Generate realistic UnsubscribeRequest for testing valid behavior."""
-    uri_options = [
-        "file:///tmp/mcp-fuzzer/",
-        "file:///tmp/mcp-fuzzer/notifications/",
-    ]
-
     return {
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
         "method": "resources/unsubscribe",
         "params": {
-            "uri": random.choice(uri_options),
+            "uri": pick_safe_uri(prefix_only=True),
         },
     }
 
@@ -295,7 +305,7 @@ def fuzz_complete_request_realistic() -> Dict[str, Any]:
     """Generate realistic CompleteRequest for testing valid behavior."""
     ref_options = [
         {"type": "ref/prompt", "name": "code-review"},
-        {"type": "ref/resource", "uri": "file:///tmp/mcp-fuzzer/docs/"},
+        {"type": "ref/resource", "uri": pick_safe_uri(prefix_only=True)},
         {"type": "ref/function", "name": "analyze_code"},
     ]
 
