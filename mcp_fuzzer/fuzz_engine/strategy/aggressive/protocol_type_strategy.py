@@ -192,6 +192,8 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                                     "",
                                     [],
                                     generate_malicious_string(),
+                                    random.randint(-1000, 1000),  # Add numeric values
+                                    random.choice([True, False]),  # Add booleans
                                     {
                                         "customCapability": generate_malicious_value(),
                                         "extendedFeature": {
@@ -208,6 +210,9 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                                             "xss": random.choice(XSS_PAYLOADS),
                                         }
                                     },
+                                    # Add arrays and nested objects for more variety
+                                    ["item1", "item2", generate_malicious_value()],
+                                    {"nested": {"key": generate_malicious_value()}},
                                 ]
                             )
                         },
@@ -538,6 +543,348 @@ def fuzz_ping_request() -> Dict[str, Any]:
     }
 
 
+# Result schemas for fuzzing
+def fuzz_initialize_result() -> Dict[str, Any]:
+    """Fuzz InitializeResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "protocolVersion": generate_malicious_string(),
+            "capabilities": generate_malicious_value(),
+            "serverInfo": generate_malicious_value(),
+            "instructions": generate_malicious_string(),
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_list_resources_result() -> Dict[str, Any]:
+    """Fuzz ListResourcesResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "resources": [
+                generate_malicious_value()
+                for _ in range(random.randint(0, 10))
+            ],
+            "nextCursor": generate_malicious_string(),
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_list_resource_templates_result() -> Dict[str, Any]:
+    """Fuzz ListResourceTemplatesResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "resourceTemplates": [
+                generate_malicious_value()
+                for _ in range(random.randint(0, 10))
+            ],
+            "nextCursor": generate_malicious_string(),
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_read_resource_result() -> Dict[str, Any]:
+    """Fuzz ReadResourceResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "contents": [
+                generate_malicious_value()
+                for _ in range(random.randint(0, 5))
+            ],
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_list_prompts_result() -> Dict[str, Any]:
+    """Fuzz ListPromptsResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "prompts": [
+                generate_malicious_value()
+                for _ in range(random.randint(0, 10))
+            ],
+            "nextCursor": generate_malicious_string(),
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_get_prompt_result() -> Dict[str, Any]:
+    """Fuzz GetPromptResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "description": generate_malicious_string(),
+            "messages": [
+                generate_malicious_value()
+                for _ in range(random.randint(0, 5))
+            ],
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_list_tools_result() -> Dict[str, Any]:
+    """Fuzz ListToolsResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "tools": [generate_malicious_value() for _ in range(random.randint(0, 10))],
+            "nextCursor": generate_malicious_string(),
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_complete_result() -> Dict[str, Any]:
+    """Fuzz CompleteResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "completion": {
+                "values": [
+                    generate_malicious_string()
+                    for _ in range(random.randint(0, 5))
+                ],
+                "total": generate_malicious_value(),
+                "hasMore": generate_malicious_value(),
+            },
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_create_message_result() -> Dict[str, Any]:
+    """Fuzz CreateMessageResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "content": generate_malicious_value(),
+            "model": generate_malicious_string(),
+            "stopReason": generate_malicious_string(),
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_list_roots_result() -> Dict[str, Any]:
+    """Fuzz ListRootsResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "roots": [generate_malicious_value() for _ in range(random.randint(0, 5))],
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_ping_result() -> Dict[str, Any]:
+    """Fuzz PingResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": generate_malicious_value(),
+    }
+
+
+def fuzz_elicit_result() -> Dict[str, Any]:
+    """Fuzz ElicitResult with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "result": {
+            "content": [
+                generate_malicious_value()
+                for _ in range(random.randint(0, 5))
+            ],
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+# Notification schemas for fuzzing
+def fuzz_logging_message_notification() -> Dict[str, Any]:
+    """Fuzz LoggingMessageNotification with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "method": "notifications/message",
+        "params": {
+            "level": generate_malicious_value(),
+            "logger": generate_malicious_string(),
+            "data": generate_malicious_value(),
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_resource_list_changed_notification() -> Dict[str, Any]:
+    """Fuzz ResourceListChangedNotification with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "method": "notifications/resources/list_changed",
+        "params": {
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_resource_updated_notification() -> Dict[str, Any]:
+    """Fuzz ResourceUpdatedNotification with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "method": "notifications/resources/updated",
+        "params": {
+            "uri": generate_malicious_string(),
+        },
+    }
+
+
+def fuzz_prompt_list_changed_notification() -> Dict[str, Any]:
+    """Fuzz PromptListChangedNotification with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "method": "notifications/prompts/list_changed",
+        "params": {
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_tool_list_changed_notification() -> Dict[str, Any]:
+    """Fuzz ToolListChangedNotification with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "method": "notifications/tools/list_changed",
+        "params": {
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_roots_list_changed_notification() -> Dict[str, Any]:
+    """Fuzz RootsListChangedNotification with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "method": "notifications/roots/list_changed",
+        "params": {
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+# Content block schemas for fuzzing
+def fuzz_text_content() -> Dict[str, Any]:
+    """Fuzz TextContent with edge cases."""
+    return {
+        "type": "text",
+        "text": generate_malicious_string(),
+        "_meta": generate_malicious_value(),
+        "annotations": generate_malicious_value(),
+    }
+
+
+def fuzz_image_content() -> Dict[str, Any]:
+    """Fuzz ImageContent with edge cases."""
+    return {
+        "type": "image",
+        "data": generate_malicious_string(),
+        "mimeType": generate_malicious_string(),
+        "_meta": generate_malicious_value(),
+        "annotations": generate_malicious_value(),
+    }
+
+
+def fuzz_audio_content() -> Dict[str, Any]:
+    """Fuzz AudioContent with edge cases."""
+    return {
+        "type": "audio",
+        "data": generate_malicious_string(),
+        "mimeType": generate_malicious_string(),
+        "_meta": generate_malicious_value(),
+        "annotations": generate_malicious_value(),
+    }
+
+
+# Resource schemas for fuzzing
+def fuzz_resource() -> Dict[str, Any]:
+    """Fuzz Resource with edge cases."""
+    return {
+        "name": generate_malicious_string(),
+        "uri": generate_malicious_string(),
+        "description": generate_malicious_string(),
+        "mimeType": generate_malicious_string(),
+        "size": generate_malicious_value(),
+        "title": generate_malicious_string(),
+        "_meta": generate_malicious_value(),
+        "annotations": generate_malicious_value(),
+    }
+
+
+def fuzz_resource_template() -> Dict[str, Any]:
+    """Fuzz ResourceTemplate with edge cases."""
+    return {
+        "name": generate_malicious_string(),
+        "uriTemplate": generate_malicious_string(),
+        "description": generate_malicious_string(),
+        "mimeType": generate_malicious_string(),
+        "title": generate_malicious_string(),
+        "_meta": generate_malicious_value(),
+        "annotations": generate_malicious_value(),
+    }
+
+
+def fuzz_text_resource_contents() -> Dict[str, Any]:
+    """Fuzz TextResourceContents with edge cases."""
+    return {
+        "uri": generate_malicious_string(),
+        "mimeType": generate_malicious_string(),
+        "text": generate_malicious_string(),
+        "_meta": generate_malicious_value(),
+    }
+
+
+def fuzz_blob_resource_contents() -> Dict[str, Any]:
+    """Fuzz BlobResourceContents with edge cases."""
+    return {
+        "uri": generate_malicious_string(),
+        "mimeType": generate_malicious_string(),
+        "blob": generate_malicious_string(),
+        "_meta": generate_malicious_value(),
+    }
+
+
+# Tool schemas for fuzzing
+def fuzz_tool() -> Dict[str, Any]:
+    """Fuzz Tool with edge cases."""
+    return {
+        "name": generate_malicious_string(),
+        "description": generate_malicious_string(),
+        "inputSchema": generate_malicious_value(),
+        "outputSchema": generate_malicious_value(),
+        "title": generate_malicious_string(),
+        "_meta": generate_malicious_value(),
+        "annotations": generate_malicious_value(),
+    }
+
+
 def get_protocol_fuzzer_method(protocol_type: str):
     """Get the fuzzer method for a specific protocol type."""
     fuzzer_methods = {
@@ -560,6 +907,37 @@ def get_protocol_fuzzer_method(protocol_type: str):
         "ListResourceTemplatesRequest": fuzz_list_resource_templates_request,
         "ElicitRequest": fuzz_elicit_request,
         "PingRequest": fuzz_ping_request,
+        # Result schemas
+        "InitializeResult": fuzz_initialize_result,
+        "ListResourcesResult": fuzz_list_resources_result,
+        "ListResourceTemplatesResult": fuzz_list_resource_templates_result,
+        "ReadResourceResult": fuzz_read_resource_result,
+        "ListPromptsResult": fuzz_list_prompts_result,
+        "GetPromptResult": fuzz_get_prompt_result,
+        "ListToolsResult": fuzz_list_tools_result,
+        "CompleteResult": fuzz_complete_result,
+        "CreateMessageResult": fuzz_create_message_result,
+        "ListRootsResult": fuzz_list_roots_result,
+        "PingResult": fuzz_ping_result,
+        "ElicitResult": fuzz_elicit_result,
+        # Notification schemas
+        "LoggingMessageNotification": fuzz_logging_message_notification,
+        "ResourceListChangedNotification": fuzz_resource_list_changed_notification,
+        "ResourceUpdatedNotification": fuzz_resource_updated_notification,
+        "PromptListChangedNotification": fuzz_prompt_list_changed_notification,
+        "ToolListChangedNotification": fuzz_tool_list_changed_notification,
+        "RootsListChangedNotification": fuzz_roots_list_changed_notification,
+        # Content block schemas
+        "TextContent": fuzz_text_content,
+        "ImageContent": fuzz_image_content,
+        "AudioContent": fuzz_audio_content,
+        # Resource schemas
+        "Resource": fuzz_resource,
+        "ResourceTemplate": fuzz_resource_template,
+        "TextResourceContents": fuzz_text_resource_contents,
+        "BlobResourceContents": fuzz_blob_resource_contents,
+        # Tool schemas
+        "Tool": fuzz_tool,
     }
 
     return fuzzer_methods.get(protocol_type)

@@ -42,6 +42,61 @@ def run_cli() -> None:
         args = _parse()
         _validate(args)
         _setup(args)
+
+        # Handle special CLI flags that exit early
+        if getattr(args, 'validate_config', None):
+            from ..config_loader import load_config_file
+            try:
+                load_config_file(args.validate_config)
+                console = Console()
+                config_file = args.validate_config
+                console.print(
+                    f"[green]✓ Configuration file '{config_file}' is valid[/green]"
+                )
+                sys.exit(0)
+            except Exception as e:
+                console = Console()
+                console.print(f"[red]✗ Configuration validation failed: {e}[/red]")
+                sys.exit(1)
+
+        if getattr(args, 'check_env', False):
+            # Check environment variables
+            console = Console()
+            console.print("[bold]Environment variables check:[/bold]")
+
+            env_vars = [
+                ('MCP_FUZZER_TIMEOUT', '30.0'),
+                ('MCP_FUZZER_LOG_LEVEL', 'INFO'),
+                ('MCP_FUZZER_SAFETY_ENABLED', 'false'),
+                ('MCP_FUZZER_FS_ROOT', '~/.mcp_fuzzer'),
+                ('MCP_FUZZER_AUTO_KILL', 'true'),
+            ]
+
+            all_valid = True
+            for var_name, default in env_vars:
+                value = os.getenv(var_name, default)
+                if var_name == 'MCP_FUZZER_LOG_LEVEL':
+                    valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+                    if value.upper() not in valid_levels:
+                        valid_list = ', '.join(valid_levels)
+                        console.print(
+                            f"[red]✗ {var_name}={value} (must be one of: "
+                            f"{valid_list})[/red]"
+                        )
+                        all_valid = False
+                    else:
+                        console.print(f"[green]✓ {var_name}={value}[/green]")
+                else:
+                    console.print(f"[green]✓ {var_name}={value}[/green]")
+
+            if all_valid:
+                console.print("[green]All environment variables are valid[/green]")
+            else:
+                console.print(
+                    "[red]Some environment variables have invalid values[/red]"
+                )
+                sys.exit(1)
+            sys.exit(0)
         _build = (
             getattr(
                 cli_module,

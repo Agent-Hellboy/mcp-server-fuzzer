@@ -14,7 +14,15 @@ from typing import Any, Dict, List
 
 from rich.console import Console
 
-from .formatters import ConsoleFormatter, JSONFormatter, TextFormatter
+from .formatters import (
+    ConsoleFormatter,
+    JSONFormatter,
+    TextFormatter,
+    CSVFormatter,
+    XMLFormatter,
+    HTMLFormatter,
+    MarkdownFormatter,
+)
 from .safety_reporter import SafetyReporter
 
 
@@ -30,6 +38,10 @@ class FuzzerReporter:
         self.console_formatter = ConsoleFormatter(self.console)
         self.json_formatter = JSONFormatter()
         self.text_formatter = TextFormatter()
+        self.csv_formatter = CSVFormatter()
+        self.xml_formatter = XMLFormatter()
+        self.html_formatter = HTMLFormatter()
+        self.markdown_formatter = MarkdownFormatter()
 
         # Initialize safety reporter
         self.safety_reporter = SafetyReporter()
@@ -250,6 +262,40 @@ class FuzzerReporter:
             self.console.print("\n[bold]Fuzzing Session:[/bold]")
             for key, value in status["metadata"].items():
                 self.console.print(f"  {key}: {value}")
+
+    def export_csv(self, filename: str):
+        """Export report data to CSV format."""
+        report_data = self._get_report_data()
+        self.csv_formatter.save_csv_report(report_data, filename)
+
+    def export_xml(self, filename: str):
+        """Export report data to XML format."""
+        report_data = self._get_report_data()
+        self.xml_formatter.save_xml_report(report_data, filename)
+
+    def export_html(self, filename: str, title: str = "Fuzzing Results Report"):
+        """Export report data to HTML format."""
+        report_data = self._get_report_data()
+        self.html_formatter.save_html_report(report_data, filename, title)
+
+    def export_markdown(self, filename: str):
+        """Export report data to Markdown format."""
+        report_data = self._get_report_data()
+        self.markdown_formatter.save_markdown_report(report_data, filename)
+
+    def _get_report_data(self) -> Dict[str, Any]:
+        """Get complete report data for export."""
+        return {
+            "metadata": self.fuzzing_metadata,
+            "tool_results": self.tool_results,
+            "protocol_results": self.protocol_results,
+            "summary": self._generate_summary_stats(),
+            "safety": (
+                self.safety_reporter.get_comprehensive_safety_data()
+                if self.safety_data
+                else {}
+            ),
+        }
 
     def cleanup(self):
         """Clean up reporter resources."""

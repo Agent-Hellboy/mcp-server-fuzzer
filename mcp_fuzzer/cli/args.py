@@ -217,6 +217,42 @@ Examples:
         ),
     )
 
+    parser.add_argument(
+        "--validate-config",
+        metavar="CONFIG_FILE",
+        help="Validate configuration file and exit",
+    )
+
+    parser.add_argument(
+        "--check-env",
+        action="store_true",
+        help="Check environment variables and exit",
+    )
+
+    parser.add_argument(
+        "--export-csv",
+        metavar="FILENAME",
+        help="Export fuzzing results to CSV format",
+    )
+
+    parser.add_argument(
+        "--export-xml",
+        metavar="FILENAME",
+        help="Export fuzzing results to XML format",
+    )
+
+    parser.add_argument(
+        "--export-html",
+        metavar="FILENAME",
+        help="Export fuzzing results to HTML format",
+    )
+
+    parser.add_argument(
+        "--export-markdown",
+        metavar="FILENAME",
+        help="Export fuzzing results to Markdown format",
+    )
+
     return parser
 
 
@@ -382,6 +418,12 @@ def get_cli_config() -> Dict[str, Any]:
             "log_level": getattr(args, "log_level", None),
             "no_network": getattr(args, "no_network", False),
             "allow_hosts": getattr(args, "allow_hosts", None),
+            "validate_config": getattr(args, "validate_config", None),
+            "check_env": getattr(args, "check_env", False),
+            "export_csv": getattr(args, "export_csv", None),
+            "export_xml": getattr(args, "export_xml", None),
+            "export_html": getattr(args, "export_html", None),
+            "export_markdown": getattr(args, "export_markdown", None),
         }
     )
 

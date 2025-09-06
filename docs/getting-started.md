@@ -71,12 +71,33 @@ mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --ru
 Results are displayed in beautiful, colorized tables showing:
 
 - **Success Rate**: Percentage of successful operations
-
 - **Exception Count**: Number of errors encountered
-
 - **Example Exceptions**: Sample error messages for debugging
-
 - **Overall Statistics**: Summary across all tools/protocols
+- **Safety Data**: Blocked operations and risk assessments (when enabled)
+
+### 4. Generate Reports
+
+The MCP Fuzzer automatically generates comprehensive reports for each fuzzing session:
+
+```bash
+# Generate reports in default 'reports' directory
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10
+
+# Specify custom output directory
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --output-dir "my_reports"
+
+# Generate comprehensive safety report
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --safety-report
+
+# Export safety data to JSON
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --export-safety-data
+```
+
+Each fuzzing session creates timestamped reports:
+- **`fuzzing_report_YYYYMMDD_HHMMSS.json`** - Complete structured data for analysis
+- **`fuzzing_report_YYYYMMDD_HHMMSS.txt`** - Human-readable summary for sharing
+- **`safety_report_YYYYMMDD_HHMMSS.json`** - Detailed safety system data (if enabled)
 
 ## Configuration
 

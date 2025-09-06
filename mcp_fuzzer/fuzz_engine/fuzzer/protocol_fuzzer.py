@@ -45,6 +45,37 @@ class ProtocolFuzzer:
         "ListResourceTemplatesRequest",
         "ElicitRequest",
         "PingRequest",
+        # Result schemas
+        "InitializeResult",
+        "ListResourcesResult",
+        "ListResourceTemplatesResult",
+        "ReadResourceResult",
+        "ListPromptsResult",
+        "GetPromptResult",
+        "ListToolsResult",
+        "CompleteResult",
+        "CreateMessageResult",
+        "ListRootsResult",
+        "PingResult",
+        "ElicitResult",
+        # Notification schemas
+        "LoggingMessageNotification",
+        "ResourceListChangedNotification",
+        "ResourceUpdatedNotification",
+        "PromptListChangedNotification",
+        "ToolListChangedNotification",
+        "RootsListChangedNotification",
+        # Content block schemas
+        "TextContent",
+        "ImageContent",
+        "AudioContent",
+        # Resource schemas
+        "Resource",
+        "ResourceTemplate",
+        "TextResourceContents",
+        "BlobResourceContents",
+        # Tool schemas
+        "Tool",
     )
     # Seconds to wait for invariant validation of batch responses
     BATCH_VALIDATION_TIMEOUT: ClassVar[float] = 5.0
