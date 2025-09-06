@@ -28,7 +28,6 @@ global:
 safety:
   enabled: true
   fs_root: "~/.mcp_fuzzer"
-  auto_kill: true
   retry_with_safety_on_interrupt: false
 
 # Runtime configuration
@@ -143,7 +142,6 @@ output_dir = "reports"
 [safety]
 enabled = true
 fs_root = "~/.mcp_fuzzer"
-auto_kill = true
 retry_with_safety_on_interrupt = false
 
 # Runtime configuration
@@ -540,7 +538,7 @@ servers:
 
 ```yaml
 # Base configuration
-base_server:
+base_server: &base_server
   timeout: 30.0
   phase: realistic
   safety:

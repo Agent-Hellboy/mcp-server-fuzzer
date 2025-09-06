@@ -681,9 +681,8 @@ async def custom_executor_configuration():
 
         # CPU-bound operations
         async def cpu_operation():
-            # Simulate CPU work
-            sum(range(1000000))
-            return "cpu_result"
+            # Simulate CPU work off the event loop
+            return await asyncio.to_thread(lambda: (sum(range(1_000_000)), "cpu_result"))[1]
 
         # Execute with appropriate executor
         io_results = await io_executor.execute_batch([
@@ -736,7 +735,9 @@ def analyze_fuzzing_report(report_path):
     metadata = report['metadata']
     print(f"Session: {metadata['session_id']}")
     print(f"Mode: {metadata['mode']}")
-    print(f"Duration: {metadata['end_time'] - metadata['start_time']}")
+    start = datetime.fromisoformat(metadata['start_time'])
+    end = datetime.fromisoformat(metadata['end_time'])
+    print(f"Duration: {end - start}")
 
     # Analyze tool results
     tool_results = report.get('tool_results', {})
@@ -763,6 +764,7 @@ analyze_fuzzing_report("reports/fuzzing_report_20250812_143000.json")
 #### Safety Report Analysis
 
 ```python
+import json
 def analyze_safety_report(safety_report_path):
     with open(safety_report_path, 'r') as f:
         safety_report = json.load(f)
@@ -852,6 +854,7 @@ async def custom_report_generation():
 #### Report Comparison
 
 ```python
+import json
 def compare_reports(report1_path, report2_path):
     with open(report1_path, 'r') as f:
         report1 = json.load(f)
@@ -870,7 +873,7 @@ def compare_reports(report1_path, report2_path):
             total_success += success_count
             total_runs += len(results)
 
-        return (total_success / total_runs * 100) if total_runs > 0 else 0
+        return (total_success / total_runs * 100.0) if total_runs else 0.0
 
     rate1 = get_success_rate(report1)
     rate2 = get_success_rate(report2)
