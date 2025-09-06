@@ -253,6 +253,56 @@ Examples:
         help="Export fuzzing results to Markdown format",
     )
 
+    # Performance and monitoring configuration
+    parser.add_argument(
+        "--watchdog-check-interval",
+        type=float,
+        default=1.0,
+        help="How often to check processes for hanging (seconds, default: 1.0)",
+    )
+
+    parser.add_argument(
+        "--watchdog-process-timeout",
+        type=float,
+        default=30.0,
+        help="Time before process is considered hanging (seconds, default: 30.0)",
+    )
+
+    parser.add_argument(
+        "--watchdog-extra-buffer",
+        type=float,
+        default=5.0,
+        help="Extra time before auto-kill (seconds, default: 5.0)",
+    )
+
+    parser.add_argument(
+        "--watchdog-max-hang-time",
+        type=float,
+        default=60.0,
+        help="Maximum time before force kill (seconds, default: 60.0)",
+    )
+
+    parser.add_argument(
+        "--process-max-concurrency",
+        type=int,
+        default=5,
+        help="Maximum concurrent operations (default: 5)",
+    )
+
+    parser.add_argument(
+        "--process-retry-count",
+        type=int,
+        default=1,
+        help="Number of retries for failed operations (default: 1)",
+    )
+
+    parser.add_argument(
+        "--process-retry-delay",
+        type=float,
+        default=1.0,
+        help="Delay between retries (seconds, default: 1.0)",
+    )
+
     return parser
 
 
@@ -266,10 +316,21 @@ def setup_logging(args: argparse.Namespace) -> None:
         level = getattr(logging, args.log_level)
     else:
         level = logging.INFO if getattr(args, "verbose", False) else logging.WARNING
+
+    # Configure efficient logging with buffering
     logging.basicConfig(
         level=level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        force=True,  # Override any existing configuration
     )
+
+    # Optimize logging for performance
+    logging.getLogger().setLevel(level)
+
+    # Reduce logging from noisy modules
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("psutil").setLevel(logging.WARNING)
 
 
 def build_unified_client_args(args: argparse.Namespace) -> Dict[str, Any]:
@@ -424,6 +485,13 @@ def get_cli_config() -> Dict[str, Any]:
             "export_xml": getattr(args, "export_xml", None),
             "export_html": getattr(args, "export_html", None),
             "export_markdown": getattr(args, "export_markdown", None),
+            "watchdog_check_interval": getattr(args, "watchdog_check_interval", 1.0),
+            "watchdog_process_timeout": getattr(args, "watchdog_process_timeout", 30.0),
+            "watchdog_extra_buffer": getattr(args, "watchdog_extra_buffer", 5.0),
+            "watchdog_max_hang_time": getattr(args, "watchdog_max_hang_time", 60.0),
+            "process_max_concurrency": getattr(args, "process_max_concurrency", 5),
+            "process_retry_count": getattr(args, "process_retry_count", 1),
+            "process_retry_delay": getattr(args, "process_retry_delay", 1.0),
         }
     )
 
