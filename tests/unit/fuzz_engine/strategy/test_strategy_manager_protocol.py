@@ -144,6 +144,44 @@ class TestProtocolStrategies(unittest.TestCase):
             explicit_aggressive, dict, "Explicit aggressive should return dict"
         )
 
+    def test_generate_batch_request(self):
+        """Test BEHAVIOR: generate_batch_request creates a list of requests."""
+        batch = ProtocolStrategies.generate_batch_request()
+
+        # Test BEHAVIOR: should return a list
+        self.assertIsInstance(batch, list, "Should return a list of requests")
+
+        # Test BEHAVIOR: should have at least one request
+        self.assertGreater(len(batch), 0, "Should generate at least one request")
+
+        # Test BEHAVIOR: each item should be a dictionary
+        for request in batch:
+            self.assertIsInstance(request, dict, "Each request should be a dict")
+
+    def test_generate_batch_request_with_params(self):
+        """Test BEHAVIOR: generate_batch_request with custom parameters."""
+        protocol_types = ["InitializeRequest", "ListResourcesRequest"]
+        batch = ProtocolStrategies.generate_batch_request(
+            protocol_types=protocol_types,
+            min_batch_size=2,
+            max_batch_size=3
+        )
+
+        # Test BEHAVIOR: should respect size constraints
+        self.assertGreaterEqual(len(batch), 2, "Should have at least min_batch_size")
+        self.assertLessEqual(len(batch), 3, "Should have at most max_batch_size")
+
+    def test_generate_out_of_order_batch(self):
+        """Test BEHAVIOR: generate_out_of_order_batch creates out-of-order IDs."""
+        batch = ProtocolStrategies.generate_out_of_order_batch()
+
+        # Test BEHAVIOR: should return a list
+        self.assertIsInstance(batch, list, "Should return a list")
+
+        # Test BEHAVIOR: should have requests with IDs
+        id_requests = [req for req in batch if "id" in req]
+        self.assertGreater(len(id_requests), 0, "Should have some requests with IDs")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -69,7 +69,9 @@ class TestToolFuzzer(unittest.TestCase):
         }
 
         # Mock the strategy to raise an exception
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.side_effect = Exception("Test exception")
 
             results = await self.fuzzer.fuzz_tool(tool, runs=2)
@@ -193,7 +195,9 @@ class TestToolFuzzer(unittest.TestCase):
         )
 
         # Mock the strategy to return a simple dict
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.return_value = {
                 "strings": ["test1", "test2"],
                 "numbers": [1, 2, 3],
@@ -319,9 +323,12 @@ class TestToolFuzzer(unittest.TestCase):
         mock_sanitize.side_effect = lambda tool_name, args: (tool_name, args)
 
         # Configure mock to return different args for each call
-        mock_strategies.fuzz_tool_arguments.side_effect = [
-            {"name": f"test_{i}", "count": i, "enabled": i % 2 == 0} for i in range(5)
-        ]
+        mock_strategies.fuzz_tool_arguments = AsyncMock(
+            side_effect=[
+                {"name": f"test_{i}", "count": i, "enabled": i % 2 == 0}
+                for i in range(5)
+            ]
+        )
 
         # Reinitialize fuzzer to use our mock
         self.fuzzer = ToolFuzzer()
@@ -387,7 +394,9 @@ class TestToolFuzzer(unittest.TestCase):
         tool = {"inputSchema": {"properties": {"param1": {"type": "string"}}}}
 
         # Mock the strategy to return a simple dict
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.return_value = {"param1": "test_value"}
 
             results = await self.fuzzer.fuzz_tool(tool, runs=1)
@@ -418,7 +427,9 @@ class TestToolFuzzer(unittest.TestCase):
         }
 
         # Mock the strategy to return a simple dict
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.return_value = {"param1": "test_value"}
 
             results = await self.fuzzer.fuzz_tool(tool, runs=1)
@@ -455,7 +466,9 @@ class TestToolFuzzer(unittest.TestCase):
         }
 
         # Test that the fuzzer properly uses the strategy
-        with patch.object(self.fuzzer.strategies, "fuzz_tool_arguments") as mock_fuzz:
+        with patch.object(
+            self.fuzzer.strategies, "fuzz_tool_arguments", new_callable=AsyncMock
+        ) as mock_fuzz:
             mock_fuzz.return_value = {"name": "test_value"}
 
             results = await self.fuzzer.fuzz_tool(tool, runs=1)
@@ -524,6 +537,40 @@ class TestToolFuzzer(unittest.TestCase):
         self.assertEqual(len(results2), 1)
         self.assertIn("success", results1[0])
         self.assertIn("success", results2[0])
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_both_phases(self):
+        """Test fuzzing a tool in both realistic and aggressive phases."""
+        tool = {
+            "name": "test_tool",
+            "inputSchema": {"properties": {"name": {"type": "string"}}},
+        }
+
+        results = await self.fuzzer.fuzz_tool_both_phases(tool, runs_per_phase=2)
+
+        # Should have results for both phases
+        self.assertIn("realistic", results)
+        self.assertIn("aggressive", results)
+
+        # Each phase should have 2 runs
+        self.assertEqual(len(results["realistic"]), 2)
+        self.assertEqual(len(results["aggressive"]), 2)
+
+        # Check structure of results
+        for phase_results in [results["realistic"], results["aggressive"]]:
+            for result in phase_results:
+                self.assertIn("success", result)
+                self.assertIn("args", result)
+                self.assertIsInstance(result["args"], dict)
+
+    @pytest.mark.asyncio
+    async def test_shutdown(self):
+        """Test shutdown method."""
+        # Mock the executor shutdown
+        with patch.object(
+            self.fuzzer.executor, "shutdown", new_callable=AsyncMock
+        ) as mock_shutdown:
+            await self.fuzzer.shutdown()
+            mock_shutdown.assert_called_once()
 
 
 if __name__ == "__main__":

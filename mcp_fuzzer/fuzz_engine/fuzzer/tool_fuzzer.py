@@ -95,7 +95,7 @@ class ToolFuzzer:
 
         try:
             # Generate fuzz arguments using the strategy with phase
-            args = self.strategies.fuzz_tool_arguments(tool, phase=phase)
+            args = await self.strategies.fuzz_tool_arguments(tool, phase=phase)
 
             # Apply safety filtering
             if not is_safe_tool_call(tool_name, args):

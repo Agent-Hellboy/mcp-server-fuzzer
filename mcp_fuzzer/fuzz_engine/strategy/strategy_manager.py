@@ -238,11 +238,11 @@ class ToolStrategies:
     AGGRESSIVE_PHASE = "aggressive"
 
     @staticmethod
-    def fuzz_tool_arguments(
+    async def fuzz_tool_arguments(
         tool: Dict[str, Any], phase: str = "aggressive"
     ) -> Dict[str, Any]:
         """Generate fuzzed tool arguments based on phase."""
         if phase == ToolStrategies.REALISTIC_PHASE:
-            return fuzz_tool_arguments_realistic(tool)
+            return await fuzz_tool_arguments_realistic(tool)
         else:
             return fuzz_tool_arguments_aggressive(tool)

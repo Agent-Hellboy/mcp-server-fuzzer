@@ -6,6 +6,7 @@ This module provides strategies for generating realistic tool arguments and data
 Used in the realistic phase to test server behavior with valid, expected inputs.
 """
 
+import asyncio
 import base64
 import random
 import string
@@ -102,8 +103,13 @@ def timestamp_strings(
     )
 
 
-def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str:
+async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str:
     """Generate realistic text using custom strategies."""
+    # Normalize bounds and cache loop
+    if min_size > max_size:
+        min_size, max_size = max_size, min_size
+    loop = asyncio.get_running_loop()
+
     strategy = random.choice(
         [
             "normal",
@@ -120,13 +126,21 @@ def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str:
         length = random.randint(min_size, max_size)
         return "".join(random.choice(chars) for _ in range(length))
     elif strategy == "base64":
-        return base64_strings(
-            min_size=max(1, min_size // 2), max_size=max_size // 2
-        ).example()
+        # Use asyncio executor to prevent deadlocks
+        size_min = max(1, min_size // 2)
+        size_max = max(1, max_size // 2)
+        if size_min > size_max:
+            size_min, size_max = size_max, size_min
+        return await loop.run_in_executor(
+            None,
+            base64_strings(min_size=size_min, max_size=size_max).example,
+        )
     elif strategy == "uuid":
-        return uuid_strings().example()
+        # Use asyncio executor to prevent deadlocks
+        return await loop.run_in_executor(None, uuid_strings().example)
     elif strategy == "timestamp":
-        return timestamp_strings().example()
+        # Use asyncio executor to prevent deadlocks
+        return await loop.run_in_executor(None, timestamp_strings().example)
     elif strategy == "numbers":
         return str(random.randint(1, 999999))
     elif strategy == "mixed_alphanumeric":
@@ -137,7 +151,7 @@ def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str:
         return "realistic_value"
 
 
-def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
+async def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
     """Generate realistic tool arguments based on schema."""
     from ..schema_parser import make_fuzz_strategy_from_jsonschema
 
@@ -162,7 +176,7 @@ def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
     if required:
         for field in required:
             if field not in args:
-                args[field] = generate_realistic_text()
+                args[field] = await generate_realistic_text()
 
     # Ensure we have at least some arguments
     if schema.get("properties"):
@@ -202,7 +216,7 @@ def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
                             for _ in range(count)
                         ]
                     else:
-                        values = [generate_realistic_text() for _ in range(count)]
+                        values = [await generate_realistic_text() for _ in range(count)]
                     args[prop_name] = values
             # Special handling for object type properties
             elif prop_spec.get("type") == "object":
@@ -262,9 +276,9 @@ def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
                     elif format_type == "uuid":
                         args[prop_name] = str(uuid.uuid4())
                     else:
-                        args[prop_name] = generate_realistic_text()
+                        args[prop_name] = await generate_realistic_text()
             # In realistic mode, generate all properties
             elif prop_name not in args:
-                args[prop_name] = generate_realistic_text()
+                args[prop_name] = await generate_realistic_text()
 
     return args
