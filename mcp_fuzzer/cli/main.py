@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import emoji
 from rich.console import Console
 import sys
 import os
@@ -50,13 +51,19 @@ def run_cli() -> None:
                 load_config_file(args.validate_config)
                 console = Console()
                 config_file = args.validate_config
-                console.print(
-                    f"[green]✓ Configuration file '{config_file}' is valid[/green]"
+                success_msg = (
+                    "[green]:heavy_check_mark: Configuration file '"
+                    f"{config_file}' is valid[/green]"
                 )
+                console.print(emoji.emojize(success_msg, language='alias'))
                 sys.exit(0)
             except Exception as e:
                 console = Console()
-                console.print(f"[red]✗ Configuration validation failed: {e}[/red]")
+                error_msg = (
+                    "[red]:heavy_multiplication_x: Configuration validation failed: "
+                    f"{e}[/red]"
+                )
+                console.print(emoji.emojize(error_msg, language='alias'))
                 sys.exit(1)
 
         if getattr(args, 'check_env', False):
@@ -79,15 +86,26 @@ def run_cli() -> None:
                     valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
                     if value.upper() not in valid_levels:
                         valid_list = ', '.join(valid_levels)
-                        console.print(
-                            f"[red]✗ {var_name}={value} (must be one of: "
-                            f"{valid_list})[/red]"
+                        invalid_msg = (
+                            f"[red]:heavy_multiplication_x: {var_name}={value} "
+                            f"(must be one of: {valid_list})[/red]"
                         )
+                        console.print(emoji.emojize(invalid_msg, language='alias'))
                         all_valid = False
                     else:
-                        console.print(f"[green]✓ {var_name}={value}[/green]")
+                        console.print(
+                            emoji.emojize(
+                                f"[green]:heavy_check_mark: {var_name}={value}[/green]",
+                                language='alias'
+                            )
+                        )
                 else:
-                    console.print(f"[green]✓ {var_name}={value}[/green]")
+                    console.print(
+                        emoji.emojize(
+                            f"[green]:heavy_check_mark: {var_name}={value}[/green]",
+                            language='alias'
+                        )
+                    )
 
             if all_valid:
                 console.print("[green]All environment variables are valid[/green]")
