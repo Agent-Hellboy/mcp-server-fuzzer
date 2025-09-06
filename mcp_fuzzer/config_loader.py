@@ -255,11 +255,11 @@ def get_config_schema() -> Dict[str, Any]:
                                 "description": "JSON schema for transport config",
                             },
                         },
-                        "additionalProperties": false,  # noqa: F821
+                        "additionalProperties": False,
                         "required": ["module", "class"],
                     }
                 },
-                "additionalProperties": false,  # noqa: F821
+                "additionalProperties": False,
             },
             "safety": {
                 "type": "object",
