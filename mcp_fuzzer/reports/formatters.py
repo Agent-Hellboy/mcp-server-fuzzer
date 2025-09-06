@@ -5,6 +5,7 @@ Formatters for MCP Fuzzer Reports
 Handles different output formats including console, JSON, and text.
 """
 
+import emoji
 from typing import Any, Dict, List
 from rich.console import Console
 from rich.table import Table
@@ -482,7 +483,11 @@ class MarkdownFormatter:
                 md_content += "|-----|---------|-----------|\n"
 
                 for i, result in enumerate(results):
-                    success = "✓" if result.get("success") else "✗"
+                    success = (
+                        emoji.emojize(":heavy_check_mark:", language='alias')
+                        if result.get("success")
+                        else emoji.emojize(":x:", language='alias')
+                    )
                     exception = result.get("exception", "")
                     md_content += f"| {i + 1} | {success} | {exception} |\n"
 
