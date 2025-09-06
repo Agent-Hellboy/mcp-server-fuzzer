@@ -8,7 +8,17 @@ classes, addressing the code duplication issues identified in GitHub issue #41.
 import json
 import logging
 from abc import ABC
-from typing import Any, Dict, List, Optional, Union, TypedDict, Protocol, Iterator, Literal
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Union,
+    TypedDict,
+    Protocol,
+    Iterator,
+    Literal,
+)
 import httpx
 
 try:
@@ -173,7 +183,7 @@ class BaseTransportMixin(ABC):
             raise PayloadValidationError("Payload must be a dictionary")
 
         if payload.get("jsonrpc") != "2.0":
-            raise PayloadValidationError("Missing/invalid 'jsonrpc' (must be '2.0')")
+            raise PayloadValidationError("Invalid jsonrpc version")
 
         is_request_like = "method" in payload
         has_result = "result" in payload
@@ -183,25 +193,29 @@ class BaseTransportMixin(ABC):
             if not isinstance(payload["method"], str) or not payload["method"]:
                 raise PayloadValidationError("'method' must be a non-empty string")
             if "params" in payload and not isinstance(payload["params"], (list, dict)):
-                raise PayloadValidationError("'params' must be array or object when present")
-            if "id" in payload and not isinstance(payload["id"], (str, int)) and payload["id"] is not None:
-                raise PayloadValidationError("'id' must be string, number, or null when present")
+                raise PayloadValidationError("'params' must be array or object")
+            if "id" in payload and not isinstance(payload["id"], (str, int)) \
+                and payload["id"] is not None:
+                raise PayloadValidationError("'id' must be string, number, or null")
             if strict and "id" not in payload:
-                # In strict mode treat request-like payloads without id as invalid (not a notification)
-                raise PayloadValidationError("Missing required field: id (strict mode)")
+                # In strict mode treat request-like payloads without id as invalid
+                raise PayloadValidationError("Missing required field: id")
         else:
             if has_result == has_error:
-                raise PayloadValidationError("Response must have exactly one of 'result' or 'error'")
+                raise PayloadValidationError("Response must have exactly one of \
+result or error")
             if "id" not in payload:
                 raise PayloadValidationError("Response must include 'id'")
             if not isinstance(payload["id"], (str, int)) and payload["id"] is not None:
                 raise PayloadValidationError("'id' must be string, number, or null")
             if has_error:
                 err = payload["error"]
-                if not isinstance(err, dict) or "code" not in err or "message" not in err:
-                    raise PayloadValidationError("Invalid error object (must include 'code' and 'message')")
-                if not isinstance(err["code"], int) or not isinstance(err["message"], str):
-                    raise PayloadValidationError("Invalid error fields: 'code' int, 'message' str required")
+                if not isinstance(err, dict) or "code" not in err \
+                    or "message" not in err:
+                    raise PayloadValidationError("Invalid error object")
+                if not isinstance(err["code"], int) \
+                    or not isinstance(err["message"], str):
+                    raise PayloadValidationError("Invalid error fields")
 
     def _validate_payload_serializable(self, payload: Dict[str, Any]) -> None:
         """Validate that payload can be serialized to JSON.
