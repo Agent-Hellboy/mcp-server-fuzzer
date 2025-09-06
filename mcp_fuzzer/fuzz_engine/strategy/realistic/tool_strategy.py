@@ -105,6 +105,11 @@ def timestamp_strings(
 
 async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str:
     """Generate realistic text using custom strategies."""
+    # Normalize bounds and cache loop
+    if min_size > max_size:
+        min_size, max_size = max_size, min_size
+    loop = asyncio.get_running_loop()
+
     strategy = random.choice(
         [
             "normal",
@@ -122,20 +127,19 @@ async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str
         return "".join(random.choice(chars) for _ in range(length))
     elif strategy == "base64":
         # Use asyncio executor to prevent deadlocks
-        loop = asyncio.get_event_loop()
+        size_min = max(1, min_size // 2)
+        size_max = max(1, max_size // 2)
+        if size_min > size_max:
+            size_min, size_max = size_max, size_min
         return await loop.run_in_executor(
             None,
-            base64_strings(
-                min_size=max(1, min_size // 2), max_size=max_size // 2
-            ).example,
+            base64_strings(min_size=size_min, max_size=size_max).example,
         )
     elif strategy == "uuid":
         # Use asyncio executor to prevent deadlocks
-        loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, uuid_strings().example)
     elif strategy == "timestamp":
         # Use asyncio executor to prevent deadlocks
-        loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, timestamp_strings().example)
     elif strategy == "numbers":
         return str(random.randint(1, 999999))

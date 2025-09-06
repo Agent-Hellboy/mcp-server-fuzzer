@@ -7,6 +7,7 @@ including wrapping Hypothesis strategies to prevent deadlocks in asyncio.
 """
 
 import asyncio
+import functools
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Tuple
@@ -81,11 +82,10 @@ class AsyncFuzzExecutor:
                 if asyncio.iscoroutinefunction(func):
                     return await func(*args, **kwargs)
                 else:
-                    # Run synchronous functions in thread pool
-                    loop = asyncio.get_event_loop()
-                    return await loop.run_in_executor(
-                        self._thread_pool, func, *args, **kwargs
-                    )
+                    # Run synchronous functions in thread pool (support kwargs)
+                    loop = asyncio.get_running_loop()
+                    bound = functools.partial(func, *args, **kwargs)
+                    return await loop.run_in_executor(self._thread_pool, bound)
             except Exception as e:
                 self._logger.warning(f"Error executing {func.__name__}: {e}")
                 raise
@@ -100,7 +100,7 @@ class AsyncFuzzExecutor:
         Returns:
             Generated value from the strategy
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._thread_pool, strategy.example)
 
     async def shutdown(self) -> None:
