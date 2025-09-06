@@ -1,207 +1,668 @@
 # Configuration Guide
 
-MCP Fuzzer provides flexible configuration options to customize its behavior. This guide explains the various ways to configure the fuzzer and how to handle configuration errors.
+This guide provides comprehensive information on configuring MCP Server Fuzzer using configuration files, environment variables, and command-line arguments.
 
-## Configuration Precedence
+## Configuration Methods
 
-MCP Fuzzer uses the following precedence order when determining configuration values (highest to lowest):
+MCP Server Fuzzer supports multiple configuration methods in order of precedence:
 
-1. Command-line arguments
-2. Configuration files (specified with `--config`)
-3. Default configuration files (searched in standard locations)
-4. Environment variables
-5. Built-in defaults
+1. **Command-line arguments** (highest precedence)
+2. **Configuration files** (YAML/TOML)
+3. **Environment variables** (lowest precedence)
 
 ## Configuration Files
 
-MCP Fuzzer supports YAML configuration files with either `.yml` or `.yaml` extensions.
+### YAML Configuration
 
-### Specifying a Configuration File
-
-You can specify a configuration file using the `--config` option:
-
-```bash
-mcp-fuzzer --config path/to/mcp-fuzzer.yml
-```
-
-### Default Configuration Locations
-
-If no configuration file is specified, MCP Fuzzer will search for a configuration file in the following locations:
-
-1. Current working directory
-2. User's configuration directory (`~/.config/mcp-fuzzer/`)
-
-The recognized file names are:
-- `mcp-fuzzer.yml`
-- `mcp-fuzzer.yaml`
-
-### Example YAML Configuration
+Create a `mcp-fuzzer.yaml` or `mcp-fuzzer.yml` file:
 
 ```yaml
-# General settings
-timeout: 30.0
-log_level: "INFO"
+# Global settings
+global:
+  timeout: 30.0
+  log_level: INFO
+  verbose: false
+  output_dir: "reports"
 
-# Transport settings
-http_timeout: 30.0
-sse_timeout: 30.0
-stdio_timeout: 30.0
-
-# Fuzzing settings
-mode: "both"
-phase: "aggressive"
-protocol: "http"
-endpoint: "http://localhost:8000/mcp/"
-runs: 10
-runs_per_type: 5
-max_concurrency: 5
-
-# Safety settings
+# Safety system configuration
 safety:
   enabled: true
-  no_network: false
-  local_hosts:
-    - "localhost"
-    - "127.0.0.1"
-    - "::1"
-  header_denylist:
-    - "authorization"
-    - "cookie"
+  fs_root: "~/.mcp_fuzzer"
+  retry_with_safety_on_interrupt: false
 
-# Authentication settings
+# Runtime configuration
+runtime:
+  max_concurrency: 5
+  retry_count: 1
+  retry_delay: 1.0
+
+# Watchdog configuration
+watchdog:
+  check_interval: 1.0
+  process_timeout: 30.0
+  extra_buffer: 5.0
+  max_hang_time: 60.0
+  auto_kill: true
+
+# Transport-specific settings
+transports:
+  http:
+    timeout: 30.0
+    verify_ssl: true
+    max_retries: 3
+
+  sse:
+    timeout: 30.0
+    reconnect_interval: 5.0
+
+  stdio:
+    timeout: 30.0
+    buffer_size: 4096
+
+# Server configurations
+servers:
+  local_http:
+    protocol: http
+    endpoint: "http://localhost:8000"
+    runs: 10
+    phase: aggressive
+
+  local_stdio:
+    protocol: stdio
+    endpoint: "python test_server.py"
+    runs: 5
+    phase: realistic
+    safety:
+      enabled: true
+      fs_root: "/tmp/safe_dir"
+
+  production_api:
+    protocol: http
+    endpoint: "https://api.example.com"
+    runs: 20
+    phase: realistic
+    timeout: 60.0
+    auth:
+      type: api_key
+      api_key: "${API_KEY}"
+      header_name: "Authorization"
+
+# Authentication providers
 auth:
   providers:
-    - type: "api_key"
-      id: "default_api_key"
-      config:
-        key: "YOUR_API_KEY"
-        header_name: "X-API-Key"
-    - type: "basic"
-      id: "default_basic"
-      config:
-        username: "user"
-        password: "pass"
-  mappings:
-    "tool1": "default_api_key"
-    "tool2": "default_basic"
+    openai_api:
+      type: api_key
+      api_key: "${OPENAI_API_KEY}"
+      header_name: "Authorization"
+
+    github_api:
+      type: api_key
+      api_key: "${GITHUB_TOKEN}"
+      header_name: "Authorization"
+
+    basic_auth:
+      type: basic
+      username: "${USERNAME}"
+      password: "${PASSWORD}"
+
+  tool_mappings:
+    openai_chat: openai_api
+    github_search: github_api
+    secure_tool: basic_auth
+
+# Reporting configuration
+reporting:
+  enable_console: true
+  enable_json: true
+  enable_text: true
+  safety_report: false
+  export_safety_data: false
+  custom_formatters:
+    - name: "csv"
+      enabled: true
+      output_file: "results.csv"
+    - name: "xml"
+      enabled: false
+      output_file: "results.xml"
 ```
 
-A complete example configuration file is available in the `examples/config/` directory.
+### TOML Configuration
+
+Create a `mcp-fuzzer.toml` file:
+
+```toml
+# Global settings
+[global]
+timeout = 30.0
+log_level = "INFO"
+verbose = false
+output_dir = "reports"
+
+# Safety system configuration
+[safety]
+enabled = true
+fs_root = "~/.mcp_fuzzer"
+retry_with_safety_on_interrupt = false
+
+# Runtime configuration
+[runtime]
+max_concurrency = 5
+retry_count = 1
+retry_delay = 1.0
+
+# Watchdog configuration
+[watchdog]
+check_interval = 1.0
+process_timeout = 30.0
+extra_buffer = 5.0
+max_hang_time = 60.0
+auto_kill = true
+
+# Transport-specific settings
+[transports.http]
+timeout = 30.0
+verify_ssl = true
+max_retries = 3
+
+[transports.sse]
+timeout = 30.0
+reconnect_interval = 5.0
+
+[transports.stdio]
+timeout = 30.0
+buffer_size = 4096
+
+# Server configurations
+[servers.local_http]
+protocol = "http"
+endpoint = "http://localhost:8000"
+runs = 10
+phase = "aggressive"
+
+[servers.local_stdio]
+protocol = "stdio"
+endpoint = "python test_server.py"
+runs = 5
+phase = "realistic"
+
+[servers.local_stdio.safety]
+enabled = true
+fs_root = "/tmp/safe_dir"
+
+[servers.production_api]
+protocol = "http"
+endpoint = "https://api.example.com"
+runs = 20
+phase = "realistic"
+timeout = 60.0
+
+[servers.production_api.auth]
+type = "api_key"
+api_key = "${API_KEY}"
+header_name = "Authorization"
+
+# Authentication providers
+[auth.providers.openai_api]
+type = "api_key"
+api_key = "${OPENAI_API_KEY}"
+header_name = "Authorization"
+
+[auth.providers.github_api]
+type = "api_key"
+api_key = "${GITHUB_TOKEN}"
+header_name = "Authorization"
+
+[auth.providers.basic_auth]
+type = "basic"
+username = "${USERNAME}"
+password = "${PASSWORD}"
+
+[auth.tool_mappings]
+openai_chat = "openai_api"
+github_search = "github_api"
+secure_tool = "basic_auth"
+
+# Reporting configuration
+[reporting]
+enable_console = true
+enable_json = true
+enable_text = true
+safety_report = false
+export_safety_data = false
+
+[reporting.custom_formatters.csv]
+enabled = true
+output_file = "results.csv"
+
+[reporting.custom_formatters.xml]
+enabled = false
+output_file = "results.xml"
+```
+
+## Using Configuration Files
+
+### Command Line Usage
+
+```bash
+# Use default configuration file (mcp-fuzzer.yaml or mcp-fuzzer.toml)
+mcp-fuzzer --mode tools --server local_http
+
+# Specify custom configuration file
+mcp-fuzzer --mode tools --config custom-config.yaml --server local_http
+
+# Override configuration with command-line arguments
+mcp-fuzzer --mode tools --config config.yaml --server local_http --runs 50 --verbose
+```
+
+### Environment Variable Substitution
+
+Configuration files support environment variable substitution:
+
+```yaml
+servers:
+  production_api:
+    protocol: http
+    endpoint: "https://${API_HOST}:${API_PORT}"
+    auth:
+      api_key: "${API_KEY}"
+```
+
+```bash
+# Set environment variables
+export API_HOST="api.example.com"
+export API_PORT="443"
+export API_KEY="your-api-key"
+
+# Use configuration
+mcp-fuzzer --mode tools --config config.yaml --server production_api
+```
 
 ## Environment Variables
 
-MCP Fuzzer can also be configured using environment variables:
+### Core Configuration
 
-```bash
-# Core configuration
-export MCP_FUZZER_TIMEOUT=30.0
-export MCP_FUZZER_LOG_LEVEL=INFO
-export MCP_FUZZER_SAFETY_ENABLED=true
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_FUZZER_TIMEOUT` | 30.0 | Default timeout for all operations |
+| `MCP_FUZZER_LOG_LEVEL` | INFO | Default log level |
+| `MCP_FUZZER_VERBOSE` | false | Enable verbose logging |
+| `MCP_FUZZER_OUTPUT_DIR` | reports | Default output directory |
 
-# Transport configuration
-export MCP_FUZZER_HTTP_TIMEOUT=30.0
-export MCP_FUZZER_SSE_TIMEOUT=30.0
-export MCP_FUZZER_STDIO_TIMEOUT=30.0
+### Safety Configuration
 
-# Safety configuration
-export MCP_FUZZER_FS_ROOT=~/.mcp_fuzzer
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_FUZZER_SAFETY_ENABLED` | false | Enable safety system by default |
+| `MCP_FUZZER_FS_ROOT` | ~/.mcp_fuzzer | Default filesystem root for safety |
+| `MCP_FUZZER_AUTO_KILL` | true | Auto-kill hanging processes |
+| `MCP_FUZZER_RETRY_WITH_SAFETY` | false | Retry with safety on interrupt |
 
-## Error Handling
+### Runtime Configuration
 
-MCP Fuzzer provides a comprehensive error handling system for configuration-related errors:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_FUZZER_MAX_CONCURRENCY` | 5 | Maximum concurrent operations |
+| `MCP_FUZZER_RETRY_COUNT` | 1 | Number of retries for failed operations |
+| `MCP_FUZZER_RETRY_DELAY` | 1.0 | Delay between retries |
 
-### Configuration Error Types
+### Transport Configuration
 
-- `ConfigurationError`: Base exception for all configuration-related errors
-- `ConfigFileError`: Raised when there are issues with configuration files (not found, invalid format, parsing errors)
-- `ValidationError`: Raised when configuration validation fails
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_FUZZER_HTTP_TIMEOUT` | 30.0 | HTTP transport timeout |
+| `MCP_FUZZER_SSE_TIMEOUT` | 30.0 | SSE transport timeout |
+| `MCP_FUZZER_STDIO_TIMEOUT` | 30.0 | Stdio transport timeout |
 
-### Common Error Scenarios
+### Authentication Environment Variables
 
-- **File Not Found**: When the specified configuration file doesn't exist
-- **Invalid Format**: When the file extension is not supported (only .yml and .yaml are supported)
-- **Parsing Error**: When the YAML content cannot be parsed
-- **Permission Error**: When there are permission issues reading the file
+| Variable | Description |
+|----------|-------------|
+| `MCP_API_KEY` | API key for authentication |
+| `MCP_HEADER_NAME` | Header name for API key (default: Authorization) |
+| `MCP_USERNAME` | Username for basic authentication |
+| `MCP_PASSWORD` | Password for basic authentication |
+| `MCP_OAUTH_TOKEN` | OAuth token for authentication |
 
-### Example Error Handling
+### Watchdog Configuration
 
-```python
-from mcp_fuzzer.exceptions import ConfigFileError, ValidationError
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_FUZZER_CHECK_INTERVAL` | 1.0 | How often to check processes |
+| `MCP_FUZZER_PROCESS_TIMEOUT` | 30.0 | Time before process is considered hanging |
+| `MCP_FUZZER_EXTRA_BUFFER` | 5.0 | Extra time before auto-kill |
+| `MCP_FUZZER_MAX_HANG_TIME` | 60.0 | Maximum time before force kill |
 
-try:
-    # Attempt to load configuration
-    from mcp_fuzzer.config_loader import load_config_file
-    config_data = load_config_file("path/to/config.yml")
-except ConfigFileError as e:
-    print(f"Configuration file error: {e}")
-    # Handle file-related errors
-except ValidationError as e:
-    print(f"Configuration validation error: {e}")
-    # Handle validation errors
-```
+## Configuration Profiles
 
-## Configuration Schema
-
-The following table describes the available configuration options:
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `timeout` | float | Default timeout in seconds | 30.0 |
-| `tool_timeout` | float | Tool-specific timeout in seconds | 30.0 |
-| `log_level` | string | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO |
-| `safety.enabled` | boolean | Whether safety features are enabled | true |
-| `fs_root` | string | Root directory for file operations | ~/.mcp_fuzzer |
-| `http_timeout` | float | HTTP transport timeout in seconds | 30.0 |
-| `sse_timeout` | float | SSE transport timeout in seconds | 30.0 |
-| `stdio_timeout` | float | STDIO transport timeout in seconds | 30.0 |
-| `mode` | string | Fuzzing mode (tools, protocol, both) | both |
-| `phase` | string | Fuzzing phase (realistic, aggressive, both) | aggressive |
-| `protocol` | string | Transport protocol (http, sse, stdio) | http |
-| `endpoint` | string | Server endpoint URL | - |
-| `runs` | integer | Number of fuzzing runs | 10 |
-| `runs_per_type` | integer | Number of runs per protocol type | 5 |
-| `protocol_type` | string | Specific protocol type to fuzz | - |
-| `safety.no_network` | boolean | Disable network access | false |
-| `safety.local_hosts` | array | List of allowed hosts | ["localhost", "127.0.0.1", "::1"] |
-| `safety.header_denylist` | array | Headers to strip/deny | ["authorization","cookie"] |
-| `safety.proxy_env_denylist` | array | Proxy env vars to ignore | ["HTTP_PROXY","HTTPS_PROXY"] |
-| `safety.env_allowlist` | array | Env vars allowed to pass through | [] |
-| `max_concurrency` | integer | Maximum concurrent operations | 5 |
-
-### Nested Configuration
-
-Some configuration options use nested structures:
-
-#### Safety Configuration
+### Development Profile
 
 ```yaml
+# config/dev.yaml
+global:
+  log_level: DEBUG
+  verbose: true
+
+safety:
+  enabled: false  # Disable for debugging
+
+watchdog:
+  auto_kill: false  # Disable for debugging
+  check_interval: 0.5
+
+servers:
+  local_dev:
+    protocol: stdio
+    endpoint: "python dev_server.py"
+    runs: 5
+    phase: realistic
+```
+
+### Production Profile
+
+```yaml
+# config/prod.yaml
+global:
+  log_level: WARNING
+  verbose: false
+  timeout: 60.0
+
 safety:
   enabled: true
-  no_network: false
-  local_hosts:
-    - "localhost"
-    - "127.0.0.1"
-    - "::1"
-  header_denylist:
-    - "authorization"
-    - "cookie"
-  proxy_env_denylist:
-    - "HTTP_PROXY"
-    - "HTTPS_PROXY"
-  env_allowlist: []
+  fs_root: "/opt/mcp_fuzzer/safe"
+
+watchdog:
+  auto_kill: true
+  process_timeout: 120.0
+  max_hang_time: 300.0
+
+servers:
+  production_api:
+    protocol: http
+    endpoint: "https://api.production.com"
+    runs: 100
+    phase: realistic
+    timeout: 120.0
 ```
 
-#### Authentication Configuration
+### Testing Profile
 
 ```yaml
-auth:
-  providers:
-    - type: "api_key"
-      id: "default_api_key"
-      config:
-        key: "YOUR_API_KEY"
-        header_name: "X-API-Key"
-  mappings:
-    "tool1": "default_api_key"
+# config/test.yaml
+global:
+  log_level: INFO
+  verbose: true
+
+runtime:
+  max_concurrency: 10
+  retry_count: 3
+
+servers:
+  test_server:
+    protocol: http
+    endpoint: "http://localhost:8000"
+    runs: 50
+    phase: aggressive
 ```
+
+## Using Profiles
+
+```bash
+# Use development profile
+mcp-fuzzer --mode tools --config config/dev.yaml --server local_dev
+
+# Use production profile
+mcp-fuzzer --mode tools --config config/prod.yaml --server production_api
+
+# Use testing profile
+mcp-fuzzer --mode tools --config config/test.yaml --server test_server
+```
+
+## Configuration Validation
+
+### Schema Validation
+
+Configuration files are validated against a schema to ensure correctness:
+
+```bash
+# Validate configuration file
+mcp-fuzzer --validate-config config.yaml
+# Output: "Configuration file is valid"
+
+# Validate with errors
+mcp-fuzzer --validate-config invalid-config.yaml
+# Output: "Configuration validation failed:
+#          - Line 5: 'timeout' must be a number, got 'invalid'
+#          - Line 10: 'protocol' must be one of ['http', 'sse', 'stdio', 'streamablehttp']"
+```
+
+### Environment Variable Validation
+
+```bash
+# Check environment variables
+mcp-fuzzer --check-env
+# Output: "Environment variables check:
+#          ✓ MCP_FUZZER_TIMEOUT=30.0
+#          ✗ MCP_FUZZER_LOG_LEVEL=INVALID (must be one of: DEBUG, INFO, WARNING, ERROR, CRITICAL)
+#          ✓ MCP_FUZZER_SAFETY_ENABLED=true"
+```
+
+## Configuration Examples
+
+### Basic HTTP Server Configuration
+
+```yaml
+servers:
+  basic_http:
+    protocol: http
+    endpoint: "http://localhost:8000"
+    runs: 10
+    phase: aggressive
+    timeout: 30.0
+```
+
+### Stdio Server with Safety
+
+```yaml
+servers:
+  safe_stdio:
+    protocol: stdio
+    endpoint: "python server.py"
+    runs: 20
+    phase: realistic
+    safety:
+      enabled: true
+      fs_root: "/tmp/safe_dir"
+    watchdog:
+      process_timeout: 60.0
+      auto_kill: true
+```
+
+### Authenticated API Configuration
+
+```yaml
+servers:
+  authenticated_api:
+    protocol: http
+    endpoint: "https://api.example.com"
+    runs: 50
+    phase: realistic
+    auth:
+      type: api_key
+      api_key: "${API_KEY}"
+      header_name: "Authorization"
+    timeout: 60.0
+```
+
+### Multi-Server Configuration
+
+```yaml
+servers:
+  local_http:
+    protocol: http
+    endpoint: "http://localhost:8000"
+    runs: 10
+
+  local_stdio:
+    protocol: stdio
+    endpoint: "python server.py"
+    runs: 5
+    safety:
+      enabled: true
+
+  remote_api:
+    protocol: http
+    endpoint: "https://api.remote.com"
+    runs: 20
+    auth:
+      type: basic
+      username: "${USERNAME}"
+      password: "${PASSWORD}"
+```
+
+## Advanced Configuration
+
+### Conditional Configuration
+
+```yaml
+# Use different configurations based on environment
+servers:
+  api_server:
+    protocol: http
+    endpoint: "${API_ENDPOINT}"
+    runs: "${RUNS:-10}"
+    phase: "${PHASE:-aggressive}"
+    timeout: "${TIMEOUT:-30.0}"
+```
+
+### Configuration Inheritance
+
+```yaml
+# Base configuration
+base_server: &base_server
+  timeout: 30.0
+  phase: realistic
+  safety:
+    enabled: true
+
+# Inherit from base
+servers:
+  server1:
+    <<: *base_server
+    protocol: http
+    endpoint: "http://localhost:8000"
+    runs: 10
+
+  server2:
+    <<: *base_server
+    protocol: stdio
+    endpoint: "python server.py"
+    runs: 5
+```
+
+### Dynamic Configuration
+
+```yaml
+# Use environment-specific settings
+servers:
+  dynamic_server:
+    protocol: http
+    endpoint: "http://${HOST:-localhost}:${PORT:-8000}"
+    runs: "${RUNS:-10}"
+    phase: "${PHASE:-aggressive}"
+    timeout: "${TIMEOUT:-30.0}"
+    safety:
+      enabled: "${SAFETY_ENABLED:-true}"
+      fs_root: "${SAFETY_ROOT:-~/.mcp_fuzzer}"
+```
+
+## Configuration Best Practices
+
+### 1. Use Environment Variables for Secrets
+
+```yaml
+# Good: Use environment variables for sensitive data
+auth:
+  api_key: "${API_KEY}"
+  password: "${PASSWORD}"
+
+# Bad: Don't hardcode secrets
+auth:
+  api_key: "sk-1234567890abcdef"
+  password: "secret123"
+```
+
+### 2. Use Profiles for Different Environments
+
+```bash
+# Create separate configuration files for different environments
+config/
+  dev.yaml
+  staging.yaml
+  prod.yaml
+```
+
+### 3. Validate Configuration Files
+
+```bash
+# Always validate configuration files before use
+mcp-fuzzer --validate-config config.yaml
+```
+
+### 4. Use Descriptive Server Names
+
+```yaml
+# Good: Descriptive names
+servers:
+  local_development_server:
+    protocol: stdio
+    endpoint: "python dev_server.py"
+
+  production_api_endpoint:
+    protocol: http
+    endpoint: "https://api.production.com"
+
+# Bad: Unclear names
+servers:
+  server1:
+    protocol: stdio
+    endpoint: "python server.py"
+
+  server2:
+    protocol: http
+    endpoint: "https://api.com"
+```
+
+### 5. Document Configuration Options
+
+```yaml
+# Add comments to explain configuration
+servers:
+  # Local development server with safety enabled
+  local_dev:
+    protocol: stdio
+    endpoint: "python dev_server.py"
+    runs: 5
+    phase: realistic
+    safety:
+      enabled: true  # Enable safety for local development
+      fs_root: "/tmp/dev_safe"  # Use temporary directory
+```
+
+### 6. Use Configuration Templates
+
+```yaml
+# Template for new server configurations
+template_server:
+  protocol: http
+  endpoint: "http://localhost:8000"
+  runs: 10
+  phase: aggressive
+  timeout: 30.0
+  safety:
+    enabled: false
+  watchdog:
+    auto_kill: true
+    process_timeout: 30.0
+```
+
+This comprehensive configuration guide provides all the information needed to effectively configure MCP Server Fuzzer for different environments and use cases.
