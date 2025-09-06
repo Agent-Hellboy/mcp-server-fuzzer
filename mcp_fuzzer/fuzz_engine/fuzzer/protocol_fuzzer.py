@@ -88,7 +88,7 @@ class ProtocolFuzzer:
             return []
 
         # Get the fuzzer method for this protocol type
-        fuzzer_method = self._get_fuzzer_method(protocol_type)
+        fuzzer_method = self._get_fuzzer_method(protocol_type, phase)
         if not fuzzer_method:
             return []
 
@@ -101,20 +101,23 @@ class ProtocolFuzzer:
         return await self._execute_and_process_operations(operations, protocol_type)
 
     def _get_fuzzer_method(
-        self, protocol_type: str
+        self, protocol_type: str, phase: str = "aggressive"
     ) -> Optional[Callable[..., Dict[str, Any]]]:
         """
-        Get the appropriate fuzzer method for a protocol type.
+        Get the appropriate fuzzer method for a protocol type and phase.
 
         Args:
             protocol_type: Protocol type to get fuzzer method for
+            phase: Fuzzing phase (realistic or aggressive)
 
         Returns:
             Fuzzer method or None if not found
         """
-        fuzzer_method = self.strategies.get_protocol_fuzzer_method(protocol_type)
+        fuzzer_method = self.strategies.get_protocol_fuzzer_method(protocol_type, phase)
         if not fuzzer_method:
-            self._logger.error(f"Unknown protocol type: {protocol_type}")
+            self._logger.error(
+                f"Unknown protocol type: {protocol_type} for phase: {phase}"
+            )
             return None
         return fuzzer_method
 
@@ -307,8 +310,14 @@ class ProtocolFuzzer:
             return maybe_coro
 
     async def _send_fuzzed_request(
-        self, protocol_type: str, fuzz_data: Dict[str, Any], generate_only: bool
-    ) -> Tuple[Optional[Union[Dict[str, Any], List[Any]]], Optional[str]]:
+        self,
+        protocol_type: str,
+        fuzz_data: Union[Dict[str, Any], List[Dict[str, Any]]],
+        generate_only: bool,
+    ) -> Tuple[
+        Optional[Union[Dict[str, Any], List[Any], Dict[Any, Dict[str, Any]]]],
+        Optional[str],
+    ]:
         """
         Send fuzzed request to server if appropriate.
 
@@ -325,8 +334,18 @@ class ProtocolFuzzer:
 
         if self.transport and not generate_only:
             try:
-                # Send envelope exactly as generated
-                server_response = await self.transport.send_raw(fuzz_data)
+                # Check if this is a batch request (list of requests)
+                if isinstance(fuzz_data, list):
+                    # Handle batch request
+                    batch_responses = await self.transport.send_batch_request(fuzz_data)
+                    # Collate responses by ID
+                    server_response = self.transport.collate_batch_responses(
+                        fuzz_data, batch_responses
+                    )
+                else:
+                    # Send single envelope exactly as generated
+                    server_response = await self.transport.send_raw(fuzz_data)
+
                 self._logger.debug(
                     f"Server accepted fuzzed envelope for {protocol_type}"
                 )
@@ -486,6 +505,101 @@ class ProtocolFuzzer:
         )
 
         return results
+
+    async def fuzz_batch_requests(
+        self,
+        protocol_types: List[str] = None,
+        runs: int = 5,
+        phase: str = "aggressive",
+        generate_only: bool = False,
+    ) -> List[FuzzDataResult]:
+        """
+        Fuzz using JSON-RPC batch requests with mixed protocol types.
+
+        Args:
+            protocol_types: List of protocol types to include in batches
+            runs: Number of batch fuzzing runs
+            phase: Fuzzing phase (realistic or aggressive)
+            generate_only: If True, only generate fuzzing data without sending requests
+
+        Returns:
+            List of fuzzing results
+        """
+        if runs <= 0:
+            return []
+
+        results = []
+        for run_index in range(runs):
+            try:
+                # Generate a batch request
+                batch_request = self.strategies.generate_batch_request(
+                    protocol_types=protocol_types, phase=phase
+                )
+
+                if not batch_request:
+                    continue
+
+                # Send the batch
+                server_response, server_error = await self._send_fuzzed_request(
+                    "BatchRequest", batch_request, generate_only
+                )
+
+                # Create result
+                result = self._create_batch_fuzz_result(
+                    run_index, batch_request, server_response, server_error
+                )
+                results.append(result)
+
+                self._logger.debug(f"Fuzzed batch request run {run_index + 1}")
+
+            except Exception as e:
+                self._logger.error(
+                    "Error fuzzing batch request run %s: %s",
+                    run_index + 1,
+                    e,
+                )
+                results.append(
+                    {
+                        "protocol_type": "BatchRequest",
+                        "run": run_index + 1,
+                        "fuzz_data": None,
+                        "success": False,
+                        "exception": str(e),
+                    }
+                )
+
+        return results
+
+    def _create_batch_fuzz_result(
+        self,
+        run_index: int,
+        batch_request: List[Dict[str, Any]],
+        server_response: Optional[Union[Dict[str, Any], List[Any]]],
+        server_error: Optional[str],
+    ) -> FuzzDataResult:
+        """
+        Create a standardized result dictionary for a batch fuzzing run.
+
+        Args:
+            run_index: Run index (0-based)
+            batch_request: Generated batch request
+            server_response: Response from server, if any
+            server_error: Error from server, if any
+
+        Returns:
+            Result dictionary
+        """
+        return {
+            "protocol_type": "BatchRequest",
+            "run": run_index + 1,
+            "fuzz_data": batch_request,
+            "success": server_error is None,
+            "server_response": server_response,
+            "server_error": server_error,
+            "server_rejected_input": server_error is not None,
+            "batch_size": len(batch_request),
+            "invariant_violations": [],  # Will be populated if violations occur
+        }
 
     async def shutdown(self) -> None:
         """Shutdown the executor and clean up resources."""

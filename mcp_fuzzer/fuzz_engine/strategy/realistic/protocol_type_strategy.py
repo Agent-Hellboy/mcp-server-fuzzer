@@ -144,3 +144,177 @@ def fuzz_initialize_request_realistic() -> Dict[str, Any]:
             "clientInfo": {"name": "test-client", "version": "1.0.0"},
         },
     }
+
+
+def fuzz_list_resources_request_realistic() -> Dict[str, Any]:
+    """Generate realistic ListResourcesRequest for testing valid behavior."""
+    cursor_options = [
+        None,  # No cursor
+        "cursor-123",
+        "next-page-token",
+        "eyJwYWdlIjoxfQ==",  # base64 encoded page info
+    ]
+
+    return {
+        "jsonrpc": "2.0",
+        "id": random.randint(1, 1000),
+        "method": "resources/list",
+        "params": {
+            "cursor": random.choice(cursor_options) if random.random() < 0.3 else None,
+        },
+    }
+
+
+def fuzz_read_resource_request_realistic() -> Dict[str, Any]:
+    """Generate realistic ReadResourceRequest for testing valid behavior."""
+    uri_options = [
+        "file:///home/user/documents/readme.txt",
+        "file:///etc/hosts",
+        "file:///var/log/application.log",
+        "file:///tmp/session-data.json",
+        "http://localhost:8080/api/data",
+        "https://api.example.com/v1/users",
+    ]
+
+    return {
+        "jsonrpc": "2.0",
+        "id": random.randint(1, 1000),
+        "method": "resources/read",
+        "params": {
+            "uri": random.choice(uri_options),
+        },
+    }
+
+
+def fuzz_subscribe_request_realistic() -> Dict[str, Any]:
+    """Generate realistic SubscribeRequest for testing valid behavior."""
+    uri_options = [
+        "file:///home/user/documents/",
+        "file:///var/log/",
+        "file:///tmp/notifications/",
+        "http://localhost:8080/api/events",
+    ]
+
+    return {
+        "jsonrpc": "2.0",
+        "id": random.randint(1, 1000),
+        "method": "resources/subscribe",
+        "params": {
+            "uri": random.choice(uri_options),
+        },
+    }
+
+
+def fuzz_unsubscribe_request_realistic() -> Dict[str, Any]:
+    """Generate realistic UnsubscribeRequest for testing valid behavior."""
+    uri_options = [
+        "file:///home/user/documents/",
+        "file:///var/log/",
+        "file:///tmp/notifications/",
+        "http://localhost:8080/api/events",
+    ]
+
+    return {
+        "jsonrpc": "2.0",
+        "id": random.randint(1, 1000),
+        "method": "resources/unsubscribe",
+        "params": {
+            "uri": random.choice(uri_options),
+        },
+    }
+
+
+def fuzz_list_prompts_request_realistic() -> Dict[str, Any]:
+    """Generate realistic ListPromptsRequest for testing valid behavior."""
+    cursor_options = [
+        None,
+        "prompt-cursor-456",
+        "next-prompts-page",
+    ]
+
+    return {
+        "jsonrpc": "2.0",
+        "id": random.randint(1, 1000),
+        "method": "prompts/list",
+        "params": {
+            "cursor": random.choice(cursor_options) if random.random() < 0.3 else None,
+        },
+    }
+
+
+def fuzz_get_prompt_request_realistic() -> Dict[str, Any]:
+    """Generate realistic GetPromptRequest for testing valid behavior."""
+    name_options = [
+        "code-review",
+        "documentation",
+        "debug-help",
+        "api-design",
+        "security-audit",
+    ]
+
+    argument_options = [
+        None,
+        {"language": "python", "framework": "flask"},
+        {"type": "bug-fix", "severity": "high"},
+        {"format": "markdown", "length": "detailed"},
+    ]
+
+    return {
+        "jsonrpc": "2.0",
+        "id": random.randint(1, 1000),
+        "method": "prompts/get",
+        "params": {
+            "name": random.choice(name_options),
+            "arguments": random.choice(argument_options),
+        },
+    }
+
+
+def fuzz_list_roots_request_realistic() -> Dict[str, Any]:
+    """Generate realistic ListRootsRequest for testing valid behavior."""
+    return {
+        "jsonrpc": "2.0",
+        "id": random.randint(1, 1000),
+        "method": "roots/list",
+        "params": {},
+    }
+
+
+def fuzz_set_level_request_realistic() -> Dict[str, Any]:
+    """Generate realistic SetLevelRequest for testing valid behavior."""
+    level_options = ["debug", "info", "warning", "error", "critical"]
+
+    return {
+        "jsonrpc": "2.0",
+        "id": random.randint(1, 1000),
+        "method": "logging/setLevel",
+        "params": {
+            "level": random.choice(level_options),
+        },
+    }
+
+
+def fuzz_complete_request_realistic() -> Dict[str, Any]:
+    """Generate realistic CompleteRequest for testing valid behavior."""
+    ref_options = [
+        {"type": "ref/prompt", "name": "code-review"},
+        {"type": "ref/resource", "uri": "file:///home/user/docs/"},
+        {"type": "ref/function", "name": "analyze_code"},
+    ]
+
+    argument_options = [
+        {"prefix": "import ", "suffix": ""},
+        {"prefix": "def ", "suffix": "(", "cursor": 4},
+        {"prefix": "class ", "suffix": ":", "cursor": 6},
+        {"prefix": "SELECT ", "suffix": " FROM", "cursor": 7},
+    ]
+
+    return {
+        "jsonrpc": "2.0",
+        "id": random.randint(1, 1000),
+        "method": "completion/complete",
+        "params": {
+            "ref": random.choice(ref_options),
+            "argument": random.choice(argument_options),
+        },
+    }

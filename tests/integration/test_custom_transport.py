@@ -73,7 +73,8 @@ class TestCustomTransportConfiguration:
         """Clear any existing custom transports."""
         from mcp_fuzzer.transport.custom import registry
 
-        registry._transports.clear()
+        for name in list(registry.list_transports().keys()):
+            registry.unregister(name)
 
     def test_config_file_custom_transport_loading(self):
         """Test loading custom transports from configuration file."""
@@ -83,7 +84,7 @@ custom_transports:
     module: "tests.integration.test_custom_transport"
     class: "IntegrationTestTransport"
     description: "Integration test transport"
-    config:
+    config_schema:
       timeout: 30
       retries: 3
 """
@@ -94,19 +95,8 @@ custom_transports:
             config_path = f.name
 
         try:
-            # Load config and custom transports
-            config_data = {
-                "custom_transports": {
-                    "integration_test": {
-                        "module": "tests.integration.test_custom_transport",
-                        "class": "IntegrationTestTransport",
-                        "description": "Integration test transport",
-                        "config": {"timeout": 30, "retries": 3},
-                    }
-                }
-            }
-
-            load_custom_transports(config_data)
+            # Load config and custom transports from the file we wrote
+            assert apply_config_file(config_path=config_path) is True
 
             # Test that transport was loaded
             from mcp_fuzzer.transport import list_custom_transports
@@ -145,7 +135,8 @@ class TestCustomTransportLifecycle:
         """Clear any existing custom transports."""
         from mcp_fuzzer.transport.custom import registry
 
-        registry._transports.clear()
+        for name in list(registry.list_transports().keys()):
+            registry.unregister(name)
 
     async def test_full_transport_lifecycle(self):
         """Test complete transport lifecycle from registration to usage."""
@@ -210,7 +201,8 @@ class TestCustomTransportErrorHandling:
         """Clear any existing custom transports."""
         from mcp_fuzzer.transport.custom import registry
 
-        registry._transports.clear()
+        for name in list(registry.list_transports().keys()):
+            registry.unregister(name)
 
     def test_invalid_registration(self):
         """Test error handling for invalid transport registration."""
@@ -245,7 +237,8 @@ class TestCustomTransportWithClient:
         """Clear any existing custom transports."""
         from mcp_fuzzer.transport.custom import registry
 
-        registry._transports.clear()
+        for name in list(registry.list_transports().keys()):
+            registry.unregister(name)
 
     async def test_transport_with_mcp_client(self):
         """Test using custom transport with MCP client."""

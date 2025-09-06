@@ -180,7 +180,7 @@ def get_config_schema() -> Dict[str, Any]:
             "phase": {"type": "string", "enum": ["realistic", "aggressive", "both"]},
             "protocol": {
                 "type": "string",
-                "enum": ["http", "sse", "stdio", "streamablehttp"],
+                "enum": ["http", "https", "sse", "stdio", "streamablehttp"],
             },
             "endpoint": {"type": "string", "description": "Server endpoint URL"},
             "runs": {"type": "integer", "description": "Number of fuzzing runs"},
@@ -235,7 +235,7 @@ def get_config_schema() -> Dict[str, Any]:
                         "properties": {
                             "module": {
                                 "type": "string",
-                                "description": "Python module path containing transport"
+                                "description": "Python module containing transport",
                             },
                             "class": {
                                 "type": "string",
@@ -245,9 +245,9 @@ def get_config_schema() -> Dict[str, Any]:
                                 "type": "string",
                                 "description": "Human-readable description",
                             },
-                            "config": {
+                            "config_schema": {
                                 "type": "object",
-                                "description": "Transport-specific configuration",
+                                "description": "JSON schema for transport config",
                             },
                         },
                         "required": ["module", "class"],

@@ -99,3 +99,72 @@ class TransportProtocol(ABC):
             result["_meta"]["original_arguments"] = arguments
             result["_meta"]["sanitized_arguments"] = sanitized_arguments
         return result
+
+    async def send_batch_request(
+        self, batch: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Send a batch of JSON-RPC requests/notifications.
+
+        Args:
+            batch: List of JSON-RPC requests/notifications
+
+        Returns:
+            List of responses (may be out of order or incomplete)
+        """
+        # Default implementation sends each request individually
+        # Subclasses can override for true batch support
+        responses = []
+        for request in batch:
+            try:
+                if "id" not in request or request["id"] is None:
+                    # Notification - no response expected
+                    await self.send_raw(request)
+                else:
+                    # Request - response expected
+                    response = await self.send_raw(request)
+                    responses.append(response)
+            except Exception as e:
+                logging.warning(f"Failed to send batch request: {e}")
+                responses.append({"error": str(e), "id": request.get("id")})
+
+        return responses
+
+    def collate_batch_responses(
+        self, requests: List[Dict[str, Any]], responses: List[Dict[str, Any]]
+    ) -> Dict[Any, Dict[str, Any]]:
+        """
+        Collate batch responses by ID, handling out-of-order and missing responses.
+
+        Args:
+            requests: Original batch requests
+            responses: Server responses
+
+        Returns:
+            Dictionary mapping request IDs to responses
+        """
+        # Create mapping of expected IDs to requests
+        expected_responses = {}
+        for request in requests:
+            if "id" in request and request["id"] is not None:
+                expected_responses[request["id"]] = request
+
+        # Map responses to requests by ID
+        collated = {}
+        for response in responses:
+            response_id = response.get("id")
+            if response_id in expected_responses:
+                collated[response_id] = response
+            else:
+                # Unmatched response - could be error or notification response
+                logging.warning(f"Received response with unmatched ID: {response_id}")
+
+        # Check for missing responses
+        for req_id, request in expected_responses.items():
+            if req_id not in collated:
+                collated[req_id] = {
+                    "error": {"code": -32000, "message": "Response missing"},
+                    "id": req_id,
+                }
+
+        return collated

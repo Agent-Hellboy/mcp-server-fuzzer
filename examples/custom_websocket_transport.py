@@ -31,6 +31,7 @@ except ImportError:
     raise
 
 from mcp_fuzzer.transport.base import TransportProtocol
+from mcp_fuzzer.exceptions import ConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class WebSocketTransport(TransportProtocol):
         Initialize WebSocket transport.
 
         Args:
-            url: WebSocket URL (ws:// or wss://)
+            url: WebSocket URL (ws:// or wss://) or a bare endpoint (host[:port]/path)
             timeout: Connection and operation timeout in seconds
             headers: Additional headers to send during WebSocket handshake
             **kwargs: Additional configuration options
@@ -67,6 +68,11 @@ class WebSocketTransport(TransportProtocol):
         self._request_id = 1
         self._connected = False
         self._lock = asyncio.Lock()
+
+        # Normalize to a valid WebSocket URL:
+        # accept ws://, wss://, or a bare endpoint (e.g., "host:port/path").
+        if "://" not in self.url:
+            self.url = f"ws://{self.url.lstrip('/')}"
 
         # Set default headers
         if "User-Agent" not in self.headers:
@@ -300,10 +306,19 @@ def register_for_mcp_fuzzer():
     """Register this transport with MCP Fuzzer."""
     from mcp_fuzzer.transport import register_custom_transport
 
+    def _factory(first_arg: str, **kwargs):
+        s = (first_arg or "").strip()
+        # Accept websocket://…, ws://…, wss://…, or bare endpoint
+        if s.startswith("websocket://"):
+            s = f"ws://{s[len('websocket://'):]}"
+        url = s if s.startswith(("ws://", "wss://")) else f"ws://{s.lstrip('/')}"
+        return WebSocketTransport(url, **kwargs)
+
     register_custom_transport(
         name="websocket",
         transport_class=WebSocketTransport,
         description="WebSocket-based MCP transport for real-time communication",
+        factory_function=_factory,
         config_schema={
             "type": "object",
             "properties": {

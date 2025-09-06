@@ -79,10 +79,8 @@ The `custom_websocket_transport.py` file contains a complete WebSocket transport
 # Install dependencies
 pip install websockets
 
-# Register the transport
-python custom_websocket_transport.py
-
-# Use in your code
+# Register in your app's process (import triggers registration) then use it
+from examples import custom_websocket_transport  # noqa: F401 – ensures registration
 from mcp_fuzzer.transport import create_transport
 transport = create_transport("websocket://localhost:8080/mcp")
 ```

@@ -27,11 +27,13 @@ def create_transport(
             "sse": SSETransport,
             "stdio": StdioTransport,
         }
+        if key in mapping:
+            return mapping[key](endpoint, **kwargs)
+        # fallback to custom transports
         try:
-            transport_cls = mapping[key]
+            return custom_registry.create_transport(key, endpoint, **kwargs)
         except KeyError:
             raise ValueError(f"Unsupported protocol: {url_or_protocol}")
-        return transport_cls(endpoint, **kwargs)
 
     # Single-URL usage
     parsed = urlparse(url_or_protocol)
@@ -84,12 +86,6 @@ def create_transport(
             )
         )
         return StreamableHTTPTransport(http_url, **kwargs)
-
-    # Check for custom transport protocols (backward compatibility)
-    try:
-        return custom_registry.create_transport(url_or_protocol, endpoint, **kwargs)
-    except KeyError:
-        pass  # Fall through to error
 
     raise ValueError(
         f"Unsupported URL scheme: {scheme or 'none'}. "

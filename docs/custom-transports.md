@@ -44,9 +44,9 @@ class MyCustomTransport(TransportProtocol):
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Send a JSON-RPC request and return the response."""
+        """Send a JSON-RPC request and return the result object."""
         # Implement request sending logic
-        # Must return a JSON-RPC response dictionary
+        # Must return the JSON-RPC result (not the full envelope)
         pass
 
     async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
