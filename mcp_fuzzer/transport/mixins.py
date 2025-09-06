@@ -8,8 +8,13 @@ classes, addressing the code duplication issues identified in GitHub issue #41.
 import json
 import logging
 from abc import ABC
-from typing import Any, Dict, Optional, Union, TypedDict, Protocol, Iterator
+from typing import Any, Dict, List, Optional, Union, TypedDict, Protocol, Iterator, Literal
 import httpx
+
+try:
+    from typing import NotRequired
+except ImportError:  # pragma: no cover
+    from typing_extensions import NotRequired
 
 from ..safety_system.policy import is_host_allowed, sanitize_headers
 
@@ -17,27 +22,45 @@ from ..safety_system.policy import is_host_allowed, sanitize_headers
 class JSONRPCRequest(TypedDict):
     """Type definition for JSON-RPC request structure."""
 
-    jsonrpc: str
+    jsonrpc: Literal["2.0"]
     method: str
-    params: Optional[Dict[str, Any]]
-    id: Optional[Union[str, int]]
-
-
-class JSONRPCResponse(TypedDict):
-    """Type definition for JSON-RPC response structure."""
-
-    jsonrpc: str
-    result: Optional[Any]
-    error: Optional[Dict[str, Any]]
-    id: Optional[Union[str, int]]
+    params: NotRequired[Union[List[Any], Dict[str, Any]]]
+    id: Union[str, int, None]
 
 
 class JSONRPCNotification(TypedDict):
     """Type definition for JSON-RPC notification structure."""
 
-    jsonrpc: str
+    jsonrpc: Literal["2.0"]
     method: str
-    params: Optional[Dict[str, Any]]
+    params: NotRequired[Union[List[Any], Dict[str, Any]]]
+
+
+class JSONRPCErrorObject(TypedDict):
+    """Type definition for JSON-RPC error object."""
+
+    code: int
+    message: str
+    data: NotRequired[Any]
+
+
+class JSONRPCSuccessResponse(TypedDict):
+    """Type definition for JSON-RPC success response."""
+
+    jsonrpc: Literal["2.0"]
+    result: Any
+    id: Union[str, int, None]
+
+
+class JSONRPCErrorResponse(TypedDict):
+    """Type definition for JSON-RPC error response."""
+
+    jsonrpc: Literal["2.0"]
+    error: JSONRPCErrorObject
+    id: Union[str, int, None]
+
+
+JSONRPCResponse = Union[JSONRPCSuccessResponse, JSONRPCErrorResponse]
 
 
 class TransportError(Exception):
@@ -137,7 +160,7 @@ class BaseTransportMixin(ABC):
     def _validate_jsonrpc_payload(
         self, payload: Dict[str, Any], strict: bool = False
     ) -> None:
-        """Validate JSON-RPC payload structure.
+        """Validate JSON-RPC 2.0 payload structure.
 
         Args:
             payload: The payload to validate
@@ -149,24 +172,36 @@ class BaseTransportMixin(ABC):
         if not isinstance(payload, dict):
             raise PayloadValidationError("Payload must be a dictionary")
 
-        # Check required fields
-        if "jsonrpc" not in payload:
-            raise PayloadValidationError("Missing required field: jsonrpc")
-
         if payload.get("jsonrpc") != "2.0":
-            raise PayloadValidationError("Invalid jsonrpc version, must be '2.0'")
+            raise PayloadValidationError("Missing/invalid 'jsonrpc' (must be '2.0')")
 
-        if strict:
-            if "method" not in payload:
-                raise PayloadValidationError("Missing required field: method")
+        is_request_like = "method" in payload
+        has_result = "result" in payload
+        has_error = "error" in payload
 
-            if not isinstance(payload.get("method"), str):
-                raise PayloadValidationError("Method must be a string")
-
-        # Validate params if present
-        if "params" in payload and payload["params"] is not None:
-            if not isinstance(payload["params"], dict):
-                raise PayloadValidationError("Params must be a dictionary")
+        if is_request_like:
+            if not isinstance(payload["method"], str) or not payload["method"]:
+                raise PayloadValidationError("'method' must be a non-empty string")
+            if "params" in payload and not isinstance(payload["params"], (list, dict)):
+                raise PayloadValidationError("'params' must be array or object when present")
+            if "id" in payload and not isinstance(payload["id"], (str, int)) and payload["id"] is not None:
+                raise PayloadValidationError("'id' must be string, number, or null when present")
+            if strict and "id" not in payload:
+                # In strict mode treat request-like payloads without id as invalid (not a notification)
+                raise PayloadValidationError("Missing required field: id (strict mode)")
+        else:
+            if has_result == has_error:
+                raise PayloadValidationError("Response must have exactly one of 'result' or 'error'")
+            if "id" not in payload:
+                raise PayloadValidationError("Response must include 'id'")
+            if not isinstance(payload["id"], (str, int)) and payload["id"] is not None:
+                raise PayloadValidationError("'id' must be string, number, or null")
+            if has_error:
+                err = payload["error"]
+                if not isinstance(err, dict) or "code" not in err or "message" not in err:
+                    raise PayloadValidationError("Invalid error object (must include 'code' and 'message')")
+                if not isinstance(err["code"], int) or not isinstance(err["message"], str):
+                    raise PayloadValidationError("Invalid error fields: 'code' int, 'message' str required")
 
     def _validate_payload_serializable(self, payload: Dict[str, Any]) -> None:
         """Validate that payload can be serialized to JSON.
@@ -201,7 +236,7 @@ class BaseTransportMixin(ABC):
 
     def _extract_result_from_response(
         self, data: Any, normalize_non_dict: bool = True
-    ) -> Dict[str, Any]:
+    ) -> Any:
         """Extract result from JSON-RPC response.
 
         Args:

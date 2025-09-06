@@ -75,7 +75,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
 
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    ) -> Any:
         """Send a JSON-RPC request and return the response.
 
         Args:
@@ -117,7 +117,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
             self._handle_http_response_error(response)
             return self._parse_http_response_json(response)
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
         """Send raw payload and return the response.
 
         Args:

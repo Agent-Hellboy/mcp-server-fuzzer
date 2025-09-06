@@ -52,45 +52,80 @@ def _log_error_and_raise(self, message: str, error_data: Any = None) -> None:
 async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 ```
 
-**After**: Specific type definitions:
+**After**: Specific type definitions matching JSON-RPC 2.0 spec:
 ```python
 class JSONRPCRequest(TypedDict):
-    jsonrpc: str
+    jsonrpc: Literal["2.0"]
     method: str
-    params: Optional[Dict[str, Any]]
-    id: Optional[Union[str, int]]
+    params: NotRequired[Union[List[Any], Dict[str, Any]]]
+    id: Union[str, int, None]
 
-class JSONRPCResponse(TypedDict):
-    jsonrpc: str
-    result: Optional[Any]
-    error: Optional[Dict[str, Any]]
-    id: Optional[Union[str, int]]
+class JSONRPCNotification(TypedDict):
+    jsonrpc: Literal["2.0"]
+    method: str
+    params: NotRequired[Union[List[Any], Dict[str, Any]]]
+
+class JSONRPCErrorObject(TypedDict):
+    code: int
+    message: str
+    data: NotRequired[Any]
+
+class JSONRPCSuccessResponse(TypedDict):
+    jsonrpc: Literal["2.0"]
+    result: Any
+    id: Union[str, int, None]
+
+class JSONRPCErrorResponse(TypedDict):
+    jsonrpc: Literal["2.0"]
+    error: JSONRPCErrorObject
+    id: Union[str, int, None]
+
+JSONRPCResponse = Union[JSONRPCSuccessResponse, JSONRPCErrorResponse]
 ```
 
 ### 4. Payload Validation
 
-**Before**: No validation of JSON-RPC structure:
+**Before**: Basic validation of JSON-RPC structure:
 ```python
 async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-    # Accepts any dictionary, no validation
+    # Accepts any dictionary, basic validation
 ```
 
-**After**: Optional validation with fuzzing support:
+**After**: Comprehensive validation with JSON-RPC 2.0 spec compliance:
 ```python
 def _validate_jsonrpc_payload(self, payload: Dict[str, Any], strict: bool = False) -> None:
-    """Validate JSON-RPC payload structure."""
+    """Validate JSON-RPC 2.0 payload structure."""
     if not isinstance(payload, dict):
         raise PayloadValidationError("Payload must be a dictionary")
-
-    if "jsonrpc" not in payload:
-        raise PayloadValidationError("Missing required field: jsonrpc")
-
     if payload.get("jsonrpc") != "2.0":
-        raise PayloadValidationError("Invalid jsonrpc version, must be '2.0'")
+        raise PayloadValidationError("Missing/invalid 'jsonrpc' (must be '2.0')")
 
-    if strict:
-        if "method" not in payload:
-            raise PayloadValidationError("Missing required field: method")
+    is_request_like = "method" in payload
+    has_result = "result" in payload
+    has_error = "error" in payload
+
+    if is_request_like:
+        if not isinstance(payload["method"], str) or not payload["method"]:
+            raise PayloadValidationError("'method' must be a non-empty string")
+        if "params" in payload and not isinstance(payload["params"], (list, dict)):
+            raise PayloadValidationError("'params' must be array or object when present")
+        if "id" in payload and not isinstance(payload["id"], (str, int)) and payload["id"] is not None:
+            raise PayloadValidationError("'id' must be string, number, or null when present")
+        if strict and "id" not in payload:
+            raise PayloadValidationError("Missing required field: id (strict mode)")
+    else:
+        if has_result == has_error:
+            raise PayloadValidationError("Response must have exactly one of 'result' or 'error'")
+        if "id" not in payload:
+            raise PayloadValidationError("Response must include 'id'")
+        if not isinstance(payload["id"], (str, int)) and payload["id"] is not None:
+            raise PayloadValidationError("'id' must be string, number, or null")
+        if has_error:
+            err = payload["error"]
+            if not isinstance(err, dict) or "code" not in err or "message" not in err:
+                raise PayloadValidationError("Invalid error object (must include 'code' and 'message')")
+            if not isinstance(err["code"], int) or not isinstance(err["message"], str):
+                raise PayloadValidationError("Invalid error fields: 'code' int, 'message' str required")
 ```
 
 ### 5. Comprehensive Test Coverage
@@ -227,9 +262,6 @@ Run the comprehensive test suite:
 ```bash
 # Run all transport tests
 pytest tests/unit/transport/ -v
-
-# Run specific improvement tests
-pytest tests/unit/transport/test_transport_improvements.py -v
 
 # Run with coverage
 pytest tests/unit/transport/ --cov=mcp_fuzzer.transport --cov-report=html

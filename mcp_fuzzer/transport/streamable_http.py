@@ -160,7 +160,7 @@ class StreamableHTTPTransport(TransportProtocol):
 
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    ) -> Any:
         request_id = str(asyncio.get_running_loop().time())
         payload = {
             "jsonrpc": "2.0",
@@ -170,7 +170,7 @@ class StreamableHTTPTransport(TransportProtocol):
         }
         return await self.send_raw(payload)
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
         # Ensure MCP initialization handshake once per session
         try:
             method = payload.get("method")
