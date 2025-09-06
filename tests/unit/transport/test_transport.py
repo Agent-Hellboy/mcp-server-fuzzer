@@ -19,6 +19,16 @@ from mcp_fuzzer.transport import (
     TransportProtocol,
     create_transport,
 )
+from mcp_fuzzer.transport.mixins import (
+    BaseTransportMixin,
+    NetworkTransportMixin,
+    ResponseParsingMixin,
+    JSONRPCRequest,
+    JSONRPCNotification,
+    TransportError,
+    NetworkError,
+    PayloadValidationError,
+)
 
 pytestmark = [pytest.mark.unit, pytest.mark.transport]
 
