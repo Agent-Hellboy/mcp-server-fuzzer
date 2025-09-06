@@ -418,8 +418,8 @@ class AggressiveToolStrategy:
         }
     ],
     "overall": {
-        "total_protocol_types": 15,
-        "total_runs": 75,
+        "total_protocol_types": 19,
+        "total_runs": 95,
         "overall_success_rate": 93.3,
         "total_exceptions": 5
     }

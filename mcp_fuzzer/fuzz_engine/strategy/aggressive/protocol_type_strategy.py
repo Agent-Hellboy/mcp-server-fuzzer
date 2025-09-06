@@ -63,7 +63,7 @@ OVERFLOW_VALUES = [
 ]
 
 
-def _generate_malicious_string() -> str:
+def generate_malicious_string() -> str:
     """Generate malicious string values for aggressive testing."""
     strategies = [
         lambda: random.choice(SQL_INJECTION),
@@ -80,7 +80,7 @@ def _generate_malicious_string() -> str:
     return random.choice(strategies)()
 
 
-def _generate_malicious_value() -> Any:
+def generate_malicious_value() -> Any:
     """Generate malicious values of various types."""
     return random.choice(
         [
@@ -101,11 +101,11 @@ def _generate_malicious_value() -> Any:
             -3.14159,
             [],
             {},
-            _generate_malicious_string(),
+            generate_malicious_string(),
             {"__proto__": {"isAdmin": True}},
             {"constructor": {"prototype": {"isAdmin": True}}},
-            [_generate_malicious_string()],
-            {"evil": _generate_malicious_string()},
+            [generate_malicious_string()],
+            {"evil": generate_malicious_string()},
         ]
     )
 
@@ -114,7 +114,7 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
     """Generate aggressive InitializeRequest for security/robustness testing."""
     # Malicious protocol versions
     malicious_versions = [
-        _generate_malicious_string(),
+        generate_malicious_string(),
         None,
         "",
         "999.999.999",
@@ -128,7 +128,7 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
 
     # Malicious JSON-RPC IDs
     malicious_ids = [
-        _generate_malicious_value(),
+        generate_malicious_value(),
         {"evil": "object_as_id"},
         [1, 2, 3],  # Array as ID
         float("inf"),
@@ -139,7 +139,7 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
 
     # Malicious method names
     malicious_methods = [
-        _generate_malicious_string(),
+        generate_malicious_string(),
         None,
         "",
         random.choice(PATH_TRAVERSAL),
@@ -160,7 +160,7 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                 "3.0",  # Future version
                 None,  # Missing
                 "",  # Empty
-                _generate_malicious_string(),  # Malicious
+                generate_malicious_string(),  # Malicious
             ]
         ),
         "id": random.choice(malicious_ids),
@@ -173,7 +173,7 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
             None,  # Missing params
             "",  # Empty string instead of object
             [],  # Array instead of object
-            _generate_malicious_string(),  # String instead of object
+            generate_malicious_string(),  # String instead of object
             {
                 "protocolVersion": random.choice(malicious_versions),
                 "capabilities": random.choice(
@@ -181,10 +181,36 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                         None,
                         "",
                         [],
-                        _generate_malicious_string(),
+                        generate_malicious_string(),
                         {"__proto__": {"isAdmin": True}},
                         {"constructor": {"prototype": {"isAdmin": True}}},
-                        {"evil": _generate_malicious_string()},
+                        {"evil": generate_malicious_string()},
+                        {
+                            "experimental": random.choice(
+                                [
+                                    None,
+                                    "",
+                                    [],
+                                    generate_malicious_string(),
+                                    {
+                                        "customCapability": generate_malicious_value(),
+                                        "extendedFeature": {
+                                            "enabled": generate_malicious_value(),
+                                            "config": generate_malicious_value(),
+                                        },
+                                        "__proto__": {"isAdmin": True},
+                                        "evil": generate_malicious_string(),
+                                    },
+                                    {
+                                        "maliciousExtension": {
+                                            "payload": generate_malicious_string(),
+                                            "injection": random.choice(SQL_INJECTION),
+                                            "xss": random.choice(XSS_PAYLOADS),
+                                        }
+                                    },
+                                ]
+                            )
+                        },
                     ]
                 ),
                 "clientInfo": random.choice(
@@ -192,12 +218,36 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                         None,
                         "",
                         [],
-                        _generate_malicious_string(),
+                        generate_malicious_string(),
                         {
-                            "name": _generate_malicious_string(),
-                            "version": _generate_malicious_string(),
+                            "name": generate_malicious_string(),
+                            "version": generate_malicious_string(),
                             "__proto__": {"isAdmin": True},
-                            "evil": _generate_malicious_string(),
+                            "evil": generate_malicious_string(),
+                        },
+                    ]
+                ),
+                "experimental": random.choice(
+                    [
+                        None,
+                        "",
+                        [],
+                        generate_malicious_string(),
+                        {
+                            "customCapability": generate_malicious_value(),
+                            "extendedFeature": {
+                                "enabled": generate_malicious_value(),
+                                "config": generate_malicious_value(),
+                            },
+                            "__proto__": {"isAdmin": True},
+                            "evil": generate_malicious_string(),
+                        },
+                        {
+                            "maliciousExtension": {
+                                "payload": generate_malicious_string(),
+                                "injection": random.choice(SQL_INJECTION),
+                                "xss": random.choice(XSS_PAYLOADS),
+                            }
                         },
                     ]
                 ),
@@ -227,7 +277,7 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
         "user": "admin",
         "password": "password123",
         "\x00null": "null_injection",
-        "evil": _generate_malicious_string(),
+        "evil": generate_malicious_string(),
     }
 
     for key, value in malicious_extras.items():
@@ -241,7 +291,7 @@ def fuzz_progress_notification() -> Dict[str, Any]:
     """Fuzz ProgressNotification with edge cases."""
     # Generate AGGRESSIVE progress tokens to break things
     progress_token_options = [
-        _generate_malicious_value(),
+        generate_malicious_value(),
         "",
         None,
         "\U0001f680\U0001f525\U0001f4af",
@@ -259,8 +309,8 @@ def fuzz_progress_notification() -> Dict[str, Any]:
         "method": "notifications/progress",
         "params": {
             "progressToken": random.choice(progress_token_options),
-            "progress": _generate_malicious_value(),
-            "total": _generate_malicious_value(),
+            "progress": generate_malicious_value(),
+            "total": generate_malicious_value(),
         },
     }
 
@@ -271,8 +321,8 @@ def fuzz_cancel_notification() -> Dict[str, Any]:
         "jsonrpc": "2.0",
         "method": "notifications/cancelled",
         "params": {
-            "requestId": _generate_malicious_value(),
-            "reason": _generate_malicious_string(),
+            "requestId": generate_malicious_value(),
+            "reason": generate_malicious_string(),
         },
     }
 
@@ -281,11 +331,11 @@ def fuzz_list_resources_request() -> Dict[str, Any]:
     """Fuzz ListResourcesRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "resources/list",
         "params": {
-            "cursor": _generate_malicious_string(),
-            "_meta": _generate_malicious_value(),
+            "cursor": generate_malicious_string(),
+            "_meta": generate_malicious_value(),
         },
     }
 
@@ -305,10 +355,10 @@ def fuzz_read_resource_request() -> Dict[str, Any]:
 
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "resources/read",
         "params": {
-            "uri": random.choice(malicious_uris + [_generate_malicious_string()])
+            "uri": random.choice(malicious_uris + [generate_malicious_string()])
         },
     }
 
@@ -317,9 +367,9 @@ def fuzz_set_level_request() -> Dict[str, Any]:
     """Fuzz SetLevelRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "logging/setLevel",
-        "params": {"level": _generate_malicious_value()},
+        "params": {"level": generate_malicious_value()},
     }
 
 
@@ -327,9 +377,9 @@ def fuzz_generic_jsonrpc_request() -> Dict[str, Any]:
     """Fuzz generic JSON-RPC requests with edge cases."""
     return {
         "jsonrpc": random.choice(["2.0", "1.0", "3.0", "invalid", "", None]),
-        "id": _generate_malicious_value(),
-        "method": _generate_malicious_string(),
-        "params": _generate_malicious_value(),
+        "id": generate_malicious_value(),
+        "method": generate_malicious_string(),
+        "params": generate_malicious_value(),
     }
 
 
@@ -337,16 +387,16 @@ def fuzz_call_tool_result() -> Dict[str, Any]:
     """Fuzz CallToolResult with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "result": {
             "content": [
                 {
-                    "type": _generate_malicious_string(),
-                    "data": _generate_malicious_string(),
+                    "type": generate_malicious_string(),
+                    "data": generate_malicious_string(),
                 }
             ],
-            "isError": _generate_malicious_value(),
-            "_meta": _generate_malicious_value(),
+            "isError": generate_malicious_value(),
+            "_meta": generate_malicious_value(),
         },
     }
 
@@ -354,11 +404,11 @@ def fuzz_call_tool_result() -> Dict[str, Any]:
 def fuzz_sampling_message() -> Dict[str, Any]:
     """Fuzz SamplingMessage with edge cases."""
     return {
-        "role": _generate_malicious_string(),
+        "role": generate_malicious_string(),
         "content": [
             {
-                "type": _generate_malicious_string(),
-                "data": _generate_malicious_string(),
+                "type": generate_malicious_string(),
+                "data": generate_malicious_string(),
             }
         ],
     }
@@ -368,17 +418,17 @@ def fuzz_create_message_request() -> Dict[str, Any]:
     """Fuzz CreateMessageRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "sampling/createMessage",
         "params": {
             "messages": [fuzz_sampling_message() for _ in range(random.randint(0, 5))],
-            "modelPreferences": _generate_malicious_value(),
-            "systemPrompt": _generate_malicious_string(),
-            "includeContext": _generate_malicious_string(),
-            "temperature": _generate_malicious_value(),
-            "maxTokens": _generate_malicious_value(),
-            "stopSequences": _generate_malicious_value(),
-            "metadata": _generate_malicious_value(),
+            "modelPreferences": generate_malicious_value(),
+            "systemPrompt": generate_malicious_string(),
+            "includeContext": generate_malicious_string(),
+            "temperature": generate_malicious_value(),
+            "maxTokens": generate_malicious_value(),
+            "stopSequences": generate_malicious_value(),
+            "metadata": generate_malicious_value(),
         },
     }
 
@@ -387,11 +437,11 @@ def fuzz_list_prompts_request() -> Dict[str, Any]:
     """Fuzz ListPromptsRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "prompts/list",
         "params": {
-            "cursor": _generate_malicious_string(),
-            "_meta": _generate_malicious_value(),
+            "cursor": generate_malicious_string(),
+            "_meta": generate_malicious_value(),
         },
     }
 
@@ -400,11 +450,11 @@ def fuzz_get_prompt_request() -> Dict[str, Any]:
     """Fuzz GetPromptRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "prompts/get",
         "params": {
-            "name": _generate_malicious_string(),
-            "arguments": _generate_malicious_value(),
+            "name": generate_malicious_string(),
+            "arguments": generate_malicious_value(),
         },
     }
 
@@ -413,9 +463,9 @@ def fuzz_list_roots_request() -> Dict[str, Any]:
     """Fuzz ListRootsRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "roots/list",
-        "params": {"_meta": _generate_malicious_value()},
+        "params": {"_meta": generate_malicious_value()},
     }
 
 
@@ -423,9 +473,9 @@ def fuzz_subscribe_request() -> Dict[str, Any]:
     """Fuzz SubscribeRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "resources/subscribe",
-        "params": {"uri": _generate_malicious_string()},
+        "params": {"uri": generate_malicious_string()},
     }
 
 
@@ -433,9 +483,9 @@ def fuzz_unsubscribe_request() -> Dict[str, Any]:
     """Fuzz UnsubscribeRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "resources/unsubscribe",
-        "params": {"uri": _generate_malicious_string()},
+        "params": {"uri": generate_malicious_string()},
     }
 
 
@@ -443,12 +493,48 @@ def fuzz_complete_request() -> Dict[str, Any]:
     """Fuzz CompleteRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": _generate_malicious_value(),
+        "id": generate_malicious_value(),
         "method": "completion/complete",
         "params": {
-            "ref": _generate_malicious_value(),
-            "argument": _generate_malicious_value(),
+            "ref": generate_malicious_value(),
+            "argument": generate_malicious_value(),
         },
+    }
+
+
+def fuzz_list_resource_templates_request() -> Dict[str, Any]:
+    """Fuzz ListResourceTemplatesRequest with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "method": "resources/templates/list",
+        "params": {
+            "cursor": generate_malicious_string(),
+            "_meta": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_elicit_request() -> Dict[str, Any]:
+    """Fuzz ElicitRequest with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "method": "elicitation/create",
+        "params": {
+            "message": generate_malicious_string(),
+            "requestedSchema": generate_malicious_value(),
+        },
+    }
+
+
+def fuzz_ping_request() -> Dict[str, Any]:
+    """Fuzz PingRequest with edge cases."""
+    return {
+        "jsonrpc": "2.0",
+        "id": generate_malicious_value(),
+        "method": "ping",
+        "params": generate_malicious_value(),
     }
 
 
@@ -471,6 +557,9 @@ def get_protocol_fuzzer_method(protocol_type: str):
         "SubscribeRequest": fuzz_subscribe_request,
         "UnsubscribeRequest": fuzz_unsubscribe_request,
         "CompleteRequest": fuzz_complete_request,
+        "ListResourceTemplatesRequest": fuzz_list_resource_templates_request,
+        "ElicitRequest": fuzz_elicit_request,
+        "PingRequest": fuzz_ping_request,
     }
 
     return fuzzer_methods.get(protocol_type)
