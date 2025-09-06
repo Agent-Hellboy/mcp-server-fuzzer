@@ -81,9 +81,7 @@ class ProcessWatchdog:
                     # Check if process is still running
                     if process.returncode is None:
                         # Process is running, check activity
-                        last_activity = await self._get_last_activity(
-                            process_info
-                        )
+                        last_activity = await self._get_last_activity(process_info)
                         time_since_activity = current_time - last_activity
 
                         timeout_threshold = (
@@ -131,9 +129,7 @@ class ProcessWatchdog:
             for pid in processes_to_remove:
                 del self._processes[pid]
 
-    async def _get_last_activity(
-        self, process_info: dict
-    ) -> float:
+    async def _get_last_activity(self, process_info: dict) -> float:
         """Get the last activity timestamp for a process."""
         # Try to get activity from callback first
         if process_info["activity_callback"]:
@@ -142,7 +138,7 @@ class ProcessWatchdog:
                 result = callback()
                 if inspect.isawaitable(result):
                     result = await result
-                
+
                 # Convert and validate timestamp
                 timestamp = float(result)
                 # Validate the timestamp is reasonable (not in future, not negative)
@@ -154,8 +150,8 @@ class ProcessWatchdog:
                 return timestamp
             except Exception:
                 self._logger.debug(
-                    "activity_callback failed; falling back to stored timestamp", 
-                    exc_info=True
+                    "activity_callback failed; falling back to stored timestamp",
+                    exc_info=True,
                 )
 
         # Fall back to stored timestamp
@@ -283,9 +279,7 @@ class ProcessWatchdog:
         async with self._lock:
             total = len(self._processes)
             running = sum(
-                1
-                for p in self._processes.values()
-                if p["process"].returncode is None
+                1 for p in self._processes.values() if p["process"].returncode is None
             )
 
             return {

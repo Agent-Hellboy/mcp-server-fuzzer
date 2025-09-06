@@ -76,6 +76,7 @@ per-file-ignores = { "tests/**" = ["F401", "F841"] }
 [tool.pytest.ini_options]
 addopts = "-q --maxfail=1 --disable-warnings --cov=mcp_fuzzer --cov-report=term-missing --cov-report=xml"
 testpaths = ["tests"]
+asyncio_mode = "auto"
 markers = [
     "auth: tests for the auth component",
     "cli: tests for the cli component",

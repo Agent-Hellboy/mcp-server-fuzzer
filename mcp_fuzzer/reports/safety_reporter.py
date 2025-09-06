@@ -404,12 +404,12 @@ class SafetyReporter:
                     return True
             except Exception:
                 pass
-                
+
             # Check system blocker data if available
             if hasattr(self, "get_blocked_operations"):
                 blocked_ops = self.get_blocked_operations()
                 return len(blocked_ops) > 0
-                
+
             return False
         except Exception:
             return False

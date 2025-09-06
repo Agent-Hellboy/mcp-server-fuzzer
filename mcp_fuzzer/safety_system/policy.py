@@ -36,13 +36,13 @@ def configure_network_policy(
     """
     global _POLICY_DENY_NETWORK_DEFAULT_OVERRIDE
     global _POLICY_EXTRA_ALLOWED_HOSTS
-    
+
     if deny_network_by_default is not None:
         _POLICY_DENY_NETWORK_DEFAULT_OVERRIDE = deny_network_by_default
-    
+
     if reset_allowed_hosts:
         _POLICY_EXTRA_ALLOWED_HOSTS = set()
-        
+
     def _normalize_host(host: str) -> str:
         """Normalize host to handle URLs, mixed case, etc."""
         if not host:
@@ -54,13 +54,13 @@ def configure_network_policy(
             host = parsed.hostname or s
         else:
             # For cases like "example.com:80" without protocol
-            if ":" in s and not s.startswith("["): 
+            if ":" in s and not s.startswith("["):
                 # Handle IPv6 addresses
                 host = s.split(":", 1)[0]
             else:
                 host = s
         return host.strip().lower()
-        
+
     if extra_allowed_hosts is not None:
         normalized_hosts = {_normalize_host(h) for h in extra_allowed_hosts if h}
         _POLICY_EXTRA_ALLOWED_HOSTS |= {h for h in normalized_hosts if h}
@@ -86,18 +86,18 @@ def is_host_allowed(
 
     parsed = urlparse(url)
     raw_host = parsed.hostname or ""
-    
+
     # Normalize the host from the URL
     if not raw_host and ":" in url and not url.startswith("["):
         # Handle non-URL format with port
         parts = url.split(":", 1)
         raw_host = parts[0]
-        
+
     host = raw_host.lower()
-    
+
     # Collect and normalize all allowed hosts
     allowed_set = set()
-    for h in (allowed_hosts or SAFETY_LOCAL_HOSTS):
+    for h in allowed_hosts or SAFETY_LOCAL_HOSTS:
         # Use same normalization logic as in configure_network_policy
         if "://" in h:
             h_parsed = urlparse(h)
@@ -105,10 +105,10 @@ def is_host_allowed(
         else:
             norm_h = h.split(":")[0] if ":" in h and not h.startswith("[") else h
         allowed_set.add(norm_h.lower())
-        
+
     if _POLICY_EXTRA_ALLOWED_HOSTS:
         allowed_set |= _POLICY_EXTRA_ALLOWED_HOSTS
-        
+
     return host in allowed_set
 
 

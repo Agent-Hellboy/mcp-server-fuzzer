@@ -56,7 +56,7 @@ class ProcessManager:
                 if config.env is not None
                 else os.environ.copy()
             )
-            
+
             # Start the process with asyncio
             process = await asyncio.create_subprocess_exec(
                 *config.command,
@@ -140,7 +140,7 @@ class ProcessManager:
         else:
             process.kill()
             self._logger.info(f"Force killed process {pid} ({name})")
-        
+
         # Wait for the process to actually terminate
         try:
             await asyncio.wait_for(process.wait(), timeout=1.0)
@@ -400,7 +400,7 @@ class ProcessManager:
         """Register an already-started subprocess with the manager and watchdog."""
         # Register with watchdog first
         await self.watchdog.register_process(pid, process, activity_callback, name)
-        
+
         # Track in manager table
         async with self._lock:
             self._processes[pid] = {

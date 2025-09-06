@@ -67,6 +67,7 @@ class Configuration:
 
     def _load_from_env(self) -> None:
         """Load configuration values from environment variables."""
+
         def _get_float(key: str, default: float) -> float:
             try:
                 return float(os.getenv(key, str(default)))

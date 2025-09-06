@@ -193,7 +193,8 @@ class StdioTransport(TransportProtocol):
                 if "error" in response:
                     logging.error(f"Server returned error: {response['error']}")
                     raise Exception(f"Server error: {response['error']}")
-                return response.get("result", response)
+                result = response.get("result", response)
+                return result if isinstance(result, dict) else {"result": result}
 
     async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Send raw payload and wait for response."""
@@ -208,7 +209,8 @@ class StdioTransport(TransportProtocol):
             logging.error(f"Server returned error: {response['error']}")
             raise Exception(f"Server error: {response['error']}")
 
-        return response.get("result", response)
+        result = response.get("result", response)
+        return result if isinstance(result, dict) else {"result": result}
 
     async def _send_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Compatibility method for tests expecting sys-based stdio behavior.
