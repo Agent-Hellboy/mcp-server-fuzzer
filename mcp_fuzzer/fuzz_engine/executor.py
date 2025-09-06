@@ -56,7 +56,10 @@ class AsyncFuzzExecutor:
 
         # Process results
         for result in completed:
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
+                # Preserve cancellation semantics
+                if isinstance(result, asyncio.CancelledError):
+                    raise result
                 errors.append(result)
             else:
                 results.append(result)

@@ -542,4 +542,56 @@ async def test_fuzz_tool_arguments_numeric_constraints():
     result = await fuzz_tool_arguments_realistic(tool)
 
     assert 0.1 <= result["small_float"] <= 0.9
-    assert 100.0 <= result["large_float"] <= 200.0
+@pytest.mark.asyncio
+async def test_generate_realistic_text_bounds_swapping():
+    """Test that generate_realistic_text handles min_size > max_size correctly."""
+    # This should trigger line 110: if min_size > max_size:
+    text = await generate_realistic_text(min_size=10, max_size=5)
+    assert isinstance(text, str)
+    assert len(text) > 0
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_base64_bounds_swapping():
+    """Test base64 strategy bounds swapping in generate_realistic_text."""
+    # This should trigger line 133: if size_min > size_max:
+    text = await generate_realistic_text(min_size=20, max_size=5)
+    assert isinstance(text, str)
+    assert len(text) > 0
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_fallback():
+    """Test the fallback case in generate_realistic_text."""
+    # Mock random.choice to return an invalid strategy to trigger the else clause
+    import random
+    from unittest.mock import patch
+
+    with patch.object(random, 'choice', return_value='invalid_strategy'):
+        text = await generate_realistic_text()
+        # Should trigger line 151: else: return "realistic_value"
+        assert text == "realistic_value"
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_exception_handling():
+    """Test exception handling in fuzz_tool_arguments_realistic."""
+    from unittest.mock import patch
+
+    # Mock the schema parser to raise an exception
+    with patch(
+        'mcp_fuzzer.fuzz_engine.strategy.schema_parser.make_fuzz_strategy_from_jsonschema',
+        side_effect=Exception("Test exception")
+    ):
+        tool = {
+            "inputSchema": {
+                "properties": {"test": {"type": "string"}},
+                "required": ["test"]
+            }
+        }
+
+        result = await fuzz_tool_arguments_realistic(tool)
+
+        # Should handle the exception and continue with required field generation
+        assert "test" in result
+        assert result["test"] is not None

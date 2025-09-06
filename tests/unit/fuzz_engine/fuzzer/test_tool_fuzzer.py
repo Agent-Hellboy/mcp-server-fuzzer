@@ -537,6 +537,40 @@ class TestToolFuzzer(unittest.TestCase):
         self.assertEqual(len(results2), 1)
         self.assertIn("success", results1[0])
         self.assertIn("success", results2[0])
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_both_phases(self):
+        """Test fuzzing a tool in both realistic and aggressive phases."""
+        tool = {
+            "name": "test_tool",
+            "inputSchema": {"properties": {"name": {"type": "string"}}},
+        }
+
+        results = await self.fuzzer.fuzz_tool_both_phases(tool, runs_per_phase=2)
+
+        # Should have results for both phases
+        self.assertIn("realistic", results)
+        self.assertIn("aggressive", results)
+
+        # Each phase should have 2 runs
+        self.assertEqual(len(results["realistic"]), 2)
+        self.assertEqual(len(results["aggressive"]), 2)
+
+        # Check structure of results
+        for phase_results in [results["realistic"], results["aggressive"]]:
+            for result in phase_results:
+                self.assertIn("success", result)
+                self.assertIn("args", result)
+                self.assertIsInstance(result["args"], dict)
+
+    @pytest.mark.asyncio
+    async def test_shutdown(self):
+        """Test shutdown method."""
+        # Mock the executor shutdown
+        with patch.object(
+            self.fuzzer.executor, "shutdown", new_callable=AsyncMock
+        ) as mock_shutdown:
+            await self.fuzzer.shutdown()
+            mock_shutdown.assert_called_once()
 
 
 if __name__ == "__main__":
