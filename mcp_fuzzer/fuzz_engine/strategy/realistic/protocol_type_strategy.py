@@ -100,23 +100,23 @@ def fuzz_initialize_request_realistic() -> Dict[str, Any]:
     """Generate realistic InitializeRequest for testing valid behavior."""
     # Use realistic protocol versions
     protocol_versions = [
-        protocol_version_strings().example(),
-        protocol_version_strings().example(),
-        DEFAULT_PROTOCOL_VERSION,  # Current MCP version
-        "2024-10-01",  # Another valid date format
-        "1.0.0",  # Semantic version
+        DEFAULT_PROTOCOL_VERSION,
+        "2024-11-05",
+        "2024-10-01",
+        "1.0.0",
+        "0.9.0",
     ]
 
     # Use realistic JSON-RPC IDs
     id_options = [
-        json_rpc_id_values().example(),
-        json_rpc_id_values().example(),
-        json_rpc_id_values().example(),
         1,
         2,
-        3,  # Simple integers
+        3,
+        42,
+        99,
         "req-001",
-        "req-002",  # String IDs
+        "req-002",
+        "init-123",
     ]
 
     return {
@@ -195,10 +195,8 @@ def fuzz_subscribe_request_realistic() -> Dict[str, Any]:
 def fuzz_unsubscribe_request_realistic() -> Dict[str, Any]:
     """Generate realistic UnsubscribeRequest for testing valid behavior."""
     uri_options = [
-        "file:///home/user/documents/",
-        "file:///var/log/",
-        "file:///tmp/notifications/",
-        "http://localhost:8080/api/events",
+        "file:///tmp/mcp-fuzzer/",
+        "file:///tmp/mcp-fuzzer/notifications/",
     ]
 
     return {
@@ -246,14 +244,17 @@ def fuzz_get_prompt_request_realistic() -> Dict[str, Any]:
         {"format": "markdown", "length": "detailed"},
     ]
 
+    name = random.choice(name_options)
+    params: Dict[str, Any] = {"name": name}
+    args = random.choice(argument_options)
+    if args is not None:
+        params["arguments"] = args
+
     return {
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
         "method": "prompts/get",
-        "params": {
-            "name": random.choice(name_options),
-            "arguments": random.choice(argument_options),
-        },
+        "params": params,
     }
 
 
@@ -269,7 +270,16 @@ def fuzz_list_roots_request_realistic() -> Dict[str, Any]:
 
 def fuzz_set_level_request_realistic() -> Dict[str, Any]:
     """Generate realistic SetLevelRequest for testing valid behavior."""
-    level_options = ["debug", "info", "warning", "error", "critical"]
+    level_options = [
+        "debug",
+        "info",
+        "notice",
+        "warning",
+        "error",
+        "critical",
+        "alert",
+        "emergency",
+    ]
 
     return {
         "jsonrpc": "2.0",
