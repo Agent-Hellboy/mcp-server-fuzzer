@@ -701,6 +701,238 @@ async def custom_executor_configuration():
         await cpu_executor.shutdown()
 ```
 
+## Enhanced Fuzzing Examples
+
+### Hypothesis Extensions
+
+The MCP fuzzer now supports Hypothesis extensions for enhanced data generation and fuzzing capabilities.
+
+#### JSON Schema-Based Fuzzing
+
+```python
+import asyncio
+from mcp_fuzzer.fuzz_engine.strategy import ProtocolStrategies
+
+async def json_schema_fuzzing():
+    # Define a JSON schema for MCP protocol messages
+    mcp_schema = {
+        "type": "object",
+        "properties": {
+            "jsonrpc": {"type": "string", "enum": ["2.0"]},
+            "id": {"type": ["string", "integer", "null"]},
+            "method": {"type": "string"},
+            "params": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "arguments": {"type": "object"}
+                }
+            }
+        },
+        "required": ["jsonrpc", "method"]
+    }
+
+    # Fuzz using Hypothesis extensions
+    results = await ProtocolStrategies.fuzz_with_hypothesis_extensions(
+        schema=mcp_schema,
+        runs=10,
+        use_realistic_data=True
+    )
+
+    print(f"Generated {len(results)} fuzzing examples")
+    for result in results[:3]:  # Show first 3
+        print(f"Success: {result['success']}")
+        print(f"Data: {result['fuzz_data']}")
+
+asyncio.run(json_schema_fuzzing())
+```
+
+#### Realistic Data Generation
+
+```python
+import asyncio
+from mcp_fuzzer.fuzz_engine.strategy.hypothesis_extensions import hypothesis_extensions
+
+async def realistic_data_generation():
+    # Generate realistic emails
+    emails = await hypothesis_extensions.generate_realistic_user_data("email", count=5)
+    print(f"Generated emails: {emails}")
+
+    # Generate realistic names
+    names = await hypothesis_extensions.generate_realistic_user_data("name", count=5)
+    print(f"Generated names: {names}")
+
+    # Generate realistic URLs
+    urls = await hypothesis_extensions.generate_realistic_user_data("url", count=5)
+    print(f"Generated URLs: {urls}")
+
+asyncio.run(realistic_data_generation())
+```
+
+### Alternative Fuzzing Libraries
+
+#### Mutation-Based Fuzzing
+
+```python
+import asyncio
+from mcp_fuzzer.fuzz_engine.strategy import ProtocolStrategies
+
+async def mutation_based_fuzzing():
+    # Define base inputs to mutate
+    base_inputs = [
+        {"jsonrpc": "2.0", "method": "test", "id": 1},
+        {"jsonrpc": "2.0", "method": "initialize", "params": {}},
+        "simple string input"
+    ]
+
+    # Define target function to fuzz
+    def target_function(data):
+        if isinstance(data, dict):
+            if "method" in data and len(str(data.get("method", ""))) > 50:
+                raise ValueError("Method name too long")
+        return True
+
+    # Fuzz using custom mutation strategies
+    results = await ProtocolStrategies.fuzz_with_alternative_libraries(
+        base_inputs=base_inputs,
+        target_function=target_function,
+        strategy="mutation",
+        num_mutations_per_input=5
+    )
+
+    successful = len([r for r in results if r.get("success")])
+    print(f"Mutation fuzzing: {successful}/{len(results)} successful")
+
+asyncio.run(mutation_based_fuzzing())
+```
+
+#### Atheris Integration (if available)
+
+```python
+import asyncio
+from mcp_fuzzer.fuzz_engine.strategy import ProtocolStrategies
+
+async def atheris_fuzzing():
+    # Define target function
+    def target_function(data):
+        if isinstance(data, dict) and "malicious" in str(data):
+            raise Exception("Malicious input detected")
+        return True
+
+    # Prepare initial inputs
+    initial_inputs = [
+        b'{"jsonrpc": "2.0", "method": "test"}',
+        b'{"jsonrpc": "2.0", "method": "malicious"}',
+        b"simple string"
+    ]
+
+    # Fuzz using Atheris
+    results = await ProtocolStrategies.fuzz_with_alternative_libraries(
+        base_inputs=initial_inputs,
+        target_function=target_function,
+        strategy="atheris",
+        max_iterations=1000,
+        timeout_seconds=10
+    )
+
+    print(f"Atheris fuzzing completed with {len(results)} results")
+
+asyncio.run(atheris_fuzzing())
+```
+
+### Combined Fuzzing Strategies
+
+#### Multi-Strategy Fuzzing Campaign
+
+```python
+import asyncio
+from mcp_fuzzer.fuzz_engine.strategy import ProtocolStrategies
+
+async def combined_fuzzing_campaign():
+    # Define comprehensive schema
+    schema = {
+        "type": "object",
+        "properties": {
+            "jsonrpc": {"type": "string", "enum": ["2.0"]},
+            "method": {"type": "string"},
+            "params": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "format": "email"},
+                    "url": {"type": "string", "format": "uri"}
+                }
+            }
+        }
+    }
+
+    # Strategy 1: Hypothesis extensions
+    print("Running Hypothesis extensions fuzzing...")
+    hypo_results = await ProtocolStrategies.fuzz_with_hypothesis_extensions(
+        schema=schema, runs=10, use_realistic_data=True
+    )
+
+    # Strategy 2: Custom mutations
+    base_data = [{"jsonrpc": "2.0", "method": "test"}]
+    def simple_target(data):
+        if isinstance(data, dict) and len(str(data.get("method", ""))) > 20:
+            raise ValueError("Method too long")
+        return True
+
+    print("Running mutation-based fuzzing...")
+    mutation_results = await ProtocolStrategies.fuzz_with_alternative_libraries(
+        base_inputs=base_data,
+        target_function=simple_target,
+        strategy="mutation",
+        num_mutations_per_input=8
+    )
+
+    # Analyze results
+    hypo_success = len([r for r in hypo_results if r.get("success")])
+    mutation_success = len([r for r in mutation_results if r.get("success")])
+
+    print("
+Fuzzing Campaign Results:")
+    print(f"Hypothesis Extensions: {hypo_success}/{len(hypo_results)} successful")
+    print(f"Custom Mutations: {mutation_success}/{len(mutation_results)} successful")
+    print(f"Total: {hypo_success + mutation_success} successful examples generated")
+
+asyncio.run(combined_fuzzing_campaign())
+```
+
+#### Enhanced Demo Script
+
+Run the comprehensive demo script to see all enhanced fuzzing features:
+
+```bash
+# Run the enhanced fuzzing demo
+python examples/enhanced_fuzzing_demo.py
+```
+
+This demo showcases:
+- Hypothesis extensions for JSON schema-based fuzzing
+- Realistic data generation with faker
+- Alternative fuzzing libraries (Atheris, PythonFuzz)
+- Custom mutation-based fuzzing
+- Combined multi-strategy fuzzing campaigns
+
+### Command Line Usage
+
+#### Hypothesis Extensions
+
+```bash
+# Use enhanced fuzzing with Hypothesis extensions (via API)
+# The enhanced features are available through the Python API
+# See the examples above for usage patterns
+```
+
+#### Alternative Libraries
+
+```bash
+# Use alternative fuzzing libraries (via API)
+# The alternative libraries are integrated through the strategy manager
+# See the Python examples above for detailed usage
+```
+
 ## Enhanced Reporting Examples
 
 ### Comprehensive Safety Reporting
