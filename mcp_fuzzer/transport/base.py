@@ -14,11 +14,11 @@ class TransportProtocol(ABC):
     @abstractmethod
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    ) -> Any:
         pass
 
     @abstractmethod
-    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
         pass
 
     @abstractmethod

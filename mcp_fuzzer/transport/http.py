@@ -3,24 +3,29 @@ import logging
 import uuid
 import time
 import inspect
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, AsyncIterator
 
 import httpx
 
 from .base import TransportProtocol
+from .mixins import NetworkTransportMixin, ResponseParsingMixin
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ..config import (
     JSON_CONTENT_TYPE,
     DEFAULT_HTTP_ACCEPT,
 )
 from ..safety_system.policy import (
-    is_host_allowed,
     resolve_redirect_safely,
-    sanitize_headers,
 )
 
 
-class HTTPTransport(TransportProtocol):
+class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMixin):
+    """HTTP transport implementation with reduced code duplication.
+
+    This implementation uses mixins to provide shared functionality,
+    addressing the code duplication issues identified in GitHub issue #41.
+    """
+
     def __init__(
         self,
         url: str,
@@ -70,118 +75,130 @@ class HTTPTransport(TransportProtocol):
 
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    ) -> Any:
+        """Send a JSON-RPC request and return the response.
+
+        Args:
+            method: The method name to call
+            params: Optional parameters for the method
+
+        Returns:
+            Response data from the server
+
+        Raises:
+            TransportError: If the request fails or server returns an error
+            NetworkError: If network-related issues occur
+            PayloadValidationError: If the payload is invalid
+        """
         request_id = str(uuid.uuid4())
-        payload = {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": method,
-            "params": params or {},
-        }
+        payload = self._create_jsonrpc_request(method, params, request_id)
+
+        # Validate payload before sending
+        self._validate_jsonrpc_payload(payload, strict=True)
+        self._validate_payload_serializable(payload)
 
         await self._update_activity()
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-            follow_redirects=False,
-            trust_env=False,
-        ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
-            safe_headers = sanitize_headers(self.headers)
+        # Use shared network functionality
+        self._validate_network_request(self.url)
+        safe_headers = self._prepare_safe_headers(self.headers)
+
+        async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
-            # Follow only 307/308 to preserve method and body
+
+            # Handle redirects
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
                 response = await client.post(
                     redirect_url, json=payload, headers=safe_headers
                 )
-            response.raise_for_status()
-            try:
-                data = response.json()
-            except json.JSONDecodeError:
-                logging.info("Response is not JSON, trying to parse as SSE")
-                for line in response.text.splitlines():
-                    if line.startswith("data:"):
-                        try:
-                            data = json.loads(line[len("data:") :].strip())
-                            break
-                        except json.JSONDecodeError:
-                            logging.error("Failed to parse SSE data line as JSON")
-                            raise
-                else:
-                    logging.error("No valid data: line found in SSE response")
-                    raise Exception("Invalid SSE response format")
-            if isinstance(data, dict) and "error" in data:
-                logging.error("Server returned error: %s", data["error"])
-                raise Exception(f"Server error: {data['error']}")
-            if isinstance(data, dict):
-                return data.get("result", data)
-            # Normalize non-dict responses
-            return {"result": data}
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+            # Use shared response handling
+            self._handle_http_response_error(response)
+            return self._parse_http_response_json(response)
+
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+        """Send raw payload and return the response.
+
+        Args:
+            payload: Raw payload to send (should be JSON-RPC compatible)
+
+        Returns:
+            Response data from the server
+
+        Raises:
+            TransportError: If the request fails or server returns an error
+            NetworkError: If network-related issues occur
+            PayloadValidationError: If the payload is invalid
+        """
+        # Optional validation - can be disabled for fuzzing
+        try:
+            self._validate_jsonrpc_payload(payload, strict=False)
+            self._validate_payload_serializable(payload)
+        except Exception as e:
+            logging.getLogger(self.__class__.__name__).warning(
+                "Payload validation failed: %s", e
+            )
+            # Continue for fuzzing purposes, but log the issue
+
         await self._update_activity()
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-            follow_redirects=False,
-            trust_env=False,
-        ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
-            safe_headers = sanitize_headers(self.headers)
+        # Use shared network functionality
+        self._validate_network_request(self.url)
+        safe_headers = self._prepare_safe_headers(self.headers)
+
+        async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
+
+            # Handle redirects
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
                 response = await client.post(
                     redirect_url, json=payload, headers=safe_headers
                 )
-            response.raise_for_status()
-            try:
-                data = response.json()
-            except json.JSONDecodeError:
-                for line in response.text.splitlines():
-                    if line.startswith("data:"):
-                        data = json.loads(line[len("data:") :].strip())
-                        break
-                else:
-                    raise
-            if isinstance(data, dict) and "error" in data:
-                raise Exception(f"Server error: {data['error']}")
-            if isinstance(data, dict):
-                return data.get("result", data)
-            # Normalize non-dict responses
-            return {"result": data}
+
+            # Use shared response handling
+            self._handle_http_response_error(response)
+            return self._parse_http_response_json(response)
 
     async def send_notification(
         self, method: str, params: Optional[Dict[str, Any]] = None
     ) -> None:
-        payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
+        """Send a JSON-RPC notification (fire-and-forget).
+
+        Args:
+            method: The method name to call
+            params: Optional parameters for the method
+
+        Raises:
+            TransportError: If the request fails
+            NetworkError: If network-related issues occur
+            PayloadValidationError: If the payload is invalid
+        """
+        payload = self._create_jsonrpc_notification(method, params)
+
+        # Validate payload before sending
+        self._validate_jsonrpc_payload(payload, strict=True)
+        self._validate_payload_serializable(payload)
 
         await self._update_activity()
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-            follow_redirects=False,
-            trust_env=False,
-        ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
-            safe_headers = sanitize_headers(self.headers)
+        # Use shared network functionality
+        self._validate_network_request(self.url)
+        safe_headers = self._prepare_safe_headers(self.headers)
+
+        async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
+
+            # Handle redirects
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
                 response = await client.post(
                     redirect_url, json=payload, headers=safe_headers
                 )
-            response.raise_for_status()
+
+            # Use shared response handling (notifications don't expect response data)
+            self._handle_http_response_error(response)
 
     async def get_process_stats(self) -> Dict[str, Any]:
         """Get statistics about any managed processes."""
@@ -193,7 +210,9 @@ class HTTPTransport(TransportProtocol):
         """Send timeout signals to all managed processes."""
         return await self.process_manager.send_timeout_signal_to_all(signal_type)
 
-    async def _stream_request(self, payload: Dict[str, Any]):
+    async def _stream_request(
+        self, payload: Dict[str, Any]
+    ) -> AsyncIterator[Dict[str, Any]]:
         """Stream a request to the transport.
 
         Args:
@@ -204,17 +223,11 @@ class HTTPTransport(TransportProtocol):
         """
         await self._update_activity()
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-            follow_redirects=False,
-            trust_env=False,
-        ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
-            safe_headers = sanitize_headers(self.headers)
+        # Use shared network functionality
+        self._validate_network_request(self.url)
+        safe_headers = self._prepare_safe_headers(self.headers)
 
+        async with self._create_http_client(self.timeout) as client:
             # First request
             response = await client.post(
                 self.url, json=payload, headers=safe_headers, stream=True
@@ -229,25 +242,28 @@ class HTTPTransport(TransportProtocol):
                 )
 
             try:
-                response.raise_for_status()
+                self._handle_http_response_error(response)
 
                 # Iterate over streamed lines; support coroutine-returning aiter_lines
                 lines_iter = response.aiter_lines()
                 if inspect.iscoroutine(lines_iter):
                     lines_iter = await lines_iter
+
                 async for line in lines_iter:
                     if line.strip():
                         try:
                             data = json.loads(line)
                             yield data
                         except json.JSONDecodeError:
-                            # Try to handle SSE format
+                            # Try to handle SSE format using shared parsing
                             if line.startswith("data:"):
                                 try:
                                     data = json.loads(line[len("data:") :].strip())
                                     yield data
                                 except json.JSONDecodeError:
-                                    logging.error("Failed to parse SSE data as JSON")
+                                    self._logger.error(
+                                        "Failed to parse SSE data as JSON"
+                                    )
                                     continue
             finally:
                 await response.aclose()  # Ensure response is closed

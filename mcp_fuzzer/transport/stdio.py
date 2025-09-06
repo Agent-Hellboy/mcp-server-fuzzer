@@ -171,7 +171,7 @@ class StdioTransport(TransportProtocol):
 
     async def send_request(
         self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    ) -> Any:
         """Send a request and wait for response."""
         request_id = str(uuid.uuid4())
         message = {
@@ -196,7 +196,7 @@ class StdioTransport(TransportProtocol):
                 result = response.get("result", response)
                 return result if isinstance(result, dict) else {"result": result}
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
         """Send raw payload and wait for response."""
         await self._send_message(payload)
 

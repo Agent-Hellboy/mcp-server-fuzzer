@@ -24,7 +24,7 @@ class SSETransport(TransportProtocol):
         # Use stream-based APIs instead (e.g., _stream_request).
         raise NotImplementedError("SSETransport does not support send_request")
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
         async with httpx.AsyncClient(
             timeout=self.timeout,
             follow_redirects=False,
