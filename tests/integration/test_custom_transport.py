@@ -124,7 +124,9 @@ custom_transports:
             }
         }
 
-        with pytest.raises(Exception):  # Should raise ConfigFileError
+        from mcp_fuzzer.config_loader import ConfigFileError
+
+        with pytest.raises(ConfigFileError):
             load_custom_transports(config_data)
 
 

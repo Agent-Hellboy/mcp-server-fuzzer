@@ -152,9 +152,9 @@ def fuzz_list_resources_request_realistic() -> Dict[str, Any]:
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
         "method": "resources/list",
-        "params": {
-            "cursor": random.choice(cursor_options) if random.random() < 0.3 else None,
-        },
+        "params": (
+            {"cursor": random.choice(cursor_options)} if random.random() < 0.3 else {}
+        ),
     }
 
 
@@ -229,9 +229,9 @@ def fuzz_list_prompts_request_realistic() -> Dict[str, Any]:
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
         "method": "prompts/list",
-        "params": {
-            "cursor": random.choice(cursor_options) if random.random() < 0.3 else None,
-        },
+        "params": (
+            {"cursor": random.choice(cursor_options)} if random.random() < 0.3 else {}
+        ),
     }
 
 

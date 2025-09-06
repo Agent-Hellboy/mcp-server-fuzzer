@@ -368,7 +368,9 @@ class ProtocolFuzzer:
         protocol_type: str,
         run_index: int,
         fuzz_data: Dict[str, Any],
-        server_response: Optional[Union[Dict[str, Any], List[Any]]],
+        server_response: Optional[
+            Union[Dict[str, Any], List[Any], Dict[Any, Dict[str, Any]]]
+        ],
         server_error: Optional[str],
     ) -> FuzzDataResult:
         """
@@ -579,7 +581,9 @@ class ProtocolFuzzer:
         self,
         run_index: int,
         batch_request: List[Dict[str, Any]],
-        server_response: Optional[Union[Dict[str, Any], List[Any]]],
+        server_response: Optional[
+            Union[Dict[str, Any], List[Any], Dict[Any, Dict[str, Any]]]
+        ],
         server_error: Optional[str],
     ) -> FuzzDataResult:
         """
