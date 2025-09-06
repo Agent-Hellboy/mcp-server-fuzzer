@@ -61,30 +61,30 @@ async def main():
         retry_count=2,     # Number of retries for failed operations
         retry_delay=1.0    # Delay between retries in seconds
     )
-    
+
     # Define an async operation
     async def my_operation(value):
         await asyncio.sleep(0.1)  # Simulate work
         return value * 2
-    
+
     # Execute a single operation
     result = await executor.execute(my_operation, 5)
     print(f"Single operation result: {result}")
-    
+
     # Execute with retry mechanism
     result = await executor.execute_with_retry(my_operation, 10)
     print(f"Operation with retry: {result}")
-    
+
     # Execute batch operations concurrently
     operations = [
         (my_operation, [5], {}),
         (my_operation, [10], {}),
         (my_operation, [15], {})
     ]
-    
+
     batch_results = await executor.execute_batch(operations)
     print(f"Batch results: {batch_results['results']}")
-    
+
     # Shutdown the executor
     await executor.shutdown()
 
@@ -109,7 +109,7 @@ async def main():
         max_hang_time=60.0,      # Force kill after 60 seconds
         auto_kill=True,          # Automatically kill hanging processes
     )
-    
+
     watchdog = ProcessWatchdog(config)
     await watchdog.start()
 
@@ -140,7 +140,7 @@ import asyncio
 
 async def main():
     manager = ProcessManager()
-    
+
     # Start a process
     config = ProcessConfig(
         command=["python", "script.py"],
@@ -149,17 +149,17 @@ async def main():
         timeout=60.0,
         name="python_script"
     )
-    
+
     process = await manager.start_process(config)
     print(f"Process started with PID: {process.pid}")
-    
+
     # Wait for completion
     exit_code = await manager.wait_for_process(process.pid, timeout=120.0)
-    
+
     # Get statistics
     stats = await manager.get_stats()
     print(f"Managed processes: {stats}")
-    
+
     # Cleanup
     await manager.shutdown()
 
@@ -244,7 +244,7 @@ from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 async def main():
     # Create manager
     manager = ProcessManager()
-    
+
     try:
         # Start a long-running process
         config = ProcessConfig(
@@ -252,10 +252,10 @@ async def main():
             name="long_script",
             timeout=300.0  # 5 minutes
         )
-        
+
         process = await manager.start_process(config)
         print(f"Started process: {process.pid}")
-        
+
         # Monitor status
         while True:
             status = await manager.get_process_status(process.pid)
@@ -263,7 +263,7 @@ async def main():
                 print(f"Process finished with exit code: {status and status.get('exit_code')}")
                 break
             await asyncio.sleep(1)
-            
+
     finally:
         await manager.shutdown()
 
@@ -278,7 +278,7 @@ from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def run_multiple_processes():
     manager = ProcessManager()
-    
+
     try:
         # Start multiple processes concurrently
         configs = []
@@ -287,16 +287,16 @@ async def run_multiple_processes():
                 command=["python", f"worker_{i}.py"],
                 name=f"worker_{i}"
             ))
-        
+
         # Start all processes concurrently
         tasks = [manager.start_process(config) for config in configs]
         processes = await asyncio.gather(*tasks)
-        
+
         # Wait for all to complete
         wait_tasks = [manager.wait_for_process(process.pid) for process in processes]
         results = await asyncio.gather(*wait_tasks)
         print(f"All processes completed with exit codes: {results}")
-        
+
     finally:
         await manager.shutdown()
 
@@ -314,12 +314,12 @@ class CustomProcess:
     def __init__(self):
         self.last_activity = time.time()
         self.activity_count = 0
-    
+
     def do_work(self):
         """Simulate some work."""
         self.last_activity = time.time()
         self.activity_count += 1
-    
+
     def get_activity_timestamp(self):
         """Callback for watchdog to check activity."""
         return self.last_activity
@@ -327,10 +327,10 @@ class CustomProcess:
 async def main():
     # Create process manager
     manager = ProcessManager()
-    
+
     # Create custom process
     custom_proc = CustomProcess()
-    
+
     try:
         # Start monitoring with activity callback
         config = ProcessConfig(
@@ -338,17 +338,17 @@ async def main():
             name="monitored_script",
             activity_callback=custom_proc.get_activity_timestamp
         )
-        
+
         process = await manager.start_process(config)
-        
+
         # Simulate work
         for _ in range(10):
             custom_proc.do_work()
             await asyncio.sleep(1)
-            
+
             # Update the activity timestamp in the watchdog
             await manager.update_activity(process.pid)
-    
+
     finally:
         await manager.shutdown()
 
@@ -363,30 +363,30 @@ from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def main():
     manager = ProcessManager()
-    
+
     try:
         # Start a long-running process
         config = ProcessConfig(command=["python", "long_script.py"], name="long_script")
         process = await manager.start_process(config)
-        
+
         # Send timeout signal (SIGTERM) for graceful shutdown
         success = await manager.send_timeout_signal(process.pid, "timeout")
         if success:
             print("Timeout signal sent successfully")
-        
+
         # Wait a bit for graceful shutdown
         await asyncio.sleep(5)
-        
+
         # If still running, send force signal (SIGKILL)
         status = await manager.get_process_status(process.pid)
         if status and status.get('status') == 'running':
             await manager.send_timeout_signal(process.pid, "force")
             print("Force signal sent")
-        
+
         # Send signals to all processes
         results = await manager.send_timeout_signal_to_all("timeout")
         print(f"Signal results: {results}")
-    
+
     finally:
         await manager.shutdown()
 

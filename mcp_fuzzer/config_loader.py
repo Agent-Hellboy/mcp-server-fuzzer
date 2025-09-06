@@ -85,7 +85,7 @@ def load_config_file(file_path: str) -> Dict[str, Any]:
         )
 
     try:
-        with open(file_path, "r") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except yaml.YAMLError as e:
         raise ConfigFileError(
@@ -134,7 +134,7 @@ def apply_config_file(
         config.update(config_data)
         return True
     except Exception as e:
-        logger.warning(f"Error loading configuration file: {str(e)}")
+        logger.error(f"Error loading configuration file: {str(e)}")
         return False
 
 
@@ -245,14 +245,21 @@ def get_config_schema() -> Dict[str, Any]:
                                 "type": "string",
                                 "description": "Human-readable description",
                             },
+                            "factory": {
+                                "type": "string",
+                                "description": "Dotted path to factory function "
+                                "(e.g., pkg.mod.create_transport)",
+                            },
                             "config_schema": {
                                 "type": "object",
                                 "description": "JSON schema for transport config",
                             },
                         },
+                        "additionalProperties": false,  # noqa: F821
                         "required": ["module", "class"],
                     }
                 },
+                "additionalProperties": false,  # noqa: F821
             },
             "safety": {
                 "type": "object",
@@ -292,12 +299,24 @@ def load_custom_transports(config_data: Dict[str, Any]) -> None:
             # Register the transport
             description = transport_config.get("description", "")
             config_schema = transport_config.get("config_schema")
+            factory_fn = None
+            factory_path = transport_config.get("factory")
+            if factory_path:
+                try:
+                    mod_path, attr = factory_path.rsplit(".", 1)
+                except ValueError as ve:
+                    raise ConfigFileError(
+                        f"Invalid factory path '{factory_path}'; expected 'module.attr'"
+                    ) from ve
+                fmod = importlib.import_module(mod_path)
+                factory_fn = getattr(fmod, attr)
 
             register_custom_transport(
                 name=transport_name,
                 transport_class=transport_class,
                 description=description,
                 config_schema=config_schema,
+                factory_function=factory_fn,
             )
 
             logger.info(

@@ -1,7 +1,7 @@
 """Tests for custom transport mechanisms."""
 
 import pytest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock
 from typing import Any, Dict, Optional, AsyncIterator
 
 from mcp_fuzzer.transport.base import TransportProtocol
@@ -172,7 +172,7 @@ class TestCustomTransportFunctions:
         """Clear the global registry before each test."""
         from mcp_fuzzer.transport.custom import registry
 
-        registry._transports.clear()
+        registry.clear()
 
     def test_register_custom_transport(self):
         """Test the global register_custom_transport function."""
@@ -205,7 +205,7 @@ class TestTransportFactoryIntegration:
         """Clear the global registry before each test."""
         from mcp_fuzzer.transport.custom import registry
 
-        registry._transports.clear()
+        registry.clear()
 
     def test_custom_transport_via_factory(self):
         """Test creating custom transport via factory."""
@@ -216,6 +216,17 @@ class TestTransportFactoryIntegration:
         )
 
         transport = create_transport("factory_mock://test-endpoint")
+        assert isinstance(transport, MockTransport)
+        assert transport.endpoint == "test-endpoint"
+
+    def test_custom_transport_via_factory_two_args(self):
+        """Back-compat: (protocol, endpoint) for custom transports."""
+        register_custom_transport(
+            name="factory_mock",
+            transport_class=MockTransport,
+            description="Factory mock transport",
+        )
+        transport = create_transport("factory_mock", "test-endpoint")
         assert isinstance(transport, MockTransport)
         assert transport.endpoint == "test-endpoint"
 

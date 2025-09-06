@@ -120,17 +120,10 @@ def fuzz_initialize_request_realistic() -> Dict[str, Any]:
         "req-002",  # String IDs
     ]
 
-    # Use realistic method names
-    method_options = [
-        "initialize",  # Correct method
-        method_names().example(),
-        method_names().example(),
-    ]
-
     return {
         "jsonrpc": "2.0",
         "id": random.choice(id_options),
-        "method": random.choice(method_options),
+        "method": "initialize",
         "params": {
             "protocolVersion": random.choice(protocol_versions),
             # Align with MCP ClientCapabilities spec: include valid fields only

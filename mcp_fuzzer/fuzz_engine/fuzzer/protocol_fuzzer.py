@@ -226,7 +226,12 @@ class ProtocolFuzzer:
             invariant_violations = []
             if server_response is not None and not generate_only:
                 try:
-                    if isinstance(server_response, list):
+                    # Batch: either a raw list of responses or a collated mapping
+                    # {id: response}
+                    if isinstance(server_response, list) or (
+                        isinstance(server_response, dict)
+                        and "jsonrpc" not in server_response
+                    ):
                         try:
                             # Handle batch responses with timeout to prevent hanging
                             batch = await asyncio.wait_for(

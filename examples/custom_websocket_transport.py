@@ -26,9 +26,10 @@ from typing import Any, Dict, Optional, AsyncIterator
 
 try:
     import websockets
-except ImportError:
-    print("websockets package is required. Install with: pip install websockets")
-    raise
+except ImportError as e:
+    raise ImportError(
+        "websockets package is required. Install with: pip install websockets"
+    ) from e
 
 from mcp_fuzzer.transport.base import TransportProtocol
 from mcp_fuzzer.exceptions import ConnectionError
@@ -353,4 +354,5 @@ if __name__ == "__main__":
 
     print("WebSocket transport example loaded successfully!")
     print("Usage in MCP Fuzzer:")
-    print("  transport = create_transport('websocket://localhost:8080/mcp')")
+    print("  transport = create_transport('websocket://localhost:8080/mcp')  # custom scheme")
+    print("  transport = create_transport('ws://localhost:8080/mcp')        # direct ws URL")

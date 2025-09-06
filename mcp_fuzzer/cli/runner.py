@@ -115,8 +115,7 @@ def execute_inner_client(args, unified_client_main, argv):
             # Reset extra allowed hosts to prevent accumulation across runs
             # Reset network policy
             configure_network_policy(
-                reset_allowed_hosts=True, 
-                deny_network_by_default=None
+                reset_allowed_hosts=True, deny_network_by_default=None
             )
             configure_network_policy(
                 deny_network_by_default=deny, extra_allowed_hosts=extra

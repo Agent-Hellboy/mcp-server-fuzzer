@@ -56,7 +56,7 @@ class SafetyFilter(SafetyProvider):
         )
         # Normalize argument names for case-insensitive membership checks
         self.dangerous_argument_names = {
-            n.lower() 
+            n.lower()
             for n in (dangerous_argument_names or DEFAULT_DANGEROUS_ARGUMENT_NAMES)
         }
 
@@ -396,9 +396,7 @@ def disable_safety() -> None:
         ) -> bool:  # noqa: ARG002
             return False
 
-        def create_safe_mock_response(
-            self, tool_name: str
-        ) -> Dict[str, Any]:  # noqa: ARG002
+        def create_safe_mock_response(self, tool_name: str) -> Dict[str, Any]:  # noqa: ARG002
             return {"result": {"content": [{"text": "[SAFETY DISABLED]"}]}}
 
         def log_blocked_operation(

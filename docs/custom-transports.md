@@ -10,10 +10,10 @@ MCP Server Fuzzer now supports custom transport mechanisms that can be registere
 
 The custom transport system consists of:
 
-1. **Transport Registry**: A centralized registry for managing custom transport implementations
-2. **Factory Integration**: Automatic discovery and instantiation of custom transports
-3. **Configuration Support**: Declarative configuration of custom transports via YAML
-4. **Type Safety**: Full type checking and validation for custom transport implementations
+1. **Transport Registry**: A centralized registry for managing custom transport implementations.
+2. **Factory Integration**: Automatic discovery and instantiation of custom transports.
+3. **Configuration Support**: Declarative configuration of custom transports via YAML.
+4. **Type Safety**: Full type checking and validation for custom transport implementations.
 
 ## Implementing a Custom Transport
 
@@ -330,9 +330,9 @@ tools = await client.list_tools()
 
 ### Common Issues
 
-1. **Import Errors**: Ensure your transport module is in the Python path
-2. **Registration Failures**: Check that your transport class inherits from `TransportProtocol`
-3. **Connection Issues**: Verify endpoint URLs and network connectivity
+1. **Import Errors**: Ensure your transport module is on the Python path.
+2. **Registration Failures**: Check that your transport class inherits from `TransportProtocol`.
+3. **Connection Issues**: Verify endpoint URLs and network connectivity.
 4. **Configuration Errors**: Validate your YAML configuration against the schema
 
 ### Debug Logging

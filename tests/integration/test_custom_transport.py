@@ -185,9 +185,13 @@ class TestCustomTransportLifecycle:
                 return {"tools": [{"name": "integration_tool"}]}
             return await original_send_request(method, params)
 
+        original_send_request = transport.send_request
         transport.send_request = mock_tools_request
-        tools = await transport.get_tools()
-        assert tools == [{"name": "integration_tool"}]
+        try:
+            tools = await transport.get_tools()
+            assert tools == [{"name": "integration_tool"}]
+        finally:
+            transport.send_request = original_send_request
 
         # Test disconnection
         await transport.disconnect()

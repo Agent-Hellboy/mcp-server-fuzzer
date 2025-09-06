@@ -8,11 +8,13 @@ custom_transports:
     module: "examples.custom_websocket_transport"
     class: "WebSocketTransport"
     description: "WebSocket transport for real-time MCP communication"
+    factory: "examples.custom_websocket_transport.create_websocket_transport"
     config:
       timeout: 30
       headers:
-        Authorization: "Bearer your-token-here"
-        X-API-Key: "your-api-key"
+        # Prefer env vars; avoid hardcoding secrets
+        Authorization: "${AUTH_BEARER:?}"
+        X-API-Key: "${API_KEY:?}"
 
   # Another custom transport (example)
   custom_protocol:

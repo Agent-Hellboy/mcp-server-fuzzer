@@ -18,6 +18,10 @@ class CustomTransportRegistry:
     def __init__(self):
         self._transports: Dict[str, Dict[str, Any]] = {}
 
+    def clear(self) -> None:
+        """Clear all registered transports. Useful for testing."""
+        self._transports.clear()
+
     def register(
         self,
         name: str,

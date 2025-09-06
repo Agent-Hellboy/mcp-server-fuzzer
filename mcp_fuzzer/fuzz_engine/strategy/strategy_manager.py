@@ -6,7 +6,7 @@ This module provides a unified interface for managing fuzzing strategies.
 It handles the dispatch between realistic and aggressive phases.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 import random
 
 from .realistic import (
@@ -80,7 +80,10 @@ class ProtocolStrategies:
     }
 
     @staticmethod
-    def get_protocol_fuzzer_method(protocol_type: str, phase: str = "aggressive"):
+    def get_protocol_fuzzer_method(
+        protocol_type: str,
+        phase: str = "aggressive",
+    ) -> Optional[Callable[[], Dict[str, Any]]]:
         """
         Get the fuzzer method for a specific protocol type and phase.
 
@@ -101,7 +104,7 @@ class ProtocolStrategies:
 
     @staticmethod
     def generate_batch_request(
-        protocol_types: List[str] = None,
+        protocol_types: Optional[List[str]] = None,
         phase: str = "aggressive",
         min_batch_size: int = 2,
         max_batch_size: int = 5,
@@ -134,6 +137,8 @@ class ProtocolStrategies:
                 "CompleteRequest",
             ]
 
+        if min_batch_size > max_batch_size:
+            min_batch_size, max_batch_size = max_batch_size, min_batch_size
         batch_size = random.randint(min_batch_size, max_batch_size)
         batch = []
 
@@ -214,7 +219,7 @@ class ProtocolStrategies:
             Batch with non-sequential or duplicate IDs
         """
         batch = ProtocolStrategies.generate_batch_request(
-            protocol_types, max_batch_size=3
+            protocol_types, max_batch_size=3, include_notifications=False
         )
 
         # Assign non-sequential IDs

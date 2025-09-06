@@ -53,7 +53,8 @@ class SSETransport(TransportProtocol):
                     return None
                 if "error" in data:
                     raise Exception(f"Server error: {data['error']}")
-                return data.get("result", data)
+                result = data.get("result", data)
+                return result if isinstance(result, dict) else {"result": result}
 
             for line in response.text.splitlines():
                 if not line.strip():
@@ -69,7 +70,8 @@ class SSETransport(TransportProtocol):
                 data = response.json()
                 if "error" in data:
                     raise Exception(f"Server error: {data['error']}")
-                return data.get("result", data)
+                result = data.get("result", data)
+                return result if isinstance(result, dict) else {"result": result}
             except json.JSONDecodeError:
                 pass
             raise Exception("No valid SSE response received")
