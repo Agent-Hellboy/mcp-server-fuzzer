@@ -210,8 +210,9 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                                             "xss": random.choice(XSS_PAYLOADS),
                                         }
                                     },
-                                    ["item1", "item2", generate_malicious_value()],  # Add arrays
-                                    {"nested": {"key": generate_malicious_value()}},  # Add nested objects
+                                    # Add arrays and nested objects for more variety
+                                    ["item1", "item2", generate_malicious_value()],
+                                    {"nested": {"key": generate_malicious_value()}},
                                 ]
                             )
                         },
