@@ -27,6 +27,8 @@ from .aggressive import (
     fuzz_initialize_request_aggressive,
     get_protocol_fuzzer_method as get_aggressive_fuzzer_method,
 )
+from .hypothesis_extensions import hypothesis_extensions
+from .alternative_fuzzers import alternative_fuzzers
 
 
 class ProtocolStrategies:
@@ -229,6 +231,64 @@ class ProtocolStrategies:
                 request["id"] = ids[i % len(ids)]
 
         return batch
+
+    @staticmethod
+    async def fuzz_with_hypothesis_extensions(
+        schema: Dict[str, Any],
+        runs: int = 10,
+        use_realistic_data: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Fuzz using Hypothesis extensions for enhanced data generation.
+
+        Args:
+            schema: JSON schema to generate data from
+            runs: Number of fuzzing runs
+            use_realistic_data: Whether to use realistic data generation
+
+        Returns:
+            List of fuzzing results
+        """
+        return await hypothesis_extensions.fuzz_with_extensions(
+            schema, runs, use_realistic_data
+        )
+
+    @staticmethod
+    async def fuzz_with_alternative_libraries(
+        base_inputs: List[Any],
+        target_function: Callable,
+        strategy: str = "mutation",
+        **kwargs
+    ) -> List[Dict[str, Any]]:
+        """
+        Fuzz using alternative fuzzing libraries.
+
+        Args:
+            base_inputs: Base inputs to fuzz
+            target_function: Function to test
+            strategy: Fuzzing strategy to use
+            **kwargs: Additional arguments for the fuzzing strategy
+
+        Returns:
+            List of fuzzing results
+        """
+        if strategy == "atheris":
+            # Convert inputs to bytes for Atheris
+            initial_inputs = [str(inp).encode() for inp in base_inputs]
+            return await alternative_fuzzers.atheris_mutation_fuzz(
+                target_function, initial_inputs, **kwargs
+            )
+        elif strategy == "pythonfuzz":
+            initial_corpus = [str(inp).encode() for inp in base_inputs]
+            return await alternative_fuzzers.pythonfuzz_coverage_fuzz(
+                target_function, initial_corpus, **kwargs
+            )
+        elif strategy == "mutation":
+            return await alternative_fuzzers.mutation_based_fuzz(
+                base_inputs, target_function, **kwargs
+            )
+        else:
+            raise ValueError(f"Unknown fuzzing strategy: {strategy}")
 
 
 class ToolStrategies:

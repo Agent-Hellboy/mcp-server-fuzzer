@@ -31,6 +31,8 @@ classifiers = [
 dependencies = [
     "httpx",
     "hypothesis",
+    "hypothesis-jsonschema",
+    "faker",
     "rich",
     "pyyaml>=6.0",
 ]
