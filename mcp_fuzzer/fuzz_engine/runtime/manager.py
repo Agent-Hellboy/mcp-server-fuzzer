@@ -31,13 +31,25 @@ class ProcessConfig:
     name: str = "unknown"
     activity_callback: Optional[Callable[[], float]] = None
 
+    @classmethod
+    def from_config(cls, config: Dict[str, Any], **overrides) -> "ProcessConfig":
+        """Create ProcessConfig with values from configuration dictionary."""
+        return cls(
+            timeout=config.get("process_timeout", 30.0),
+            auto_kill=config.get("auto_kill", True),
+            **overrides
+        )
+
 
 class ProcessManager:
     """Fully asynchronous process manager."""
 
-    def __init__(self, config: Optional[WatchdogConfig] = None):
+    def __init__(self, config: Optional[WatchdogConfig] = None, config_dict: Optional[Dict[str, Any]] = None):
         """Initialize the async process manager."""
-        self.config = config or WatchdogConfig()
+        if config_dict:
+            self.config = WatchdogConfig.from_config(config_dict)
+        else:
+            self.config = config or WatchdogConfig()
         self.watchdog = ProcessWatchdog(self.config)
         self._processes: Dict[int, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
@@ -278,6 +290,11 @@ class ProcessManager:
         self._logger.info("Shutting down process manager")
         await self.stop_all_processes()
         await self.watchdog.stop()
+
+        # Clear process tracking to free memory
+        async with self._lock:
+            self._processes.clear()
+        self._logger.info("Process manager shutdown complete")
 
     async def send_timeout_signal(self, pid: int, signal_type: str = "timeout") -> bool:
         """Send a timeout signal to a running process asynchronously."""

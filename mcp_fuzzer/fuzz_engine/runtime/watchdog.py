@@ -16,6 +16,13 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    psutil = None
+    HAS_PSUTIL = False
+
 
 @dataclass
 class WatchdogConfig:
@@ -26,6 +33,17 @@ class WatchdogConfig:
     extra_buffer: float = 5.0  # Extra time before auto-kill (seconds)
     max_hang_time: float = 60.0  # Maximum time before force kill (seconds)
     auto_kill: bool = True  # Whether to automatically kill hanging processes
+
+    @classmethod
+    def from_config(cls, config: Dict[str, Any]) -> "WatchdogConfig":
+        """Create WatchdogConfig from configuration dictionary."""
+        return cls(
+            check_interval=config.get("watchdog_check_interval", 1.0),
+            process_timeout=config.get("watchdog_process_timeout", 30.0),
+            extra_buffer=config.get("watchdog_extra_buffer", 5.0),
+            max_hang_time=config.get("watchdog_max_hang_time", 60.0),
+            auto_kill=config.get("auto_kill", True),
+        )
 
 
 class ProcessWatchdog:
@@ -61,11 +79,18 @@ class ProcessWatchdog:
         while not self._stop_event.is_set():
             try:
                 await self._check_processes()
-                # Use asyncio.sleep instead of time.sleep to avoid blocking
-                await asyncio.sleep(self.config.check_interval)
+
+                # Adaptive sleep interval based on system load
+                sleep_interval = await self._calculate_adaptive_interval()
+                await asyncio.sleep(sleep_interval)
+            except asyncio.CancelledError:
+                # Handle cancellation gracefully
+                self._logger.debug("Watchdog loop cancelled")
+                break
             except Exception as e:
                 self._logger.error(f"Error in watchdog loop: {e}")
-                await asyncio.sleep(self.config.check_interval)
+                # Use a shorter delay on error to avoid flooding logs
+                await asyncio.sleep(min(self.config.check_interval, 5.0))
 
     async def _check_processes(self) -> None:
         """Check all registered processes for hanging behavior."""
@@ -290,6 +315,117 @@ class ProcessWatchdog:
                     self._watchdog_task and not self._watchdog_task.done()
                 ),
             }
+
+    async def get_performance_metrics(self) -> Dict[str, Any]:
+        """Get performance metrics for monitoring and optimization."""
+        try:
+            system_metrics = {}
+            if HAS_PSUTIL and psutil:
+                # System metrics
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                memory = psutil.virtual_memory()
+                disk = psutil.disk_usage('/')
+
+                system_metrics = {
+                    "cpu_percent": cpu_percent,
+                    "memory_percent": memory.percent,
+                    "memory_used_gb": memory.used / (1024**3),
+                    "disk_percent": disk.percent,
+                }
+            else:
+                system_metrics = {"psutil_not_available": True}
+
+            # Process metrics
+            async with self._lock:
+                total_processes = len(self._processes)
+                running_processes = sum(
+                    1 for p in self._processes.values()
+                    if p["process"].returncode is None
+                )
+
+            return {
+                "system": system_metrics,
+                "processes": {
+                    "total": total_processes,
+                    "running": running_processes,
+                    "finished": total_processes - running_processes,
+                },
+                "watchdog": {
+                    "active": self._watchdog_task and not self._watchdog_task.done(),
+                    "check_interval": self.config.check_interval,
+                    "process_timeout": self.config.process_timeout,
+                },
+                "timestamp": time.time(),
+            }
+        except Exception as e:
+            self._logger.warning(f"Failed to collect performance metrics: {e}")
+            return {"error": str(e), "timestamp": time.time()}
+
+    async def _calculate_adaptive_interval(self) -> float:
+        """Calculate adaptive check interval based on system load and process count."""
+        try:
+            async with self._lock:
+                process_count = len(self._processes)
+
+            # Base interval from config
+            base_interval = self.config.check_interval
+
+            # Only apply system-based adjustments if psutil is available
+            if HAS_PSUTIL and psutil:
+                # Get current system metrics
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                memory = psutil.virtual_memory()
+
+                # Adjust based on CPU usage
+                if cpu_percent > 80:
+                    # High CPU: increase interval to reduce load
+                    cpu_multiplier = 2.0
+                elif cpu_percent > 60:
+                    cpu_multiplier = 1.5
+                elif cpu_percent < 20:
+                    # Low CPU: can check more frequently
+                    cpu_multiplier = 0.8
+                else:
+                    cpu_multiplier = 1.0
+
+                # Adjust based on memory usage
+                if memory.percent > 85:
+                    # High memory: increase interval
+                    memory_multiplier = 1.8
+                elif memory.percent > 70:
+                    memory_multiplier = 1.3
+                else:
+                    memory_multiplier = 1.0
+
+                # Log significant changes
+                adaptive_interval = base_interval * cpu_multiplier * memory_multiplier
+                if abs(adaptive_interval - base_interval) > 0.5:
+                    self._logger.debug(
+                        f"Adaptive interval: {adaptive_interval:.1f}s "
+                        f"(CPU: {cpu_percent:.1f}%, Mem: {memory.percent:.1f}%)"
+                    )
+            else:
+                # Fallback to process-count-based adjustment only
+                adaptive_interval = base_interval
+
+            # Adjust based on process count (always available)
+            if process_count > 20:
+                # Many processes: increase interval
+                adaptive_interval *= 1.5
+            elif process_count > 10:
+                adaptive_interval *= 1.2
+            elif process_count < 3:
+                # Few processes: can check less frequently
+                adaptive_interval *= 0.9
+
+            # Clamp to reasonable bounds
+            adaptive_interval = max(0.5, min(adaptive_interval, 10.0))
+
+            return adaptive_interval
+
+        except Exception as e:
+            self._logger.debug(f"Failed to calculate adaptive interval: {e}")
+            return self.config.check_interval
 
     async def __aenter__(self):
         """Enter context manager."""

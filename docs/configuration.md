@@ -332,6 +332,14 @@ mcp-fuzzer --mode tools --config config.yaml --server production_api
 | `MCP_FUZZER_EXTRA_BUFFER` | 5.0 | Extra time before auto-kill |
 | `MCP_FUZZER_MAX_HANG_TIME` | 60.0 | Maximum time before force kill |
 
+### Performance Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_FUZZER_PROCESS_MAX_CONCURRENCY` | 5 | Maximum concurrent operations |
+| `MCP_FUZZER_PROCESS_RETRY_COUNT` | 1 | Number of retries for failed operations |
+| `MCP_FUZZER_PROCESS_RETRY_DELAY` | 1.0 | Delay between retries |
+
 ## Configuration Profiles
 
 ### Development Profile
@@ -416,6 +424,42 @@ mcp-fuzzer --mode tools --config config/prod.yaml --server production_api
 # Use testing profile
 mcp-fuzzer --mode tools --config config/test.yaml --server test_server
 ```
+
+## Performance Configuration
+
+### CLI Arguments for Performance Tuning
+
+The following CLI arguments allow fine-tuning of performance-related parameters:
+
+```bash
+# Watchdog configuration
+mcp-fuzzer --watchdog-check-interval 0.5 \
+           --watchdog-process-timeout 45.0 \
+           --watchdog-extra-buffer 10.0 \
+           --watchdog-max-hang-time 120.0
+
+# Process management configuration
+mcp-fuzzer --process-max-concurrency 10 \
+           --process-retry-count 3 \
+           --process-retry-delay 2.0
+```
+
+### Watchdog CLI Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--watchdog-check-interval` | 1.0 | How often to check processes (seconds) |
+| `--watchdog-process-timeout` | 30.0 | Time before process is considered hanging |
+| `--watchdog-extra-buffer` | 5.0 | Extra time before auto-kill |
+| `--watchdog-max-hang-time` | 60.0 | Maximum time before force kill |
+
+### Process Management CLI Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--process-max-concurrency` | 5 | Maximum concurrent operations |
+| `--process-retry-count` | 1 | Number of retries for failed operations |
+| `--process-retry-delay` | 1.0 | Delay between retries (seconds) |
 
 ## Configuration Validation
 
