@@ -5,7 +5,8 @@ import tempfile
 import os
 from pathlib import Path
 
-from mcp_fuzzer.config_loader import apply_config_file, load_custom_transports
+from mcp_fuzzer.config import apply_config_file, load_custom_transports
+from mcp_fuzzer.exceptions import ConfigFileError
 from mcp_fuzzer.transport import create_transport, register_custom_transport
 from mcp_fuzzer.transport.base import TransportProtocol
 from typing import Any, Dict, Optional, AsyncIterator
@@ -123,8 +124,6 @@ custom_transports:
                 }
             }
         }
-
-        from mcp_fuzzer.config_loader import ConfigFileError
 
         with pytest.raises(ConfigFileError):
             load_custom_transports(config_data)

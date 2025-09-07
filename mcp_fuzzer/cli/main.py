@@ -46,7 +46,7 @@ def run_cli() -> None:
 
         # Handle special CLI flags that exit early
         if getattr(args, 'validate_config', None):
-            from ..config_loader import load_config_file
+            from ..config import load_config_file
             try:
                 load_config_file(args.validate_config)
                 console = Console()

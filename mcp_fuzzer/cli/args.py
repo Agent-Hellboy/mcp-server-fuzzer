@@ -478,7 +478,7 @@ def get_cli_config() -> Dict[str, Any]:
 
     # Load configuration file if specified
     if args.config:
-        from ..config_loader import load_config_file
+        from ..config import load_config_file
         from ..exceptions import ConfigFileError
 
         try:
@@ -490,7 +490,7 @@ def get_cli_config() -> Dict[str, Any]:
     else:
         # Try to find and load a configuration file in default locations
         try:
-            from ..config_loader import apply_config_file
+            from ..config import apply_config_file
 
             apply_config_file()
         except Exception as e:

@@ -6,13 +6,13 @@ import tempfile
 import pytest
 from unittest.mock import patch, mock_open
 
-from mcp_fuzzer.config_loader import (
+from mcp_fuzzer.config import (
     find_config_file,
     load_config_file,
     apply_config_file,
     get_config_schema,
+    config,
 )
-from mcp_fuzzer.config import config
 from mcp_fuzzer.exceptions import ConfigFileError, ValidationError
 
 
@@ -133,7 +133,7 @@ def test_load_config_file_invalid_extension(config_files):
         load_config_file(invalid_ext_path)
 
 
-@patch("mcp_fuzzer.config_loader.config")
+@patch("mcp_fuzzer.config.loader.config")
 def test_apply_config_file(mock_config, config_files):
     """Test applying a config file."""
     # Test with explicit path

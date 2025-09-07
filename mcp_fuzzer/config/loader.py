@@ -11,10 +11,10 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from .config import config
-from .exceptions import ConfigFileError
-from .transport.custom import register_custom_transport
-from .transport.base import TransportProtocol
+from .manager import config
+from ..exceptions import ConfigFileError
+from ..transport.custom import register_custom_transport
+from ..transport.base import TransportProtocol
 import importlib
 
 logger = logging.getLogger(__name__)
