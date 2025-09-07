@@ -8,6 +8,8 @@ This package provides a modular client for fuzzing MCP servers.
 import logging
 from typing import List, Optional
 
+import emoji
+
 from ..transport import create_transport
 from ..reports import FuzzerReporter
 from .base import MCPFuzzerClient
@@ -124,7 +126,7 @@ async def main(argv: Optional[List[str]] = None) -> int:
         try:
             if (config["mode"] == "tools" or config["mode"] == "tool") and tool_results:
                 print("\n" + "="*80)
-                print("🎯 MCP FUZZER TOOL RESULTS SUMMARY")
+                print(f"{emoji.emojize(':bullseye:')} MCP FUZZER TOOL RESULTS SUMMARY")
                 print("="*80)
                 client.print_tool_summary(tool_results)
 
@@ -142,7 +144,7 @@ async def main(argv: Optional[List[str]] = None) -> int:
                     else 0
                 )
 
-                print("\n📈 OVERALL STATISTICS")
+                print(f"\n{emoji.emojize(':chart_increasing:')} OVERALL STATISTICS")
                 print("-" * 40)
                 print(f"• Total Tools Tested: {total_tools}")
                 print(f"• Total Fuzzing Runs: {total_runs}")
@@ -157,14 +159,14 @@ async def main(argv: Optional[List[str]] = None) -> int:
                         vulnerable_tools.append((tool_name, exceptions, len(runs)))
 
                 if vulnerable_tools:
-                    print(f"\n🚨 VULNERABILITIES FOUND: {len(vulnerable_tools)}")
+                    print(f"\n{emoji.emojize(':police_car_light:')} VULNERABILITIES FOUND: {len(vulnerable_tools)}")
                     for tool, exceptions, total in vulnerable_tools:
                         rate = exceptions / total * 100
                         print(
                             f"  • {tool}: {exceptions}/{total} exceptions ({rate:.1f}%)"
                         )
                 else:
-                    print("\n✅ NO VULNERABILITIES FOUND")
+                    print(f"\n{emoji.emojize(':check_mark_button:')} NO VULNERABILITIES FOUND")
 
         except Exception as e:
             logging.warning(f"Failed to display table summary: {e}")

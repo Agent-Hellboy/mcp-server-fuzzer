@@ -15,6 +15,8 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import emoji
+
 
 class SystemCommandBlocker:
     """Blocks system commands by creating fake executables with higher PATH priority."""
@@ -44,7 +46,7 @@ class SystemCommandBlocker:
             # Create temporary directory for fake executables
             self.temp_dir = Path(tempfile.mkdtemp(prefix="mcp_fuzzer_block_"))
             logging.info(
-                f"\U0001f6e1 Created command blocking directory: {self.temp_dir}"
+                f"{emoji.emojize(':shield:')} Created command blocking directory: {self.temp_dir}"
             )
 
             # Create fake executables
@@ -56,7 +58,7 @@ class SystemCommandBlocker:
 
             logging.info("System command blocking activated")
             logging.info(
-                f"\U0001f6ab Blocked commands: {', '.join(self.blocked_commands)}"
+                f"{emoji.emojize(':prohibited:')} Blocked commands: {', '.join(self.blocked_commands)}"
             )
 
         except Exception as e:
@@ -74,7 +76,7 @@ class SystemCommandBlocker:
             # Clean up using the cleanup method
             self.cleanup()
 
-            logging.info("🔓 System command blocking stopped")
+            logging.info(f"{emoji.emojize(':unlocked:')} System command blocking stopped")
 
         except Exception as e:
             logging.error(f"Error during cleanup: {e}")
@@ -91,17 +93,18 @@ import sys
 import os
 import json
 from datetime import datetime
+import emoji
 
 command_name = os.path.basename(sys.argv[0])
 args = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else ''
 
 # Log to stderr so it's visible
 print(
-    f"\\U0001F6AB [FUZZER BLOCKED] {{command_name}} {{args}}", file=sys.stderr
+    f"{emoji.emojize(':prohibited:')} [FUZZER BLOCKED] {{command_name}} {{args}}", file=sys.stderr
 )
 print(
     (
-        f"\\U0001F6E1 Command '{{command_name}}' was blocked to prevent external app "
+        f"{emoji.emojize(':shield:')} Command '{{command_name}}' was blocked to prevent external app "
         f"launch during fuzzing. This is a safety feature."
     )
 )

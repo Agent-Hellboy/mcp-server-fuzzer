@@ -14,6 +14,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Protocol, runtime_checkable
 
+import emoji
+
 from .patterns import (
     DEFAULT_DANGEROUS_URL_PATTERNS,
     DEFAULT_DANGEROUS_COMMAND_PATTERNS,
@@ -283,7 +285,7 @@ class SafetyFilter(SafetyProvider):
             logging.warning(f"Arguments: {safe_args}")
 
             if dangerous_content:
-                logging.warning("🚨 DANGEROUS CONTENT DETECTED:")
+                logging.warning(f"{emoji.emojize(':police_car_light:')} DANGEROUS CONTENT DETECTED:")
                 for content in dangerous_content:
                     logging.warning(f"  • {content}")
 
