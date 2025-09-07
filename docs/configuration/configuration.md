@@ -10,6 +10,18 @@ MCP Server Fuzzer supports multiple configuration methods in order of precedence
 2. **Configuration files** (YAML/TOML)
 3. **Environment variables** (lowest precedence)
 
+### When to Use Configuration Files vs Command-Line Arguments
+
+While command-line arguments provide quick access to common options, configuration files are recommended for:
+
+- **Complex configurations** with many parameters
+- **Reproducible setups** across different environments
+- **Team sharing** of standardized configurations
+- **Advanced features** not exposed as CLI flags
+- **Security** by keeping sensitive values in files rather than command history
+
+If you find yourself using many command-line flags repeatedly, consider creating a configuration file instead. The CLI currently supports 42 flags - for configurations requiring more customization, use YAML/TOML files to maintain readability and maintainability.
+
 ## Configuration Files
 
 ### YAML Configuration
