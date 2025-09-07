@@ -70,31 +70,54 @@ mcp-fuzzer --mode both --protocol stdio --endpoint "node DesktopCommanderMCP/dis
 
 ##### Detailed Tool Performance
 
-| Tool | Success Rate | Issues | Status |
-|------|-------------|--------|--------|
-| get_config | 100.0% | 0 | ✅ |
-| set_config_value | 100.0% | 0 | ✅ |
-| read_file | 100.0% | 0 | ✅ |
-| read_multiple_files | 100.0% | 0 | ✅ |
-| write_file | 100.0% | 0 | ✅ |
-| create_directory | 100.0% | 0 | ✅ |
-| list_directory | 100.0% | 0 | ✅ |
-| move_file | 100.0% | 0 | ✅ |
-| start_search | 100.0% | 0 | ✅ |
-| get_more_search_results | 100.0% | 0 | ✅ |
-| stop_search | 100.0% | 0 | ✅ |
-| list_searches | 100.0% | 0 | ✅ |
-| get_file_info | 100.0% | 0 | ✅ |
-| edit_block | 100.0% | 0 | ✅ |
-| start_process | 40.0% | 3 | ⚠️ |
-| read_process_output | 80.0% | 1 | ⚠️ |
-| interact_with_process | 100.0% | 0 | ✅ |
-| force_terminate | 100.0% | 0 | ✅ |
-| list_sessions | 100.0% | 0 | ✅ |
-| list_processes | 100.0% | 0 | ✅ |
-| kill_process | 100.0% | 0 | ✅ |
-| get_usage_stats | 100.0% | 0 | ✅ |
-| give_feedback_to_desktop_commander | 100.0% | 0 | ✅ |
+```
+================================================================================
+🎯 MCP FUZZER TOOL RESULTS SUMMARY
+================================================================================
+                                    MCP Tool Fuzzing Summary
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Tool                               ┃ Total Runs ┃ Exceptions ┃ Safety Blocked ┃ Success Rate ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━┩
+│ get_config                         │ 5          │ 0          │ 0              │ 100.0%       │
+│ set_config_value                   │ 5          │ 0          │ 0              │ 100.0%       │
+│ read_file                          │ 5          │ 0          │ 0              │ 100.0%       │
+│ read_multiple_files                │ 5          │ 0          │ 0              │ 100.0%       │
+│ write_file                         │ 5          │ 0          │ 0              │ 100.0%       │
+│ create_directory                   │ 5          │ 0          │ 0              │ 100.0%       │
+│ list_directory                     │ 5          │ 0          │ 0              │ 100.0%       │
+│ move_file                          │ 5          │ 0          │ 0              │ 100.0%       │
+│ start_search                       │ 5          │ 0          │ 0              │ 100.0%       │
+│ get_more_search_results            │ 5          │ 0          │ 0              │ 100.0%       │
+│ stop_search                        │ 5          │ 0          │ 0              │ 100.0%       │
+│ list_searches                      │ 5          │ 0          │ 0              │ 100.0%       │
+│ get_file_info                      │ 5          │ 0          │ 0              │ 100.0%       │
+│ edit_block                         │ 5          │ 0          │ 0              │ 100.0%       │
+│ start_process                      │ 5          │ 4          │ 0              │ 20.0%        │
+│ read_process_output                │ 5          │ 0          │ 0              │ 100.0%       │
+│ interact_with_process              │ 5          │ 0          │ 0              │ 100.0%       │
+│ force_terminate                    │ 5          │ 0          │ 0              │ 100.0%       │
+│ list_sessions                      │ 5          │ 0          │ 0              │ 100.0%       │
+│ list_processes                     │ 5          │ 0          │ 0              │ 100.0%       │
+│ kill_process                       │ 5          │ 0          │ 0              │ 100.0%       │
+│ get_usage_stats                    │ 5          │ 0          │ 0              │ 100.0%       │
+│ give_feedback_to_desktop_commander │ 5          │ 0          │ 0              │ 100.0%       │
+└────────────────────────────────────┴────────────┴────────────┴────────────────┴──────────────┘
+
+📈 OVERALL STATISTICS
+----------------------------------------
+• Total Tools Tested: 23
+• Total Fuzzing Runs: 115
+• Total Exceptions: 4
+• Overall Success Rate: 96.5%
+
+🚨 VULNERABILITIES FOUND: 1
+  • start_process: 4/5 exceptions (80.0%)
+2025-09-08 01:46:22,814 - mcp_fuzzer.reports.output_protocol - INFO - Output saved to: reports/sessions/3296f219-9edd-49c8-b903-2241c3084e09/20250908_014622_fuzzing_results.json
+2025-09-08 01:46:22,815 - root - INFO - Generated standardized reports: ['fuzzing_results']
+2025-09-08 01:46:22,815 - root - INFO - Checking export flags: csv=None, xml=None, html=None, md=None
+2025-09-08 01:46:22,815 - root - INFO - Client reporter available: True
+2025-09-08 01:46:22,815 - mcp_fuzzer.fuzz_engine.runtime.manager - INFO - Force killed process 88913 (stdio_transport)
+```
 
 ##### Key Findings
 - **File operations are solid** - All file system tools worked perfectly (100% success)
@@ -153,8 +176,8 @@ python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode bo
 ##### Detailed Fuzzing Results Summary
 ```
 🎯 MCP FUZZER TOOL RESULTS SUMMARY
-================================================================================
-                               MCP Tool Fuzzing Summary
+===============================================================================
+                                MCP Tool Fuzzing Summary
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Tool                      ┃ Total Runs ┃ Exceptions ┃ Safety Blocked ┃ Success Rate ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━┩
