@@ -13,29 +13,29 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 
-[📖 Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/) • [🚀 Quick Start](#quick-start) • [📋 Examples](#examples) • [🔧 Configuration](#configuration)
+[Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/) • [Quick Start](#quick-start) • [Examples](#examples) • [Configuration](#configuration)
 
 </div>
 
 ---
 
-## 🎯 What is MCP Server Fuzzer?
+## What is MCP Server Fuzzer?
 
-MCP Server Fuzzer is a **comprehensive fuzzing tool** designed specifically for testing [Model Context Protocol (MCP)](https://github.com/modelcontextprotocol/modelcontextprotocol) servers. It supports both **tool argument fuzzing** and **protocol type fuzzing** across multiple transport protocols.
+MCP Server Fuzzer is a comprehensive fuzzing tool designed specifically for testing [Model Context Protocol (MCP)](https://github.com/modelcontextprotocol/modelcontextprotocol) servers. It supports both tool argument fuzzing and protocol type fuzzing across multiple transport protocols.
 
-### ✨ Key Promise
+### Key Promise
 
-**If your server conforms to the [MCP schema](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/main/schema), this tool will fuzz it effectively and safely.**
+If your server conforms to the [MCP schema](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/main/schema), this tool will fuzz it effectively and safely.
 
-### 🚀 Why Choose MCP Server Fuzzer?
+### Why Choose MCP Server Fuzzer?
 
-- **🔒 Safety First**: Built-in safety system prevents dangerous operations
-- **⚡ High Performance**: Asynchronous execution with configurable concurrency
-- **🎨 Beautiful Output**: Rich, colorized terminal output with detailed reporting
-- **🔧 Flexible Configuration**: CLI args, YAML configs, environment variables
-- **📊 Comprehensive Reporting**: Multiple output formats (JSON, CSV, HTML, Markdown)
-- **🛡️ Production Ready**: Environment detection and production-safe defaults
-- **🔍 Intelligent Testing**: Hypothesis-based data generation with custom strategies
+- Safety First: Built-in safety system prevents dangerous operations
+- High Performance: Asynchronous execution with configurable concurrency
+- Beautiful Output: Rich, colorized terminal output with detailed reporting
+- Flexible Configuration: CLI args, YAML configs, environment variables
+- Comprehensive Reporting: Multiple output formats (JSON, CSV, HTML, Markdown)
+- Production Ready: Environment detection and production-safe defaults
+- Intelligent Testing: Hypothesis-based data generation with custom strategies
 
 ## Quick Start
 
@@ -80,7 +80,7 @@ mcp-fuzzer --mode tools --export-csv results.csv --export-json results.json
 mcp-fuzzer --config my-config.yaml --server production_api
 ```
 
-## 📋 Examples
+## Examples
 
 ### HTTP Server Fuzzing
 
@@ -134,7 +134,7 @@ servers:
 mcp-fuzzer --config config.yaml --server local_dev
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### Configuration Methods (in order of precedence)
 
@@ -170,41 +170,29 @@ mcp-fuzzer --process-max-concurrency 20 --watchdog-check-interval 0.5
 mcp-fuzzer --timeout 120 --process-retry-count 5 --process-retry-delay 2.0
 ```
 
-## ⭐ Key Features
+## Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **🔄 Two-Phase Fuzzing** | Realistic testing + aggressive security testing |
-| **🌐 Multi-Protocol Support** | HTTP, SSE, Stdio, and StreamableHTTP transports |
-| **🛡️ Built-in Safety** | Environment detection and system protection |
-| **🧠 Intelligent Testing** | Hypothesis-based data generation with custom strategies |
-| **📊 Rich Reporting** | Detailed output with exception tracking and safety reports |
-| **📤 Multiple Output Formats** | JSON, CSV, HTML, Markdown, and XML export options |
-| **⚙️ Flexible Configuration** | CLI args, YAML/TOML configs, environment variables |
-| **⚡ Asynchronous Execution** | Efficient concurrent fuzzing with configurable limits |
-| **🔍 Comprehensive Monitoring** | Process watchdog, timeout handling, and resource management |
-| **🔐 Authentication Support** | API keys, basic auth, OAuth, and custom providers |
-| **📈 Performance Metrics** | Built-in benchmarking and performance analysis |
-| **🎯 Schema Validation** | Automatic MCP protocol compliance checking |
+| Two-Phase Fuzzing | Realistic testing + aggressive security testing |
+| Multi-Protocol Support | HTTP, SSE, Stdio, and StreamableHTTP transports |
+| Built-in Safety | Environment detection and system protection |
+| Intelligent Testing | Hypothesis-based data generation with custom strategies |
+| Rich Reporting | Detailed output with exception tracking and safety reports |
+| Multiple Output Formats | JSON, CSV, HTML, Markdown, and XML export options |
+| Flexible Configuration | CLI args, YAML/TOML configs, environment variables |
+| Asynchronous Execution | Efficient concurrent fuzzing with configurable limits |
+| Comprehensive Monitoring | Process watchdog, timeout handling, and resource management |
+| Authentication Support | API keys, basic auth, OAuth, and custom providers |
+| Performance Metrics | Built-in benchmarking and performance analysis |
+| Schema Validation | Automatic MCP protocol compliance checking |
 
-### 🆚 Comparison with Other Tools
+### Performance
 
-| Feature | MCP Fuzzer | Generic Fuzzer | Protocol Tester |
-|---------|------------|----------------|-----------------|
-| MCP-Specific | ✅ | ❌ | ❌ |
-| Multi-Protocol | ✅ | ⚠️ | ✅ |
-| Safety Built-in | ✅ | ❌ | ❌ |
-| Rich Output | ✅ | ❌ | ⚠️ |
-| Configuration | ✅ | ⚠️ | ✅ |
-| Async Support | ✅ | ❌ | ⚠️ |
-| Production Ready | ✅ | ❌ | ⚠️ |
-
-### 📈 Performance
-
-- **Concurrent Operations**: Up to 20 simultaneous fuzzing tasks
-- **Memory Efficient**: Streaming responses and configurable resource limits
-- **Fast Execution**: Optimized async I/O and connection pooling
-- **Scalable**: Configurable timeouts and retry mechanisms
+- Concurrent Operations: Up to 20 simultaneous fuzzing tasks
+- Memory Efficient: Streaming responses and configurable resource limits
+- Fast Execution: Optimized async I/O and connection pooling
+- Scalable: Configurable timeouts and retry mechanisms
 
 ## Architecture
 
@@ -219,7 +207,7 @@ The system is built with a modular architecture:
 - **Authentication**: Multiple auth provider support
 - **Reporting**: FuzzerReporter, Console/JSON/Text formatters, SafetyReporter
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -258,12 +246,12 @@ mcp-fuzzer --verbose --log-level DEBUG
 mcp-fuzzer --check-env
 ```
 
-## 🤝 Community & Support
+## Community & Support
 
-- **📖 Documentation**: [Full Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/)
-- **🐛 Issues**: [GitHub Issues](https://github.com/Agent-Hellboy/mcp-server-fuzzer/issues)
-- **💬 Discussions**: [GitHub Discussions](https://github.com/Agent-Hellboy/mcp-server-fuzzer/discussions)
-- **📧 Security**: For security issues, please email [security@example.com](mailto:security@example.com)
+- Documentation: [Full Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/)
+- Issues: [GitHub Issues](https://github.com/Agent-Hellboy/mcp-server-fuzzer/issues)
+- Discussions: [GitHub Discussions](https://github.com/Agent-Hellboy/mcp-server-fuzzer/discussions)
+- Security: For security issues, please email [security@example.com](mailto:security@example.com)
 
 ### Contributing
 
@@ -277,13 +265,13 @@ pip install -e .[dev]
 pytest tests/
 ```
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-**This tool is designed for testing and security research purposes only.**
+This tool is designed for testing and security research purposes only.
 
 - Always use in controlled environments
 - Ensure you have explicit permission to test target systems
@@ -294,8 +282,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-**Made with ❤️ for the MCP community**
+Made with love for the MCP community
 
-[⭐ Star us on GitHub](https://github.com/Agent-Hellboy/mcp-server-fuzzer) • [📖 Read the Docs](https://agent-hellboy.github.io/mcp-server-fuzzer/)
+[Star us on GitHub](https://github.com/Agent-Hellboy/mcp-server-fuzzer) • [Read the Docs](https://agent-hellboy.github.io/mcp-server-fuzzer/)
 
 </div>
