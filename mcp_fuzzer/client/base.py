@@ -154,6 +154,17 @@ class MCPFuzzerClient:
                 self.safety_system.get_blocked_examples()
         self.reporter.print_comprehensive_safety_report()
 
+    def generate_standardized_reports(self, output_types=None, include_safety=True):
+        """Generate standardized output reports."""
+        return self.reporter.generate_standardized_report(
+            output_types=output_types,
+            include_safety=include_safety
+        )
+
+    def generate_final_report(self, include_safety=True):
+        """Generate final comprehensive report."""
+        return self.reporter.generate_final_report(include_safety=include_safety)
+
     # ============================================================================
     # Cleanup Methods
     # ============================================================================

@@ -303,6 +303,45 @@ Examples:
         help="Delay between retries (seconds, default: 1.0)",
     )
 
+    # Standardized output options
+    parser.add_argument(
+        "--output-format",
+        choices=["json", "yaml", "csv", "xml"],
+        default="json",
+        help="Output format for standardized reports (default: json)",
+    )
+
+    parser.add_argument(
+        "--output-types",
+        nargs="+",
+        choices=[
+            "fuzzing_results",
+            "error_report",
+            "safety_summary",
+            "performance_metrics",
+            "configuration_dump",
+        ],
+        help="Specific output types to generate (default: all)",
+    )
+
+    parser.add_argument(
+        "--output-schema",
+        metavar="SCHEMA_FILE",
+        help="Path to custom output schema file",
+    )
+
+    parser.add_argument(
+        "--output-compress",
+        action="store_true",
+        help="Compress output files",
+    )
+
+    parser.add_argument(
+        "--output-session-id",
+        metavar="SESSION_ID",
+        help="Custom session ID for output files",
+    )
+
     return parser
 
 
@@ -492,6 +531,11 @@ def get_cli_config() -> Dict[str, Any]:
             "process_max_concurrency": getattr(args, "process_max_concurrency", 5),
             "process_retry_count": getattr(args, "process_retry_count", 1),
             "process_retry_delay": getattr(args, "process_retry_delay", 1.0),
+            "output_format": getattr(args, "output_format", "json"),
+            "output_types": getattr(args, "output_types", None),
+            "output_schema": getattr(args, "output_schema", None),
+            "output_compress": getattr(args, "output_compress", False),
+            "output_session_id": getattr(args, "output_session_id", None),
         }
     )
 
