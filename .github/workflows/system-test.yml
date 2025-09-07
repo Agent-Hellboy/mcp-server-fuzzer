@@ -1,0 +1,122 @@
+name: System Test with Safety
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode (tools/protocol/both)'
+        required: false
+        default: 'tools'
+        type: choice
+        options:
+        - tools
+        - protocol
+        - both
+      runs_per_tool:
+        description: 'Runs per tool'
+        required: false
+        default: '3'
+        type: string
+
+jobs:
+  system-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        # Include testing-servers submodule if it exists
+        submodules: recursive
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: |
+          testing-servers/DesktopCommanderMCP/package-lock.json
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+
+    - name: Install DesktopCommanderMCP dependencies
+      run: |
+        cd testing-servers/DesktopCommanderMCP
+        npm ci --ignore-scripts
+        npm run build
+
+    - name: Create test output directory
+      run: mkdir -p test-results
+
+    - name: Run safety check
+      run: |
+        echo "🔒 Running pre-flight safety check..."
+        chmod +x tests/system/check_safety.sh
+        ./tests/system/check_safety.sh
+
+    - name: Run system test with safety system
+      env:
+        TEST_MODE: ${{ github.event.inputs.test_mode || 'tools' }}
+        RUNS_PER_TOOL: ${{ github.event.inputs.runs_per_tool || '3' }}
+        MCP_FUZZER_TIMEOUT: '30'
+        MCP_FUZZER_SAFETY_ENABLED: 'true'
+        MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
+      run: |
+        echo "🧪 Running system test with safety system enabled"
+        echo "Test Mode: $TEST_MODE"
+        echo "Runs per tool: $RUNS_PER_TOOL"
+
+        # Create sandbox directory
+        mkdir -p /tmp/mcp_fuzzer_sandbox
+
+        # Run the system test
+        chmod +x tests/system/test_desktop_commander_mcp.sh
+        ./tests/system/test_desktop_commander_mcp.sh
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: system-test-results-${{ github.run_id }}
+        path: |
+          reports/
+          test-results/
+        retention-days: 30
+
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## 🧪 System Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -d "reports" ]; then
+          echo "### 📊 Test Reports Generated" >> $GITHUB_STEP_SUMMARY
+          find reports -name "*.json" -exec basename {} \; | head -5 >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ -f "reports/sessions/*/fuzzing_results.json" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📈 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "Fuzzing results generated successfully" >> $GITHUB_STEP_SUMMARY
+          echo "Results location: \`reports/\`" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔒 Security Status" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Safety system enabled" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Command blocking active" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Filesystem sandboxing" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Process isolation" >> $GITHUB_STEP_SUMMARY

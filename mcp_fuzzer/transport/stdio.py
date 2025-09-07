@@ -114,7 +114,7 @@ class StdioTransport(TransportProtocol):
                 # Register with process manager for monitoring
                 if hasattr(self.process, "pid"):
                     # Register with manager (ensures tracking + watchdog)
-                    self.process_manager.register_existing_process(
+                    await self.process_manager.register_existing_process(
                         self.process.pid,
                         self.process,
                         "stdio_transport",
@@ -276,7 +276,7 @@ class StdioTransport(TransportProtocol):
                 if not await self.process_manager.is_process_registered(
                     self.process.pid
                 ):
-                    self.process_manager.register_existing_process(
+                    await self.process_manager.register_existing_process(
                         self.process.pid,
                         self.process,
                         "stdio_transport",
