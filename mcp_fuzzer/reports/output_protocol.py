@@ -8,6 +8,7 @@ Provides schema validation and structured output generation.
 
 import json
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -31,7 +32,7 @@ class OutputProtocol:
     }
 
     def __init__(self, session_id: Optional[str] = None):
-        self.session_id = session_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.session_id = session_id or str(uuid.uuid4())
         self.logger = logging.getLogger(__name__)
 
     def create_base_output(
