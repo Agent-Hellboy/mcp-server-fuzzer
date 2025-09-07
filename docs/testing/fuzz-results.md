@@ -5,6 +5,7 @@
 This document serves as both a comprehensive testing report and a practical guide for **mcp-fuzzer developers** looking to test their changes. Whether you're modifying the fuzzing engine, safety systems, or transport layers, use these tested MCP servers as your validation targets to ensure your changes work correctly.
 
 **What You'll Find Here:**
+
 - ✅ Complete setup instructions for reliable test MCP servers
 - ✅ Ready-to-use fuzzing commands for regression testing
 - ✅ Detailed baseline results showing expected behavior
@@ -30,6 +31,7 @@ Hey, here's what we found when we fuzzed multiple MCP servers. We've tested vari
 ### DesktopCommanderMCP Server
 
 #### Server Information
+
 - **Repository**: [https://github.com/wonderwhy-er/DesktopCommanderMCP](https://github.com/wonderwhy-er/DesktopCommanderMCP)
 - **Version**: 0.2.11
 - **Tools**: 23 file system and process management tools
@@ -61,6 +63,7 @@ mcp-fuzzer --mode both --protocol stdio --endpoint "node DesktopCommanderMCP/dis
 ```
 
 #### Test Results
+
 - **Connection**: ✅ Successfully established stdio connection
 - **Tool Discovery**: ✅ Found 23 tools
 - **File Operations**: ✅ All file system tools worked perfectly (100% success)
@@ -112,6 +115,8 @@ mcp-fuzzer --mode both --protocol stdio --endpoint "node DesktopCommanderMCP/dis
 
 🚨 VULNERABILITIES FOUND: 1
   • start_process: 4/5 exceptions (80.0%)
+
+
 2025-09-08 01:46:22,814 - mcp_fuzzer.reports.output_protocol - INFO - Output saved to: reports/sessions/3296f219-9edd-49c8-b903-2241c3084e09/20250908_014622_fuzzing_results.json
 2025-09-08 01:46:22,815 - root - INFO - Generated standardized reports: ['fuzzing_results']
 2025-09-08 01:46:22,815 - root - INFO - Checking export flags: csv=None, xml=None, html=None, md=None
@@ -120,6 +125,7 @@ mcp-fuzzer --mode both --protocol stdio --endpoint "node DesktopCommanderMCP/dis
 ```
 
 ##### Key Findings
+
 - **File operations are solid** - All file system tools worked perfectly (100% success)
 - **Search tools are great** - No issues with any search functionality
 - **Safety system works** - Prevented dangerous operations effectively
@@ -130,6 +136,7 @@ mcp-fuzzer --mode both --protocol stdio --endpoint "node DesktopCommanderMCP/dis
 ### MCP Server Chart
 
 #### Server Information
+
 - **Repository**: [https://github.com/antvis/mcp-server-chart](https://github.com/antvis/mcp-server-chart)
 - **Server Type**: Chart generation and data visualization MCP server
 - **Protocol**: stdio
@@ -139,6 +146,7 @@ mcp-fuzzer --mode both --protocol stdio --endpoint "node DesktopCommanderMCP/dis
 - **Status**: ✅ Successfully tested - robust input validation detected
 
 #### Setup Instructions
+
 ```bash
 # Clone the server repository
 git clone https://github.com/antvis/mcp-server-chart.git
@@ -150,6 +158,7 @@ npm run build
 ```
 
 #### Fuzzing Commands
+
 ```bash
 # From project root directory - Basic testing
 mcp-fuzzer --protocol stdio --endpoint "node /path/to/mcp-server-chart/build/index.js" --mode tools --runs 5 --verbose --enable-safety-system --output-dir /tmp
@@ -166,6 +175,7 @@ python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode bo
 ```
 
 #### Test Results
+
 - **Connection**: ✅ Successfully established stdio connection
 - **Tool Discovery**: ✅ Found 25 tools (14 tested in detail)
 - **Input Validation**: ✅ Server properly rejects malformed inputs with detailed error messages
@@ -174,6 +184,7 @@ python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode bo
 - **Safety System**: ✅ Successfully blocked dangerous content (XSS, file paths, SQL injection)
 
 ##### Detailed Fuzzing Results Summary
+
 ```
 🎯 MCP FUZZER TOOL RESULTS SUMMARY
 ===============================================================================
@@ -311,14 +322,17 @@ mcp-fuzzer --config config.yaml --mode both --runs 5 --verbose
 Our MCP fuzzing framework has proven highly effective across multiple server types, with each server having its own comprehensive testing results. The framework provides robust safety systems and detailed reporting for thorough security assessment.
 
 **Server Testing Portfolio:**
+
 - ✅ **DesktopCommanderMCP**: File system and process management (23 tools, 96.5% success rate)
 - ✅ **MCP Server Chart**: Data visualization and chart generation (25 tools, 2.0% success rate with excellent input validation)
 
 **Key Framework Capabilities:**
+
 - **Safety Systems Work:** Command blocking, URL filtering, and content sanitization effectively prevent malicious operations
 - **Comprehensive Testing:** Both tools and protocol-level testing provide thorough validation
 - **Input Validation:** Successfully detects and reports detailed validation errors across different server types
 - **Real-world Ready:** Production-ready safety features make it suitable for testing MCP servers in development and production environments
 
 **Framework Evolution:**
+
 The framework continues to evolve with each new server tested, ensuring robust fuzzing capabilities for the MCP ecosystem. Each server type brings unique testing challenges and validation requirements, helping us improve the framework's ability to handle diverse MCP server implementations.
