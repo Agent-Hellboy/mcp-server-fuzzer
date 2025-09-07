@@ -100,7 +100,7 @@ plugins:
       minify_html: true
 
 nav:
-  - Home: getting-started/index.md
+  - Home: index.md
   - Getting Started:
       - Quick Start: getting-started/getting-started.md
       - Examples: getting-started/examples.md
