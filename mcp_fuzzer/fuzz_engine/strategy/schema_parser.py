@@ -242,7 +242,16 @@ def _handle_enum(enum_values: List[Any], phase: str) -> Any:
         else:
             # Generate an invalid value based on the type of the first enum value
             if enum_values and isinstance(enum_values[0], str):
-                return "INVALID_" + "".join(random.choices(string.ascii_letters, k=10))
+                # Generate a realistic-looking invalid string
+                invalid_options = [
+                    "INVALID_" + "".join(random.choices(string.ascii_letters, k=8)),
+                    "not-a-valid-option",
+                    "unknown_value",
+                    "",  # Empty string
+                    " " * random.randint(1, 10),  # Whitespace
+                    "123invalid",  # Mixed alphanumeric
+                ]
+                return random.choice(invalid_options)
             elif enum_values and isinstance(enum_values[0], int):
                 # Generate a number not in the enum
                 all_values = set(enum_values)
@@ -271,8 +280,9 @@ def _handle_object_type(
 
     # Process each property
     for prop_name, prop_schema in properties.items():
-        # For required properties or by chance for optional ones
-        if prop_name in required or random.random() < 0.8:
+        # For required properties or by chance for optional ones (lower probability in realistic mode)
+        chance = 0.3 if phase == "realistic" else 0.8
+        if prop_name in required or random.random() < chance:
             result[prop_name] = make_fuzz_strategy_from_jsonschema(
                 prop_schema, phase, recursion_depth + 1
             )
@@ -335,8 +345,8 @@ def _handle_array_type(
 
     # Determine array size
     if phase == "realistic":
-        # In realistic mode, use reasonable array sizes
-        hi = max(min(max_items, 5), min_items)
+        # In realistic mode, use smaller, more reasonable array sizes
+        hi = max(min(max_items, 3), min_items)
         array_size = random.randint(min_items, hi)
     else:
         # In aggressive mode, sometimes use edge cases
@@ -415,9 +425,10 @@ def _handle_string_type(schema: Dict[str, Any], phase: str) -> str:
 
     # Generate string based on phase
     if phase == "realistic":
-        # Generate a reasonable string
+        # Generate a reasonable string with only printable ASCII characters
         length = random.randint(min_length, min(max_length, 50))
-        chars = string.ascii_letters + string.digits + " ._-"
+        # Use only printable characters, no control characters
+        chars = "".join(chr(i) for i in range(32, 127))  # Printable ASCII
         return "".join(random.choice(chars) for _ in range(length))
     else:
         # In aggressive mode, sometimes use edge cases
@@ -427,16 +438,18 @@ def _handle_string_type(schema: Dict[str, Any], phase: str) -> str:
             chars = string.ascii_letters + string.digits + string.punctuation
             return "".join(random.choice(chars) for _ in range(length))
         else:
-            # Edge cases
+            # Edge cases with safer character sets
             edge_cases = [
                 "",  # Empty string (might violate minLength)
                 "A" * min_length,  # Minimum length
-                "A" * max_length,  # Maximum length
-                "A" * 10000,  # Very long string
+                "A" * min(max_length, 1000),  # Maximum length (capped)
+                "A" * 1000,  # Very long string (reasonable limit)
                 "<script>alert('xss')</script>",  # XSS payload
                 "' OR '1'='1",  # SQL injection
                 "../../../etc/passwd",  # Path traversal
                 "\x00\x01\x02\x03",  # Null bytes
+                " " * min_length,  # Whitespace
+                "mixed123!@#",  # Special characters
             ]
             return random.choice(edge_cases)
 

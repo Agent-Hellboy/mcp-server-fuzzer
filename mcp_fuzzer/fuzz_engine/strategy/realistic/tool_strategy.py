@@ -122,9 +122,20 @@ async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str
     )
 
     if strategy == "normal":
-        chars = string.ascii_letters + string.digits + " ._-"
-        length = random.randint(min_size, max_size)
-        return "".join(random.choice(chars) for _ in range(length))
+        # Generate more realistic data based on context
+        if min_size == 0 and max_size > 50:
+            # Likely a title or description field - use realistic text
+            realistic_titles = [
+                "Sales Performance Q4", "User Growth Metrics", "Revenue Analysis",
+                "Customer Satisfaction Survey", "Product Usage Statistics",
+                "Market Share Analysis", "Performance Dashboard", "Trend Analysis"
+            ]
+            return random.choice(realistic_titles)
+        else:
+            # Use only printable ASCII characters, no control characters
+            chars = string.ascii_letters + string.digits + " ._-"
+            length = random.randint(min_size, min(max_size, 100))  # Limit max length
+            return "".join(random.choice(chars) for _ in range(length))
     elif strategy == "base64":
         # Use asyncio executor to prevent deadlocks
         size_min = max(1, min_size // 2)
@@ -190,6 +201,7 @@ async def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
                     count = random.randint(1, 3)
                     item_type = items_schema.get("type")
                     values: list[Any] = []
+
                     if item_type == "object":
                         # Generate each object via schema parser to honor constraints
                         for _ in range(count):
@@ -237,6 +249,7 @@ async def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
                 if prop_name not in args:
                     minimum = prop_spec.get("minimum", -100)
                     maximum = prop_spec.get("maximum", 100)
+
                     args[prop_name] = random.randint(minimum, maximum)
             # Special handling for number type properties
             elif prop_spec.get("type") == "number":
@@ -277,8 +290,21 @@ async def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
                         args[prop_name] = str(uuid.uuid4())
                     else:
                         args[prop_name] = await generate_realistic_text()
-            # In realistic mode, generate all properties
-            elif prop_name not in args:
-                args[prop_name] = await generate_realistic_text()
+            # In realistic mode, only generate required properties and some optional ones
+            # But only if the property has a simple string schema without enum/format constraints
+            elif prop_name not in args and (prop_name in required or random.random() < 0.3):
+                # Only use fallback generation for simple string properties without constraints
+                if (prop_spec.get("type") == "string" and
+                    not prop_spec.get("enum") and
+                    not prop_spec.get("format") and
+                    not prop_spec.get("pattern")):
+                    args[prop_name] = await generate_realistic_text()
+                # For properties with schemas, let the schema parser handle them
+                elif prop_spec.get("type") in ["integer", "number", "boolean", "array", "object"]:
+                    # These should have been handled by the schema parser above
+                    pass
+                else:
+                    # Fallback for unknown types
+                    args[prop_name] = await generate_realistic_text()
 
     return args
