@@ -276,6 +276,58 @@ def get_config_schema() -> Dict[str, Any]:
                     "env_allowlist": {"type": "array", "items": {"type": "string"}},
                 },
             },
+            "output": {
+                "type": "object",
+                "properties": {
+                    "format": {
+                        "type": "string",
+                        "enum": ["json", "yaml", "csv", "xml"],
+                        "description": "Output format for standardized reports",
+                    },
+                    "directory": {
+                        "type": "string",
+                        "description": "Directory to save output files",
+                    },
+                    "compress": {
+                        "type": "boolean",
+                        "description": "Whether to compress output files",
+                    },
+                    "types": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "fuzzing_results",
+                                "error_report",
+                                "safety_summary",
+                                "performance_metrics",
+                                "configuration_dump",
+                            ],
+                        },
+                        "description": "Specific output types to generate",
+                    },
+                    "schema": {
+                        "type": "string",
+                        "description": "Path to custom output schema file",
+                    },
+                    "retention": {
+                        "type": "object",
+                        "properties": {
+                            "days": {
+                                "type": "integer",
+                                "description": "Number of days to retain output files",
+                            },
+                            "max_size": {
+                                "type": "string",
+                                "description": (
+                                    "Maximum size of output directory "
+                                    "(e.g., '1GB', '500MB')"
+                                ),
+                            },
+                        },
+                    },
+                },
+            },
         },
     }
 

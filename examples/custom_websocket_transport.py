@@ -158,7 +158,9 @@ class WebSocketTransport(TransportProtocol):
                     )
                     response = json.loads(response_text)
                     if isinstance(response, dict) and response.get("id") == request_id:
-                        logger.debug(f"Received WebSocket response for {method} (id={request_id})")
+                        logger.debug(
+                            f"Received WebSocket response for {method} (id={request_id})"
+                        )
                         if "error" in response:
                             error_msg = f"Server error: {response['error']}"
                             logger.error(error_msg)

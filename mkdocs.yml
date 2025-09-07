@@ -104,6 +104,7 @@ nav:
   - Getting Started: getting-started.md
   - Architecture: architecture.md
   - Examples: examples.md
+  - Standardized Output: standardized-output.md
   - Reference: reference.md
   - Runtime Management: runtime-management.md
   - Process Management Guide: process-management-guide.md

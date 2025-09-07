@@ -48,6 +48,7 @@ mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8000/sse
 - **Built-in Safety**: Environment detection and system protection
 - **Intelligent Testing**: Hypothesis-based data generation strategies
 - **Rich Reporting**: Detailed output with exception tracking
+- **Standardized Output**: Machine-readable JSON format with mini-protocol for tool integration
 - **Flexible Configuration**: YAML config files, environment variables, and CLI options
 - **Asynchronous Execution**: Efficient concurrent fuzzing with configurable limits
 - **Comprehensive Error Handling**: Detailed exception hierarchy for better error diagnosis

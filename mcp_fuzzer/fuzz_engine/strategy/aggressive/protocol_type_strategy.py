@@ -192,8 +192,8 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                                     "",
                                     [],
                                     generate_malicious_string(),
-                                    random.randint(-1000, 1000),  # Add numeric values
-                                    random.choice([True, False]),  # Add booleans
+                                    random.randint(-1000, 1000),
+                                    random.choice([True, False]),
                                     {
                                         "customCapability": generate_malicious_value(),
                                         "extendedFeature": {
@@ -213,6 +213,10 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                                     # Add arrays and nested objects for more variety
                                     ["item1", "item2", generate_malicious_value()],
                                     {"nested": {"key": generate_malicious_value()}},
+                                    "experimental_string_value",
+                                    {"feature_flag": True},
+                                    [1, 2, 3, "mixed_array"],
+                                    {"config": {"debug": False, "verbose": True}},
                                 ]
                             )
                         },

@@ -23,14 +23,25 @@ from .formatters import (
     HTMLFormatter,
     MarkdownFormatter,
 )
+from .output_protocol import OutputManager
 from .safety_reporter import SafetyReporter
 
 
 class FuzzerReporter:
     """Centralized reporter for all MCP Fuzzer output and reporting."""
 
-    def __init__(self, output_dir: str = "reports"):
-        self.output_dir = Path(output_dir)
+    def __init__(self, output_dir: str = "reports", compress_output: bool = False):
+        # Load output configuration from global config
+        from ..config import config
+
+        output_config = config.get("output", {})
+        self.output_format = output_config.get("format", "json")
+        self.output_types = output_config.get("types")
+        self.output_schema = output_config.get("schema")
+        self.output_compress = output_config.get("compress", compress_output)
+        self.output_dir_config = output_config.get("directory", output_dir)
+
+        self.output_dir = Path(self.output_dir_config)
         self.output_dir.mkdir(exist_ok=True)
 
         # Initialize formatters
@@ -43,6 +54,9 @@ class FuzzerReporter:
         self.html_formatter = HTMLFormatter()
         self.markdown_formatter = MarkdownFormatter()
 
+        # Initialize standardized output manager
+        self.output_manager = OutputManager(str(self.output_dir), self.output_compress)
+
         # Initialize safety reporter
         self.safety_reporter = SafetyReporter()
 
@@ -52,8 +66,8 @@ class FuzzerReporter:
         self.safety_data: Dict[str, Any] = {}
         self.fuzzing_metadata: Dict[str, Any] = {}
 
-        # Generate unique session ID
-        self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Use session ID from output manager
+        self.session_id = self.output_manager.protocol.session_id
 
         logging.info(
             f"FuzzerReporter initialized with output directory: {self.output_dir}"
@@ -158,6 +172,69 @@ class FuzzerReporter:
 
         logging.info(f"Final report generated: {json_filename}")
         return str(json_filename)
+
+    def generate_standardized_report(
+        self,
+        output_types: List[str] = None,
+        include_safety: bool = True
+    ) -> Dict[str, str]:
+        """Generate standardized reports using the new output protocol."""
+        generated_files = {}
+
+        # Use configured output types if none specified
+        if output_types is None:
+            if self.output_types:
+                output_types = self.output_types
+            else:
+                output_types = ["fuzzing_results"]
+                if include_safety and self.safety_reporter.has_safety_data():
+                    output_types.append("safety_summary")
+
+        # Generate fuzzing results
+        if "fuzzing_results" in output_types:
+            try:
+                execution_time = self._calculate_execution_time()
+                total_tests = self._get_total_test_count()
+                success_rate = self._calculate_overall_success_rate()
+
+                filepath = self.output_manager.save_fuzzing_results(
+                    mode=self.fuzzing_metadata.get("mode", "unknown"),
+                    protocol=self.fuzzing_metadata.get("protocol", "unknown"),
+                    endpoint=self.fuzzing_metadata.get("endpoint", "unknown"),
+                    tool_results=self.tool_results,
+                    protocol_results=self.protocol_results,
+                    execution_time=execution_time,
+                    total_tests=total_tests,
+                    success_rate=success_rate,
+                    safety_enabled=include_safety,
+                )
+                generated_files["fuzzing_results"] = filepath
+            except Exception as e:
+                logging.error(f"Failed to generate standardized fuzzing results: {e}")
+
+        # Generate safety summary
+        if "safety_summary" in output_types and include_safety:
+            try:
+                safety_data = self.safety_reporter.get_comprehensive_safety_data()
+                filepath = self.output_manager.save_safety_summary(safety_data)
+                generated_files["safety_summary"] = filepath
+            except Exception as e:
+                logging.error(f"Failed to generate standardized safety summary: {e}")
+
+        # Generate error report if there are errors
+        if "error_report" in output_types:
+            try:
+                errors = self._collect_errors()
+                if errors:
+                    filepath = self.output_manager.save_error_report(
+                        errors=errors,
+                        execution_context=self.fuzzing_metadata
+                    )
+                    generated_files["error_report"] = filepath
+            except Exception as e:
+                logging.error(f"Failed to generate standardized error report: {e}")
+
+        return generated_files
 
     def _generate_summary_stats(self) -> Dict[str, Any]:
         """Generate summary statistics from all results."""
@@ -296,6 +373,83 @@ class FuzzerReporter:
                 else {}
             ),
         }
+
+    def _calculate_execution_time(self) -> str:
+        """Calculate total execution time."""
+        start_time = self.fuzzing_metadata.get("start_time")
+        end_time = self.fuzzing_metadata.get("end_time", datetime.now().isoformat())
+
+        if start_time:
+            try:
+                start = datetime.fromisoformat(start_time)
+                end = datetime.fromisoformat(end_time)
+                duration = end - start
+                return f"PT{duration.total_seconds()}S"
+            except Exception:
+                pass
+
+        return "PT0S"
+
+    def _get_total_test_count(self) -> int:
+        """Get total number of tests run."""
+        tool_tests = sum(len(results) for results in self.tool_results.values())
+        protocol_tests = sum(len(results) for results in self.protocol_results.values())
+        return tool_tests + protocol_tests
+
+    def _calculate_overall_success_rate(self) -> float:
+        """Calculate overall success rate across all tests."""
+        total_tests = self._get_total_test_count()
+        if total_tests == 0:
+            return 0.0
+
+        successful_tests = 0
+
+        # Count successful tool tests
+        for tool_results in self.tool_results.values():
+            for result in tool_results:
+                if ("exception" not in result and
+                    not result.get("safety_blocked", False)):
+                    successful_tests += 1
+
+        # Count successful protocol tests
+        for protocol_results in self.protocol_results.values():
+            for result in protocol_results:
+                if result.get("success", True):
+                    successful_tests += 1
+
+        return (successful_tests / total_tests) * 100
+
+    def _collect_errors(self) -> List[Dict[str, Any]]:
+        """Collect all errors from test results."""
+        errors = []
+
+        # Collect tool errors
+        for tool_name, tool_results in self.tool_results.items():
+            for i, result in enumerate(tool_results):
+                if "exception" in result:
+                    errors.append({
+                        "type": "tool_error",
+                        "tool_name": tool_name,
+                        "run_number": i + 1,
+                        "severity": "medium",
+                        "message": str(result["exception"]),
+                        "arguments": result.get("args", {}),
+                    })
+
+        # Collect protocol errors
+        for protocol_type, protocol_results in self.protocol_results.items():
+            for i, result in enumerate(protocol_results):
+                if not result.get("success", True):
+                    errors.append({
+                        "type": "protocol_error",
+                        "protocol_type": protocol_type,
+                        "run_number": i + 1,
+                        "severity": "medium",
+                        "message": result.get("error", "Unknown protocol error"),
+                        "details": result,
+                    })
+
+        return errors
 
     def cleanup(self):
         """Clean up reporter resources."""

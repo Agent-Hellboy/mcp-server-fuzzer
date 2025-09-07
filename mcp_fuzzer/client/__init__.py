@@ -73,6 +73,20 @@ async def main(argv: Optional[List[str]] = None) -> int:
             logging.error(f"Unknown mode: {config['mode']}")
             return 1
 
+        # Generate standardized reports
+        try:
+            output_types = config.get("output_types")
+            standardized_files = client.generate_standardized_reports(
+                output_types=output_types,
+                include_safety=config.get("safety_report", False)
+            )
+            if standardized_files:
+                logging.info(
+                    f"Generated standardized reports: {list(standardized_files.keys())}"
+                )
+        except Exception as e:
+            logging.warning(f"Failed to generate standardized reports: {e}")
+
         return 0
     except Exception as e:
         logging.error(f"Error during fuzzing: {e}")
