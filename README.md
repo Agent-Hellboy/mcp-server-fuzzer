@@ -251,8 +251,7 @@ mcp-fuzzer --check-env
 - Documentation: [Full Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/)
 - Issues: [GitHub Issues](https://github.com/Agent-Hellboy/mcp-server-fuzzer/issues)
 - Discussions: [GitHub Discussions](https://github.com/Agent-Hellboy/mcp-server-fuzzer/discussions)
-- Security: For security issues, please email [security@example.com](mailto:security@example.com)
-
+  
 ### Contributing
 
 We welcome contributions! Please see our [Contributing Guide](https://agent-hellboy.github.io/mcp-server-fuzzer/development/contributing/) for details.
