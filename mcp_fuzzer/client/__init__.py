@@ -159,14 +159,20 @@ async def main(argv: Optional[List[str]] = None) -> int:
                         vulnerable_tools.append((tool_name, exceptions, len(runs)))
 
                 if vulnerable_tools:
-                    print(f"\n{emoji.emojize(':police_car_light:')} VULNERABILITIES FOUND: {len(vulnerable_tools)}")
+                    print(
+                        f"\n{emoji.emojize(':police_car_light:')} "
+                        f"VULNERABILITIES FOUND: {len(vulnerable_tools)}"
+                    )
                     for tool, exceptions, total in vulnerable_tools:
                         rate = exceptions / total * 100
                         print(
                             f"  • {tool}: {exceptions}/{total} exceptions ({rate:.1f}%)"
                         )
                 else:
-                    print(f"\n{emoji.emojize(':check_mark_button:')} NO VULNERABILITIES FOUND")
+                    print(
+                        f"\n{emoji.emojize(':check_mark_button:')} "
+                        f"NO VULNERABILITIES FOUND"
+                    )
 
         except Exception as e:
             logging.warning(f"Failed to display table summary: {e}")

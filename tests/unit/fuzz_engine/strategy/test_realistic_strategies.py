@@ -175,6 +175,9 @@ async def test_generate_realistic_text():
 @pytest.mark.asyncio
 async def test_fuzz_tool_arguments_realistic():
     """Test realistic tool argument generation with various schema types."""
+    # Set seed for deterministic behavior
+    import random
+    random.seed(42)
 
     # Test with string type properties
     tool = {
@@ -193,13 +196,33 @@ async def test_fuzz_tool_arguments_realistic():
 
     result = await fuzz_tool_arguments_realistic(tool)
 
-    # Verify all properties are generated
+    # Verify required properties are generated
     assert "name" in result
-    assert "description" in result
-    assert "uuid_field" in result
-    assert "datetime_field" in result
-    assert "email_field" in result
-    assert "uri_field" in result
+
+    # Verify optional properties may or may not be generated (realistic mode behavior)
+    # In realistic mode, optional properties are generated with ~30% probability
+    # So we check that if they exist, they have the correct format
+    if "description" in result:
+        assert isinstance(result["description"], str)
+    if "uuid_field" in result:
+        assert isinstance(result["uuid_field"], str)
+        # Should be a valid UUID format
+        import re
+        assert re.match(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+            result["uuid_field"]
+        )
+    if "datetime_field" in result:
+        assert isinstance(result["datetime_field"], str)
+        # Should contain T and Z for ISO format
+        assert "T" in result["datetime_field"]
+        assert result["datetime_field"].endswith("Z")
+    if "email_field" in result:
+        assert isinstance(result["email_field"], str)
+        assert "@" in result["email_field"]
+    if "uri_field" in result:
+        assert isinstance(result["uri_field"], str)
+        assert result["uri_field"].startswith(("http://", "https://"))
 
     # Verify required field is present
     assert result["name"] is not None
@@ -445,10 +468,14 @@ async def test_fuzz_tool_arguments_with_required_fields():
 
     result = await fuzz_tool_arguments_realistic(tool)
 
-    # All fields should be present
-    assert "optional_field" in result
+    # Required fields should be present
     assert "required_field1" in result
     assert "required_field2" in result
+
+    # Optional field may or may not be present (realistic mode behavior)
+    # In realistic mode, optional properties are generated with ~30% probability
+    if "optional_field" in result:
+        assert isinstance(result["optional_field"], str)
 
     # Required fields should have values
     assert result["required_field1"] is not None

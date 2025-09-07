@@ -290,17 +290,22 @@ async def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
                         args[prop_name] = str(uuid.uuid4())
                     else:
                         args[prop_name] = await generate_realistic_text()
-            # In realistic mode, only generate required properties and some optional ones
-            # But only if the property has a simple string schema without enum/format constraints
-            elif prop_name not in args and (prop_name in required or random.random() < 0.3):
-                # Only use fallback generation for simple string properties without constraints
+            # In realistic mode, only generate required properties and some
+            # optional ones
+            # But only if the property has a simple string schema without enum/format
+            # constraints
+            elif (prop_name not in args and
+                  (prop_name in required or random.random() < 0.3)):
+                # Only use fallback generation for simple string properties without
+                # constraints
                 if (prop_spec.get("type") == "string" and
                     not prop_spec.get("enum") and
                     not prop_spec.get("format") and
                     not prop_spec.get("pattern")):
                     args[prop_name] = await generate_realistic_text()
                 # For properties with schemas, let the schema parser handle them
-                elif prop_spec.get("type") in ["integer", "number", "boolean", "array", "object"]:
+                elif prop_spec.get("type") in ["integer", "number", "boolean",
+                                               "array", "object"]:
                     # These should have been handled by the schema parser above
                     pass
                 else:

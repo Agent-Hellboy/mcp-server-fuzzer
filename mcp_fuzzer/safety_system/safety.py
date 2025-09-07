@@ -285,7 +285,9 @@ class SafetyFilter(SafetyProvider):
             logging.warning(f"Arguments: {safe_args}")
 
             if dangerous_content:
-                logging.warning(f"{emoji.emojize(':police_car_light:')} DANGEROUS CONTENT DETECTED:")
+                logging.warning(
+                    f"{emoji.emojize(':police_car_light:')} DANGEROUS CONTENT DETECTED:"
+                )
                 for content in dangerous_content:
                     logging.warning(f"  • {content}")
 

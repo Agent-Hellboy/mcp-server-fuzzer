@@ -46,7 +46,8 @@ class SystemCommandBlocker:
             # Create temporary directory for fake executables
             self.temp_dir = Path(tempfile.mkdtemp(prefix="mcp_fuzzer_block_"))
             logging.info(
-                f"{emoji.emojize(':shield:')} Created command blocking directory: {self.temp_dir}"
+                f"{emoji.emojize(':shield:')} Created command blocking directory: "
+                f"{self.temp_dir}"
             )
 
             # Create fake executables
@@ -58,7 +59,8 @@ class SystemCommandBlocker:
 
             logging.info("System command blocking activated")
             logging.info(
-                f"{emoji.emojize(':prohibited:')} Blocked commands: {', '.join(self.blocked_commands)}"
+                f"{emoji.emojize(':prohibited:')} Blocked commands: "
+                f"{', '.join(self.blocked_commands)}"
             )
 
         except Exception as e:
@@ -76,7 +78,9 @@ class SystemCommandBlocker:
             # Clean up using the cleanup method
             self.cleanup()
 
-            logging.info(f"{emoji.emojize(':unlocked:')} System command blocking stopped")
+            logging.info(
+                f"{emoji.emojize(':unlocked:')} System command blocking stopped"
+            )
 
         except Exception as e:
             logging.error(f"Error during cleanup: {e}")
@@ -100,12 +104,13 @@ args = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else ''
 
 # Log to stderr so it's visible
 print(
-    f"{emoji.emojize(':prohibited:')} [FUZZER BLOCKED] {{command_name}} {{args}}", file=sys.stderr
+    f"{emoji.emojize(':prohibited:')} [FUZZER BLOCKED] {{command_name}} {{args}}",
+    file=sys.stderr
 )
 print(
     (
-        f"{emoji.emojize(':shield:')} Command '{{command_name}}' was blocked to prevent external app "
-        f"launch during fuzzing. This is a safety feature."
+        f"{emoji.emojize(':shield:')} Command '{{command_name}}' was blocked to "
+        f"prevent external app launch during fuzzing. This is a safety feature."
     )
 )
 

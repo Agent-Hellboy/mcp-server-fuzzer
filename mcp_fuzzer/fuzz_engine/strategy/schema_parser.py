@@ -200,7 +200,7 @@ def make_fuzz_strategy_from_jsonschema(
         return alt if alt != const_val else _generate_default_value("aggressive")
 
     # Handle different types
-    if schema_type == "object":
+    if schema_type == "object" or "properties" in schema:
         return _handle_object_type(schema, phase, recursion_depth)
     elif schema_type == "array":
         return _handle_array_type(schema, phase, recursion_depth)
@@ -280,7 +280,8 @@ def _handle_object_type(
 
     # Process each property
     for prop_name, prop_schema in properties.items():
-        # For required properties or by chance for optional ones (lower probability in realistic mode)
+        # For required properties or by chance for optional ones
+        # (lower probability in realistic mode)
         chance = 0.3 if phase == "realistic" else 0.8
         if prop_name in required or random.random() < chance:
             result[prop_name] = make_fuzz_strategy_from_jsonschema(
