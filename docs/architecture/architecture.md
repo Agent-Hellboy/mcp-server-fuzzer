@@ -140,58 +140,73 @@ graph TD
 
 ```text
 mcp_fuzzer/
-| -- cli/                    # Command-line interface
-|    | -- __init__.py
-|    | -- args.py            # Argument parsing and validation
-|    | -- main.py            # Main CLI entry point
-|    | -- runner.py          # CLI execution logic
-| -- transport/              # Transport layer implementations
-|    | -- __init__.py
-|    | -- base.py            # Abstract transport protocol
-|    | -- factory.py         # Transport factory
-|    | -- http.py            # HTTP/HTTPS transport
-|    | -- sse.py             # Server-Sent Events transport
-|    | -- stdio.py           # Standard I/O transport
-| -- fuzz_engine/            # Fuzzing engine
-|    | -- __init__.py
-|    | -- executor.py        # Async execution framework
-|    | -- fuzzer/            # Core fuzzing logic
-|    |    | -- __init__.py
-|    |    | -- tool_fuzzer.py     # Tool-level fuzzing
-|    |    | -- protocol_fuzzer.py # Protocol-level fuzzing
-|    | -- strategy/           # Fuzzing strategies
-|    |    | -- __init__.py
-|    |    | -- realistic/         # Realistic data generation
-|    |    |    | -- __init__.py
-|    |    |    | -- protocol_type_strategy.py
-|    |    |    | -- tool_strategy.py
-|    |    | -- aggressive/        # Aggressive attack vectors
-|    |    |    | -- __init__.py
-|    |    |    | -- protocol_type_strategy.py
-|    |    |    | -- tool_strategy.py
-|    |    | -- strategy_manager.py # Strategy orchestration
-|    | -- runtime/            # Process management and runtime
-|        | -- __init__.py
-|        | -- manager.py      # Fully async process manager
-|        | -- watchdog.py     # Async process monitoring
-| -- reports/                # Reporting and output system
-|    | -- __init__.py
-|    | -- reporter.py         # Main reporting coordinator
-|    | -- formatters.py       # Output formatters (Console, JSON, Text)
-|    | -- safety_reporter.py  # Safety system reporting
-| -- safety_system/          # Safety and protection
-|    | -- __init__.py
-|    | -- safety.py          # Core safety logic
-|    | -- policy.py          # Network policy and host normalization
-|    | -- patterns.py        # Safety pattern definitions
-|    | -- system_blocker.py  # System command blocking
-| -- auth/                   # Authentication providers
-|    | -- __init__.py
-|    | -- providers.py        # Auth provider implementations
-|    | -- manager.py          # Auth management
-|    | -- loaders.py          # Configuration loading
-| -- client.py               # Unified MCP client
-| -- __main__.py            # Entry point for module execution
+├── __init__.py              # Package initialization and exports
+├── __main__.py              # Entry point for module execution
+├── config_loader.py         # Configuration loading utilities
+├── config.py                # Configuration management
+├── exceptions.py            # Custom exception classes
+├── types.py                 # Type definitions and protocols
+├── auth/                    # Authentication system
+│   ├── __init__.py
+│   ├── loaders.py           # Configuration loading
+│   ├── manager.py           # Authentication management
+│   └── providers.py         # Auth provider implementations
+├── cli/                     # Command-line interface
+│   ├── __init__.py
+│   ├── args.py              # Argument parsing and validation
+│   ├── main.py              # Main CLI entry point
+│   └── runner.py            # CLI execution logic
+├── client/                  # MCP client implementations
+│   ├── __init__.py
+│   ├── base.py              # Main MCPFuzzerClient
+│   ├── protocol_client.py   # Protocol-level client
+│   └── tool_client.py       # Tool-level client
+├── fuzz_engine/             # Core fuzzing engine
+│   ├── __init__.py
+│   ├── executor.py          # Async execution framework
+│   ├── invariants.py        # Property-based testing invariants
+│   ├── fuzzer/              # Core fuzzing logic
+│   │   ├── __init__.py
+│   │   ├── protocol_fuzzer.py # Protocol-level fuzzing
+│   │   └── tool_fuzzer.py   # Tool-level fuzzing
+│   ├── runtime/             # Process management and runtime
+│   │   ├── __init__.py
+│   │   ├── manager.py       # Async process manager
+│   │   └── watchdog.py      # Process monitoring
+│   └── strategy/            # Fuzzing strategies
+│       ├── __init__.py
+│       ├── schema_parser.py # JSON Schema parsing
+│       ├── strategy_manager.py # Strategy orchestration
+│       ├── aggressive/      # Aggressive attack vectors
+│       │   ├── __init__.py
+│       │   ├── protocol_type_strategy.py
+│       │   └── tool_strategy.py
+│       └── realistic/       # Realistic data generation
+│           ├── __init__.py
+│           ├── protocol_type_strategy.py
+│           └── tool_strategy.py
+├── reports/                 # Reporting and output system
+│   ├── __init__.py
+│   ├── formatters.py        # Output formatters
+│   ├── output_protocol.py   # Output protocol definitions
+│   ├── reporter.py          # Main reporting coordinator
+│   └── safety_reporter.py   # Safety system reporting
+├── safety_system/           # Safety and protection
+│   ├── __init__.py
+│   ├── patterns.py          # Safety pattern definitions
+│   ├── policy.py            # Network policy and host normalization
+│   ├── safety.py            # Core safety logic with SafetyProvider protocol
+│   └── system_blocker.py    # System command blocking
+└── transport/               # Transport layer implementations
+    ├── __init__.py
+    ├── base.py              # Abstract transport protocol
+    ├── custom.py            # Custom transport implementations
+    ├── factory.py           # Transport factory
+    ├── http.py              # HTTP/HTTPS transport
+    ├── mixins.py            # Transport mixins and utilities
+    ├── sse.py               # Server-Sent Events transport
+    ├── stdio.py             # Standard I/O transport
+    └── streamable_http.py   # Streamable HTTP transport
 ```
 
 ## Component Details
@@ -215,15 +230,18 @@ The CLI layer provides the user interface and handles argument parsing, validati
 
 ### 2. Transport Layer
 
-The transport layer abstracts communication with MCP servers, supporting multiple protocols.
+The transport layer abstracts communication with MCP servers, supporting multiple protocols with built-in safety integration.
 
 **Key Components:**
 
-- `base.py`: Abstract TransportProtocol class defining the interface
+- `base.py`: Abstract TransportProtocol class with safety integration
 - `factory.py`: Factory function for creating transport instances
 - `http.py`: HTTP/HTTPS transport implementation
+- `streamable_http.py`: Streamable HTTP transport for real-time communication
 - `sse.py`: Server-Sent Events transport implementation
 - `stdio.py`: Standard I/O transport for local processes
+- `mixins.py`: Reusable transport mixins and utilities
+- `custom.py`: Custom transport implementations
 
 **Transport Protocol Interface:**
 
@@ -232,8 +250,13 @@ class TransportProtocol(ABC):
     async def send_request(self, method: str, params=None) -> Any
     async def send_raw(self, payload: Any) -> Any
     async def send_notification(self, method: str, params=None) -> None
+    async def connect(self) -> None
+    async def disconnect(self) -> None
+    async def stream_request(self, payload: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]
     async def get_tools(self) -> List[Dict[str, Any]]
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any
+    async def send_batch_request(self, batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]
+    def collate_batch_responses(self, requests: List[Dict[str, Any]], responses: List[Dict[str, Any]]) -> Dict[Any, Dict[str, Any]]
 ```
 
 ### 3. Fuzzing Engine
@@ -309,82 +332,256 @@ The module supports both "realistic" and "aggressive" fuzzing strategies, where 
 
 ### 5. Invariants System
 
-The invariants system provides property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
+The invariants system provides comprehensive property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
 
 **Key Components:**
 
-- `check_response_validity`: Ensures responses follow JSON-RPC 2.0 specification
-- `check_error_type_correctness`: Verifies error responses have correct structure and codes
-- `check_response_schema_conformity`: Validates responses against JSON schema definitions
+- `check_response_validity`: Ensures responses follow JSON-RPC 2.0 specification with proper field validation
+- `check_error_type_correctness`: Verifies error responses have correct structure, codes, and message types
+- `check_response_schema_conformity`: Validates responses against JSON schema definitions using jsonschema
 - `verify_response_invariants`: Orchestrates multiple invariant checks on a single response
-- `verify_batch_responses`: Applies invariant checks to batches of responses
-- `check_state_consistency`: Ensures server state remains consistent during fuzzing
+- `verify_batch_responses`: Applies invariant checks to batches of responses asynchronously
+- `check_state_consistency`: Ensures server state remains consistent during fuzzing operations
+
+**Invariant Types:**
+
+- **Response Structure Invariants**: Validate JSON-RPC 2.0 compliance, proper field presence, and data types
+- **Error Handling Invariants**: Ensure error responses have correct codes, messages, and don't contain both result and error
+- **Schema Validation Invariants**: Optional JSON Schema validation for complex response structures
+- **State Consistency Invariants**: Verify server state changes are expected and consistent
+- **Batch Processing Invariants**: Asynchronous validation of multiple responses with proper error aggregation
+
+**Usage in Fuzzing:**
+
+```python
+# Single response validation
+try:
+    verify_response_invariants(response, expected_error_codes=[-32600, -32601])
+    print("Response passed all invariants")
+except InvariantViolation as e:
+    print(f"Invariant violation: {e}")
+
+# Batch response validation
+results = await verify_batch_responses(responses, schema=tool_schema)
+for idx, result in results.items():
+    if result is not True:
+        print(f"Response {idx} failed: {result}")
+```
 
 These invariants serve as runtime assertions that validate the behavior of the server being tested, helping to identify potential issues that might not be caught by simple error checking.
 
-### 6. Safety System
+### 6. Client Architecture
 
-The safety system provides multiple layers of protection against dangerous operations.
+The client architecture provides specialized MCP client implementations for different fuzzing scenarios.
 
 **Key Components:**
 
-- `safety.py`: Core safety logic and filtering
+- `base.py`: Main MCPFuzzerClient integrating all components
+- `tool_client.py`: Specialized client for tool-level fuzzing
+- `protocol_client.py`: Specialized client for protocol-level fuzzing
+
+**Client Features:**
+
+- **Unified Interface**: Single entry point for all fuzzing operations
+- **Component Integration**: Seamlessly integrates transport, safety, and reporting
+- **Specialized Clients**: Separate clients for tool and protocol fuzzing
+- **Authentication Support**: Built-in authentication management
+- **Reporting Integration**: Automatic result collection and reporting
+
+### 7. Safety System
+
+The safety system provides multiple layers of protection against dangerous operations using a pluggable provider architecture.
+
+**Key Components:**
+
+- `safety.py`: Core safety logic with SafetyProvider protocol
+- `patterns.py`: Predefined dangerous pattern definitions
+- `policy.py`: Network policy and host normalization
 - `system_blocker.py`: System command blocking and PATH shimming
 
 **Safety Features:**
 
-- **SafetyFilter**: Centralized filter for all tool and protocol calls
+- **Pluggable Safety Providers**: Protocol-based safety system allowing custom implementations
+- **Pattern-Based Filtering**: Comprehensive pattern matching for dangerous content
+- **SafetyFilter Class**: Main implementation with URL/command blocking
 - **System Command Blocking**: Prevents execution of dangerous commands (PATH shims)
 - **Filesystem Sandboxing**: Confines file operations to specified directories
 - **Process Isolation**: Safe subprocess handling with timeouts
 - **Input Sanitization**: Filters potentially dangerous input
+- **Mock Response Generation**: Safe responses for blocked operations
 
-### 7. Authentication System
+### 8. Authentication System
 
-The authentication system manages various authentication methods for MCP servers.
-
-**Key Components:**
-
-- `providers.py`: Authentication provider implementations
-- `manager.py`: Authentication management and coordination
-- `loaders.py`: Configuration loading from files and environment
-
-**Supported Auth Types:**
-
-- **API Key authentication**
-- **Basic username/password authentication**
-- **OAuth token authentication**
-- **Custom header authentication**
-
-### 8. Reporting System
-
-The reporting system provides centralized output management and comprehensive result reporting.
+The authentication system provides comprehensive support for various authentication methods for MCP servers using a flexible provider-based architecture.
 
 **Key Components:**
 
-- `reporter.py`: Main `FuzzerReporter` class that coordinates all reporting
-- `formatters.py`: Output formatters for different formats (Console, JSON, Text)
-- `safety_reporter.py`: Dedicated safety system reporting and statistics
+- `providers.py`: Authentication provider implementations (API Key, Basic, OAuth, Custom)
+- `manager.py`: Authentication management and coordination with transport layer integration
+- `loaders.py`: Configuration loading from files, environment variables, and command-line
+
+**Supported Authentication Types:**
+
+- **API Key Authentication**: Header-based API key authentication with customizable headers
+- **Basic Authentication**: Standard username/password with Base64 encoding
+- **OAuth Token Authentication**: Bearer token authentication for OAuth flows
+- **Custom Header Authentication**: Flexible header-based authentication for custom schemes
+- **Multi-Provider Support**: Different authentication methods for different tools/endpoints
+
+**Authentication Flow:**
+
+```mermaid
+graph TD
+    A[Tool Call] --> B[Check Auth Mapping]
+    B --> C{Auth Required?}
+    C -->|Yes| D[Get Provider]
+    C -->|No| E[Proceed without auth]
+    D --> F[Apply Authentication]
+    F --> G[Add to Request]
+    G --> H[Send Request]
+    E --> H
+```
+
+**Configuration Structure:**
+
+```yaml
+auth:
+  providers:
+    - type: "api_key"
+      id: "openai_provider"
+      config:
+        key: "sk-your-api-key"
+        header_name: "Authorization"
+        prefix: "Bearer"
+    - type: "basic"
+      id: "secure_provider"
+      config:
+        username: "service_user"
+        password: "secure_password"
+    - type: "oauth"
+      id: "github_provider"
+      config:
+        token: "ghp-your-token"
+        header_name: "Authorization"
+
+  mappings:
+    "chat_completion": "openai_provider"
+    "github_search": "github_provider"
+    "secure_tool": "secure_provider"
+```
+
+**Security Features:**
+
+- **Credential Isolation**: Each provider manages its own credentials securely
+- **Header Sanitization**: Automatic cleaning of sensitive headers
+- **Environment Variable Support**: Secure credential loading from environment
+- **Provider Validation**: Runtime validation of authentication configurations
+- **Error Handling**: Graceful fallback for authentication failures
+
+### 9. Configuration Management
+
+The configuration system provides centralized configuration management with multiple loading strategies.
+
+**Key Components:**
+
+- `config.py`: Main configuration classes and validation
+- `config_loader.py`: Configuration loading utilities
+
+**Configuration Sources:**
+
+- **Environment Variables**: Runtime configuration via environment
+- **Configuration Files**: YAML/JSON configuration files
+- **CLI Arguments**: Command-line argument overrides
+- **Default Values**: Sensible defaults for all settings
+
+**Configuration Areas:**
+
+- **Transport Settings**: Protocol-specific configuration
+- **Safety Settings**: Safety system configuration
+- **Runtime Settings**: Execution and concurrency settings
+- **Reporting Settings**: Output and logging configuration
+
+### 9. Reporting System
+
+The reporting system provides centralized output management and comprehensive result reporting with multiple output formats and real-time progress tracking.
+
+**Key Components:**
+
+- `reporter.py`: Main `FuzzerReporter` class that coordinates all reporting and manages output destinations
+- `formatters.py`: Output formatters for different formats (Console, JSON, Text, CSV, XML)
+- `safety_reporter.py`: Dedicated safety system reporting with risk assessment and blocked operation analysis
+- `output_protocol.py`: Standardized output protocol definitions for consistent reporting structure
 
 **Reporting Features:**
 
-- **Console Output**: Rich, formatted tables with colors and progress tracking
-- **File Export**: JSON and text reports for analysis and documentation
-- **Result Aggregation**: Comprehensive statistics and success rate calculations
-- **Safety Reporting**: Detailed breakdown of blocked operations and risk assessments
-- **Session Tracking**: Timestamped reports with unique session identification
+- **Multi-Format Output**: Support for console, JSON, text, CSV, and XML formats
+- **Real-time Progress**: Live progress indicators and status updates during fuzzing
+- **Result Aggregation**: Comprehensive statistics, success rates, and performance metrics
+- **Safety Reporting**: Detailed breakdown of blocked operations, risk assessments, and security events
+- **Session Tracking**: Timestamped reports with unique session identification and metadata
+- **Configurable Retention**: Automatic cleanup of old reports based on time or size limits
 
 **Output Formats:**
 
-- **Console**: Interactive tables and progress indicators
-- **JSON**: Machine-readable structured data for external analysis
-- **Text**: Human-readable summaries for sharing and documentation
+- **Console**: Interactive tables with colors, progress bars, and real-time updates
+- **JSON**: Machine-readable structured data for CI/CD integration and external analysis
+- **Text**: Human-readable summaries for documentation and sharing
+- **CSV**: Spreadsheet-compatible format for data analysis
+- **XML**: Enterprise-compatible format for integration with existing systems
 
 **Report Types:**
 
-- **Fuzzing Reports**: Complete tool and protocol testing results
-- **Safety Reports**: Detailed safety system data and blocked operations
-- **Session Reports**: Metadata, configuration, and execution statistics
+- **Fuzzing Reports**: Complete tool and protocol testing results with detailed metrics
+- **Safety Reports**: Comprehensive safety system data, blocked operations, and risk analysis
+- **Session Reports**: Execution metadata, configuration snapshots, and performance statistics
+- **Performance Reports**: Detailed timing, resource usage, and scalability metrics
+- **Error Reports**: Categorized error analysis with root cause identification
+
+**Reporting Architecture:**
+
+```mermaid
+graph TD
+    A[Fuzzing Engine] --> B[FuzzerReporter]
+    B --> C{Output Format}
+    C -->|Console| D[ConsoleFormatter]
+    C -->|JSON| E[JSONFormatter]
+    C -->|Text| F[TextFormatter]
+    C -->|CSV| G[CSVFormatter]
+
+    B --> H[SafetyReporter]
+    H --> I[Risk Assessment]
+    H --> J[Blocked Operations]
+
+    D --> K[Terminal Output]
+    E --> L[File System]
+    F --> L
+    G --> L
+```
+
+**Configuration Options:**
+
+```yaml
+output:
+  format: "json"                 # json, yaml, csv, xml, console
+  directory: "./reports"         # Output directory path
+  compress: true                 # Enable compression for large reports
+  types:                         # Specific report types to generate
+    - "fuzzing_results"
+    - "error_report"
+    - "safety_summary"
+    - "performance_metrics"
+  retention:
+    days: 30                     # Retain reports for N days
+    max_size: "1GB"              # Maximum total size before cleanup
+  schema: "./custom_schema.json" # Custom output schema file
+```
+
+**Integration Features:**
+
+- **CI/CD Integration**: JSON output for automated test pipelines
+- **Monitoring Integration**: Structured logging for external monitoring systems
+- **Dashboard Integration**: CSV/XML formats for business intelligence tools
+- **Audit Integration**: Comprehensive session tracking for compliance requirements
 
 ## Runtime Management Details
 
@@ -393,6 +590,7 @@ The reporting system provides centralized output management and comprehensive re
 The `ProcessManager` provides fully asynchronous subprocess lifecycle management with the following capabilities:
 
 **Core Features:**
+
 - **Async Process Creation**: Uses `asyncio.create_subprocess_exec` for non-blocking process spawning
 - **Process Registration**: Automatically registers processes with the watchdog for monitoring
 - **Signal Handling**: Supports graceful termination (SIGTERM) and force kill (SIGKILL) with process-group signaling
@@ -400,12 +598,14 @@ The `ProcessManager` provides fully asynchronous subprocess lifecycle management
 - **Cleanup Management**: Automatic cleanup of finished processes to prevent resource leaks
 
 **Process Lifecycle:**
+
 1. **Start**: Process is created with asyncio, registered with watchdog, and tracked in manager
 2. **Monitor**: Watchdog monitors for hangs and inactivity using activity callbacks
 3. **Stop**: Graceful termination with escalation to force kill if needed
 4. **Cleanup**: Process is unregistered from watchdog and removed from tracking
 
 **Configuration Options:**
+
 - `command`: List of command and arguments
 - `cwd`: Working directory for the process
 - `env`: Environment variables (merged with current environment)
@@ -419,12 +619,14 @@ The `ProcessManager` provides fully asynchronous subprocess lifecycle management
 The `ProcessWatchdog` provides automated monitoring and termination of hanging processes:
 
 **Monitoring Features:**
+
 - **Activity Tracking**: Monitors process activity through callbacks or timestamps
 - **Hang Detection**: Identifies processes that haven't been active for configured timeout periods
 - **Automatic Termination**: Can automatically kill hanging processes based on policy
 - **Configurable Thresholds**: Separate thresholds for warning, timeout, and force kill
 
 **Configuration Options:**
+
 - `check_interval`: How often to check processes (default: 1.0 seconds)
 - `process_timeout`: Time before process is considered hanging (default: 30.0 seconds)
 - `extra_buffer`: Extra time before auto-kill (default: 5.0 seconds)
@@ -432,6 +634,7 @@ The `ProcessWatchdog` provides automated monitoring and termination of hanging p
 - `auto_kill`: Whether to automatically kill hanging processes (default: true)
 
 **Activity Callbacks:**
+
 Processes can register activity callbacks that return timestamps indicating when they were last active. This allows for more sophisticated hang detection based on actual process activity rather than just time elapsed.
 
 ### AsyncFuzzExecutor
@@ -439,22 +642,26 @@ Processes can register activity callbacks that return timestamps indicating when
 The `AsyncFuzzExecutor` provides controlled concurrency and robust error handling for fuzzing operations:
 
 **Concurrency Control:**
+
 - **Bounded Concurrency**: Uses semaphore to limit concurrent operations
 - **Task Tracking**: Maintains set of running tasks for proper shutdown
 - **Batch Operations**: Execute multiple operations concurrently with result collection
 
 **Error Handling:**
+
 - **Timeout Management**: Configurable timeouts for individual operations
 - **Retry Logic**: Exponential backoff retry mechanism for failed operations
 - **Exception Collection**: Collects and categorizes errors from batch operations
 
 **Configuration Options:**
+
 - `max_concurrency`: Maximum number of concurrent operations (default: 5)
 - `timeout`: Default timeout for operations (default: 30.0 seconds)
 - `retry_count`: Number of retries for failed operations (default: 1)
 - `retry_delay`: Delay between retries (default: 1.0 seconds)
 
 **Usage Patterns:**
+
 - **Single Operations**: Execute individual operations with timeout and error handling
 - **Retry Operations**: Execute operations with automatic retry on failure
 - **Batch Operations**: Execute multiple operations concurrently with bounded concurrency

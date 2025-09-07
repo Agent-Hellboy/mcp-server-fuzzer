@@ -10,7 +10,7 @@ from .fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzz_engine.fuzzer.tool_fuzzer import ToolFuzzer
 from .fuzz_engine.strategy import ProtocolStrategies, ToolStrategies
 
-__version__ = "0.1.6"
+__version__ = "0.1.9"
 __all__ = [
     "ToolFuzzer",
     "ProtocolFuzzer",

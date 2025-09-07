@@ -103,26 +103,26 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 
 - **CLI Interface** - User-friendly command-line interface
 
-See [Architecture](architecture.md) for detailed diagrams and flow charts.
+See [Architecture](../architecture/architecture.md) for detailed diagrams and flow charts.
 
 ## Documentation
 
 - **[Getting Started](getting-started.md)** - Installation and basic usage
-- **[Configuration](configuration.md)** - Configuration options and file formats (YAML/TOML)
-- **[Architecture](architecture.md)** - System design and components
-- **[Runtime Management](runtime-management.md)** - Process management, watchdog system, and async executor
-- **[Process Management Guide](process-management-guide.md)** - Process management best practices and troubleshooting
-- **[Client Architecture](client-architecture.md)** - Client package structure
-- **[Code Structure](code-structure.md)** - Code organization and patterns
+- **[Configuration](../configuration/configuration.md)** - Configuration options and file formats (YAML/TOML)
+- **[Architecture](../architecture/architecture.md)** - System design and components
+- **[Runtime Management](../components/runtime-management.md)** - Process management, watchdog system, and async executor
+- **[Process Management Guide](../components/process-management-guide.md)** - Process management best practices and troubleshooting
+- **[Client Architecture](../architecture/client-architecture.md)** - Client package structure
 - **[Examples](examples.md)** - Working examples and configurations
-- **[Reference](reference.md)** - Complete API reference
-- **[Safety Guide](safety.md)** - Safety system configuration
-- **[Exceptions](exceptions.md)** - Error handling and exception hierarchy
-- **[Contributing](contributing.md)** - Development and contribution guide
+- **[Reference](../development/reference.md)** - Complete API reference
+- **[Safety Guide](../components/safety.md)** - Safety system configuration
+- **[Exceptions](../development/exceptions.md)** - Error handling and exception hierarchy
+- **[Contributing](../development/contributing.md)** - Development and contribution guide
+- **[Fuzz Results](../testing/fuzz-results.md)** - Latest fuzzing test results
 
 ## Contributing
 
-We welcome contributions. Please see our [Contributing Guide](contributing.md) for details.
+We welcome contributions. Please see our [Contributing Guide](../development/contributing.md) for details.
 
 ## License
 
