@@ -44,7 +44,11 @@ class ProcessConfig:
 class ProcessManager:
     """Fully asynchronous process manager."""
 
-    def __init__(self, config: Optional[WatchdogConfig] = None, config_dict: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        config: Optional[WatchdogConfig] = None,
+        config_dict: Optional[Dict[str, Any]] = None
+    ):
         """Initialize the async process manager."""
         if config_dict:
             self.config = WatchdogConfig.from_config(config_dict)
