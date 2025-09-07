@@ -4,7 +4,7 @@
 
 This document serves as both a comprehensive testing report and a practical guide for **mcp-fuzzer developers** looking to test their changes. Whether you're modifying the fuzzing engine, safety systems, or transport layers, use these tested MCP servers as your validation targets to ensure your changes work correctly.
 
-**What You'll Find Here:**
+## What You'll Find Here
 
 - ✅ Complete setup instructions for reliable test MCP servers
 - ✅ Ready-to-use fuzzing commands for regression testing
@@ -40,6 +40,7 @@ Hey, here's what we found when we fuzzed multiple MCP servers. We've tested vari
 - **Status**: ✅ Well-tested server with good performance
 
 #### Setup Instructions
+
 ```bash
 # Clone the server repository
 git clone https://github.com/wonderwhy-er/DesktopCommanderMCP.git
@@ -321,12 +322,12 @@ mcp-fuzzer --config config.yaml --mode both --runs 5 --verbose
 
 Our MCP fuzzing framework has proven highly effective across multiple server types, with each server having its own comprehensive testing results. The framework provides robust safety systems and detailed reporting for thorough security assessment.
 
-**Server Testing Portfolio:**
+## Server Testing Portfolio
 
 - ✅ **DesktopCommanderMCP**: File system and process management (23 tools, 96.5% success rate)
 - ✅ **MCP Server Chart**: Data visualization and chart generation (25 tools, 2.0% success rate with excellent input validation)
 
-**Key Framework Capabilities:**
+## Key Framework Capabilities
 
 - **Safety Systems Work:** Command blocking, URL filtering, and content sanitization effectively prevent malicious operations
 - **Comprehensive Testing:** Both tools and protocol-level testing provide thorough validation
