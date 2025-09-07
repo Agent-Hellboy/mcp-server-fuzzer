@@ -135,6 +135,12 @@ class ProtocolStrategies:
                 "ListRootsRequest",
                 "SetLevelRequest",
                 "CompleteRequest",
+                "ListResourceTemplatesRequest",
+                "ElicitRequest",
+                "PingRequest",
+                "SubscribeRequest",
+                "UnsubscribeRequest",
+                "CreateMessageRequest",
             ]
 
         if min_batch_size > max_batch_size:

@@ -294,6 +294,37 @@ class TestAggressiveProtocolStrategies:
             "ListResourceTemplatesRequest",
             "ElicitRequest",
             "PingRequest",
+            # Result schemas
+            "InitializeResult",
+            "ListResourcesResult",
+            "ListResourceTemplatesResult",
+            "ReadResourceResult",
+            "ListPromptsResult",
+            "GetPromptResult",
+            "ListToolsResult",
+            "CompleteResult",
+            "CreateMessageResult",
+            "ListRootsResult",
+            "PingResult",
+            "ElicitResult",
+            # Notification schemas
+            "LoggingMessageNotification",
+            "ResourceListChangedNotification",
+            "ResourceUpdatedNotification",
+            "PromptListChangedNotification",
+            "ToolListChangedNotification",
+            "RootsListChangedNotification",
+            # Content block schemas
+            "TextContent",
+            "ImageContent",
+            "AudioContent",
+            # Resource schemas
+            "Resource",
+            "ResourceTemplate",
+            "TextResourceContents",
+            "BlobResourceContents",
+            # Tool schemas
+            "Tool",
         ]
 
         for protocol_type in potential_types:
@@ -306,7 +337,7 @@ class TestAggressiveProtocolStrategies:
             f"{all_supported_types}"
         )
 
-        # Should have exactly 19 types
-        assert len(ProtocolFuzzer.PROTOCOL_TYPES) == 19, (
-            f"Expected 19 protocol types, got {len(ProtocolFuzzer.PROTOCOL_TYPES)}"
+        # Should have exactly 45 types (19 original + 26 new)
+        assert len(ProtocolFuzzer.PROTOCOL_TYPES) == 45, (
+            f"Expected 45 protocol types, got {len(ProtocolFuzzer.PROTOCOL_TYPES)}"
         )
