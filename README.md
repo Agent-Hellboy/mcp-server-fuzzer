@@ -2,9 +2,9 @@
 
 <div align="center">
 
-**A comprehensive super aggressive CLI based fuzzing tool for MCP servers**
+**A comprehensive super-aggressive CLI-based fuzzing tool for MCP servers**
 
-*Multi-protocol support • Two-phase fuzzing • Built-in safety • Rich reporting*
+*Multi-protocol support • Two-phase fuzzing • Built-in safety • Rich reporting • async runtime and async fuzzing of mcp tools*
 
 [![CI](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml/badge.svg)](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml)
 [![codecov](https://codecov.io/gh/Agent-Hellboy/mcp-server-fuzzer/graph/badge.svg?token=HZKC5V28LS)](https://codecov.io/gh/Agent-Hellboy/mcp-server-fuzzer)
