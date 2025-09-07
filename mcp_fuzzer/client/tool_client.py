@@ -158,7 +158,6 @@ class ToolClient:
                     safety_sanitized = sanitized_args != args
 
                 # Get authentication for this tool
-                auth_headers = self.auth_manager.get_auth_headers_for_tool(tool_name)
                 auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
 
                 # Merge auth params only into the call payload; never persist secrets
@@ -171,9 +170,8 @@ class ToolClient:
 
                 # Call the tool with the generated arguments
                 try:
-                    timeout = tool_timeout
                     result = await self.transport.call_tool(
-                        tool_name, args_for_call, auth_headers, timeout=timeout
+                        tool_name, args_for_call
                     )
                     results.append(
                         {
@@ -341,7 +339,6 @@ class ToolClient:
                     safety_sanitized = sanitized_args != args
 
                 # Get authentication for this tool
-                auth_headers = self.auth_manager.get_auth_headers_for_tool(tool_name)
                 auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
 
                 # Merge auth params only into call payload
@@ -352,7 +349,7 @@ class ToolClient:
                 # Call the tool with the generated arguments
                 try:
                     result = await self.transport.call_tool(
-                        tool_name, args_for_call, auth_headers
+                        tool_name, args_for_call
                     )
                     realistic_processed.append(
                         {
@@ -410,7 +407,6 @@ class ToolClient:
                     safety_sanitized = sanitized_args != args
 
                 # Get authentication for this tool
-                auth_headers = self.auth_manager.get_auth_headers_for_tool(tool_name)
                 auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
 
                 # Merge auth params only into call payload
@@ -421,7 +417,7 @@ class ToolClient:
                 # Call the tool with the generated arguments
                 try:
                     result = await self.transport.call_tool(
-                        tool_name, args_for_call, auth_headers
+                        tool_name, args_for_call
                     )
                     aggressive_processed.append(
                         {

@@ -58,8 +58,11 @@ class TestFuzzerReporter:
                         with patch("mcp_fuzzer.reports.reporter.TextFormatter"):
                             with patch("mcp_fuzzer.reports.reporter.SafetyReporter"):
                                 with patch("mcp_fuzzer.config.config") as mock_config:
-                                    # Mock config to return None for output directory
-                                    mock_config.get.return_value = {}
+                                    # Mock config for output and output_dir
+                                    def mock_get(key, default=None):
+                                        return {} if key == "output" else default
+
+                                    mock_config.get.side_effect = mock_get
                                     reporter = FuzzerReporter()
                                     assert reporter.output_dir == Path("reports")
                                     mock_mkdir.assert_called_once_with(exist_ok=True)

@@ -21,7 +21,6 @@ from mcp_fuzzer.cli import (
     print_startup_info,
     validate_arguments,
     get_cli_config,
-    run_cli,
 )
 
 # Import the functions to test
@@ -516,7 +515,7 @@ class TestCLI:
     @patch("mcp_fuzzer.cli.setup_logging")
     @patch("mcp_fuzzer.cli.build_unified_client_args")
     @patch("mcp_fuzzer.cli.print_startup_info")
-    @patch("mcp_fuzzer.cli.create_transport")
+    @patch("mcp_fuzzer.transport.create_transport")
     @patch("mcp_fuzzer.cli.asyncio.run")
     def test_run_cli_success(
         self,
@@ -529,6 +528,8 @@ class TestCLI:
         mock_parse,
     ):
         """Test successful CLI execution."""
+        from mcp_fuzzer.cli.main import run_cli
+
         mock_args = argparse.Namespace(
             mode="tool",
             phase="aggressive",
@@ -584,6 +585,8 @@ class TestCLI:
         mock_parse,
     ):
         """Test CLI execution with transport error."""
+        from mcp_fuzzer.cli.main import run_cli
+
         mock_args = argparse.Namespace(
             mode="tool",
             phase="aggressive",
@@ -619,6 +622,8 @@ class TestCLI:
     @patch("mcp_fuzzer.cli.sys.exit")
     def test_run_cli_validation_error(self, mock_exit, mock_validate, mock_parse):
         """Test CLI execution with validation error."""
+        from mcp_fuzzer.cli.main import run_cli
+
         mock_args = argparse.Namespace()
         mock_parse.return_value = mock_args
 
@@ -646,6 +651,8 @@ class TestCLI:
         mock_parse,
     ):
         """Test CLI execution with keyboard interrupt."""
+        from mcp_fuzzer.cli.main import run_cli
+
         mock_args = argparse.Namespace(
             mode="tool",
             phase="aggressive",
@@ -697,6 +704,8 @@ class TestCLI:
         mock_parse,
     ):
         """Test CLI execution with unexpected error."""
+        from mcp_fuzzer.cli.main import run_cli
+
         mock_args = argparse.Namespace(
             mode="tools",
             protocol="http",
@@ -803,8 +812,8 @@ class TestCLI:
         with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
             transport = runner.create_transport_with_auth(args, client_args)
             mock_create_transport.assert_called_once_with(
-                protocol="http",
-                endpoint="http://example.com",
+                "http",
+                "http://example.com",
                 timeout=30.0,
                 auth_headers={"Authorization": "Bearer token"},
             )
@@ -821,7 +830,7 @@ class TestCLI:
         with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
             transport = runner.create_transport_with_auth(args, client_args)
             mock_create_transport.assert_called_once_with(
-                protocol="http", endpoint="http://example.com", timeout=30.0
+                "http", "http://example.com", timeout=30.0
             )
             assert transport is not None
 

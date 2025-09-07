@@ -31,15 +31,25 @@ class FuzzerReporter:
     """Centralized reporter for all MCP Fuzzer output and reporting."""
 
     def __init__(self, output_dir: str = "reports", compress_output: bool = False):
-        # Load output configuration from global config
+        # Prioritize the output_dir parameter over global config
         from ..config import config
 
+        # If a custom output_dir was passed (not the default), use it directly
+        if output_dir != "reports":
+            self.output_dir_config = output_dir
+        else:
+            # Check global config for custom output directory
+            output_config = config.get("output", {})
+            self.output_dir_config = config.get(
+                "output_dir", output_config.get("directory", output_dir)
+            )
+
+        # Load other configuration from global config
         output_config = config.get("output", {})
         self.output_format = output_config.get("format", "json")
         self.output_types = output_config.get("types")
         self.output_schema = output_config.get("schema")
         self.output_compress = output_config.get("compress", compress_output)
-        self.output_dir_config = output_config.get("directory", output_dir)
 
         self.output_dir = Path(self.output_dir_config)
         self.output_dir.mkdir(exist_ok=True)

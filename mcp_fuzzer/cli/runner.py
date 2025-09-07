@@ -23,8 +23,8 @@ def create_transport_with_auth(args, client_args: Dict[str, Any]):
             factory_kwargs["auth_headers"] = auth_headers
 
         transport = create_transport(
-            protocol=args.protocol,
-            endpoint=args.endpoint,
+            args.protocol,
+            args.endpoint,
             **factory_kwargs,
         )
         return transport

@@ -9,6 +9,7 @@ import logging
 from typing import List, Optional
 
 from ..transport import create_transport
+from ..reports import FuzzerReporter
 from .base import MCPFuzzerClient
 
 # For backward compatibility
@@ -31,35 +32,46 @@ async def main(argv: Optional[List[str]] = None) -> int:
 
     # Create transport based on configuration
     transport = create_transport(
-        protocol=config["protocol"],
-        endpoint=config["endpoint"],
+        config["protocol"],
+        config["endpoint"],
         timeout=config.get("timeout"),
     )
+
+    # Create reporter with custom output directory if specified
+    reporter = None
+    if "output_dir" in config:
+        reporter = FuzzerReporter(output_dir=config["output_dir"])
 
     # Create client
     client = MCPFuzzerClient(
         transport=transport,
         auth_manager=config.get("auth_manager"),
         tool_timeout=config.get("tool_timeout"),
+        reporter=reporter,
         max_concurrency=config.get("max_concurrency", 5),
     )
 
     try:
         # Execute fuzzing based on mode
+        tool_results = {}
         if config["mode"] == "tools":
             if config.get("phase") == "both":
-                await client.fuzz_all_tools_both_phases(
+                tool_results = await client.fuzz_all_tools_both_phases(
                     runs_per_phase=config.get("runs", 10)
                 )
             else:
-                await client.fuzz_all_tools(runs_per_tool=config.get("runs", 10))
+                tool_results = await client.fuzz_all_tools(
+                    runs_per_tool=config.get("runs", 10)
+                )
         elif config["mode"] == "tool":
             if config.get("phase") == "both":
-                await client.fuzz_tool_both_phases(
+                tool_results = await client.fuzz_tool_both_phases(
                     config["tool"], runs_per_phase=config.get("runs", 10)
                 )
             else:
-                await client.fuzz_tool(config["tool"], runs=config.get("runs", 10))
+                tool_results = await client.fuzz_tool(
+                    config["tool"], runs=config.get("runs", 10)
+                )
         elif config["mode"] == "protocol":
             if config.get("protocol_type"):
                 await client.fuzz_protocol_type(
@@ -72,6 +84,55 @@ async def main(argv: Optional[List[str]] = None) -> int:
         else:
             logging.error(f"Unknown mode: {config['mode']}")
             return 1
+
+        # Display Rich table summary
+        try:
+            if (config["mode"] == "tools" or config["mode"] == "tool") and tool_results:
+                print("\n" + "="*80)
+                print("🎯 MCP FUZZER TOOL RESULTS SUMMARY")
+                print("="*80)
+                client.print_tool_summary(tool_results)
+
+                # Calculate and display overall stats
+                total_tools = len(tool_results)
+                total_runs = sum(len(runs) for runs in tool_results.values())
+                total_exceptions = sum(
+                    len([r for r in runs if r.get('exception')])
+                    for runs in tool_results.values()
+                )
+
+                success_rate = (
+                    ((total_runs - total_exceptions) / total_runs * 100)
+                    if total_runs > 0
+                    else 0
+                )
+
+                print("\n📈 OVERALL STATISTICS")
+                print("-" * 40)
+                print(f"• Total Tools Tested: {total_tools}")
+                print(f"• Total Fuzzing Runs: {total_runs}")
+                print(f"• Total Exceptions: {total_exceptions}")
+                print(f"• Overall Success Rate: {success_rate:.1f}%")
+
+                # Show vulnerabilities
+                vulnerable_tools = []
+                for tool_name, runs in tool_results.items():
+                    exceptions = len([r for r in runs if r.get('exception')])
+                    if exceptions > 0:
+                        vulnerable_tools.append((tool_name, exceptions, len(runs)))
+
+                if vulnerable_tools:
+                    print(f"\n🚨 VULNERABILITIES FOUND: {len(vulnerable_tools)}")
+                    for tool, exceptions, total in vulnerable_tools:
+                        rate = exceptions / total * 100
+                        print(
+                            f"  • {tool}: {exceptions}/{total} exceptions ({rate:.1f}%)"
+                        )
+                else:
+                    print("\n✅ NO VULNERABILITIES FOUND")
+
+        except Exception as e:
+            logging.warning(f"Failed to display table summary: {e}")
 
         # Generate standardized reports
         try:

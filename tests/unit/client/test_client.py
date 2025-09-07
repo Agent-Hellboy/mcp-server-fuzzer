@@ -13,7 +13,6 @@ import pytest
 
 # Import the class and functions to test
 from mcp_fuzzer.client.base import MCPFuzzerClient as UnifiedMCPFuzzerClient
-from mcp_fuzzer.cli.main import run_cli
 from mcp_fuzzer.reports import FuzzerReporter
 from mcp_fuzzer.auth import AuthManager
 from mcp_fuzzer.exceptions import MCPError

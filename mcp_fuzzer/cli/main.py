@@ -132,15 +132,13 @@ def run_cli() -> None:
         )
         _print_info(args)
 
-        # Early transport validation using patched create_transport if provided
+        # Early transport validation using create_transport from transport module
         try:
-            create_transport_func = getattr(cli_module, "create_transport", None)
-            if create_transport_func is None:
-                from ..transport import create_transport as create_transport_func  # type: ignore
+            from ..transport import create_transport as create_transport_func  # type: ignore
 
             _ = create_transport_func(
-                protocol=args.protocol,
-                endpoint=args.endpoint,
+                args.protocol,
+                args.endpoint,
                 timeout=args.timeout,
             )
         except Exception as transport_error:

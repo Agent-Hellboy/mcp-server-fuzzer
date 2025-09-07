@@ -753,6 +753,24 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 
 | **Markdown** | Documentation, GitHub integration | Human-readable, version control friendly | Limited formatting |
 | **Text** | Simple reporting, logs | Simple, universal | Limited structure |
 
+### Export Format Comparison
+
+| Format | Use Case | Pros | Cons |
+|--------|----------|------|------|
+| **JSON** | API integration, programmatic analysis | Structured, machine-readable | Verbose, not human-readable |
+| **CSV** | Spreadsheet analysis, data science | Simple, widely supported | Limited structure, no metadata |
+| **XML** | Enterprise integration, complex data | Structured, extensible | Verbose, complex parsing |
+| **HTML** | Web reporting, human-readable | Rich formatting, interactive | Not machine-readable |
+| **Markdown** | Documentation, GitHub integration | Human-readable, version control friendly | Limited formatting |
+| **Text** | Simple reporting, logs | Simple, universal | Limited structure |
+
+## Famous Open Source MCP Server Fuzz Results
+
+For detailed fuzzing results and security analysis of popular open source MCP servers, see the [Fuzz Results](fuzz-results.md) documentation.
+
+This section provides comprehensive testing results for various MCP server implementations, including vulnerability assessments, performance metrics, and security recommendations.
+
+## API Reference
 ## API Reference
 
 ## Package Layout and Fuzz Engine

@@ -1,4 +1,3 @@
-from .main import run_cli
 from .args import (
     build_unified_client_args,
     create_argument_parser,
@@ -20,7 +19,6 @@ from ..safety_system.safety import (
 )
 
 __all__ = [
-    "run_cli",
     "build_unified_client_args",
     "create_argument_parser",
     "get_cli_config",
