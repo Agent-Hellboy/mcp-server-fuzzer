@@ -83,7 +83,6 @@ Examples:
     parser.add_argument(
         "--endpoint",
         type=str,
-        required=True,
         help="Server endpoint (URL for http/sse, command for stdio)",
     )
     parser.add_argument(
@@ -468,6 +467,15 @@ def get_cli_config() -> Dict[str, Any]:
 
     args = _parse()
 
+    # Debug logging to see what arguments are parsed
+    logging.debug(f"Parsed args: {args}")
+    logging.debug(
+        f"Export flags: csv={getattr(args, 'export_csv', 'NOT_SET')}, "
+        f"xml={getattr(args, 'export_xml', 'NOT_SET')}, "
+        f"html={getattr(args, 'export_html', 'NOT_SET')}, "
+        f"md={getattr(args, 'export_markdown', 'NOT_SET')}"
+    )
+
     # Load configuration file if specified
     if args.config:
         from ..config_loader import load_config_file
@@ -563,10 +571,26 @@ def get_cli_config() -> Dict[str, Any]:
         "log_level": getattr(args, "log_level", None),
         "no_network": getattr(args, "no_network", False),
         "allow_hosts": getattr(args, "allow_hosts", None),
+        "validate_config": getattr(args, "validate_config", None),
+        "check_env": getattr(args, "check_env", False),
+        "export_csv": getattr(args, "export_csv", None),
+        "export_xml": getattr(args, "export_xml", None),
+        "export_html": getattr(args, "export_html", None),
+        "export_markdown": getattr(args, "export_markdown", None),
     }
 
 
 def validate_arguments(args: argparse.Namespace) -> None:
+    # Check if this is a utility command that doesn't need endpoint
+    is_utility_command = (
+        getattr(args, 'check_env', False) or
+        getattr(args, 'validate_config', None) is not None
+    )
+
+    # Require endpoint for non-utility commands
+    if not is_utility_command and not getattr(args, 'endpoint', None):
+        raise ValueError("--endpoint is required for fuzzing operations")
+
     if args.mode == "protocol" and not args.protocol_type:
         pass
 

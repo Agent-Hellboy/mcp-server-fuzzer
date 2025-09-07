@@ -30,6 +30,18 @@ async def main(argv: Optional[List[str]] = None) -> int:
     # Get configuration from CLI args, env vars, and config files
     config = get_cli_config()
 
+    # Also get the global config which has all the export flags
+    from ..config import config as global_config
+    logging.info(f"Global config object: {global_config}")
+    logging.info(f"Global config dict: {global_config._config}")
+    logging.info(
+        f"Client received config with export flags: "
+        f"csv={global_config.get('export_csv')}, "
+        f"xml={global_config.get('export_xml')}, "
+        f"html={global_config.get('export_html')}, "
+        f"md={global_config.get('export_markdown')}"
+    )
+
     # Create transport based on configuration
     transport = create_transport(
         config["protocol"],
@@ -73,6 +85,29 @@ async def main(argv: Optional[List[str]] = None) -> int:
                     config["tool"], runs=config.get("runs", 10)
                 )
         elif config["mode"] == "protocol":
+            if config.get("protocol_type"):
+                await client.fuzz_protocol_type(
+                    config["protocol_type"], runs=config.get("runs_per_type", 10)
+                )
+            else:
+                await client.fuzz_all_protocol_types(
+                    runs_per_type=config.get("runs_per_type", 10)
+                )
+        elif config["mode"] == "both":
+            # Run both tools and protocol fuzzing
+            logging.info("Running both tools and protocol fuzzing")
+
+            # First, fuzz tools
+            if config.get("phase") == "both":
+                tool_results = await client.fuzz_all_tools_both_phases(
+                    runs_per_phase=config.get("runs", 10)
+                )
+            else:
+                tool_results = await client.fuzz_all_tools(
+                    runs_per_tool=config.get("runs", 10)
+                )
+
+            # Then, fuzz protocol types
             if config.get("protocol_type"):
                 await client.fuzz_protocol_type(
                     config["protocol_type"], runs=config.get("runs_per_type", 10)
@@ -147,6 +182,52 @@ async def main(argv: Optional[List[str]] = None) -> int:
                 )
         except Exception as e:
             logging.warning(f"Failed to generate standardized reports: {e}")
+
+        # Export results to additional formats if requested
+        try:
+            logging.info(
+                f"Checking export flags: csv={global_config.get('export_csv')}, "
+                f"xml={global_config.get('export_xml')}, "
+                f"html={global_config.get('export_html')}, "
+                f"md={global_config.get('export_markdown')}"
+            )
+            logging.info(f"Client reporter available: {client.reporter is not None}")
+
+            if global_config.get("export_csv"):
+                csv_filename = global_config["export_csv"]
+                if client.reporter:
+                    client.reporter.export_csv(csv_filename)
+                    logging.info(f"Exported CSV report to: {csv_filename}")
+                else:
+                    logging.warning("No reporter available for CSV export")
+
+            if global_config.get("export_xml"):
+                xml_filename = global_config["export_xml"]
+                if client.reporter:
+                    client.reporter.export_xml(xml_filename)
+                    logging.info(f"Exported XML report to: {xml_filename}")
+                else:
+                    logging.warning("No reporter available for XML export")
+
+            if global_config.get("export_html"):
+                html_filename = global_config["export_html"]
+                if client.reporter:
+                    client.reporter.export_html(html_filename)
+                    logging.info(f"Exported HTML report to: {html_filename}")
+                else:
+                    logging.warning("No reporter available for HTML export")
+
+            if global_config.get("export_markdown"):
+                markdown_filename = global_config["export_markdown"]
+                if client.reporter:
+                    client.reporter.export_markdown(markdown_filename)
+                    logging.info(f"Exported Markdown report to: {markdown_filename}")
+                else:
+                    logging.warning("No reporter available for Markdown export")
+
+        except Exception as e:
+            logging.warning(f"Failed to export additional report formats: {e}")
+            logging.exception("Export error details:")
 
         return 0
     except Exception as e:

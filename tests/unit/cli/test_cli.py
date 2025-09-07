@@ -457,7 +457,9 @@ class TestCLI:
             endpoint="",
         )
 
-        with pytest.raises(ValueError, match="--endpoint cannot be empty"):
+        with pytest.raises(
+            ValueError, match="--endpoint is required for fuzzing operations"
+        ):
             validate_arguments(args)
 
     def test_validate_arguments_whitespace_endpoint(self):

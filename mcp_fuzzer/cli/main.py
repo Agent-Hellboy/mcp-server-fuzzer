@@ -125,27 +125,34 @@ def run_cli() -> None:
             else build_unified_client_args
         )
         _ = _build(args)
-        _print_info = (
-            getattr(cli_module, "print_startup_info", print_startup_info)
-            if cli_module
-            else print_startup_info
+        # Check if this is a utility command that doesn't need endpoint
+        is_utility_command = (
+            getattr(args, 'check_env', False) or
+            getattr(args, 'validate_config', None) is not None
         )
-        _print_info(args)
 
-        # Early transport validation using create_transport from transport module
-        try:
-            from ..transport import create_transport as create_transport_func  # type: ignore
-
-            _ = create_transport_func(
-                args.protocol,
-                args.endpoint,
-                timeout=args.timeout,
+        if not is_utility_command:
+            _print_info = (
+                getattr(cli_module, "print_startup_info", print_startup_info)
+                if cli_module
+                else print_startup_info
             )
-        except Exception as transport_error:
-            console = Console()
-            console.print(f"[bold red]Unexpected error:[/bold red] {transport_error}")
-            sys.exit(1)
-            return
+            _print_info(args)
+
+            # Early transport validation using create_transport from transport module
+            try:
+                from ..transport import create_transport as create_transport_func  # type: ignore
+
+                _ = create_transport_func(
+                    args.protocol,
+                    args.endpoint,
+                    timeout=args.timeout,
+                )
+            except Exception as transport_error:
+                console = Console()
+                console.print(f"[bold red]Error:[/bold red] {transport_error}")
+                sys.exit(1)
+                return
 
         from ..client import main as unified_client_main
 
