@@ -103,7 +103,7 @@ Each fuzzing session creates timestamped reports:
 
 MCP Fuzzer can be configured using environment variables, configuration files (YAML or TOML), or command-line arguments.
 
-For detailed configuration information, see the [Configuration Guide](configuration.md).
+For detailed configuration information, see the [Configuration Guide](../configuration/configuration.md).
 
 ### Quick Configuration
 
@@ -354,8 +354,8 @@ mcp-fuzzer --mode protocol --help
 
 - **[Examples](examples.md)** - Working examples and configurations
 
-- **[Architecture](architecture.md)** - Understanding the system design
+- **[Architecture](../architecture/architecture.md)** - Understanding the system design
 
-- **[Reference](reference.md)** - Complete command reference
+- **[Reference](../development/reference.md)** - Complete command reference
 
-- **[Safety Guide](safety.md)** - Advanced safety configuration
+- **[Safety Guide](../components/safety.md)** - Advanced safety configuration
