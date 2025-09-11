@@ -87,6 +87,22 @@ def execute_inner_client(args, unified_client_main, argv):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
+        # Check if aiomonitor is enabled
+        enable_aiomonitor = getattr(args, 'enable_aiomonitor', False)
+        
+        if enable_aiomonitor:
+            try:
+                import aiomonitor
+                print("AIOMonitor enabled! Connect with: telnet localhost 20101")
+                print("Try commands: ps, where <task_id>, console, monitor")
+                print("=" * 60)
+            except ImportError:
+                print(
+                    "AIOMonitor requested but not installed. "
+                    "Install with: pip install aiomonitor"
+                )
+                enable_aiomonitor = False
+
         # Print an immediate notice on first SIGINT/SIGTERM, then cancel tasks
         _signal_notice = {"printed": False}
 
@@ -120,7 +136,19 @@ def execute_inner_client(args, unified_client_main, argv):
             configure_network_policy(
                 deny_network_by_default=deny, extra_allowed_hosts=extra
             )
-            loop.run_until_complete(unified_client_main())
+            
+            # Run with or without aiomonitor
+            if enable_aiomonitor:
+                import aiomonitor
+                # Start aiomonitor with better monitoring configuration
+                with aiomonitor.start_monitor(
+                    loop,
+                    console_enabled=True,
+                    locals=True,  # Enable locals inspection
+                ):
+                    loop.run_until_complete(unified_client_main())
+            else:
+                loop.run_until_complete(unified_client_main())
         except asyncio.CancelledError:
             Console().print("\n[yellow]Fuzzing interrupted by user[/yellow]")
             should_exit = True

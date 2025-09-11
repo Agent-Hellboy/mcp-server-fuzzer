@@ -100,6 +100,17 @@ Examples:
         ),
     )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+    
+    # AIOMonitor integration
+    parser.add_argument(
+        "--enable-aiomonitor",
+        action="store_true",
+        help=(
+            "Enable AIOMonitor for async debugging "
+            "(connect with: telnet localhost 20101)"
+        ),
+    )
+    
     parser.add_argument(
         "--log-level",
         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],

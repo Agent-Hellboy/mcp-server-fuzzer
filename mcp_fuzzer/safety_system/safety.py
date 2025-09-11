@@ -12,7 +12,7 @@ is handled by the system_blocker module.
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, Protocol, runtime_checkable
+from typing import Any, Dict, Protocol, runtime_checkable, Union
 
 import emoji
 
@@ -29,7 +29,7 @@ from .patterns import (
 class SafetyProvider(Protocol):
     """Protocol for pluggable safety providers."""
 
-    def set_fs_root(self, root: str | Path) -> None: ...
+    def set_fs_root(self, root: Union[str, Path]) -> None: ...
     def sanitize_tool_arguments(
         self, tool_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]: ...
@@ -70,7 +70,7 @@ class SafetyFilter(SafetyProvider):
 
         # Track blocked operations for testing and analysis
         self.blocked_operations = []
-        self._fs_root: Path | None = None
+        self._fs_root: Union[Path, None] = None
 
     def set_fs_root(self, root: str | Path) -> None:
         """Initialize filesystem sandbox with the specified root directory."""
@@ -473,7 +473,7 @@ def load_safety_plugin(dotted_path: str) -> None:
     import importlib
 
     module = importlib.import_module(dotted_path)
-    provider: SafetyProvider | None = None
+    provider: Union[SafetyProvider, None] = None
     if hasattr(module, "get_safety"):
         provider = getattr(module, "get_safety")()
     elif hasattr(module, "safety"):
@@ -489,7 +489,7 @@ def disable_safety() -> None:
     """Disable safety by installing a no-op provider."""
 
     class _NoopSafety(SafetyProvider):
-        def set_fs_root(self, root: str | Path) -> None:  # noqa: ARG002
+        def set_fs_root(self, root: Union[str, Path]) -> None:  # noqa: ARG002
             return
 
         def sanitize_tool_arguments(

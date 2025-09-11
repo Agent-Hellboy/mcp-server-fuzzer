@@ -56,8 +56,14 @@ class ProcessManager:
             self.config = config or WatchdogConfig()
         self.watchdog = ProcessWatchdog(self.config)
         self._processes: Dict[int, Dict[str, Any]] = {}
-        self._lock = asyncio.Lock()
+        self._lock = None  # Will be created lazily when needed
         self._logger = logging.getLogger(__name__)
+
+    def _get_lock(self):
+        """Get or create the lock lazily."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def start_process(self, config: ProcessConfig) -> asyncio.subprocess.Process:
         """Start a new process asynchronously."""
@@ -92,7 +98,7 @@ class ProcessManager:
             )
 
             # Store process info
-            async with self._lock:
+            async with self._get_lock():
                 self._processes[process.pid] = {
                     "process": process,
                     "config": config,
@@ -112,7 +118,7 @@ class ProcessManager:
 
     async def stop_process(self, pid: int, force: bool = False) -> bool:
         """Stop a running process asynchronously."""
-        async with self._lock:
+        async with self._get_lock():
             if pid not in self._processes:
                 return False
 
@@ -129,7 +135,7 @@ class ProcessManager:
                 await self._graceful_terminate_process(pid, process, name)
 
             # Update status to reflect stop intent
-            async with self._lock:
+            async with self._get_lock():
                 if pid in self._processes:
                     self._processes[pid]["status"] = "stopped"
 
@@ -190,14 +196,14 @@ class ProcessManager:
     async def stop_all_processes(self, force: bool = False) -> None:
         """Stop all running processes asynchronously."""
         # Snapshot PIDs under lock to avoid concurrent mutation during iteration
-        async with self._lock:
+        async with self._get_lock():
             pids = list(self._processes.keys())
         tasks = [self.stop_process(pid, force=force) for pid in pids]
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def get_process_status(self, pid: int) -> Optional[Dict[str, Any]]:
         """Get status information for a specific process."""
-        async with self._lock:
+        async with self._get_lock():
             if pid not in self._processes:
                 return None
 
@@ -217,7 +223,7 @@ class ProcessManager:
         """Get a list of all managed processes with their status."""
         # Copy current PIDs under lock, then fetch statuses outside to avoid
         # re-entrant lock acquisition in get_process_status
-        async with self._lock:
+        async with self._get_lock():
             pids = list(self._processes.keys())
 
         results = await asyncio.gather(
@@ -232,7 +238,7 @@ class ProcessManager:
         self, pid: int, timeout: Optional[float] = None
     ) -> Optional[int]:
         """Wait for a process to complete asynchronously."""
-        async with self._lock:
+        async with self._get_lock():
             if pid not in self._processes:
                 return None
 
@@ -272,7 +278,7 @@ class ProcessManager:
     async def cleanup_finished_processes(self) -> int:
         """Remove finished processes from tracking and return count cleaned."""
         cleaned = 0
-        async with self._lock:
+        async with self._get_lock():
             pids_to_remove = []
             for pid, process_info in self._processes.items():
                 process = process_info["process"]
@@ -296,13 +302,13 @@ class ProcessManager:
         await self.watchdog.stop()
 
         # Clear process tracking to free memory
-        async with self._lock:
+        async with self._get_lock():
             self._processes.clear()
         self._logger.info("Process manager shutdown complete")
 
     async def send_timeout_signal(self, pid: int, signal_type: str = "timeout") -> bool:
         """Send a timeout signal to a running process asynchronously."""
-        async with self._lock:
+        async with self._get_lock():
             if pid not in self._processes:
                 return False
 
@@ -393,7 +399,7 @@ class ProcessManager:
     ) -> Dict[int, bool]:
         """Send a timeout signal to all running processes asynchronously."""
         results = {}
-        async with self._lock:
+        async with self._get_lock():
             pids = list(self._processes.keys())
 
         tasks = [self.send_timeout_signal(pid, signal_type) for pid in pids]
@@ -423,7 +429,7 @@ class ProcessManager:
         await self.watchdog.register_process(pid, process, activity_callback, name)
 
         # Track in manager table
-        async with self._lock:
+        async with self._get_lock():
             self._processes[pid] = {
                 "process": process,
                 "config": ProcessConfig(

@@ -1,3 +1,4 @@
+from typing import Union
 from .base import TransportProtocol
 from .http import HTTPTransport
 from .sse import SSETransport
@@ -8,7 +9,7 @@ from urllib.parse import urlparse, urlunparse
 
 
 def create_transport(
-    url_or_protocol: str, endpoint: str | None = None, **kwargs
+    url_or_protocol: str, endpoint: Union[str, None] = None, **kwargs
 ) -> TransportProtocol:
     """Create a transport from either a full URL or protocol + endpoint.
 

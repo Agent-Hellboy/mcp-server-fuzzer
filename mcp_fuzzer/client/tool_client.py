@@ -83,7 +83,8 @@ class ToolClient:
 
         try:
             tool_task = asyncio.create_task(
-                self.fuzz_tool(tool, runs_per_tool, tool_timeout=tool_timeout)
+                self.fuzz_tool(tool, runs_per_tool, tool_timeout=tool_timeout),
+                name=f"fuzz_tool_{tool_name}"
             )
 
             try:

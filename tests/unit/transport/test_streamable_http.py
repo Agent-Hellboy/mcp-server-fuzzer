@@ -1,6 +1,6 @@
 import asyncio
 import types
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import pytest
 from mcp_fuzzer.transport.streamable_http import (
@@ -44,7 +44,7 @@ class _DummySSEStreamResponse:
         self,
         *,
         headers: Optional[Dict[str, str]] = None,
-        lines: List[str] | None = None,
+        lines: Union[List[str], None] = None,
     ) -> None:
         self.status_code = 200
         self.headers = {CONTENT_TYPE: "text/event-stream"}

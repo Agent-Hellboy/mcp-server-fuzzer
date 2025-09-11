@@ -26,9 +26,15 @@ class AsyncFuzzExecutor:
             max_concurrency: Maximum number of concurrent operations
         """
         self.max_concurrency = max_concurrency
-        self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._semaphore = None  # Will be created lazily when needed
         self._thread_pool = ThreadPoolExecutor(max_workers=max_concurrency)
         self._logger = logging.getLogger(__name__)
+
+    def _get_semaphore(self):
+        """Get or create the semaphore lazily."""
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self.max_concurrency)
+        return self._semaphore
 
     async def execute_batch(
         self, operations: List[Tuple[Callable, List[Any], Dict[str, Any]]]
@@ -47,8 +53,13 @@ class AsyncFuzzExecutor:
 
         # Create tasks for all operations
         tasks = []
-        for func, args, kwargs in operations:
-            task = asyncio.create_task(self._execute_single(func, args, kwargs))
+        for i, (func, args, kwargs) in enumerate(operations):
+            func_name = func.__name__ if hasattr(func, '__name__') else 'unknown'
+            task_name = f"fuzz_operation_{i}_{func_name}"
+            task = asyncio.create_task(
+                self._execute_single(func, args, kwargs),
+                name=task_name
+            )
             tasks.append(task)
 
         # Wait for all tasks to complete
@@ -80,7 +91,7 @@ class AsyncFuzzExecutor:
         Returns:
             Result of the function execution
         """
-        async with self._semaphore:
+        async with self._get_semaphore():
             try:
                 if asyncio.iscoroutinefunction(func):
                     return await func(*args, **kwargs)

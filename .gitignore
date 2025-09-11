@@ -3,6 +3,12 @@ __pycache__/
 testing-servers/
 *.py[cod]
 *$py.class
+*$py.pyc
+*$py.pyo
+*$py.pyd
+*$py.pyw
+*$py.pyz
+*$py.pywz
 cleints/
 servers/
 sdks/
@@ -46,6 +52,7 @@ pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov/
+testing_servers/
 .tox/
 .nox/
 .coverage
@@ -54,7 +61,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
-*.py,cover
+*.py
 .hypothesis/
 .pytest_cache/
 cover/

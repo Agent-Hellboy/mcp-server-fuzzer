@@ -63,7 +63,7 @@ class TestProcessManager:
 
         try:
             # Set up a process in the manager
-            async with manager._lock:
+            async with manager._get_lock():
                 manager._processes[12345] = {
                     "process": mock_process,
                     "config": ProcessConfig(command=["test"], name="test_process"),
@@ -95,7 +95,7 @@ class TestProcessManager:
 
         try:
             # Set up a process in the manager
-            async with manager._lock:
+            async with manager._get_lock():
                 manager._processes[12345] = {
                     "process": mock_process,
                     "config": ProcessConfig(command=["test"], name="test_process"),
@@ -138,7 +138,7 @@ class TestProcessManager:
 
         try:
             # Set up two processes in the manager
-            async with manager._lock:
+            async with manager._get_lock():
                 manager._processes[12345] = {
                     "process": mock_process1,
                     "config": ProcessConfig(command=["test1"], name="test_process1"),

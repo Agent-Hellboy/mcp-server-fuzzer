@@ -53,22 +53,34 @@ class ProcessWatchdog:
         """Initialize the process watchdog."""
         self.config = config or WatchdogConfig()
         self._processes: Dict[int, Dict[str, Any]] = {}
-        self._lock = asyncio.Lock()
+        self._lock = None  # Will be created lazily when needed
         self._logger = logging.getLogger(__name__)
-        self._stop_event = asyncio.Event()
+        self._stop_event = None  # Will be created lazily when needed
         self._watchdog_task: Optional[asyncio.Task] = None
+
+    def _get_lock(self):
+        """Get or create the lock lazily."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
+    def _get_stop_event(self):
+        """Get or create the stop event lazily."""
+        if self._stop_event is None:
+            self._stop_event = asyncio.Event()
+        return self._stop_event
 
     async def start(self) -> None:
         """Start the watchdog monitoring."""
         if self._watchdog_task is None or self._watchdog_task.done():
-            self._stop_event.clear()
+            self._get_stop_event().clear()
             self._watchdog_task = asyncio.create_task(self._watchdog_loop())
             self._logger.info("Process watchdog started")
 
     async def stop(self) -> None:
         """Stop the watchdog monitoring."""
         if self._watchdog_task and not self._watchdog_task.done():
-            self._stop_event.set()
+            self._get_stop_event().set()
             # Don't wait for the task to complete - just cancel it
             self._watchdog_task.cancel()
             self._watchdog_task = None
@@ -76,7 +88,7 @@ class ProcessWatchdog:
 
     async def _watchdog_loop(self) -> None:
         """Main watchdog monitoring loop."""
-        while not self._stop_event.is_set():
+        while not self._get_stop_event().is_set():
             try:
                 await self._check_processes()
 
@@ -97,7 +109,7 @@ class ProcessWatchdog:
         current_time = time.time()
         processes_to_remove = []
 
-        async with self._lock:
+        async with self._get_lock():
             for pid, process_info in self._processes.items():
                 try:
                     process = process_info["process"]
@@ -265,7 +277,7 @@ class ProcessWatchdog:
         name: str,
     ) -> None:
         """Register a process for monitoring."""
-        async with self._lock:
+        async with self._get_lock():
             self._processes[pid] = {
                 "process": process,
                 "activity_callback": activity_callback,
@@ -280,7 +292,7 @@ class ProcessWatchdog:
 
     async def unregister_process(self, pid: int) -> None:
         """Unregister a process from monitoring."""
-        async with self._lock:
+        async with self._get_lock():
             if pid in self._processes:
                 name = self._processes[pid]["name"]
                 del self._processes[pid]
@@ -290,18 +302,18 @@ class ProcessWatchdog:
 
     async def update_activity(self, pid: int) -> None:
         """Update activity timestamp for a process."""
-        async with self._lock:
+        async with self._get_lock():
             if pid in self._processes:
                 self._processes[pid]["last_activity"] = time.time()
 
     async def is_process_registered(self, pid: int) -> bool:
         """Check if a process is registered for monitoring."""
-        async with self._lock:
+        async with self._get_lock():
             return pid in self._processes
 
     async def get_stats(self) -> dict:
         """Get statistics about monitored processes."""
-        async with self._lock:
+        async with self._get_lock():
             total = len(self._processes)
             running = sum(
                 1 for p in self._processes.values() if p["process"].returncode is None
@@ -336,7 +348,7 @@ class ProcessWatchdog:
                 system_metrics = {"psutil_not_available": True}
 
             # Process metrics
-            async with self._lock:
+            async with self._get_lock():
                 total_processes = len(self._processes)
                 running_processes = sum(
                     1 for p in self._processes.values()
@@ -364,7 +376,7 @@ class ProcessWatchdog:
     async def _calculate_adaptive_interval(self) -> float:
         """Calculate adaptive check interval based on system load and process count."""
         try:
-            async with self._lock:
+            async with self._get_lock():
                 process_count = len(self._processes)
 
             # Base interval from config
