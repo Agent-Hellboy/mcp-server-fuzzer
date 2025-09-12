@@ -28,22 +28,13 @@ class FilesystemSandbox:
             root_path = str(default_path)
         
         self.root_path = Path(root_path).resolve()
+        self._is_temp: bool = False
         self.ensure_safe_directory()
-        logging.info(f"Filesystem sandbox initialized at: {self.root_path}")
+        logging.info("Filesystem sandbox initialized at: %s", self.root_path)
 
     def ensure_safe_directory(self):
         """Ensure the sandbox directory exists and is safe."""
         try:
-            # Create the directory if it doesn't exist
-            self.root_path.mkdir(parents=True, exist_ok=True, mode=0o700)
-            # Harden permissions against umask
-            try:
-                os.chmod(self.root_path, 0o700)
-            except OSError:
-                logging.warning(
-                    "Failed to enforce 0700 permissions on %s", self.root_path
-                )
-            
             # Ensure directory is not in dangerous locations.
             # Allow under HOME and temp directories; reject critical system roots.
             temp_root = Path(tempfile.gettempdir()).resolve()
@@ -91,15 +82,29 @@ class FilesystemSandbox:
                 raise ValueError(
                     "Refusing to use HOME, TMP, or /tmp root as the sandbox directory"
                 )
+
+            # Create the directory if it doesn't exist
+            self.root_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+            # Harden permissions against umask
+            try:
+                os.chmod(self.root_path, 0o700)
+            except OSError:
+                logging.warning("Failed to enforce 0700 permissions on %s", self.root_path)
                     
         except ValueError:
             # Re-raise ValueError for dangerous paths
             raise
         except Exception as e:
-            logging.error(f"Failed to create safe directory {self.root_path}: {e}")
+            logging.error("Failed to create safe directory %s: %s", self.root_path, e)
             # Fall back to a temporary directory
             self.root_path = Path(tempfile.mkdtemp(prefix="mcp_fuzzer_sandbox_"))
-            logging.info(f"Using temporary sandbox directory: {self.root_path}")
+            # Enforce 0700 on fallback as well
+            try:
+                os.chmod(self.root_path, 0o700)
+            except OSError:
+                logging.warning("Failed to enforce 0700 permissions on %s", self.root_path)
+            self._is_temp = True
+            logging.info("Using temporary sandbox directory: %s", self.root_path)
 
     def is_path_safe(self, path: str) -> bool:
         """Check if a path is within the safe sandbox.
@@ -179,12 +184,15 @@ class FilesystemSandbox:
     def cleanup(self):
         """Clean up the sandbox directory if it's temporary."""
         try:
-            if "mcp_fuzzer_sandbox_" in str(self.root_path):
+            temp_root = Path(tempfile.gettempdir()).resolve()
+            if getattr(self, "_is_temp", False) and \
+               self.root_path.is_relative_to(temp_root) and \
+               self.root_path.name.startswith("mcp_fuzzer_sandbox_"):
                 import shutil
                 shutil.rmtree(self.root_path, ignore_errors=True)
-                logging.info(f"Cleaned up temporary sandbox: {self.root_path}")
+                logging.info("Cleaned up temporary sandbox: %s", self.root_path)
         except Exception as e:
-            logging.warning(f"Failed to cleanup sandbox {self.root_path}: {e}")
+            logging.warning("Failed to cleanup sandbox %s: %s", self.root_path, e)
 
 
 # Global sandbox instance
