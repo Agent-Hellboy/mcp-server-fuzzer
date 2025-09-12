@@ -89,7 +89,8 @@ class FilesystemSandbox:
             try:
                 os.chmod(self.root_path, 0o700)
             except OSError:
-                logging.warning("Failed to enforce 0700 permissions on %s", self.root_path)
+                warning_msg = "Failed to enforce 0700 permissions on %s"
+                logging.warning(warning_msg, self.root_path)
                     
         except ValueError:
             # Re-raise ValueError for dangerous paths
@@ -102,7 +103,8 @@ class FilesystemSandbox:
             try:
                 os.chmod(self.root_path, 0o700)
             except OSError:
-                logging.warning("Failed to enforce 0700 permissions on %s", self.root_path)
+                warning_msg = "Failed to enforce 0700 permissions on %s"
+                logging.warning(warning_msg, self.root_path)
             self._is_temp = True
             logging.info("Using temporary sandbox directory: %s", self.root_path)
 
@@ -186,7 +188,7 @@ class FilesystemSandbox:
         try:
             temp_root = Path(tempfile.gettempdir()).resolve()
             if getattr(self, "_is_temp", False) and \
-               self.root_path.is_relative_to(temp_root) and \
+               self.root_path.resolve().is_relative_to(temp_root) and \
                self.root_path.name.startswith("mcp_fuzzer_sandbox_"):
                 import shutil
                 shutil.rmtree(self.root_path, ignore_errors=True)

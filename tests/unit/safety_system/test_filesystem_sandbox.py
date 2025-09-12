@@ -71,8 +71,12 @@ class TestFilesystemSandbox:
 
     def test_init_fallback_to_temp_on_error(self):
         """Test that initialization falls back to temp directory on error."""
+        # Use a path that passes validation but fails during creation
+        temp_dir = Path(tempfile.gettempdir())
+        test_path = temp_dir / "test_fallback_path"
+        
         with patch("pathlib.Path.mkdir", side_effect=OSError("Permission denied")):
-            sandbox = FilesystemSandbox("/some/invalid/path")
+            sandbox = FilesystemSandbox(str(test_path))
             # Should fall back to a temporary directory
             assert "mcp_fuzzer_sandbox_" in str(sandbox.root_path)
 
@@ -187,14 +191,22 @@ class TestFilesystemSandbox:
     def test_cleanup_temp_directory(self):
         """Test cleanup removes temporary directories."""
         with patch("tempfile.mkdtemp") as mock_mkdtemp:
-            temp_path = Path("/tmp/mcp_fuzzer_sandbox_test")
+            # Use a path that's actually under the system temp directory
+            temp_root = Path(tempfile.gettempdir())
+            temp_path = temp_root / "mcp_fuzzer_sandbox_test123"
             mock_mkdtemp.return_value = str(temp_path)
             
-            sandbox = FilesystemSandbox("/some/invalid/path")
+            # Use a path that passes validation but fails during creation
+            temp_dir = Path(tempfile.gettempdir())
+            test_path = temp_dir / "test_cleanup_path"
             
-            with patch("shutil.rmtree") as mock_rmtree:
-                sandbox.cleanup()
-                mock_rmtree.assert_called_once_with(temp_path, ignore_errors=True)
+            # Mock mkdir to fail so it falls back to temp directory
+            with patch("pathlib.Path.mkdir", side_effect=OSError("Permission denied")):
+                sandbox = FilesystemSandbox(str(test_path))
+                
+                with patch("shutil.rmtree") as mock_rmtree:
+                    sandbox.cleanup()
+                    mock_rmtree.assert_called_once_with(temp_path, ignore_errors=True)
 
     def test_cleanup_non_temp_directory(self):
         """Test cleanup does not remove non-temporary directories."""

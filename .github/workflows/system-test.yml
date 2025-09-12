@@ -64,7 +64,6 @@ jobs:
 
         # Install dependencies and build
         cd testing-servers/DesktopCommanderMCP
-        npm install
         npm run build
 
         # Verify build was successful
