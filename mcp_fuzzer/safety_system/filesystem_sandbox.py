@@ -36,38 +36,61 @@ class FilesystemSandbox:
         try:
             # Create the directory if it doesn't exist
             self.root_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+            # Harden permissions against umask
+            try:
+                os.chmod(self.root_path, 0o700)
+            except OSError:
+                logging.warning(
+                    "Failed to enforce 0700 permissions on %s", self.root_path
+                )
             
-            # Ensure directory is not in dangerous locations
-            dangerous_paths = [
-                "/etc", "/usr", "/bin", "/sbin", "/System", "/home",
-                "/private/etc", "/private/usr", "/private/bin", "/private/sbin"
+            # Ensure directory is not in dangerous locations.
+            # Allow under HOME and temp directories; reject critical system roots.
+            temp_root = Path(tempfile.gettempdir()).resolve()
+            home_root = Path.home().resolve()
+            # Also allow /tmp and /var/tmp specifically (resolve to handle symlinks)
+            tmp_paths = [Path("/tmp").resolve(), Path("/var/tmp").resolve()]
+            
+            disallowed = [
+                Path("/"),
+                Path("/etc"),
+                Path("/usr"),
+                Path("/bin"),
+                Path("/sbin"),
+                Path("/System"),
+                Path("/dev"),
+                Path("/proc"),
             ]
-            for dangerous in dangerous_paths:
-                dangerous_path = Path(dangerous)
-                try:
-                    # Check both the original path and resolved path
-                    if (self.root_path.is_relative_to(dangerous_path) and 
-                        self.root_path != dangerous_path):
-                        # Allow /tmp and /var/tmp as they are safe temporary locations
-                        if (dangerous_path.name in ["tmp", "var"] and 
-                            "tmp" in str(self.root_path)):
-                            continue
-                        # Allow /tmp specifically
-                        if str(self.root_path).startswith("/tmp/"):
-                            continue
+            
+            # Check if path is under allowed locations
+            is_under_temp = self.root_path.is_relative_to(temp_root)
+            is_under_home = self.root_path.is_relative_to(home_root)
+            is_under_tmp = any(self.root_path.is_relative_to(tmp) for tmp in tmp_paths)
+            
+            # If not under any allowed location, check if it's in a disallowed location
+            if not (is_under_temp or is_under_home or is_under_tmp):
+                for disallowed_path in disallowed:
+                    if (self.root_path == disallowed_path or 
+                        self.root_path.is_relative_to(disallowed_path)):
                         raise ValueError(
-                            f"Sandbox path {self.root_path} is in dangerous "
-                            f"location: {dangerous}"
+                            f"Sandbox path {self.root_path} is in a "
+                            f"disallowed system location"
                         )
-                    # Also check if the path starts with the dangerous path
-                    if str(self.root_path).startswith(dangerous + "/"):
-                        raise ValueError(
-                            f"Sandbox path {self.root_path} is in dangerous "
-                            f"location: {dangerous}"
-                        )
-                except OSError:
-                    # If we can't resolve the path, it's probably safe
-                    pass
+            # Require the sandbox to live under HOME, system temp, or /tmp
+            # (not the root of any)
+            if not (
+                self.root_path.is_relative_to(home_root)
+                or self.root_path.is_relative_to(temp_root)
+                or is_under_tmp
+            ):
+                raise ValueError(
+                    f"Sandbox path {self.root_path} must be under HOME, "
+                    f"temp directory, or /tmp"
+                )
+            if self.root_path in (home_root, temp_root) or self.root_path in tmp_paths:
+                raise ValueError(
+                    "Refusing to use HOME, TMP, or /tmp root as the sandbox directory"
+                )
                     
         except ValueError:
             # Re-raise ValueError for dangerous paths
@@ -112,14 +135,18 @@ class FilesystemSandbox:
         except (OSError, ValueError, RuntimeError):
             pass
             
-        # If path is not safe, create a safe version
-        safe_name = os.path.basename(path) or "default"
-        # Remove dangerous characters
-        safe_name = "".join(c for c in safe_name if c.isalnum() or c in "._-")
-        if not safe_name:
-            safe_name = "default"
-            
-        return str(self.root_path / safe_name)
+        # If path is not safe, create a safe version under the sandbox root.
+        base = os.path.basename(path) or "default"
+        safe_name = "".join(c for c in base if c.isalnum() or c in "._-") or "default"
+        candidate = self.root_path / safe_name
+        try:
+            # Prevent returning a symlink path
+            if candidate.exists() and candidate.is_symlink():
+                safe_name = f"{safe_name}.safe"
+                candidate = self.root_path / safe_name
+        except OSError:
+            pass
+        return str(candidate)
 
     def create_safe_path(self, filename: str) -> str:
         """Create a safe path for a filename within the sandbox.

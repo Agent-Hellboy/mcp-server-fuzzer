@@ -55,7 +55,7 @@ class TestFilesystemSandbox:
         
         for dangerous_path in dangerous_paths:
             with patch("pathlib.Path.mkdir"):
-                with pytest.raises(ValueError, match="dangerous location"):
+                with pytest.raises(ValueError, match="disallowed system location"):
                     FilesystemSandbox(dangerous_path)
 
     def test_init_allows_tmp_paths(self):
