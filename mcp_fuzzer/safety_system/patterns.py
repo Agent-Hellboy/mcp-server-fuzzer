@@ -9,6 +9,16 @@ DEFAULT_DANGEROUS_URL_PATTERNS = [
     r"[a-zA-Z0-9-]+\.(com|org|net|edu|gov|mil|int|co\.uk|de|fr|jp|cn)",
 ]
 
+# HTML/JavaScript injection patterns
+DEFAULT_DANGEROUS_SCRIPT_PATTERNS = [
+    r"<script[^>]*>",
+    r"javascript:",
+    r"\bon(?:abort|blur|change|click|dblclick|error|focus|input|keydown|keypress|keyup|load|mousedown|mousemove|mouseout|mouseover|mouseup|reset|resize|scroll|submit|unload)\s*=",
+    r"eval\s*\(",
+    r"\bdocument\.",
+    r"\bwindow\.",
+]
+
 DEFAULT_DANGEROUS_COMMAND_PATTERNS = [
     # Browser/app launching commands
     r"xdg-open",  # Linux open command
