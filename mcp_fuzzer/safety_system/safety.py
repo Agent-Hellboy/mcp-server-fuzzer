@@ -19,6 +19,7 @@ import emoji
 from .filesystem_sandbox import initialize_sandbox, get_sandbox
 from .patterns import (
     DEFAULT_DANGEROUS_URL_PATTERNS,
+    DEFAULT_DANGEROUS_SCRIPT_PATTERNS,
     DEFAULT_DANGEROUS_COMMAND_PATTERNS,
     DEFAULT_DANGEROUS_ARGUMENT_NAMES,
 )
@@ -47,12 +48,16 @@ class SafetyFilter(SafetyProvider):
     def __init__(
         self,
         dangerous_url_patterns: list[str] | None = None,
+        dangerous_script_patterns: list[str] | None = None,
         dangerous_command_patterns: list[str] | None = None,
         dangerous_argument_names: list[str] | None = None,
     ):
         # Allow dependency injection of patterns for easier testing and configurability
         self.dangerous_url_patterns = self._compile_patterns(
             dangerous_url_patterns or DEFAULT_DANGEROUS_URL_PATTERNS
+        )
+        self.dangerous_script_patterns = self._compile_patterns(
+            dangerous_script_patterns or DEFAULT_DANGEROUS_SCRIPT_PATTERNS
         )
         self.dangerous_command_patterns = self._compile_patterns(
             dangerous_command_patterns or DEFAULT_DANGEROUS_COMMAND_PATTERNS
@@ -97,6 +102,16 @@ class SafetyFilter(SafetyProvider):
             return False
 
         for pattern in self.dangerous_url_patterns:
+            if pattern.search(value):
+                return True
+        return False
+
+    def contains_dangerous_script(self, value: str) -> bool:
+        """Check if a string contains dangerous script injection patterns."""
+        if not value:
+            return False
+
+        for pattern in self.dangerous_script_patterns:
             if pattern.search(value):
                 return True
         return False
@@ -223,6 +238,11 @@ class SafetyFilter(SafetyProvider):
         if self.contains_dangerous_url(value):
             logging.warning(f"BLOCKED dangerous URL in {arg_name}: {value[:50]}...")
             return "[BLOCKED_URL]"
+
+        # CRITICAL: Check for script injection - completely block them
+        if self.contains_dangerous_script(value):
+            logging.warning(f"BLOCKED dangerous script in {arg_name}: {value[:50]}...")
+            return "[BLOCKED_SCRIPT]"
 
         # CRITICAL: Check for dangerous commands - completely block them
         if self.contains_dangerous_command(value):

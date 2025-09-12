@@ -198,7 +198,7 @@ class TestFilesystemPathSanitization:
             sanitized = safety_filter.sanitize_tool_arguments("test_tool", arguments)
             
             # Dangerous content should be blocked
-            assert sanitized["content"] == "[BLOCKED_URL]"
+            assert sanitized["content"] == "[BLOCKED_SCRIPT]"
             
             # Filesystem path should be sanitized
             sandbox_root = get_sandbox().get_sandbox_root()
