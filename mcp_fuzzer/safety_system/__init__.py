@@ -26,3 +26,11 @@ from .system_blocker import (  # noqa: F401
     get_blocked_operations,
     clear_blocked_operations,
 )
+
+from .filesystem_sandbox import (  # noqa: F401
+    FilesystemSandbox,
+    initialize_sandbox,
+    get_sandbox,
+    set_sandbox,
+    cleanup_sandbox,
+)

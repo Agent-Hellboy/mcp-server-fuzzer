@@ -16,6 +16,7 @@ from typing import Any, Dict, Protocol, runtime_checkable
 
 import emoji
 
+from .filesystem_sandbox import FilesystemSandbox, initialize_sandbox, get_sandbox
 from .patterns import (
     DEFAULT_DANGEROUS_URL_PATTERNS,
     DEFAULT_DANGEROUS_COMMAND_PATTERNS,
@@ -67,11 +68,14 @@ class SafetyFilter(SafetyProvider):
         self._fs_root: Path | None = None
 
     def set_fs_root(self, root: str | Path) -> None:
-        """Record a sandbox root for potential future path validations."""
+        """Initialize filesystem sandbox with the specified root directory."""
         try:
-            self._fs_root = Path(root)
-        except Exception:
-            self._fs_root = None
+            sandbox = initialize_sandbox(str(root))
+            logging.info(f"Filesystem sandbox initialized at: {sandbox.get_sandbox_root()}")
+        except Exception as e:
+            logging.error(f"Failed to initialize filesystem sandbox with root '{root}': {e}")
+            # Initialize with default sandbox
+            initialize_sandbox()
 
     def _compile_patterns(self, patterns):
         """Compile string patterns into regex Pattern objects."""
@@ -106,11 +110,62 @@ class SafetyFilter(SafetyProvider):
     def sanitize_tool_arguments(
         self, tool_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Sanitize tool arguments to remove dangerous content recursively."""
+        """Sanitize tool arguments to remove dangerous content and enforce filesystem sandbox."""
         if not arguments:
             return arguments
 
-        return self._sanitize_value("root", arguments)
+        # First sanitize for dangerous content
+        sanitized_args = self._sanitize_value("root", arguments)
+        
+        # Then sanitize filesystem paths if sandbox is enabled
+        sandbox = get_sandbox()
+        if sandbox:
+            sanitized_args = self._sanitize_filesystem_paths(sanitized_args, tool_name)
+            
+        return sanitized_args
+
+    def _sanitize_filesystem_paths(self, arguments: Dict[str, Any], tool_name: str) -> Dict[str, Any]:
+        """Sanitize filesystem paths to ensure they're within the sandbox."""
+        sandbox = get_sandbox()
+        if not sandbox:
+            return arguments
+            
+        # Common filesystem-related argument names
+        filesystem_args = {
+            'path', 'file', 'filename', 'filepath', 'directory', 'dir', 'folder',
+            'source', 'destination', 'dest', 'target', 'output', 'input',
+            'root', 'base', 'location', 'where', 'to', 'from'
+        }
+        
+        sanitized = {}
+        for key, value in arguments.items():
+            if isinstance(value, str):
+                # Check if this looks like a filesystem path
+                if (key.lower() in filesystem_args or 
+                    '/' in value or '\\' in value or 
+                    value.endswith(('.txt', '.json', '.yaml', '.yml', '.log', '.md'))):
+                    
+                    if sandbox.is_path_safe(value):
+                        sanitized[key] = value
+                    else:
+                        # Sanitize the path to be within the sandbox
+                        safe_path = sandbox.sanitize_path(value)
+                        logging.info(f"Sanitized filesystem path '{key}': '{value}' -> '{safe_path}'")
+                        sanitized[key] = safe_path
+                else:
+                    sanitized[key] = value
+            elif isinstance(value, dict):
+                sanitized[key] = self._sanitize_filesystem_paths(value, tool_name)
+            elif isinstance(value, list):
+                sanitized[key] = [
+                    self._sanitize_filesystem_paths({f"{key}_item": item}, tool_name)[f"{key}_item"]
+                    if isinstance(item, dict) else item
+                    for item in value
+                ]
+            else:
+                sanitized[key] = value
+                
+        return sanitized
 
     def _sanitize_value(self, key: str, value: Any) -> Any:
         """Recursively sanitize any value (string, dict, list, etc.)."""
