@@ -27,26 +27,36 @@ class StdioTransport(TransportProtocol):
         self.stdin = None
         self.stdout = None
         self.stderr = None
-        self._lock = asyncio.Lock()
+        self._lock = None  # Will be created lazily when needed
         self._initialized = False
 
-        # Use our new Process Management system
-        watchdog_config = WatchdogConfig(
-            check_interval=1.0,
-            process_timeout=timeout,
-            extra_buffer=5.0,
-            max_hang_time=timeout + 10.0,
-            auto_kill=True,
-        )
-        self.process_manager = ProcessManager(watchdog_config)
-        self._last_activity = time.time()
+    def _get_lock(self):
+        """Get or create the lock lazily."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
+    def _get_process_manager(self):
+        """Get or create the process manager lazily."""
+        if not hasattr(self, 'process_manager'):
+            # Use our new Process Management system
+            watchdog_config = WatchdogConfig(
+                check_interval=1.0,
+                process_timeout=self.timeout,
+                extra_buffer=5.0,
+                max_hang_time=self.timeout + 10.0,
+                auto_kill=True,
+            )
+            self.process_manager = ProcessManager(watchdog_config)
+            self._last_activity = time.time()
+        return self.process_manager
 
     async def _update_activity(self):
         """Update last activity timestamp and notify process manager asynchronously."""
         self._last_activity = time.time()
         if self.process and hasattr(self.process, "pid"):
             # Update activity in the process manager
-            await self.process_manager.update_activity(self.process.pid)
+            await self._get_process_manager().update_activity(self.process.pid)
 
     async def _ensure_connection(self):
         """Ensure we have a persistent connection to the subprocess."""
@@ -55,7 +65,7 @@ class StdioTransport(TransportProtocol):
         if self._initialized and proc is not None and proc.returncode is None:
             return
 
-        async with self._lock:
+        async with self._get_lock():
             if self._initialized and self.process and self.process.returncode is None:
                 return
 
@@ -64,7 +74,7 @@ class StdioTransport(TransportProtocol):
                 try:
                     # Use process manager to stop the process
                     if hasattr(self.process, "pid"):
-                        await self.process_manager.stop_process(
+                        await self._get_process_manager().stop_process(
                             self.process.pid, force=True
                         )
                     else:
@@ -114,7 +124,7 @@ class StdioTransport(TransportProtocol):
                 # Register with process manager for monitoring
                 if hasattr(self.process, "pid"):
                     # Register with manager (ensures tracking + watchdog)
-                    await self.process_manager.register_existing_process(
+                    await self._get_process_manager().register_existing_process(
                         self.process.pid,
                         self.process,
                         "stdio_transport",
@@ -273,17 +283,17 @@ class StdioTransport(TransportProtocol):
         try:
             if self.process and hasattr(self.process, "pid"):
                 # Ensure manager knows about it (in case of earlier failures)
-                if not await self.process_manager.is_process_registered(
+                if not await self._get_process_manager().is_process_registered(
                     self.process.pid
                 ):
-                    await self.process_manager.register_existing_process(
+                    await self._get_process_manager().register_existing_process(
                         self.process.pid,
                         self.process,
                         "stdio_transport",
                         self._get_activity_timestamp,
                     )
                 # Use process manager to stop the process
-                await self.process_manager.stop_process(self.process.pid, force=True)
+                await self._get_process_manager().stop_process(self.process.pid, force=True)
                 # Reap the child to avoid zombies
                 try:
                     await asyncio.wait_for(self.process.wait(), timeout=1.0)
@@ -313,14 +323,14 @@ class StdioTransport(TransportProtocol):
 
     async def get_process_stats(self) -> Dict[str, Any]:
         """Get statistics about the managed process."""
-        return await self.process_manager.get_stats()
+        return await self._get_process_manager().get_stats()
 
     async def send_timeout_signal(self, signal_type: str = "timeout") -> bool:
         """Send a timeout signal to the transport process."""
         if self.process and hasattr(self.process, "pid"):
             # Check if process is registered with watchdog
-            if await self.process_manager.is_process_registered(self.process.pid):
-                return await self.process_manager.send_timeout_signal(
+            if await self._get_process_manager().is_process_registered(self.process.pid):
+                return await self._get_process_manager().send_timeout_signal(
                     self.process.pid, signal_type
                 )
             else:

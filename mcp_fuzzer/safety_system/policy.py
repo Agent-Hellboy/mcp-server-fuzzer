@@ -8,7 +8,7 @@ can enforce safety consistently without duplicating logic.
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, Optional, Set
+from typing import Dict, Iterable, Optional, Set, Union
 from urllib.parse import urljoin, urlparse
 import os
 
@@ -68,8 +68,8 @@ def configure_network_policy(
 
 def is_host_allowed(
     url: str,
-    allowed_hosts: Iterable[str] | None = None,
-    deny_network_by_default: bool | None = None,
+    allowed_hosts: Union[Iterable[str], None] = None,
+    deny_network_by_default: Union[bool, None] = None,
 ) -> bool:
     """Return True if the URL's host is permitted by policy.
 
@@ -114,10 +114,10 @@ def is_host_allowed(
 
 def resolve_redirect_safely(
     base_url: str,
-    location: str | None,
-    allowed_hosts: Iterable[str] | None = None,
-    deny_network_by_default: bool | None = None,
-) -> str | None:
+    location: Union[str, None],
+    allowed_hosts: Union[Iterable[str], None] = None,
+    deny_network_by_default: Union[bool, None] = None,
+) -> Union[str, None]:
     """Resolve a redirect target while enforcing same-origin and host allow-list.
 
     Returns the resolved URL if allowed, otherwise None.
@@ -139,8 +139,8 @@ def resolve_redirect_safely(
 
 
 def sanitize_subprocess_env(
-    source_env: Dict[str, str] | None = None,
-    proxy_denylist: Iterable[str] | None = None,
+    source_env: Union[Dict[str, str], None] = None,
+    proxy_denylist: Union[Iterable[str], None] = None,
 ) -> Dict[str, str]:
     """Return an environment mapping safe to pass to subprocesses.
 

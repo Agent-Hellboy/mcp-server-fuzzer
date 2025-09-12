@@ -21,7 +21,8 @@ async def test_init():
     """Test AsyncFuzzExecutor initialization."""
     executor = AsyncFuzzExecutor(max_concurrency=5)
     assert executor.max_concurrency == 5
-    assert executor._semaphore._value == 5
+    # Semaphore is now lazily initialized, so it should be None initially
+    assert executor._semaphore is None
 
 
 @pytest.mark.asyncio

@@ -94,7 +94,13 @@ class ProtocolFuzzer:
         self.executor = AsyncFuzzExecutor(max_concurrency=max_concurrency)
         self._logger = logging.getLogger(__name__)
         # Bound concurrent protocol-type tasks
-        self._type_semaphore = asyncio.Semaphore(max_concurrency)
+        self._type_semaphore = None  # Will be created lazily when needed
+
+    def _get_type_semaphore(self):
+        """Get or create the type semaphore lazily."""
+        if self._type_semaphore is None:
+            self._type_semaphore = asyncio.Semaphore(self.executor.max_concurrency)
+        return self._type_semaphore
 
     def _get_request_id(self) -> int:
         """Generate a request ID for JSON-RPC requests."""
@@ -484,7 +490,7 @@ class ProtocolFuzzer:
 
         # Create tasks for each protocol type with bounded concurrency
         tasks = []
-        sem = self._type_semaphore
+        sem = self._get_type_semaphore()
 
         async def _run(pt: str) -> List[Dict[str, Any]]:
             async with sem:
