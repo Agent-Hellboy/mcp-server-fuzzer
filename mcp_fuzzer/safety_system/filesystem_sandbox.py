@@ -38,19 +38,40 @@ class FilesystemSandbox:
             self.root_path.mkdir(parents=True, exist_ok=True, mode=0o700)
             
             # Ensure directory is not in dangerous locations
-            dangerous_paths = ["/", "/home", "/etc", "/var", "/usr", "/bin", "/sbin", "/System"]
+            dangerous_paths = [
+                "/etc", "/usr", "/bin", "/sbin", "/System", "/home",
+                "/private/etc", "/private/usr", "/private/bin", "/private/sbin"
+            ]
             for dangerous in dangerous_paths:
                 dangerous_path = Path(dangerous)
                 try:
-                    if self.root_path.is_relative_to(dangerous_path) and self.root_path != dangerous_path:
+                    # Check both the original path and resolved path
+                    if (self.root_path.is_relative_to(dangerous_path) and 
+                        self.root_path != dangerous_path):
                         # Allow /tmp and /var/tmp as they are safe temporary locations
-                        if dangerous_path.name in ["tmp", "var"] and "tmp" in str(self.root_path):
+                        if (dangerous_path.name in ["tmp", "var"] and 
+                            "tmp" in str(self.root_path)):
                             continue
-                        raise ValueError(f"Sandbox path {self.root_path} is in dangerous location: {dangerous}")
-                except (OSError, ValueError):
+                        # Allow /tmp specifically
+                        if str(self.root_path).startswith("/tmp/"):
+                            continue
+                        raise ValueError(
+                            f"Sandbox path {self.root_path} is in dangerous "
+                            f"location: {dangerous}"
+                        )
+                    # Also check if the path starts with the dangerous path
+                    if str(self.root_path).startswith(dangerous + "/"):
+                        raise ValueError(
+                            f"Sandbox path {self.root_path} is in dangerous "
+                            f"location: {dangerous}"
+                        )
+                except OSError:
                     # If we can't resolve the path, it's probably safe
                     pass
                     
+        except ValueError:
+            # Re-raise ValueError for dangerous paths
+            raise
         except Exception as e:
             logging.error(f"Failed to create safe directory {self.root_path}: {e}")
             # Fall back to a temporary directory
@@ -112,8 +133,9 @@ class FilesystemSandbox:
         if not filename:
             filename = "default"
             
-        # Remove dangerous characters and path separators
-        safe_filename = "".join(c for c in filename if c.isalnum() or c in "._-")
+        # Replace spaces with underscores and remove dangerous characters
+        safe_filename = filename.replace(" ", "_")
+        safe_filename = "".join(c for c in safe_filename if c.isalnum() or c in "._-")
         if not safe_filename:
             safe_filename = "default"
             

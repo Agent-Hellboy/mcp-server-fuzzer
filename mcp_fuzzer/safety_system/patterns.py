@@ -7,6 +7,13 @@ DEFAULT_DANGEROUS_URL_PATTERNS = [
     r"file://",  # File URLs
     r"www\.",  # Common web URLs
     r"[a-zA-Z0-9-]+\.(com|org|net|edu|gov|mil|int|co\.uk|de|fr|jp|cn)",
+    # HTML/JavaScript injection patterns
+    r"<script[^>]*>",  # Script tags
+    r"javascript:",  # JavaScript URLs
+    r"on\w+\s*=",  # Event handlers
+    r"eval\s*\(",  # eval() calls
+    r"document\.",  # Document manipulation
+    r"window\.",  # Window manipulation
 ]
 
 DEFAULT_DANGEROUS_COMMAND_PATTERNS = [

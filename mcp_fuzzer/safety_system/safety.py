@@ -16,7 +16,7 @@ from typing import Any, Dict, Protocol, runtime_checkable
 
 import emoji
 
-from .filesystem_sandbox import FilesystemSandbox, initialize_sandbox, get_sandbox
+from .filesystem_sandbox import initialize_sandbox, get_sandbox
 from .patterns import (
     DEFAULT_DANGEROUS_URL_PATTERNS,
     DEFAULT_DANGEROUS_COMMAND_PATTERNS,
@@ -71,9 +71,13 @@ class SafetyFilter(SafetyProvider):
         """Initialize filesystem sandbox with the specified root directory."""
         try:
             sandbox = initialize_sandbox(str(root))
-            logging.info(f"Filesystem sandbox initialized at: {sandbox.get_sandbox_root()}")
+            logging.info(
+                f"Filesystem sandbox initialized at: {sandbox.get_sandbox_root()}"
+            )
         except Exception as e:
-            logging.error(f"Failed to initialize filesystem sandbox with root '{root}': {e}")
+            logging.error(
+                f"Failed to initialize filesystem sandbox with root '{root}': {e}"
+            )
             # Initialize with default sandbox
             initialize_sandbox()
 
@@ -110,7 +114,8 @@ class SafetyFilter(SafetyProvider):
     def sanitize_tool_arguments(
         self, tool_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Sanitize tool arguments to remove dangerous content and enforce filesystem sandbox."""
+        """Sanitize tool arguments to remove dangerous content and enforce 
+        filesystem sandbox."""
         if not arguments:
             return arguments
 
@@ -124,7 +129,9 @@ class SafetyFilter(SafetyProvider):
             
         return sanitized_args
 
-    def _sanitize_filesystem_paths(self, arguments: Dict[str, Any], tool_name: str) -> Dict[str, Any]:
+    def _sanitize_filesystem_paths(
+        self, arguments: Dict[str, Any], tool_name: str
+    ) -> Dict[str, Any]:
         """Sanitize filesystem paths to ensure they're within the sandbox."""
         sandbox = get_sandbox()
         if not sandbox:
@@ -143,14 +150,19 @@ class SafetyFilter(SafetyProvider):
                 # Check if this looks like a filesystem path
                 if (key.lower() in filesystem_args or 
                     '/' in value or '\\' in value or 
-                    value.endswith(('.txt', '.json', '.yaml', '.yml', '.log', '.md'))):
+                    value.endswith(('.txt', '.json', '.yaml', '.yml', '.log', 
+                                   '.md', '.py', '.js', '.html', '.css', 
+                                   '.xml', '.csv'))):
                     
                     if sandbox.is_path_safe(value):
                         sanitized[key] = value
                     else:
                         # Sanitize the path to be within the sandbox
                         safe_path = sandbox.sanitize_path(value)
-                        logging.info(f"Sanitized filesystem path '{key}': '{value}' -> '{safe_path}'")
+                        logging.info(
+                            f"Sanitized filesystem path '{key}': '{value}' -> "
+                            f"'{safe_path}'"
+                        )
                         sanitized[key] = safe_path
                 else:
                     sanitized[key] = value
@@ -158,8 +170,9 @@ class SafetyFilter(SafetyProvider):
                 sanitized[key] = self._sanitize_filesystem_paths(value, tool_name)
             elif isinstance(value, list):
                 sanitized[key] = [
-                    self._sanitize_filesystem_paths({f"{key}_item": item}, tool_name)[f"{key}_item"]
-                    if isinstance(item, dict) else item
+                    self._sanitize_filesystem_paths(
+                        {f"{key}_item": item}, tool_name
+                    )[f"{key}_item"]
                     for item in value
                 ]
             else:
