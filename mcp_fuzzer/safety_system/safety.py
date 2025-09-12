@@ -146,22 +146,26 @@ class SafetyFilter(SafetyProvider):
         
         sanitized = {}
         for key, value in arguments.items():
-            if isinstance(value, str):
-                # Check if this looks like a filesystem path
-                if (key.lower() in filesystem_args or 
-                    '/' in value or '\\' in value or 
-                    value.endswith(('.txt', '.json', '.yaml', '.yml', '.log', 
-                                   '.md', '.py', '.js', '.html', '.css', 
-                                   '.xml', '.csv'))):
-                    
-                    if sandbox.is_path_safe(value):
-                        sanitized[key] = value
+            if isinstance(value, (str, Path)):
+                value_str = str(value)
+                looks_like_path = (
+                    key.lower() in filesystem_args
+                    or "/" in value_str
+                    or "\\" in value_str
+                    or value_str.endswith(('.txt', '.json', '.yaml', '.yml', '.log', 
+                                           '.md', '.py', '.js', '.html', '.css', 
+                                           '.xml', '.csv'))
+                )
+                if looks_like_path:
+                    if sandbox.is_path_safe(value_str):
+                        sanitized[key] = value_str
                     else:
-                        # Sanitize the path to be within the sandbox
-                        safe_path = sandbox.sanitize_path(value)
+                        safe_path = sandbox.sanitize_path(value_str)
                         logging.info(
-                            f"Sanitized filesystem path '{key}': '{value}' -> "
-                            f"'{safe_path}'"
+                            "Sanitized filesystem path '%s': '%s' -> '%s'",
+                            key,
+                            value_str,
+                            safe_path,
                         )
                         sanitized[key] = safe_path
                 else:
@@ -169,12 +173,22 @@ class SafetyFilter(SafetyProvider):
             elif isinstance(value, dict):
                 sanitized[key] = self._sanitize_filesystem_paths(value, tool_name)
             elif isinstance(value, list):
-                sanitized[key] = [
-                    self._sanitize_filesystem_paths(
-                        {f"{key}_item": item}, tool_name
-                    )[f"{key}_item"]
-                    for item in value
-                ]
+                new_list = []
+                for item in value:
+                    if isinstance(item, dict):
+                        new_list.append(
+                            self._sanitize_filesystem_paths(item, tool_name)
+                        )
+                    elif isinstance(item, (str, Path)):
+                        item_key = f"{key}_item"
+                        new_list.append(
+                            self._sanitize_filesystem_paths(
+                                {item_key: item}, tool_name
+                            )[item_key]
+                        )
+                    else:
+                        new_list.append(item)
+                sanitized[key] = new_list
             else:
                 sanitized[key] = value
                 

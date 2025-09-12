@@ -4,6 +4,7 @@ Tests for filesystem path sanitization in safety system
 """
 
 import tempfile
+import unittest.mock
 from pathlib import Path
 from unittest.mock import patch
 
@@ -173,10 +174,13 @@ class TestFilesystemPathSanitization:
                 
                 # Should log sanitization of unsafe path
                 mock_logging.info.assert_called()
-                log_call = mock_logging.info.call_args[0][0]
-                assert "Sanitized filesystem path" in log_call
+                log_call = mock_logging.info.call_args
+                
+                # Check the new logging format with separate arguments
+                assert log_call[0][0] == "Sanitized filesystem path '%s': '%s' -> '%s'"
                 # The 'file' argument gets sanitized due to .txt extension
-                assert "'file'" in log_call
+                assert log_call[0][1] == "file"
+                assert log_call[0][2] == "safe_file.txt"
 
     def test_sanitize_tool_arguments_integration(self):
         """Test integration of filesystem path sanitization in 
@@ -278,3 +282,85 @@ class TestFilesystemPathSanitization:
             
             # Text without file extension should remain unchanged
             assert sanitized["text"] == "just text"
+
+    def test_path_object_support(self):
+        """Test that pathlib.Path objects are handled correctly."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            initialize_sandbox(temp_dir)
+            safety_filter = SafetyFilter()
+            
+            from pathlib import Path
+            
+            arguments = {
+                "path_obj": Path("/etc/passwd"),
+                "str_path": "/etc/shadow",
+                "safe_path": Path("safe_file.txt")
+            }
+            
+            sanitized = safety_filter._sanitize_filesystem_paths(arguments, "test_tool")
+            
+            sandbox_root = get_sandbox().get_sandbox_root()
+            
+            # Path objects should be converted to strings and sanitized
+            assert isinstance(sanitized["path_obj"], str)
+            assert sanitized["path_obj"].startswith(sandbox_root)
+            
+            # String paths should still work
+            assert isinstance(sanitized["str_path"], str)
+            assert sanitized["str_path"].startswith(sandbox_root)
+            
+            # Safe paths should remain as strings
+            assert isinstance(sanitized["safe_path"], str)
+            assert sanitized["safe_path"].startswith(sandbox_root)
+
+    def test_list_string_items_sanitization(self):
+        """Test that string items in lists are properly sanitized."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            initialize_sandbox(temp_dir)
+            safety_filter = SafetyFilter()
+            
+            arguments = {
+                "files": ["/etc/passwd", "/etc/shadow", "safe_file.txt"],
+                "mixed": ["/etc/passwd", {"nested": "/etc/hosts"}, 123]
+            }
+            
+            sanitized = safety_filter._sanitize_filesystem_paths(arguments, "test_tool")
+            
+            sandbox_root = get_sandbox().get_sandbox_root()
+            
+            # All string items in the list should be sanitized
+            assert len(sanitized["files"]) == 3
+            for file_path in sanitized["files"]:
+                assert isinstance(file_path, str)
+                assert file_path.startswith(sandbox_root)
+            
+            # Mixed list should handle different types correctly
+            assert len(sanitized["mixed"]) == 3
+            assert sanitized["mixed"][0].startswith(sandbox_root)  # String sanitized
+            assert isinstance(sanitized["mixed"][1], dict)  # Dict processed
+            # Nested string sanitized
+            assert sanitized["mixed"][1]["nested"].startswith(sandbox_root)
+            assert sanitized["mixed"][2] == 123  # Number unchanged
+
+    def test_improved_logging_format(self):
+        """Test that the improved logging format works correctly."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            initialize_sandbox(temp_dir)
+            safety_filter = SafetyFilter()
+            
+            with unittest.mock.patch(
+                'mcp_fuzzer.safety_system.safety.logging'
+            ) as mock_logging:
+                arguments = {"file": "/etc/passwd"}
+                safety_filter._sanitize_filesystem_paths(arguments, "test_tool")
+                
+                # Should log with the new format
+                mock_logging.info.assert_called()
+                log_call = mock_logging.info.call_args
+                
+                # Check that it's called with separate arguments (not f-string)
+                assert len(log_call[0]) == 4  # format string + 3 arguments
+                assert log_call[0][0] == "Sanitized filesystem path '%s': '%s' -> '%s'"
+                assert log_call[0][1] == "file"
+                assert log_call[0][2] == "/etc/passwd"
+                assert log_call[0][3].startswith(get_sandbox().get_sandbox_root())
