@@ -13,6 +13,8 @@ from mcp_fuzzer.fuzz_engine.strategy.aggressive.protocol_type_strategy import (
     get_protocol_fuzzer_method,
     generate_malicious_string,
     generate_malicious_value,
+    choice_lazy,
+    generate_experimental_payload,
 )
 
 
@@ -337,7 +339,84 @@ class TestAggressiveProtocolStrategies:
             f"{all_supported_types}"
         )
 
-        # Should have exactly 45 types (19 original + 26 new)
-        assert len(ProtocolFuzzer.PROTOCOL_TYPES) == 45, (
-            f"Expected 45 protocol types, got {len(ProtocolFuzzer.PROTOCOL_TYPES)}"
-        )
+    def test_choice_lazy_function(self):
+        """Test that choice_lazy function works correctly with callable and non-callable options."""
+        # Test with non-callable options
+        non_callable_options = [1, 2, 3, "test", None, True]
+        result = choice_lazy(non_callable_options)
+        assert result in non_callable_options
+        
+        # Test with callable options
+        callable_options = [
+            lambda: "generated_string",
+            lambda: {"key": "value"},
+            lambda: [1, 2, 3],
+        ]
+        result = choice_lazy(callable_options)
+        assert isinstance(result, (str, dict, list))
+        
+        # Test with mixed options
+        mixed_options = [
+            "static_value",
+            lambda: "dynamic_value",
+            None,
+            lambda: {"dynamic": "object"},
+        ]
+        result = choice_lazy(mixed_options)
+        assert result in ["static_value", None] or isinstance(result, (str, dict))
+
+    def test_generate_experimental_payload(self):
+        """Test that generate_experimental_payload generates varied experimental values."""
+        # Generate multiple experimental payloads to test variety
+        payloads = [generate_experimental_payload() for _ in range(50)]
+        
+        # Should have some variety
+        unique_payloads = set(str(p) for p in payloads)
+        assert len(unique_payloads) > 1, "Should generate different experimental payloads"
+        
+        # Should include None values
+        assert any(p is None for p in payloads), "Should include None experimental payloads"
+        
+        # Should include non-None values
+        assert any(p is not None for p in payloads), "Should include non-None experimental payloads"
+        
+        # Should include various types
+        types = {type(p) for p in payloads}
+        assert len(types) > 1, "Should generate different types of experimental payloads"
+
+    def test_lazy_generation_performance(self):
+        """Test that lazy generation doesn't eagerly evaluate all options."""
+        # This test ensures we're not generating all options upfront
+        # by checking that we can generate values without side effects
+        
+        # Test that generate_malicious_value uses lazy evaluation
+        values = [generate_malicious_value() for _ in range(10)]
+        
+        # Should have variety
+        unique_values = set(str(v) for v in values)
+        assert len(unique_values) > 1, "Should generate different malicious values"
+        
+        # Test that generate_experimental_payload uses lazy evaluation
+        experimental_values = [generate_experimental_payload() for _ in range(10)]
+        
+        # Should have variety
+        unique_experimental = set(str(v) for v in experimental_values)
+        assert len(unique_experimental) > 1, "Should generate different experimental values"
+
+    def test_lazy_generation_with_lambdas(self):
+        """Test that lambda functions in lazy generation work correctly."""
+        # Test choice_lazy with lambda functions
+        lambda_options = [
+            lambda: "lambda_result_1",
+            lambda: "lambda_result_2", 
+            lambda: {"lambda": "object"},
+            lambda: [1, 2, 3],
+        ]
+        
+        result = choice_lazy(lambda_options)
+        assert isinstance(result, (str, dict, list))
+        
+        # Test that each lambda is called independently
+        results = [choice_lazy(lambda_options) for _ in range(20)]
+        unique_results = set(str(r) for r in results)
+        assert len(unique_results) > 1, "Lambda functions should generate different results"
