@@ -185,6 +185,7 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                         {"__proto__": {"isAdmin": True}},
                         {"constructor": {"prototype": {"isAdmin": True}}},
                         {"evil": generate_malicious_string()},
+                        # Add more capabilities structures that include experimental field
                         {
                             "experimental": random.choice(
                                 [
@@ -219,6 +220,23 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
                                     {"config": {"debug": False, "verbose": True}},
                                 ]
                             )
+                        },
+                        # Add more capabilities with experimental field for better variety
+                        {
+                            "experimental": generate_malicious_value(),
+                            "other_capability": generate_malicious_string(),
+                        },
+                        {
+                            "experimental": random.choice([True, False, "enabled", "disabled"]),
+                            "logging": {"level": generate_malicious_string()},
+                        },
+                        {
+                            "experimental": {"feature": "test", "enabled": True},
+                            "resources": {"listChanged": True},
+                        },
+                        {
+                            "experimental": [1, 2, 3, "mixed"],
+                            "tools": {"listChanged": True},
                         },
                     ]
                 ),
