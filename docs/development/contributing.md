@@ -32,7 +32,7 @@ We welcome various types of contributions:
 
 ### Prerequisites
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 
 - Git
 - pip or conda for package management
@@ -350,7 +350,7 @@ What actually happened
 ## Environment
 - OS: [e.g., Ubuntu 20.04]
 
-- Python Version: [e.g., 3.9.7]
+- Python Version: [e.g., 3.10.17]
 - MCP Fuzzer Version: [e.g., 0.1.0]
 
 ## Error Messages
