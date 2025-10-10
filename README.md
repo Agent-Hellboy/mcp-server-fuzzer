@@ -277,6 +277,21 @@ This tool is designed for testing and security research purposes only.
 - The safety system provides protection but should not be relied upon as the sole security measure
 - Use at your own risk
 
+## Funding & Support
+
+If you find this project helpful, please consider supporting its development:
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/Agent-Hellboy?logo=github&color=ea4aaa)](https://github.com/sponsors/Agent-Hellboy)
+
+**Ways to support:**
+- ⭐ **Star the repository** - helps others discover the project
+- 🐛 **Report issues** - help improve the tool
+- 💡 **Suggest features** - contribute ideas for new functionality
+- 💰 **Sponsor on GitHub** - directly support ongoing development
+- 📖 **Share the documentation** - help others learn about MCP fuzzing
+
+Your support helps maintain and improve this tool for the MCP community!
+
 ---
 
 <div align="center">
