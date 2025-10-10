@@ -624,7 +624,7 @@ Built-in diagnostic information for troubleshooting:
 # System diagnostic information
 mcp-fuzzer --diagnostics
 # Output: "System Diagnostics:"
-#         "  Python version: 3.9.7"
+#         "  Python version: 3.10.17"
 #         "  Platform: Linux x86_64"
 #         "  Available protocols: http, sse, stdio, streamablehttp"
 #         "  Safety system: available"

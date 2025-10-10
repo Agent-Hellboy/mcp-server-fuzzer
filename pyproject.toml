@@ -11,7 +11,7 @@ version = "0.2.0"
 description = "MCP server fuzzer client and utilities"
 readme = "README.md"
 license = {file = "LICENSE"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "Prince Roshan", email = "princekrroshan01@gmail.com"}
 ]
@@ -21,7 +21,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -69,7 +68,7 @@ Issues = "https://github.com/agent-hellboy/mcp-server-fuzzer/issues"
 Documentation = "https://agent-hellboy.github.io/mcp-server-fuzzer"
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["F", "E"]
