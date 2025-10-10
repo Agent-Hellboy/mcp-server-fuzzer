@@ -124,7 +124,7 @@ async def main(argv: Optional[List[str]] = None) -> int:
 
         # Display Rich table summary
         try:
-            if (config["mode"] == "tools" or config["mode"] == "tool") and tool_results:
+            if (config["mode"] in ["tools", "tool", "both"]) and tool_results:
                 print("\n" + "="*80)
                 print(f"{emoji.emojize(':bullseye:')} MCP FUZZER TOOL RESULTS SUMMARY")
                 print("="*80)

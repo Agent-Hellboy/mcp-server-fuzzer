@@ -80,34 +80,72 @@ def generate_malicious_string() -> str:
     return random.choice(strategies)()
 
 
+def choice_lazy(options):
+    """Lazy choice that only evaluates the selected option."""
+    picked = random.choice(options)
+    return picked() if callable(picked) else picked
+
+
 def generate_malicious_value() -> Any:
     """Generate malicious values of various types."""
-    return random.choice(
-        [
-            None,
-            "",
-            "null",
-            "undefined",
-            "NaN",
-            "Infinity",
-            "-Infinity",
-            True,
-            False,
-            0,
-            -1,
-            999999999,
-            -999999999,
-            3.14159,
-            -3.14159,
-            [],
-            {},
-            generate_malicious_string(),
-            {"__proto__": {"isAdmin": True}},
-            {"constructor": {"prototype": {"isAdmin": True}}},
-            [generate_malicious_string()],
-            {"evil": generate_malicious_string()},
-        ]
-    )
+    return choice_lazy([
+        None,
+        "",
+        "null",
+        "undefined",
+        "NaN",
+        "Infinity",
+        "-Infinity",
+        True,
+        False,
+        0,
+        -1,
+        999999999,
+        -999999999,
+        3.14159,
+        -3.14159,
+        [],
+        {},
+        lambda: generate_malicious_string(),
+        {"__proto__": {"isAdmin": True}},
+        {"constructor": {"prototype": {"isAdmin": True}}},
+        lambda: [generate_malicious_string()],
+        lambda: {"evil": generate_malicious_string()},
+    ])
+
+
+def generate_experimental_payload():
+    """Generate experimental capability payloads lazily."""
+    return choice_lazy([
+        None,
+        "",
+        [],
+        lambda: generate_malicious_string(),
+        lambda: random.randint(-1000, 1000),
+        lambda: random.choice([True, False]),
+        lambda: {
+            "customCapability": generate_malicious_value(),
+            "extendedFeature": {
+                "enabled": generate_malicious_value(),
+                "config": generate_malicious_value(),
+            },
+            "__proto__": {"isAdmin": True},
+            "evil": generate_malicious_string(),
+        },
+        lambda: {
+            "maliciousExtension": {
+                "payload": generate_malicious_string(),
+                "injection": random.choice(SQL_INJECTION),
+                "xss": random.choice(XSS_PAYLOADS),
+            }
+        },
+        lambda: ["item1", "item2", generate_malicious_value()],
+        lambda: {"nested": {"key": generate_malicious_value()}},
+        "experimental_string_value",
+        {"feature_flag": True},
+        lambda: [1, 2, 3, "mixed_array"],
+        {"config": {"debug": False, "verbose": True}},
+    ])
 
 
 def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
@@ -168,107 +206,89 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
     }
 
     # Malicious params
-    malicious_params = random.choice(
-        [
-            None,  # Missing params
-            "",  # Empty string instead of object
-            [],  # Array instead of object
-            generate_malicious_string(),  # String instead of object
-            {
-                "protocolVersion": random.choice(malicious_versions),
-                "capabilities": random.choice(
-                    [
-                        None,
-                        "",
-                        [],
-                        generate_malicious_string(),
-                        {"__proto__": {"isAdmin": True}},
-                        {"constructor": {"prototype": {"isAdmin": True}}},
-                        {"evil": generate_malicious_string()},
-                        {
-                            "experimental": random.choice(
-                                [
-                                    None,
-                                    "",
-                                    [],
-                                    generate_malicious_string(),
-                                    random.randint(-1000, 1000),
-                                    random.choice([True, False]),
-                                    {
-                                        "customCapability": generate_malicious_value(),
-                                        "extendedFeature": {
-                                            "enabled": generate_malicious_value(),
-                                            "config": generate_malicious_value(),
-                                        },
-                                        "__proto__": {"isAdmin": True},
-                                        "evil": generate_malicious_string(),
-                                    },
-                                    {
-                                        "maliciousExtension": {
-                                            "payload": generate_malicious_string(),
-                                            "injection": random.choice(SQL_INJECTION),
-                                            "xss": random.choice(XSS_PAYLOADS),
-                                        }
-                                    },
-                                    # Add arrays and nested objects for more variety
-                                    ["item1", "item2", generate_malicious_value()],
-                                    {"nested": {"key": generate_malicious_value()}},
-                                    "experimental_string_value",
-                                    {"feature_flag": True},
-                                    [1, 2, 3, "mixed_array"],
-                                    {"config": {"debug": False, "verbose": True}},
-                                ]
-                            )
+    malicious_params = choice_lazy([
+        None,  # Missing params
+        "",  # Empty string instead of object
+        [],  # Array instead of object
+        lambda: generate_malicious_string(),  # String instead of object
+        lambda: {
+            "protocolVersion": random.choice(malicious_versions),
+            "capabilities": choice_lazy([
+                None,
+                "",
+                [],
+                lambda: generate_malicious_string(),
+                {"__proto__": {"isAdmin": True}},
+                {"constructor": {"prototype": {"isAdmin": True}}},
+                lambda: {"evil": generate_malicious_string()},
+                # Add more capabilities structures that include experimental field
+                lambda: {
+                    "experimental": generate_experimental_payload()
+                },
+                # Add more capabilities with experimental field for better variety
+                lambda: {
+                    "experimental": generate_malicious_value(),
+                    "other_capability": generate_malicious_string(),
+                },
+                lambda: {
+                    "experimental": random.choice([True, False, "enabled", "disabled"]),
+                    "logging": {"level": generate_malicious_string()},
+                },
+                lambda: {
+                    "experimental": {"feature": "test", "enabled": True},
+                    "resources": {"listChanged": True},
+                },
+                lambda: {
+                    "experimental": [1, 2, 3, "mixed"],
+                    "tools": {"listChanged": True},
+                },
+            ]),
+            "clientInfo": random.choice(
+                [
+                    None,
+                    "",
+                    [],
+                    lambda: generate_malicious_string(),
+                    lambda: {
+                        "name": generate_malicious_string(),
+                        "version": generate_malicious_string(),
+                        "__proto__": {"isAdmin": True},
+                        "evil": generate_malicious_string(),
+                    },
+                ]
+            ),
+            "experimental": random.choice(
+                [
+                    None,
+                    "",
+                    [],
+                    lambda: generate_malicious_string(),
+                    lambda: {
+                        "customCapability": generate_malicious_value(),
+                        "extendedFeature": {
+                            "enabled": generate_malicious_value(),
+                            "config": generate_malicious_value(),
                         },
-                    ]
-                ),
-                "clientInfo": random.choice(
-                    [
-                        None,
-                        "",
-                        [],
-                        generate_malicious_string(),
-                        {
-                            "name": generate_malicious_string(),
-                            "version": generate_malicious_string(),
-                            "__proto__": {"isAdmin": True},
-                            "evil": generate_malicious_string(),
-                        },
-                    ]
-                ),
-                "experimental": random.choice(
-                    [
-                        None,
-                        "",
-                        [],
-                        generate_malicious_string(),
-                        {
-                            "customCapability": generate_malicious_value(),
-                            "extendedFeature": {
-                                "enabled": generate_malicious_value(),
-                                "config": generate_malicious_value(),
-                            },
-                            "__proto__": {"isAdmin": True},
-                            "evil": generate_malicious_string(),
-                        },
-                        {
-                            "maliciousExtension": {
-                                "payload": generate_malicious_string(),
-                                "injection": random.choice(SQL_INJECTION),
-                                "xss": random.choice(XSS_PAYLOADS),
-                            }
-                        },
-                    ]
-                ),
-                # Add extra malicious fields
-                "__proto__": {"isAdmin": True},
-                "constructor": {"prototype": {"isAdmin": True}},
-                "eval": "console.log('injection')",
-                "../injection": "path_traversal",
-                "\x00null": "null_injection",
-            },
-        ]
-    )
+                        "__proto__": {"isAdmin": True},
+                        "evil": generate_malicious_string(),
+                    },
+                    lambda: {
+                        "maliciousExtension": {
+                            "payload": generate_malicious_string(),
+                            "injection": random.choice(SQL_INJECTION),
+                            "xss": random.choice(XSS_PAYLOADS),
+                        }
+                    },
+                ]
+            ),
+            # Add extra malicious fields
+            "__proto__": {"isAdmin": True},
+            "constructor": {"prototype": {"isAdmin": True}},
+            "eval": "console.log('injection')",
+            "../injection": "path_traversal",
+            "\x00null": "null_injection",
+        },
+    ])
 
     if malicious_params is not None and isinstance(malicious_params, dict):
         base_request["params"] = malicious_params
