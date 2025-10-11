@@ -6,7 +6,6 @@ This package provides a modular client for fuzzing MCP servers.
 """
 
 import logging
-from typing import List, Optional
 
 import emoji
 
@@ -17,8 +16,7 @@ from .base import MCPFuzzerClient
 # For backward compatibility
 UnifiedMCPFuzzerClient = MCPFuzzerClient
 
-
-async def main(argv: Optional[List[str]] = None) -> int:
+async def main(argv: list[str | None] = None) -> int:
     """Main entry point for the CLI application.
 
     Args:
@@ -244,6 +242,5 @@ async def main(argv: Optional[List[str]] = None) -> int:
     finally:
         # Ensure proper shutdown
         await client.cleanup()
-
 
 __all__ = ["MCPFuzzerClient", "UnifiedMCPFuzzerClient", "main"]

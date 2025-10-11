@@ -7,7 +7,7 @@ This module provides functionality to load configuration from YAML files.
 import os
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 
@@ -19,12 +19,11 @@ import importlib
 
 logger = logging.getLogger(__name__)
 
-
 def find_config_file(
-    config_path: Optional[str] = None,
-    search_paths: Optional[list[str]] = None,
-    file_names: Optional[list[str]] = None,
-) -> Optional[str]:
+    config_path: str | None = None,
+    search_paths: list[str | None] = None,
+    file_names: list[str | None] = None,
+) -> str | None:
     """Find a configuration file in the given paths.
 
     Args:
@@ -62,8 +61,7 @@ def find_config_file(
 
     return None
 
-
-def load_config_file(file_path: str) -> Dict[str, Any]:
+def load_config_file(file_path: str) -> dict[str, Any]:
     """Load configuration from a YAML file.
 
     Args:
@@ -101,11 +99,10 @@ def load_config_file(file_path: str) -> Dict[str, Any]:
             f"Unexpected error reading configuration file {file_path}: {str(e)}"
         )
 
-
 def apply_config_file(
-    config_path: Optional[str] = None,
-    search_paths: Optional[list[str]] = None,
-    file_names: Optional[list[str]] = None,
+    config_path: str | None = None,
+    search_paths: list[str | None] = None,
+    file_names: list[str | None] = None,
 ) -> bool:
     """Find and apply configuration from a file.
 
@@ -138,8 +135,7 @@ def apply_config_file(
         logger.error(f"Error loading configuration file: {str(e)}")
         return False
 
-
-def get_config_schema() -> Dict[str, Any]:
+def get_config_schema() -> dict[str, Any]:
     """Get the configuration schema.
 
     Returns:
@@ -331,8 +327,7 @@ def get_config_schema() -> Dict[str, Any]:
         },
     }
 
-
-def load_custom_transports(config_data: Dict[str, Any]) -> None:
+def load_custom_transports(config_data: dict[str, Any]) -> None:
     """Load and register custom transports from configuration.
 
     Args:

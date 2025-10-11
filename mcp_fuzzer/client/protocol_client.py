@@ -8,13 +8,12 @@ This module provides functionality for fuzzing MCP protocol types.
 import json
 import logging
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
 
 from ..fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
 from ..safety_system.safety import SafetyProvider
-
 
 class ProtocolClient:
     """Client for fuzzing MCP protocol types."""
@@ -22,7 +21,7 @@ class ProtocolClient:
     def __init__(
         self,
         transport,
-        safety_system: Optional[SafetyProvider] = None,
+        safety_system: SafetyProvider | None = None,
         max_concurrency: int = 5,
     ):
         """
@@ -40,7 +39,7 @@ class ProtocolClient:
         self._logger = logging.getLogger(__name__)
 
     async def _check_safety_for_protocol_message(
-        self, protocol_type: str, fuzz_data: Dict[str, Any]
+        self, protocol_type: str, fuzz_data: dict[str, Any]
     ) -> SafetyCheckResult:
         """Check if a protocol message should be blocked by the safety system.
 
@@ -211,7 +210,7 @@ class ProtocolClient:
 
     async def fuzz_protocol_type(
         self, protocol_type: str, runs: int = 10
-    ) -> List[ProtocolFuzzResult]:
+    ) -> list[ProtocolFuzzResult]:
         """Fuzz a specific protocol type."""
         results = []
 
@@ -221,7 +220,7 @@ class ProtocolClient:
 
         return results
 
-    async def _get_protocol_types(self) -> List[str]:
+    async def _get_protocol_types(self) -> list[str]:
         """Get list of protocol types to fuzz.
 
         Returns:
@@ -236,16 +235,16 @@ class ProtocolClient:
 
     async def fuzz_all_protocol_types(
         self, runs_per_type: int = 5
-    ) -> Dict[str, List[ProtocolFuzzResult]]:
+    ) -> dict[str, list[ProtocolFuzzResult]]:
         """Fuzz all protocol types using ProtocolClient safety + sending."""
         try:
             protocol_types = await self._get_protocol_types()
             if not protocol_types:
                 self._logger.warning("No protocol types available")
                 return {}
-            all_results: Dict[str, List[Dict[str, Any]]] = {}
+            all_results: dict[str, list[dict[str, Any]]] = {}
             for pt in protocol_types:
-                per_type: List[Dict[str, Any]] = []
+                per_type: list[dict[str, Any]] = []
                 for i in range(runs_per_type):
                     per_type.append(
                         await self._process_single_protocol_fuzz(pt, i, runs_per_type)
@@ -256,7 +255,7 @@ class ProtocolClient:
             self._logger.error(f"Failed to fuzz all protocol types: {e}")
             return {}
 
-    def _extract_params(self, data: Any) -> Dict[str, Any]:
+    def _extract_params(self, data: Any) -> dict[str, Any]:
         """Extract parameters from data, safely handling non-dict inputs.
 
         Args:
@@ -275,8 +274,8 @@ class ProtocolClient:
         return {}
 
     async def _send_protocol_request(
-        self, protocol_type: str, data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, protocol_type: str, data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Send a protocol request based on the type."""
         if protocol_type == "InitializeRequest":
             return await self._send_initialize_request(data)
@@ -308,85 +307,85 @@ class ProtocolClient:
             # Generic JSON-RPC request
             return await self._send_generic_request(data)
 
-    async def _send_initialize_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_initialize_request(self, data: Any) -> dict[str, Any]:
         """Send an initialize request."""
         return await self.transport.send_request(
             "initialize", self._extract_params(data)
         )
 
-    async def _send_progress_notification(self, data: Any) -> Dict[str, str]:
+    async def _send_progress_notification(self, data: Any) -> dict[str, str]:
         """Send a progress notification as JSON-RPC notification (no id)."""
         params = self._extract_params(data)
         await self.transport.send_notification("notifications/progress", params)
         return {"status": "notification_sent"}
 
-    async def _send_cancel_notification(self, data: Any) -> Dict[str, str]:
+    async def _send_cancel_notification(self, data: Any) -> dict[str, str]:
         """Send a cancel notification as JSON-RPC notification (no id)."""
         params = self._extract_params(data)
         await self.transport.send_notification("notifications/cancelled", params)
         return {"status": "notification_sent"}
 
-    async def _send_list_resources_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_list_resources_request(self, data: Any) -> dict[str, Any]:
         """Send a list resources request."""
         return await self.transport.send_request(
             "resources/list", self._extract_params(data)
         )
 
-    async def _send_read_resource_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_read_resource_request(self, data: Any) -> dict[str, Any]:
         """Send a read resource request."""
         return await self.transport.send_request(
             "resources/read", self._extract_params(data)
         )
 
-    async def _send_set_level_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_set_level_request(self, data: Any) -> dict[str, Any]:
         """Send a set level request."""
         return await self.transport.send_request(
             "logging/setLevel", self._extract_params(data)
         )
 
-    async def _send_create_message_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_create_message_request(self, data: Any) -> dict[str, Any]:
         """Send a create message request."""
         return await self.transport.send_request(
             "sampling/createMessage", self._extract_params(data)
         )
 
-    async def _send_list_prompts_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_list_prompts_request(self, data: Any) -> dict[str, Any]:
         """Send a list prompts request."""
         return await self.transport.send_request(
             "prompts/list", self._extract_params(data)
         )
 
-    async def _send_get_prompt_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_get_prompt_request(self, data: Any) -> dict[str, Any]:
         """Send a get prompt request."""
         return await self.transport.send_request(
             "prompts/get", self._extract_params(data)
         )
 
-    async def _send_list_roots_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_list_roots_request(self, data: Any) -> dict[str, Any]:
         """Send a list roots request."""
         return await self.transport.send_request(
             "roots/list", self._extract_params(data)
         )
 
-    async def _send_subscribe_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_subscribe_request(self, data: Any) -> dict[str, Any]:
         """Send a subscribe request."""
         return await self.transport.send_request(
             "resources/subscribe", self._extract_params(data)
         )
 
-    async def _send_unsubscribe_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_unsubscribe_request(self, data: Any) -> dict[str, Any]:
         """Send an unsubscribe request."""
         return await self.transport.send_request(
             "resources/unsubscribe", self._extract_params(data)
         )
 
-    async def _send_complete_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_complete_request(self, data: Any) -> dict[str, Any]:
         """Send a complete request."""
         return await self.transport.send_request(
             "completion/complete", self._extract_params(data)
         )
 
-    async def _send_generic_request(self, data: Any) -> Dict[str, Any]:
+    async def _send_generic_request(self, data: Any) -> dict[str, Any]:
         """Send a generic JSON-RPC request."""
         method = data.get("method") if isinstance(data, dict) else None
         if not isinstance(method, str) or not method:

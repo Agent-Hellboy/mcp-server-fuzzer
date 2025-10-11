@@ -2,7 +2,7 @@
 import argparse
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any
 
 from rich.console import Console
 
@@ -12,7 +12,6 @@ from ..safety_system.safety import (
     load_safety_plugin,
 )
 from ..config import config
-
 
 def create_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -354,11 +353,9 @@ Examples:
 
     return parser
 
-
 def parse_arguments() -> argparse.Namespace:
     parser = create_argument_parser()
     return parser.parse_args()
-
 
 def setup_logging(args: argparse.Namespace) -> None:
     if getattr(args, "log_level", None):
@@ -381,8 +378,7 @@ def setup_logging(args: argparse.Namespace) -> None:
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("psutil").setLevel(logging.WARNING)
 
-
-def build_unified_client_args(args: argparse.Namespace) -> Dict[str, Any]:
+def build_unified_client_args(args: argparse.Namespace) -> dict[str, Any]:
     client_args = {
         "mode": args.mode,
         "phase": args.phase,
@@ -442,7 +438,6 @@ def build_unified_client_args(args: argparse.Namespace) -> Dict[str, Any]:
 
     return client_args
 
-
 def print_startup_info(args: argparse.Namespace) -> None:
     # Resolve Console via package so tests can patch mcp_fuzzer.cli.Console
     cli_module = sys.modules.get("mcp_fuzzer.cli")
@@ -452,8 +447,7 @@ def print_startup_info(args: argparse.Namespace) -> None:
     console.print(f"Protocol: {args.protocol.upper()}")
     console.print(f"Endpoint: {args.endpoint}")
 
-
-def get_cli_config() -> Dict[str, Any]:
+def get_cli_config() -> dict[str, Any]:
     """Get CLI configuration as a dictionary for external callers/tests.
 
     Resolve helpers through the package namespace so unit tests patching
@@ -589,7 +583,6 @@ def get_cli_config() -> Dict[str, Any]:
         "export_html": getattr(args, "export_html", None),
         "export_markdown": getattr(args, "export_markdown", None),
     }
-
 
 def validate_arguments(args: argparse.Namespace) -> None:
     # Check if this is a utility command that doesn't need endpoint

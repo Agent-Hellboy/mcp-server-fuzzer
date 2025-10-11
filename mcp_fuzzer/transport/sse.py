@@ -1,12 +1,11 @@
 import json
 import logging
-from typing import Any, Dict, Optional, List
+from typing import Any
 
 import httpx
 
 from .base import TransportProtocol
 from ..safety_system.policy import is_host_allowed, sanitize_headers
-
 
 class SSETransport(TransportProtocol):
     def __init__(self, url: str, timeout: float = 30.0):
@@ -18,13 +17,13 @@ class SSETransport(TransportProtocol):
         }
 
     async def send_request(
-        self, method: str, params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, method: str, params: dict[str, Any | None] = None
+    ) -> dict[str, Any]:
         # SSE transport does not support non-streaming requests via send_request.
         # Use stream-based APIs instead (e.g., _stream_request).
         raise NotImplementedError("SSETransport does not support send_request")
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+    async def send_raw(self, payload: dict[str, Any]) -> Any:
         async with httpx.AsyncClient(
             timeout=self.timeout,
             follow_redirects=False,
@@ -37,9 +36,9 @@ class SSETransport(TransportProtocol):
             safe_headers = sanitize_headers(self.headers)
             response = await client.post(self.url, json=payload, headers=safe_headers)
             response.raise_for_status()
-            buffer: List[str] = []
+            buffer: list[str] = []
 
-            def flush_once() -> Optional[Dict[str, Any]]:
+            def flush_once() -> dict[str, Any | None]:
                 if not buffer:
                     return None
                 event_text = "\n".join(buffer)
@@ -77,7 +76,7 @@ class SSETransport(TransportProtocol):
             raise Exception("No valid SSE response received")
 
     async def send_notification(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] = None
     ) -> None:
         payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
         async with httpx.AsyncClient(
@@ -93,7 +92,7 @@ class SSETransport(TransportProtocol):
             response = await client.post(self.url, json=payload, headers=safe_headers)
             response.raise_for_status()
 
-    async def _stream_request(self, payload: Dict[str, Any]):
+    async def _stream_request(self, payload: dict[str, Any]):
         """Stream a request via SSE and yield parsed events.
 
         Args:
@@ -188,7 +187,7 @@ class SSETransport(TransportProtocol):
                         logging.error("Failed to parse SSE event payload as JSON")
 
     @staticmethod
-    def _parse_sse_event(event_text: str) -> Optional[Dict[str, Any]]:
+    def _parse_sse_event(event_text: str) -> dict[str, Any | None]:
         """Parse a single SSE event text into a JSON object.
 
         The input may contain multiple lines such as "event:", "data:", or
@@ -201,7 +200,7 @@ class SSETransport(TransportProtocol):
         if not event_text:
             return None
 
-        data_parts: List[str] = []
+        data_parts: list[str] = []
         for raw_line in event_text.splitlines():
             line = raw_line.strip()
             if not line:

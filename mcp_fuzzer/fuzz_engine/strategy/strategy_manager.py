@@ -6,7 +6,7 @@ This module provides a unified interface for managing fuzzing strategies.
 It handles the dispatch between realistic and aggressive phases.
 """
 
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Callable
 import random
 
 from .realistic import (
@@ -27,7 +27,6 @@ from .aggressive import (
     fuzz_initialize_request_aggressive,
     get_protocol_fuzzer_method as get_aggressive_fuzzer_method,
 )
-
 
 class ProtocolStrategies:
     """Unified protocol strategies with two-phase approach."""
@@ -83,7 +82,7 @@ class ProtocolStrategies:
     def get_protocol_fuzzer_method(
         protocol_type: str,
         phase: str = "aggressive",
-    ) -> Optional[Callable[[], Dict[str, Any]]]:
+    ) -> Callable[[], dict[str, Any]] | None:
         """
         Get the fuzzer method for a specific protocol type and phase.
 
@@ -104,12 +103,12 @@ class ProtocolStrategies:
 
     @staticmethod
     def generate_batch_request(
-        protocol_types: Optional[List[str]] = None,
+        protocol_types: list[str | None] = None,
         phase: str = "aggressive",
         min_batch_size: int = 2,
         max_batch_size: int = 5,
         include_notifications: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Generate a batch of JSON-RPC requests/notifications.
 
@@ -193,7 +192,7 @@ class ProtocolStrategies:
         return batch
 
     @staticmethod
-    def fuzz_initialize_request(phase: str = "aggressive") -> Dict[str, Any]:
+    def fuzz_initialize_request(phase: str = "aggressive") -> dict[str, Any]:
         """
         Generate a fuzzed initialize request.
 
@@ -213,8 +212,8 @@ class ProtocolStrategies:
 
     @staticmethod
     def generate_out_of_order_batch(
-        protocol_types: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        protocol_types: list[str | None] = None,
+    ) -> list[dict[str, Any]]:
         """
         Generate a batch with deliberately out-of-order IDs to test server handling.
 
@@ -236,7 +235,6 @@ class ProtocolStrategies:
 
         return batch
 
-
 class ToolStrategies:
     """Unified tool strategies with two-phase approach."""
 
@@ -245,8 +243,8 @@ class ToolStrategies:
 
     @staticmethod
     async def fuzz_tool_arguments(
-        tool: Dict[str, Any], phase: str = "aggressive"
-    ) -> Dict[str, Any]:
+        tool: dict[str, Any], phase: str = "aggressive"
+    ) -> dict[str, Any]:
         """Generate fuzzed tool arguments based on phase."""
         if phase == ToolStrategies.REALISTIC_PHASE:
             return await fuzz_tool_arguments_realistic(tool)

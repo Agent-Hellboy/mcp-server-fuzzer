@@ -1,6 +1,5 @@
 import json
 import os
-from typing import Dict
 
 from .manager import AuthManager
 from .providers import (
@@ -9,7 +8,6 @@ from .providers import (
     create_oauth_auth,
     create_custom_header_auth,
 )
-
 
 def setup_auth_from_env() -> AuthManager:
     auth_manager = AuthManager()
@@ -32,7 +30,7 @@ def setup_auth_from_env() -> AuthManager:
         try:
             headers_json = json.loads(custom_headers)
             if isinstance(headers_json, dict):
-                headers: Dict[str, str] = {
+                headers: dict[str, str] = {
                     str(k): str(v) for k, v in headers_json.items()
                 }
                 auth_manager.add_auth_provider(
@@ -54,7 +52,6 @@ def setup_auth_from_env() -> AuthManager:
             pass
 
     return auth_manager
-
 
 def load_auth_config(config_file: str) -> AuthManager:
     auth_manager = AuthManager()
@@ -95,7 +92,7 @@ def load_auth_config(config_file: str) -> AuthManager:
             headers = provider_config.get("headers")
             if not isinstance(headers, dict):
                 raise ValueError(f"Provider '{name}' custom headers must be a dict")
-            headers_str: Dict[str, str] = {str(k): str(v) for k, v in headers.items()}
+            headers_str: dict[str, str] = {str(k): str(v) for k, v in headers.items()}
             auth_manager.add_auth_provider(name, create_custom_header_auth(headers_str))
         else:
             raise ValueError(f"Unknown provider type: {provider_type}")

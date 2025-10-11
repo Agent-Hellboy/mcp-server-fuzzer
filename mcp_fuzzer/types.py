@@ -6,70 +6,64 @@ This module provides TypedDict definitions and other type structures
 to improve type safety throughout the codebase.
 """
 
-from typing import Any, Dict, List, Optional, TypedDict, Union
+from typing import Any, TypedDict
 
 # JSON container types
-JSONContainer = Union[Dict[str, Any], List[Any]]
-
+JSONContainer = dict[str | Any, list[Any]]
 
 class FuzzDataResult(TypedDict, total=False):
     """TypedDict for fuzzing results data structure."""
 
-    fuzz_data: Dict[str, Any]
+    fuzz_data: dict[str, Any]
     success: bool
     # Absent when no response was captured; None when explicitly captured as null
-    server_response: Optional[JSONContainer]
-    server_error: Optional[str]
+    server_response: JSONContainer | None
+    server_error: str | None
     server_rejected_input: bool
     run: int
     protocol_type: str
-    exception: Optional[str]
-    invariant_violations: List[str]
-
+    exception: str | None
+    invariant_violations: list[str]
 
 class ProtocolFuzzResult(TypedDict, total=False):
     """TypedDict for protocol fuzzing results."""
 
-    fuzz_data: Dict[str, Any]
-    result: Dict[str, Any]
+    fuzz_data: dict[str, Any]
+    result: dict[str, Any]
     safety_blocked: bool
     safety_sanitized: bool
     success: bool
-    exception: Optional[str]
-    traceback: Optional[str]
-
+    exception: str | None
+    traceback: str | None
 
 class ToolFuzzResult(TypedDict, total=False):
     """TypedDict for tool fuzzing results."""
 
-    args: Dict[str, Any]
-    result: Dict[str, Any]
+    args: dict[str, Any]
+    result: dict[str, Any]
     safety_blocked: bool
     safety_sanitized: bool
     success: bool
-    exception: Optional[str]
-    traceback: Optional[str]
-    error: Optional[str]
-
+    exception: str | None
+    traceback: str | None
+    error: str | None
 
 class BatchExecutionResult(TypedDict):
     """TypedDict for batch execution results."""
 
-    results: List[Dict[str, Any]]
-    errors: List[Exception]
+    results: list[dict[str, Any]]
+    errors: list[Exception]
     execution_time: float
     completed: int
     failed: int
-
 
 class SafetyCheckResult(TypedDict):
     """TypedDict for safety check results."""
 
     blocked: bool
     sanitized: bool
-    blocking_reason: Optional[str]
+    blocking_reason: str | None
     data: Any
-
 
 class TransportStats(TypedDict, total=False):
     """TypedDict for transport statistics."""
@@ -81,9 +75,8 @@ class TransportStats(TypedDict, total=False):
     network_errors: int
     average_response_time: float
     last_activity: float
-    process_id: Optional[int]
+    process_id: int | None
     active: bool
-
 
 # Constants for timeouts and other magic numbers
 DEFAULT_TIMEOUT = 30.0  # seconds

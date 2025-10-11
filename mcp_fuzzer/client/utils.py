@@ -7,10 +7,9 @@ This module provides utility functions for the MCP Fuzzer client.
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-
-def get_tool_name(tool: Dict[str, Any]) -> str:
+def get_tool_name(tool: dict[str, Any]) -> str:
     """
     Get the name of a tool, with fallback to 'unknown'.
 
@@ -22,8 +21,7 @@ def get_tool_name(tool: Dict[str, Any]) -> str:
     """
     return tool.get("name", "unknown")
 
-
-def create_error_result(error_message: str) -> Dict[str, Any]:
+def create_error_result(error_message: str) -> dict[str, Any]:
     """
     Create a standardized error result.
 
@@ -38,8 +36,7 @@ def create_error_result(error_message: str) -> Dict[str, Any]:
         "success": False,
     }
 
-
-def calculate_success_rate(results: List[Dict[str, Any]]) -> float:
+def calculate_success_rate(results: list[dict[str, Any]]) -> float:
     """
     Calculate success rate from a list of results.
 
@@ -55,9 +52,8 @@ def calculate_success_rate(results: List[Dict[str, Any]]) -> float:
     successful = sum(1 for r in results if r.get("success", False))
     return successful / len(results)
 
-
 async def with_timeout(
-    coro, timeout: Optional[float] = None, default_result: Any = None
+    coro, timeout: float | None = None, default_result: Any = None
 ) -> Any:
     """
     Run a coroutine with a timeout.

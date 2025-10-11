@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 from ..config import (
@@ -29,14 +29,12 @@ from ..safety_system.policy import (
     sanitize_headers,
 )
 
-
 # Back-compat local aliases (referenced by tests)
 MCP_SESSION_ID = MCP_SESSION_ID_HEADER
 MCP_PROTOCOL_VERSION = MCP_PROTOCOL_VERSION_HEADER
 CONTENT_TYPE = CONTENT_TYPE_HEADER
 JSON_CT = JSON_CONTENT_TYPE
 SSE_CT = SSE_CONTENT_TYPE
-
 
 class StreamableHTTPTransport(TransportProtocol):
     """Streamable HTTP transport with basic SSE support and session headers.
@@ -51,11 +49,11 @@ class StreamableHTTPTransport(TransportProtocol):
         self,
         url: str,
         timeout: float = DEFAULT_TIMEOUT,
-        auth_headers: Optional[Dict[str, str]] = None,
+        auth_headers: dict[str, str | None] = None,
     ):
         self.url = url
         self.timeout = timeout
-        self.headers: Dict[str, str] = {
+        self.headers: dict[str, str] = {
             "Accept": DEFAULT_HTTP_ACCEPT,
             "Content-Type": JSON_CT,
         }
@@ -63,13 +61,13 @@ class StreamableHTTPTransport(TransportProtocol):
             self.headers.update(auth_headers)
 
         self._logger = logging.getLogger(__name__)
-        self.session_id: Optional[str] = None
-        self.protocol_version: Optional[str] = None
+        self.session_id: str | None = None
+        self.protocol_version: str | None = None
         self._initialized: bool = False
         self._init_lock: asyncio.Lock = asyncio.Lock()
         self._initializing: bool = False
 
-    def _prepare_headers(self) -> Dict[str, str]:
+    def _prepare_headers(self) -> dict[str, str]:
         headers = dict(self.headers)
         if self.session_id:
             headers[MCP_SESSION_ID] = self.session_id
@@ -97,7 +95,7 @@ class StreamableHTTPTransport(TransportProtocol):
     async def _parse_sse_response(self, response: httpx.Response) -> Any:
         """Parse SSE stream and return on first JSON-RPC response/error."""
         # Basic SSE parser: accumulate fields until blank line
-        event: Dict[str, Any] = {"event": "message", "data": []}
+        event: dict[str, Any] = {"event": "message", "data": []}
         async for line in response.aiter_lines():
             if line == "":
                 # dispatch event
@@ -139,7 +137,7 @@ class StreamableHTTPTransport(TransportProtocol):
         # If we exit loop without a response, return None
         return None
 
-    def _resolve_redirect(self, response: httpx.Response) -> Optional[str]:
+    def _resolve_redirect(self, response: httpx.Response) -> str | None:
         redirect_codes = (HTTP_REDIRECT_TEMPORARY, HTTP_REDIRECT_PERMANENT)
         if response.status_code not in redirect_codes:
             return None
@@ -159,7 +157,7 @@ class StreamableHTTPTransport(TransportProtocol):
         return response.headers.get(CONTENT_TYPE, "").lower()
 
     async def send_request(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] = None
     ) -> Any:
         request_id = str(asyncio.get_running_loop().time())
         payload = {
@@ -170,7 +168,7 @@ class StreamableHTTPTransport(TransportProtocol):
         }
         return await self.send_raw(payload)
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+    async def send_raw(self, payload: dict[str, Any]) -> Any:
         # Ensure MCP initialization handshake once per session
         try:
             method = payload.get("method")
@@ -278,7 +276,7 @@ class StreamableHTTPTransport(TransportProtocol):
             raise Exception(f"Unexpected content type: {ct}")
 
     async def send_notification(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] = None
     ) -> None:
         payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
         headers = self._prepare_headers()
@@ -333,8 +331,8 @@ class StreamableHTTPTransport(TransportProtocol):
         self,
         client: httpx.AsyncClient,
         url: str,
-        json: Dict[str, Any],
-        headers: Dict[str, str],
+        json: dict[str, Any],
+        headers: dict[str, str],
         retries: int = 2,  # Default max retries
     ) -> httpx.Response:
         """POST with simple exponential backoff for transient network errors."""
@@ -369,7 +367,7 @@ class StreamableHTTPTransport(TransportProtocol):
                 delay *= 2
                 attempt += 1
 
-    async def _stream_request(self, payload: Dict[str, Any]):
+    async def _stream_request(self, payload: dict[str, Any]):
         """Stream a request and yield parsed JSON or SSE data lines.
 
         This mirrors the logic used in HTTPTransport._stream_request but adapted

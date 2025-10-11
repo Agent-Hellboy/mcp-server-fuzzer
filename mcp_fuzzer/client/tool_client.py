@@ -7,7 +7,7 @@ This module provides functionality for fuzzing MCP tools.
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..auth import AuthManager
 from ..fuzz_engine.fuzzer import ToolFuzzer
@@ -19,15 +19,14 @@ from ..config import (
     DEFAULT_FORCE_KILL_TIMEOUT,
 )
 
-
 class ToolClient:
     """Client for fuzzing MCP tools."""
 
     def __init__(
         self,
         transport,
-        auth_manager: Optional[AuthManager] = None,
-        safety_system: Optional[SafetyProvider] = None,
+        auth_manager: AuthManager | None = None,
+        safety_system: SafetyProvider | None = None,
         max_concurrency: int = 5,
     ):
         """
@@ -45,7 +44,7 @@ class ToolClient:
         self.tool_fuzzer = ToolFuzzer(max_concurrency=max_concurrency)
         self._logger = logging.getLogger(__name__)
 
-    async def _get_tools_from_server(self) -> List[Dict[str, Any]]:
+    async def _get_tools_from_server(self) -> list[dict[str, Any]]:
         """Get tools from the server.
 
         Returns:
@@ -64,10 +63,10 @@ class ToolClient:
 
     async def _fuzz_single_tool_with_timeout(
         self,
-        tool: Dict[str, Any],
+        tool: dict[str, Any],
         runs_per_tool: int,
-        tool_timeout: Optional[float] = None,
-    ) -> List[Dict[str, Any]]:
+        tool_timeout: float | None = None,
+    ) -> list[dict[str, Any]]:
         """Fuzz a single tool with timeout handling.
 
         Args:
@@ -114,10 +113,10 @@ class ToolClient:
 
     async def fuzz_tool(
         self,
-        tool: Dict[str, Any],
+        tool: dict[str, Any],
         runs: int = DEFAULT_TOOL_RUNS,
-        tool_timeout: Optional[float] = None,
-    ) -> List[Dict[str, Any]]:
+        tool_timeout: float | None = None,
+    ) -> list[dict[str, Any]]:
         """Fuzz a tool by calling it with random/edge-case arguments."""
         results = []
         tool_name = tool.get("name", "unknown")
@@ -212,8 +211,8 @@ class ToolClient:
     async def fuzz_all_tools(
         self,
         runs_per_tool: int = DEFAULT_TOOL_RUNS,
-        tool_timeout: Optional[float] = None,
-    ) -> Dict[str, List[Dict[str, Any]]]:
+        tool_timeout: float | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
         """Fuzz all tools from the server."""
         tools = await self._get_tools_from_server()
         if not tools:
@@ -255,7 +254,7 @@ class ToolClient:
         return all_results
 
     def _print_phase_report(
-        self, tool_name: str, phase: str, results: List[Dict[str, Any]]
+        self, tool_name: str, phase: str, results: list[dict[str, Any]]
     ):
         """Print phase report statistics."""
         from ..reports import FuzzerReporter
@@ -272,8 +271,8 @@ class ToolClient:
         )
 
     async def _fuzz_single_tool_both_phases(
-        self, tool: Dict[str, Any], runs_per_phase: int
-    ) -> Dict[str, Any]:
+        self, tool: dict[str, Any], runs_per_phase: int
+    ) -> dict[str, Any]:
         """Fuzz a single tool in both phases and report results."""
         tool_name = tool.get("name", "unknown")
 
@@ -297,8 +296,8 @@ class ToolClient:
             return {"error": str(e)}
 
     async def fuzz_tool_both_phases(
-        self, tool: Dict[str, Any], runs_per_phase: int = 5
-    ) -> Dict[str, List[Dict[str, Any]]]:
+        self, tool: dict[str, Any], runs_per_phase: int = 5
+    ) -> dict[str, list[dict[str, Any]]]:
         """Fuzz a specific tool in both realistic and aggressive phases."""
         tool_name = tool.get("name", "unknown")
         self._logger.info(f"Starting two-phase fuzzing for tool: {tool_name}")
@@ -453,7 +452,7 @@ class ToolClient:
 
     async def fuzz_all_tools_both_phases(
         self, runs_per_phase: int = 5
-    ) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+    ) -> dict[str, dict[str, list[dict[str, Any]]]]:
         """Fuzz all tools in both realistic and aggressive phases."""
         # Use reporter for output instead of console
         self._logger.info("Starting Two-Phase Tool Fuzzing")

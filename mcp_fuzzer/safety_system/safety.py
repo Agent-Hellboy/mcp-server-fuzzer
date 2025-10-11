@@ -12,7 +12,7 @@ is handled by the system_blocker module.
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, Protocol, runtime_checkable, Union
+from typing import Any, Protocol, runtime_checkable
 
 import emoji
 
@@ -29,16 +29,16 @@ from .patterns import (
 class SafetyProvider(Protocol):
     """Protocol for pluggable safety providers."""
 
-    def set_fs_root(self, root: Union[str, Path]) -> None: ...
+    def set_fs_root(self, root: str | Path) -> None: ...
     def sanitize_tool_arguments(
-        self, tool_name: str, arguments: Dict[str, Any]
-    ) -> Dict[str, Any]: ...
+        self, tool_name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]: ...
     def should_skip_tool_call(
-        self, tool_name: str, arguments: Dict[str, Any]
+        self, tool_name: str, arguments: dict[str, Any]
     ) -> bool: ...
-    def create_safe_mock_response(self, tool_name: str) -> Dict[str, Any]: ...
+    def create_safe_mock_response(self, tool_name: str) -> dict[str, Any]: ...
     def log_blocked_operation(
-        self, tool_name: str, arguments: Dict[str, Any], reason: str
+        self, tool_name: str, arguments: dict[str, Any], reason: str
     ) -> None: ...
 
 
@@ -70,7 +70,7 @@ class SafetyFilter(SafetyProvider):
 
         # Track blocked operations for testing and analysis
         self.blocked_operations = []
-        self._fs_root: Union[Path, None] = None
+        self._fs_root: Path | None = None
 
     def set_fs_root(self, root: str | Path) -> None:
         """Initialize filesystem sandbox with the specified root directory."""
@@ -127,8 +127,8 @@ class SafetyFilter(SafetyProvider):
         return False
 
     def sanitize_tool_arguments(
-        self, tool_name: str, arguments: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, tool_name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
         """Sanitize tool arguments to remove dangerous content and enforce 
         filesystem sandbox."""
         if not arguments:
@@ -145,8 +145,8 @@ class SafetyFilter(SafetyProvider):
         return sanitized_args
 
     def _sanitize_filesystem_paths(
-        self, arguments: Dict[str, Any], tool_name: str
-    ) -> Dict[str, Any]:
+        self, arguments: dict[str, Any], tool_name: str
+    ) -> dict[str, Any]:
         """Sanitize filesystem paths to ensure they're within the sandbox."""
         sandbox = get_sandbox()
         if not sandbox:
@@ -272,7 +272,7 @@ class SafetyFilter(SafetyProvider):
 
         return value
 
-    def should_skip_tool_call(self, tool_name: str, arguments: Dict[str, Any]) -> bool:
+    def should_skip_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> bool:
         """
         Determine if a tool call should be completely skipped based on
         dangerous content in arguments.
@@ -316,7 +316,7 @@ class SafetyFilter(SafetyProvider):
 
         return False
 
-    def create_safe_mock_response(self, tool_name: str) -> Dict[str, Any]:
+    def create_safe_mock_response(self, tool_name: str) -> dict[str, Any]:
         """Create a safe mock response for blocked tool calls."""
         return {
             "error": {
@@ -332,7 +332,7 @@ class SafetyFilter(SafetyProvider):
         }
 
     def log_blocked_operation(
-        self, tool_name: str, arguments: Dict[str, Any], reason: str
+        self, tool_name: str, arguments: dict[str, Any], reason: str
     ):
         """Log details about blocked operations for analysis."""
         # Enhanced logging with more structure
@@ -414,7 +414,7 @@ class SafetyFilter(SafetyProvider):
 
         return datetime.now().isoformat()
 
-    def get_blocked_operations_summary(self) -> Dict[str, Any]:
+    def get_blocked_operations_summary(self) -> dict[str, Any]:
         """Get a summary of all blocked operations for reporting."""
         if not self.blocked_operations:
             return {"total_blocked": 0, "tools_blocked": {}, "reasons": {}}
@@ -473,7 +473,7 @@ def load_safety_plugin(dotted_path: str) -> None:
     import importlib
 
     module = importlib.import_module(dotted_path)
-    provider: Union[SafetyProvider, None] = None
+    provider: SafetyProvider | None = None
     if hasattr(module, "get_safety"):
         provider = getattr(module, "get_safety")()
     elif hasattr(module, "safety"):
@@ -489,24 +489,24 @@ def disable_safety() -> None:
     """Disable safety by installing a no-op provider."""
 
     class _NoopSafety(SafetyProvider):
-        def set_fs_root(self, root: Union[str, Path]) -> None:  # noqa: ARG002
+        def set_fs_root(self, root: str | Path) -> None:  # noqa: ARG002
             return
 
         def sanitize_tool_arguments(
-            self, tool_name: str, arguments: Dict[str, Any]
-        ) -> Dict[str, Any]:  # noqa: ARG002
+            self, tool_name: str, arguments: dict[str, Any]
+        ) -> dict[str, Any]:  # noqa: ARG002
             return arguments
 
         def should_skip_tool_call(
-            self, tool_name: str, arguments: Dict[str, Any]
+            self, tool_name: str, arguments: dict[str, Any]
         ) -> bool:  # noqa: ARG002
             return False
 
-        def create_safe_mock_response(self, tool_name: str) -> Dict[str, Any]:  # noqa: ARG002
+        def create_safe_mock_response(self, tool_name: str) -> dict[str, Any]:  # noqa: ARG002
             return {"result": {"content": [{"text": "[SAFETY DISABLED]"}]}}
 
         def log_blocked_operation(
-            self, tool_name: str, arguments: Dict[str, Any], reason: str
+            self, tool_name: str, arguments: dict[str, Any], reason: str
         ) -> None:  # noqa: ARG002
             logging.warning("SAFETY DISABLED: %s", reason)
 
@@ -514,18 +514,18 @@ def disable_safety() -> None:
 
 
 # Backwards-compatible helpers
-def is_safe_tool_call(tool_name: str, arguments: Dict[str, Any]) -> bool:
+def is_safe_tool_call(tool_name: str, arguments: dict[str, Any]) -> bool:
     return not _current_safety.should_skip_tool_call(tool_name, arguments)
 
 
 def sanitize_tool_call(
-    tool_name: str, arguments: Dict[str, Any]
-) -> tuple[str, Dict[str, Any]]:
+    tool_name: str, arguments: dict[str, Any]
+) -> tuple[str, dict[str, Any]]:
     sanitized_args = _current_safety.sanitize_tool_arguments(tool_name, arguments)
     return tool_name, sanitized_args
 
 
-def create_safety_response(tool_name: str) -> Dict[str, Any]:
+def create_safety_response(tool_name: str) -> dict[str, Any]:
     return _current_safety.create_safe_mock_response(tool_name)
 
 

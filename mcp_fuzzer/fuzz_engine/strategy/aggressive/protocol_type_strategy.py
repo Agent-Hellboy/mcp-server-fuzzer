@@ -8,7 +8,7 @@ robustness with attack vectors.
 """
 
 import random
-from typing import Any, Dict
+from typing import Any
 
 # Attack payloads from tool strategy
 SQL_INJECTION = [
@@ -62,7 +62,6 @@ OVERFLOW_VALUES = [
     "漢" * 1000,  # Unicode
 ]
 
-
 def generate_malicious_string() -> str:
     """Generate malicious string values for aggressive testing."""
     strategies = [
@@ -79,12 +78,10 @@ def generate_malicious_string() -> str:
 
     return random.choice(strategies)()
 
-
 def choice_lazy(options):
     """Lazy choice that only evaluates the selected option."""
     picked = random.choice(options)
     return picked() if callable(picked) else picked
-
 
 def generate_malicious_value() -> Any:
     """Generate malicious values of various types."""
@@ -112,7 +109,6 @@ def generate_malicious_value() -> Any:
         lambda: [generate_malicious_string()],
         lambda: {"evil": generate_malicious_string()},
     ])
-
 
 def generate_experimental_payload():
     """Generate experimental capability payloads lazily."""
@@ -147,8 +143,7 @@ def generate_experimental_payload():
         {"config": {"debug": False, "verbose": True}},
     ])
 
-
-def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
+def fuzz_initialize_request_aggressive() -> dict[str, Any]:
     """Generate aggressive InitializeRequest for security/robustness testing."""
     # Malicious protocol versions
     malicious_versions = [
@@ -315,8 +310,7 @@ def fuzz_initialize_request_aggressive() -> Dict[str, Any]:
 
     return base_request
 
-
-def fuzz_progress_notification() -> Dict[str, Any]:
+def fuzz_progress_notification() -> dict[str, Any]:
     """Fuzz ProgressNotification with edge cases."""
     # Generate AGGRESSIVE progress tokens to break things
     progress_token_options = [
@@ -343,8 +337,7 @@ def fuzz_progress_notification() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_cancel_notification() -> Dict[str, Any]:
+def fuzz_cancel_notification() -> dict[str, Any]:
     """Fuzz CancelNotification with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -355,8 +348,7 @@ def fuzz_cancel_notification() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_list_resources_request() -> Dict[str, Any]:
+def fuzz_list_resources_request() -> dict[str, Any]:
     """Fuzz ListResourcesRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -368,8 +360,7 @@ def fuzz_list_resources_request() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_read_resource_request() -> Dict[str, Any]:
+def fuzz_read_resource_request() -> dict[str, Any]:
     """Fuzz ReadResourceRequest with edge cases."""
     malicious_uris = [
         "file:///etc/passwd",
@@ -391,8 +382,7 @@ def fuzz_read_resource_request() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_set_level_request() -> Dict[str, Any]:
+def fuzz_set_level_request() -> dict[str, Any]:
     """Fuzz SetLevelRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -401,8 +391,7 @@ def fuzz_set_level_request() -> Dict[str, Any]:
         "params": {"level": generate_malicious_value()},
     }
 
-
-def fuzz_generic_jsonrpc_request() -> Dict[str, Any]:
+def fuzz_generic_jsonrpc_request() -> dict[str, Any]:
     """Fuzz generic JSON-RPC requests with edge cases."""
     return {
         "jsonrpc": random.choice(["2.0", "1.0", "3.0", "invalid", "", None]),
@@ -411,8 +400,7 @@ def fuzz_generic_jsonrpc_request() -> Dict[str, Any]:
         "params": generate_malicious_value(),
     }
 
-
-def fuzz_call_tool_result() -> Dict[str, Any]:
+def fuzz_call_tool_result() -> dict[str, Any]:
     """Fuzz CallToolResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -429,8 +417,7 @@ def fuzz_call_tool_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_sampling_message() -> Dict[str, Any]:
+def fuzz_sampling_message() -> dict[str, Any]:
     """Fuzz SamplingMessage with edge cases."""
     return {
         "role": generate_malicious_string(),
@@ -442,8 +429,7 @@ def fuzz_sampling_message() -> Dict[str, Any]:
         ],
     }
 
-
-def fuzz_create_message_request() -> Dict[str, Any]:
+def fuzz_create_message_request() -> dict[str, Any]:
     """Fuzz CreateMessageRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -461,8 +447,7 @@ def fuzz_create_message_request() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_list_prompts_request() -> Dict[str, Any]:
+def fuzz_list_prompts_request() -> dict[str, Any]:
     """Fuzz ListPromptsRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -474,8 +459,7 @@ def fuzz_list_prompts_request() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_get_prompt_request() -> Dict[str, Any]:
+def fuzz_get_prompt_request() -> dict[str, Any]:
     """Fuzz GetPromptRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -487,8 +471,7 @@ def fuzz_get_prompt_request() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_list_roots_request() -> Dict[str, Any]:
+def fuzz_list_roots_request() -> dict[str, Any]:
     """Fuzz ListRootsRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -497,8 +480,7 @@ def fuzz_list_roots_request() -> Dict[str, Any]:
         "params": {"_meta": generate_malicious_value()},
     }
 
-
-def fuzz_subscribe_request() -> Dict[str, Any]:
+def fuzz_subscribe_request() -> dict[str, Any]:
     """Fuzz SubscribeRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -507,8 +489,7 @@ def fuzz_subscribe_request() -> Dict[str, Any]:
         "params": {"uri": generate_malicious_string()},
     }
 
-
-def fuzz_unsubscribe_request() -> Dict[str, Any]:
+def fuzz_unsubscribe_request() -> dict[str, Any]:
     """Fuzz UnsubscribeRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -517,8 +498,7 @@ def fuzz_unsubscribe_request() -> Dict[str, Any]:
         "params": {"uri": generate_malicious_string()},
     }
 
-
-def fuzz_complete_request() -> Dict[str, Any]:
+def fuzz_complete_request() -> dict[str, Any]:
     """Fuzz CompleteRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -530,8 +510,7 @@ def fuzz_complete_request() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_list_resource_templates_request() -> Dict[str, Any]:
+def fuzz_list_resource_templates_request() -> dict[str, Any]:
     """Fuzz ListResourceTemplatesRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -543,8 +522,7 @@ def fuzz_list_resource_templates_request() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_elicit_request() -> Dict[str, Any]:
+def fuzz_elicit_request() -> dict[str, Any]:
     """Fuzz ElicitRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -556,8 +534,7 @@ def fuzz_elicit_request() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_ping_request() -> Dict[str, Any]:
+def fuzz_ping_request() -> dict[str, Any]:
     """Fuzz PingRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -566,9 +543,8 @@ def fuzz_ping_request() -> Dict[str, Any]:
         "params": generate_malicious_value(),
     }
 
-
 # Result schemas for fuzzing
-def fuzz_initialize_result() -> Dict[str, Any]:
+def fuzz_initialize_result() -> dict[str, Any]:
     """Fuzz InitializeResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -582,8 +558,7 @@ def fuzz_initialize_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_list_resources_result() -> Dict[str, Any]:
+def fuzz_list_resources_result() -> dict[str, Any]:
     """Fuzz ListResourcesResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -598,8 +573,7 @@ def fuzz_list_resources_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_list_resource_templates_result() -> Dict[str, Any]:
+def fuzz_list_resource_templates_result() -> dict[str, Any]:
     """Fuzz ListResourceTemplatesResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -614,8 +588,7 @@ def fuzz_list_resource_templates_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_read_resource_result() -> Dict[str, Any]:
+def fuzz_read_resource_result() -> dict[str, Any]:
     """Fuzz ReadResourceResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -629,8 +602,7 @@ def fuzz_read_resource_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_list_prompts_result() -> Dict[str, Any]:
+def fuzz_list_prompts_result() -> dict[str, Any]:
     """Fuzz ListPromptsResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -645,8 +617,7 @@ def fuzz_list_prompts_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_get_prompt_result() -> Dict[str, Any]:
+def fuzz_get_prompt_result() -> dict[str, Any]:
     """Fuzz GetPromptResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -661,8 +632,7 @@ def fuzz_get_prompt_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_list_tools_result() -> Dict[str, Any]:
+def fuzz_list_tools_result() -> dict[str, Any]:
     """Fuzz ListToolsResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -674,8 +644,7 @@ def fuzz_list_tools_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_complete_result() -> Dict[str, Any]:
+def fuzz_complete_result() -> dict[str, Any]:
     """Fuzz CompleteResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -693,8 +662,7 @@ def fuzz_complete_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_create_message_result() -> Dict[str, Any]:
+def fuzz_create_message_result() -> dict[str, Any]:
     """Fuzz CreateMessageResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -707,8 +675,7 @@ def fuzz_create_message_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_list_roots_result() -> Dict[str, Any]:
+def fuzz_list_roots_result() -> dict[str, Any]:
     """Fuzz ListRootsResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -719,8 +686,7 @@ def fuzz_list_roots_result() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_ping_result() -> Dict[str, Any]:
+def fuzz_ping_result() -> dict[str, Any]:
     """Fuzz PingResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -728,8 +694,7 @@ def fuzz_ping_result() -> Dict[str, Any]:
         "result": generate_malicious_value(),
     }
 
-
-def fuzz_elicit_result() -> Dict[str, Any]:
+def fuzz_elicit_result() -> dict[str, Any]:
     """Fuzz ElicitResult with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -743,9 +708,8 @@ def fuzz_elicit_result() -> Dict[str, Any]:
         },
     }
 
-
 # Notification schemas for fuzzing
-def fuzz_logging_message_notification() -> Dict[str, Any]:
+def fuzz_logging_message_notification() -> dict[str, Any]:
     """Fuzz LoggingMessageNotification with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -758,8 +722,7 @@ def fuzz_logging_message_notification() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_resource_list_changed_notification() -> Dict[str, Any]:
+def fuzz_resource_list_changed_notification() -> dict[str, Any]:
     """Fuzz ResourceListChangedNotification with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -769,8 +732,7 @@ def fuzz_resource_list_changed_notification() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_resource_updated_notification() -> Dict[str, Any]:
+def fuzz_resource_updated_notification() -> dict[str, Any]:
     """Fuzz ResourceUpdatedNotification with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -780,8 +742,7 @@ def fuzz_resource_updated_notification() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_prompt_list_changed_notification() -> Dict[str, Any]:
+def fuzz_prompt_list_changed_notification() -> dict[str, Any]:
     """Fuzz PromptListChangedNotification with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -791,8 +752,7 @@ def fuzz_prompt_list_changed_notification() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_tool_list_changed_notification() -> Dict[str, Any]:
+def fuzz_tool_list_changed_notification() -> dict[str, Any]:
     """Fuzz ToolListChangedNotification with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -802,8 +762,7 @@ def fuzz_tool_list_changed_notification() -> Dict[str, Any]:
         },
     }
 
-
-def fuzz_roots_list_changed_notification() -> Dict[str, Any]:
+def fuzz_roots_list_changed_notification() -> dict[str, Any]:
     """Fuzz RootsListChangedNotification with edge cases."""
     return {
         "jsonrpc": "2.0",
@@ -813,9 +772,8 @@ def fuzz_roots_list_changed_notification() -> Dict[str, Any]:
         },
     }
 
-
 # Content block schemas for fuzzing
-def fuzz_text_content() -> Dict[str, Any]:
+def fuzz_text_content() -> dict[str, Any]:
     """Fuzz TextContent with edge cases."""
     return {
         "type": "text",
@@ -824,8 +782,7 @@ def fuzz_text_content() -> Dict[str, Any]:
         "annotations": generate_malicious_value(),
     }
 
-
-def fuzz_image_content() -> Dict[str, Any]:
+def fuzz_image_content() -> dict[str, Any]:
     """Fuzz ImageContent with edge cases."""
     return {
         "type": "image",
@@ -835,8 +792,7 @@ def fuzz_image_content() -> Dict[str, Any]:
         "annotations": generate_malicious_value(),
     }
 
-
-def fuzz_audio_content() -> Dict[str, Any]:
+def fuzz_audio_content() -> dict[str, Any]:
     """Fuzz AudioContent with edge cases."""
     return {
         "type": "audio",
@@ -846,9 +802,8 @@ def fuzz_audio_content() -> Dict[str, Any]:
         "annotations": generate_malicious_value(),
     }
 
-
 # Resource schemas for fuzzing
-def fuzz_resource() -> Dict[str, Any]:
+def fuzz_resource() -> dict[str, Any]:
     """Fuzz Resource with edge cases."""
     return {
         "name": generate_malicious_string(),
@@ -861,8 +816,7 @@ def fuzz_resource() -> Dict[str, Any]:
         "annotations": generate_malicious_value(),
     }
 
-
-def fuzz_resource_template() -> Dict[str, Any]:
+def fuzz_resource_template() -> dict[str, Any]:
     """Fuzz ResourceTemplate with edge cases."""
     return {
         "name": generate_malicious_string(),
@@ -874,8 +828,7 @@ def fuzz_resource_template() -> Dict[str, Any]:
         "annotations": generate_malicious_value(),
     }
 
-
-def fuzz_text_resource_contents() -> Dict[str, Any]:
+def fuzz_text_resource_contents() -> dict[str, Any]:
     """Fuzz TextResourceContents with edge cases."""
     return {
         "uri": generate_malicious_string(),
@@ -884,8 +837,7 @@ def fuzz_text_resource_contents() -> Dict[str, Any]:
         "_meta": generate_malicious_value(),
     }
 
-
-def fuzz_blob_resource_contents() -> Dict[str, Any]:
+def fuzz_blob_resource_contents() -> dict[str, Any]:
     """Fuzz BlobResourceContents with edge cases."""
     return {
         "uri": generate_malicious_string(),
@@ -894,9 +846,8 @@ def fuzz_blob_resource_contents() -> Dict[str, Any]:
         "_meta": generate_malicious_value(),
     }
 
-
 # Tool schemas for fuzzing
-def fuzz_tool() -> Dict[str, Any]:
+def fuzz_tool() -> dict[str, Any]:
     """Fuzz Tool with edge cases."""
     return {
         "name": generate_malicious_string(),
@@ -907,7 +858,6 @@ def fuzz_tool() -> Dict[str, Any]:
         "_meta": generate_malicious_value(),
         "annotations": generate_malicious_value(),
     }
-
 
 def get_protocol_fuzzer_method(protocol_type: str):
     """Get the fuzzer method for a specific protocol type."""

@@ -8,11 +8,10 @@ safety statistics, and safety data export.
 
 import logging
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from rich.console import Console
 from rich.table import Table
-
 
 class SafetyReporter:
     """Handles all safety system reporting functionality."""
@@ -357,7 +356,7 @@ class SafetyReporter:
         self.console.print("[bold green]\U0001f6e1 Safety Report Complete[/bold green]")
         self.console.print("=" * 80)
 
-    def get_comprehensive_safety_data(self) -> Dict[str, Any]:
+    def get_comprehensive_safety_data(self) -> dict[str, Any]:
         """Get comprehensive safety data for reporting."""
         safety_data = {
             "timestamp": datetime.now().isoformat(),

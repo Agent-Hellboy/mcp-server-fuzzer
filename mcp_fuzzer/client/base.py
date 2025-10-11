@@ -6,7 +6,6 @@ This module provides the base client class for fuzzing MCP servers.
 """
 
 import logging
-from typing import Optional
 
 from ..auth import AuthManager
 from ..reports import FuzzerReporter
@@ -14,7 +13,6 @@ from ..safety_system.safety import SafetyProvider
 
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
-
 
 class MCPFuzzerClient:
     """
@@ -27,10 +25,10 @@ class MCPFuzzerClient:
     def __init__(
         self,
         transport,
-        auth_manager: Optional[AuthManager] = None,
-        tool_timeout: Optional[float] = None,
-        reporter: Optional[FuzzerReporter] = None,
-        safety_system: Optional[SafetyProvider] = None,
+        auth_manager: AuthManager | None = None,
+        tool_timeout: float | None = None,
+        reporter: FuzzerReporter | None = None,
+        safety_system: SafetyProvider | None = None,
         max_concurrency: int = 5,
     ):
         """

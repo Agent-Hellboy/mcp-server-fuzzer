@@ -10,13 +10,12 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 
 class FilesystemSandbox:
     """Filesystem sandbox that restricts file operations to a safe directory."""
 
-    def __init__(self, root_path: Optional[str] = None):
+    def __init__(self, root_path: str | None = None):
         """Initialize the filesystem sandbox.
         
         Args:
@@ -198,10 +197,10 @@ class FilesystemSandbox:
 
 
 # Global sandbox instance
-_sandbox: Optional[FilesystemSandbox] = None
+_sandbox: FilesystemSandbox | None = None
 
 
-def get_sandbox() -> Optional[FilesystemSandbox]:
+def get_sandbox() -> FilesystemSandbox | None:
     """Get the global filesystem sandbox instance.
     
     Returns:
@@ -220,7 +219,7 @@ def set_sandbox(sandbox: FilesystemSandbox) -> None:
     _sandbox = sandbox
 
 
-def initialize_sandbox(root_path: Optional[str] = None) -> FilesystemSandbox:
+def initialize_sandbox(root_path: str | None = None) -> FilesystemSandbox:
     """Initialize the global filesystem sandbox.
     
     Args:

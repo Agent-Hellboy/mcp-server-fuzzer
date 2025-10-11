@@ -10,12 +10,11 @@ import sys
 import inspect
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .base import TransportProtocol
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ..safety_system.policy import sanitize_subprocess_env
-
 
 class StdioTransport(TransportProtocol):
     def __init__(self, command: str, timeout: float = 30.0):
@@ -146,7 +145,7 @@ class StdioTransport(TransportProtocol):
         """Callback for process manager to get last activity timestamp."""
         return self._last_activity
 
-    async def _send_message(self, message: Dict[str, Any]) -> None:
+    async def _send_message(self, message: dict[str, Any]) -> None:
         """Send a message to the subprocess."""
         if not self._initialized:
             await self._ensure_connection()
@@ -161,7 +160,7 @@ class StdioTransport(TransportProtocol):
             self._initialized = False
             raise
 
-    async def _receive_message(self) -> Optional[Dict[str, Any]]:
+    async def _receive_message(self) -> dict[str, Any | None]:
         """Receive a message from the subprocess."""
         if not self._initialized:
             await self._ensure_connection()
@@ -180,7 +179,7 @@ class StdioTransport(TransportProtocol):
             raise
 
     async def send_request(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] = None
     ) -> Any:
         """Send a request and wait for response."""
         request_id = str(uuid.uuid4())
@@ -206,7 +205,7 @@ class StdioTransport(TransportProtocol):
                 result = response.get("result", response)
                 return result if isinstance(result, dict) else {"result": result}
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+    async def send_raw(self, payload: dict[str, Any]) -> Any:
         """Send raw payload and wait for response."""
         await self._send_message(payload)
 
@@ -222,7 +221,7 @@ class StdioTransport(TransportProtocol):
         result = response.get("result", response)
         return result if isinstance(result, dict) else {"result": result}
 
-    async def _send_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _send_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Compatibility method for tests expecting sys-based stdio behavior.
 
         Writes the request to module-level sys.stdout and reads a single line
@@ -242,7 +241,7 @@ class StdioTransport(TransportProtocol):
         return json.loads(line)
 
     async def send_notification(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] = None
     ) -> None:
         """Send a notification (no response expected)."""
         message = {
@@ -252,7 +251,7 @@ class StdioTransport(TransportProtocol):
         }
         await self._send_message(message)
 
-    async def _stream_request(self, payload: Dict[str, Any]):
+    async def _stream_request(self, payload: dict[str, Any]):
         """Compatibility streaming: write once, then yield each stdin line as JSON.
 
         This mirrors how tests patch the module's sys.stdin/stdout to simulate
@@ -321,7 +320,7 @@ class StdioTransport(TransportProtocol):
             self.stdout = None
             self.stderr = None
 
-    async def get_process_stats(self) -> Dict[str, Any]:
+    async def get_process_stats(self) -> dict[str, Any]:
         """Get statistics about the managed process."""
         return await self._get_process_manager().get_stats()
 

@@ -23,22 +23,21 @@ mode intentionally generates edge cases and invalid data to test error handling.
 import random
 import string
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any
 
 # Maximum depth for recursive parsing
 MAX_RECURSION_DEPTH = 5
 
-
-def _merge_allOf(schemas: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Deep merge for allOf schemas.
 
     Combines properties and required fields, intersects types,
     and applies the most restrictive constraints (max of minimums, min of maximums).
     """
-    merged: Dict[str, Any] = {}
-    props: Dict[str, Any] = {}
-    required: List[str] = []
+    merged: dict[str, Any] = {}
+    props: dict[str, Any] = {}
+    required: list[str] = []
     merged_types = None  # track intersection of declared types
 
     # Track min/max constraint values
@@ -128,9 +127,8 @@ def _merge_allOf(schemas: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     return merged
 
-
 def make_fuzz_strategy_from_jsonschema(
-    schema: Dict[str, Any],
+    schema: dict[str, Any],
     phase: str = "realistic",
     recursion_depth: int = 0,
 ) -> Any:
@@ -228,8 +226,7 @@ def make_fuzz_strategy_from_jsonschema(
     # Default fallback
     return _generate_default_value(phase)
 
-
-def _handle_enum(enum_values: List[Any], phase: str) -> Any:
+def _handle_enum(enum_values: list[Any], phase: str) -> Any:
     """Handle enum values in schema."""
     if phase == "realistic":
         # In realistic mode, simply choose from the enum values
@@ -262,10 +259,9 @@ def _handle_enum(enum_values: List[Any], phase: str) -> Any:
             else:
                 return "INVALID_ENUM_VALUE"
 
-
 def _handle_object_type(
-    schema: Dict[str, Any], phase: str, recursion_depth: int
-) -> Dict[str, Any]:
+    schema: dict[str, Any], phase: str, recursion_depth: int
+) -> dict[str, Any]:
     """Handle object type schema."""
     result = {}
 
@@ -318,10 +314,9 @@ def _handle_object_type(
 
     return result
 
-
 def _handle_array_type(
-    schema: Dict[str, Any], phase: str, recursion_depth: int
-) -> List[Any]:
+    schema: dict[str, Any], phase: str, recursion_depth: int
+) -> list[Any]:
     """Handle array type schema."""
     items_schema = schema.get("items", {})
 
@@ -398,8 +393,7 @@ def _handle_array_type(
 
     return result
 
-
-def _handle_string_type(schema: Dict[str, Any], phase: str) -> str:
+def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
     """Handle string type schema."""
     # Handle string constraints
     min_length = max(0, int(schema.get("minLength", 0)))
@@ -453,7 +447,6 @@ def _handle_string_type(schema: Dict[str, Any], phase: str) -> str:
                 "mixed123!@#",  # Special characters
             ]
             return random.choice(edge_cases)
-
 
 def _handle_string_format(format_type: str, phase: str) -> str:
     """Handle specific string formats."""
@@ -556,7 +549,6 @@ def _handle_string_format(format_type: str, phase: str) -> str:
     # Default: treat as regular string
     return _handle_string_type({"type": "string"}, phase)
 
-
 def _generate_string_from_pattern(
     pattern: str, min_length: int, max_length: int
 ) -> str:
@@ -589,8 +581,7 @@ def _generate_string_from_pattern(
         random.choice(string.ascii_letters + string.digits) for _ in range(length)
     )
 
-
-def _handle_integer_type(schema: Dict[str, Any], phase: str) -> int:
+def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
     """Handle integer type schema."""
     # Handle integer constraints
     minimum = schema.get("minimum", -1000000)
@@ -657,8 +648,7 @@ def _handle_integer_type(schema: Dict[str, Any], phase: str) -> int:
             else:
                 return random.randint(minimum, maximum)
 
-
-def _handle_number_type(schema: Dict[str, Any], phase: str) -> float:
+def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
     """Handle number type schema."""
     # Handle number constraints
     minimum = schema.get("minimum", -1000000.0)
@@ -734,7 +724,6 @@ def _handle_number_type(schema: Dict[str, Any], phase: str) -> float:
             else:
                 return random.uniform(minimum, maximum)
 
-
 def _handle_boolean_type(phase: str) -> bool:
     """Handle boolean type schema."""
     if phase == "realistic":
@@ -756,7 +745,6 @@ def _handle_boolean_type(phase: str) -> bool:
                     "no",
                 ]
             )
-
 
 def _generate_default_value(phase: str) -> Any:
     """Generate a default value when schema type is unknown."""

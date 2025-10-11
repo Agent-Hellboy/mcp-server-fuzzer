@@ -28,23 +28,20 @@ except ImportError:  # pragma: no cover
 
 from ..safety_system.policy import is_host_allowed, sanitize_headers
 
-
 class JSONRPCRequest(TypedDict):
     """Type definition for JSON-RPC request structure."""
 
     jsonrpc: Literal["2.0"]
     method: str
-    params: NotRequired[Union[List[Any], Dict[str, Any]]]
-    id: Union[str, int, None]
-
+    params: NotRequired[list[Any, dict[str, Any]]]
+    id: str | int | None
 
 class JSONRPCNotification(TypedDict):
     """Type definition for JSON-RPC notification structure."""
 
     jsonrpc: Literal["2.0"]
     method: str
-    params: NotRequired[Union[List[Any], Dict[str, Any]]]
-
+    params: NotRequired[list[Any, dict[str, Any]]]
 
 class JSONRPCErrorObject(TypedDict):
     """Type definition for JSON-RPC error object."""
@@ -53,55 +50,47 @@ class JSONRPCErrorObject(TypedDict):
     message: str
     data: NotRequired[Any]
 
-
 class JSONRPCSuccessResponse(TypedDict):
     """Type definition for JSON-RPC success response."""
 
     jsonrpc: Literal["2.0"]
     result: Any
-    id: Union[str, int, None]
-
+    id: str | int | None
 
 class JSONRPCErrorResponse(TypedDict):
     """Type definition for JSON-RPC error response."""
 
     jsonrpc: Literal["2.0"]
     error: JSONRPCErrorObject
-    id: Union[str, int, None]
+    id: str | int | None
 
-
-JSONRPCResponse = Union[JSONRPCSuccessResponse, JSONRPCErrorResponse]
-
+JSONRPCResponse = JSONRPCSuccessResponse | JSONRPCErrorResponse
 
 class TransportError(Exception):
     """Base exception for transport-related errors."""
 
     pass
 
-
 class NetworkError(TransportError):
     """Exception raised for network-related errors."""
 
     pass
-
 
 class PayloadValidationError(TransportError):
     """Exception raised for invalid payload validation."""
 
     pass
 
-
 class ResponseParser(Protocol):
     """Protocol for response parsing functionality."""
 
-    def parse_json_response(self, data: Any) -> Dict[str, Any]:
+    def parse_json_response(self, data: Any) -> dict[str, Any]:
         """Parse JSON response and extract result."""
         ...
 
-    def parse_sse_response(self, response_text: str) -> Optional[Dict[str, Any]]:
+    def parse_sse_response(self, response_text: str) -> dict[str, Any | None]:
         """Parse SSE response and extract JSON data."""
         ...
-
 
 class BaseTransportMixin(ABC):
     """Base mixin providing common transport functionality."""
@@ -113,8 +102,8 @@ class BaseTransportMixin(ABC):
     def _create_jsonrpc_request(
         self,
         method: str,
-        params: Optional[Dict[str, Any]] = None,
-        request_id: Optional[Union[str, int]] = None,
+        params: dict[str, Any | None] = None,
+        request_id: str | int | None = None,
     ) -> JSONRPCRequest:
         """Create a JSON-RPC request payload.
 
@@ -144,7 +133,7 @@ class BaseTransportMixin(ABC):
         return payload
 
     def _create_jsonrpc_notification(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] = None
     ) -> JSONRPCNotification:
         """Create a JSON-RPC notification payload.
 
@@ -168,7 +157,7 @@ class BaseTransportMixin(ABC):
         }
 
     def _validate_jsonrpc_payload(
-        self, payload: Dict[str, Any], strict: bool = False
+        self, payload: dict[str, Any], strict: bool = False
     ) -> None:
         """Validate JSON-RPC 2.0 payload structure.
 
@@ -217,7 +206,7 @@ result or error")
                     or not isinstance(err["message"], str):
                     raise PayloadValidationError("Invalid error fields")
 
-    def _validate_payload_serializable(self, payload: Dict[str, Any]) -> None:
+    def _validate_payload_serializable(self, payload: dict[str, Any]) -> None:
         """Validate that payload can be serialized to JSON.
 
         Args:
@@ -275,7 +264,6 @@ result or error")
 
         return data
 
-
 class NetworkTransportMixin(BaseTransportMixin):
     """Mixin for network-based transports (HTTP, SSE, WebSocket)."""
 
@@ -293,7 +281,7 @@ class NetworkTransportMixin(BaseTransportMixin):
                 "Network to non-local host is disallowed by safety policy"
             )
 
-    def _prepare_safe_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
+    def _prepare_safe_headers(self, headers: dict[str, str]) -> dict[str, str]:
         """Prepare headers with safety sanitization.
 
         Args:
@@ -337,7 +325,7 @@ class NetworkTransportMixin(BaseTransportMixin):
 
     def _parse_http_response_json(
         self, response: httpx.Response, fallback_to_sse: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Parse HTTP response as JSON with SSE fallback.
 
         Args:
@@ -380,11 +368,10 @@ class NetworkTransportMixin(BaseTransportMixin):
 
             raise TransportError("No valid JSON data found in response")
 
-
 class ResponseParsingMixin(BaseTransportMixin):
     """Mixin providing shared response parsing functionality."""
 
-    def parse_sse_event(self, event_text: str) -> Optional[Dict[str, Any]]:
+    def parse_sse_event(self, event_text: str) -> dict[str, Any | None]:
         """Parse a single SSE event text into a JSON object.
 
         The input may contain multiple lines such as "event:", "data:", or
@@ -422,7 +409,7 @@ class ResponseParsingMixin(BaseTransportMixin):
 
     def parse_streaming_response(
         self, lines: list[str], buffer_size: int = 1000
-    ) -> Iterator[Dict[str, Any]]:
+    ) -> Iterator[dict[str, Any]]:
         """Parse streaming response lines and yield JSON objects.
 
         Args:

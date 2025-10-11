@@ -3,7 +3,7 @@ import asyncio
 import os
 import signal
 import sys
-from typing import Any, Dict, List
+from typing import Any
 
 from rich.console import Console
 
@@ -11,8 +11,7 @@ from ..transport import create_transport
 from ..safety_system.policy import configure_network_policy
 from ..safety_system import start_system_blocking, stop_system_blocking
 
-
-def create_transport_with_auth(args, client_args: Dict[str, Any]):
+def create_transport_with_auth(args, client_args: dict[str, Any]):
     try:
         auth_headers = None
         if client_args.get("auth_manager"):
@@ -33,9 +32,8 @@ def create_transport_with_auth(args, client_args: Dict[str, Any]):
         console.print(f"[bold red]Unexpected error:[/bold red] {transport_error}")
         sys.exit(1)
 
-
-def prepare_inner_argv(args) -> List[str]:
-    argv: List[str] = [sys.argv[0]]
+def prepare_inner_argv(args) -> list[str]:
+    argv: list[str] = [sys.argv[0]]
     mode = args.mode
     argv += ["--mode", mode]
     argv += ["--protocol", args.protocol]
@@ -59,13 +57,11 @@ def prepare_inner_argv(args) -> List[str]:
             argv += ["--allow-host", h]
     return argv
 
-
 def start_safety_if_enabled(args) -> bool:
     if getattr(args, "enable_safety_system", False):
         start_system_blocking()
         return True
     return False
-
 
 def stop_safety_if_started(started: bool) -> None:
     if started:
@@ -73,7 +69,6 @@ def stop_safety_if_started(started: bool) -> None:
             stop_system_blocking()
         except Exception:
             pass
-
 
 def execute_inner_client(args, unified_client_main, argv):
     old_argv = sys.argv
@@ -176,7 +171,6 @@ def execute_inner_client(args, unified_client_main, argv):
         sys.argv = old_argv
         if should_exit:
             raise SystemExit(130)
-
 
 def run_with_retry_on_interrupt(args, unified_client_main, argv) -> None:
     try:
