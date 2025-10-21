@@ -9,7 +9,7 @@ to improve type safety throughout the codebase.
 from typing import Any, TypedDict
 
 # JSON container types
-JSONContainer = dict[str | Any, list[Any]]
+JSONContainer = dict[str, Any] | list[Any]
 
 class FuzzDataResult(TypedDict, total=False):
     """TypedDict for fuzzing results data structure."""

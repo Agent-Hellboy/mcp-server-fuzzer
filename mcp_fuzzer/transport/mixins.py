@@ -33,7 +33,7 @@ class JSONRPCRequest(TypedDict):
 
     jsonrpc: Literal["2.0"]
     method: str
-    params: NotRequired[list[Any, dict[str, Any]]]
+    params: NotRequired[list[Any] | dict[str, Any]]
     id: str | int | None
 
 class JSONRPCNotification(TypedDict):
@@ -41,7 +41,7 @@ class JSONRPCNotification(TypedDict):
 
     jsonrpc: Literal["2.0"]
     method: str
-    params: NotRequired[list[Any, dict[str, Any]]]
+    params: NotRequired[list[Any] | dict[str, Any]]
 
 class JSONRPCErrorObject(TypedDict):
     """Type definition for JSON-RPC error object."""

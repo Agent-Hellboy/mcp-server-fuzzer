@@ -179,7 +179,7 @@ class StdioTransport(TransportProtocol):
             raise
 
     async def send_request(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any | None] | None = None
     ) -> Any:
         """Send a request and wait for response."""
         request_id = str(uuid.uuid4())
@@ -241,7 +241,7 @@ class StdioTransport(TransportProtocol):
         return json.loads(line)
 
     async def send_notification(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any | None] | None = None
     ) -> None:
         """Send a notification (no response expected)."""
         message = {

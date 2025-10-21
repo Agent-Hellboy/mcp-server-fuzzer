@@ -17,7 +17,7 @@ class SSETransport(TransportProtocol):
         }
 
     async def send_request(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any | None] | None = None
     ) -> dict[str, Any]:
         # SSE transport does not support non-streaming requests via send_request.
         # Use stream-based APIs instead (e.g., _stream_request).
@@ -76,7 +76,7 @@ class SSETransport(TransportProtocol):
             raise Exception("No valid SSE response received")
 
     async def send_notification(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any | None] | None = None
     ) -> None:
         payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
         async with httpx.AsyncClient(
