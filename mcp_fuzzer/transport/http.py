@@ -29,7 +29,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         self,
         url: str,
         timeout: float = 30.0,
-        auth_headers: dict[str, str | None] = None,
+        auth_headers: dict[str, str | None] | None = None,
     ):
         self.url = url
         self.timeout = timeout
@@ -73,7 +73,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         return resolved
 
     async def send_request(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any | None] | None = None
     ) -> Any:
         """Send a JSON-RPC request and return the response.
 
@@ -161,7 +161,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
             return self._parse_http_response_json(response)
 
     async def send_notification(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any | None] | None = None
     ) -> None:
         """Send a JSON-RPC notification (fire-and-forget).
 
