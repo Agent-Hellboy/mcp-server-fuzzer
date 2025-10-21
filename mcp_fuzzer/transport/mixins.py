@@ -98,7 +98,7 @@ class BaseTransportMixin(ABC):
     def _create_jsonrpc_request(
         self,
         method: str,
-        params: dict[str, Any | None] = None,
+        params: dict[str, Any] | None = None,
         request_id: str | int | None = None,
     ) -> JSONRPCRequest:
         """Create a JSON-RPC request payload.
@@ -129,7 +129,7 @@ class BaseTransportMixin(ABC):
         return payload
 
     def _create_jsonrpc_notification(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any] | None = None
     ) -> JSONRPCNotification:
         """Create a JSON-RPC notification payload.
 

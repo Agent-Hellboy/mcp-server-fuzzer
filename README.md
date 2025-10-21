@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="icon.png" alt="MCP Server Fuzzer Icon" width="100" height="100">
+
 **A comprehensive super-aggressive CLI-based fuzzing tool for MCP servers**
 
 *Multi-protocol support • Two-phase fuzzing • Built-in safety • Rich reporting • async runtime and async fuzzing of mcp tools*

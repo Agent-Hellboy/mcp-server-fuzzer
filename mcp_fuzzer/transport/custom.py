@@ -26,7 +26,7 @@ class CustomTransportRegistry:
         name: str,
         transport_class: Type[TransportProtocol],
         description: str = "",
-        config_schema: dict[str, Any | None] = None,
+        config_schema: dict[str, Any] | None = None,
         factory_function: Callable | None = None,
     ) -> None:
         """Register a custom transport.
@@ -155,7 +155,7 @@ def register_custom_transport(
     name: str,
     transport_class: Type[TransportProtocol],
     description: str = "",
-    config_schema: dict[str, Any | None] = None,
+    config_schema: dict[str, Any] | None = None,
     factory_function: Callable | None = None,
 ) -> None:
     """Register a custom transport with the global registry.

@@ -157,7 +157,7 @@ class StreamableHTTPTransport(TransportProtocol):
         return response.headers.get(CONTENT_TYPE, "").lower()
 
     async def send_request(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any] | None = None
     ) -> Any:
         request_id = str(asyncio.get_running_loop().time())
         payload = {
@@ -276,7 +276,7 @@ class StreamableHTTPTransport(TransportProtocol):
             raise Exception(f"Unexpected content type: {ct}")
 
     async def send_notification(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any] | None = None
     ) -> None:
         payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
         headers = self._prepare_headers()
