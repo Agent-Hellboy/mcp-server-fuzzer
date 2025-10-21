@@ -12,6 +12,13 @@ import pytest
 
 from mcp_fuzzer.reports.output_protocol import OutputProtocol, OutputManager
 
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    expected_version = version("mcp-fuzzer")
+except PackageNotFoundError:
+    expected_version = "unknown"
+
 
 class TestOutputProtocol:
     """Test cases for OutputProtocol class."""
@@ -26,7 +33,7 @@ class TestOutputProtocol:
         output = self.protocol.create_base_output("fuzzing_results", data)
 
         assert output["protocol_version"] == "1.0.0"
-        assert output["tool_version"] == "0.1.6"
+        assert output["tool_version"] == expected_version
         assert output["session_id"] == "test-session-123"
         assert output["output_type"] == "fuzzing_results"
         assert output["data"] == data
