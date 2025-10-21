@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 def find_config_file(
     config_path: str | None = None,
-    search_paths: list[str | None] = None,
-    file_names: list[str | None] = None,
+    search_paths: list[str] | None = None,
+    file_names: list[str] | None = None,
 ) -> str | None:
     """Find a configuration file in the given paths.
 
@@ -101,8 +101,8 @@ def load_config_file(file_path: str) -> dict[str, Any]:
 
 def apply_config_file(
     config_path: str | None = None,
-    search_paths: list[str | None] = None,
-    file_names: list[str | None] = None,
+    search_paths: list[str] | None = None,
+    file_names: list[str] | None = None,
 ) -> bool:
     """Find and apply configuration from a file.
 

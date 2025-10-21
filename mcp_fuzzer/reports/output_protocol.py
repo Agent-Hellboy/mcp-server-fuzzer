@@ -43,7 +43,7 @@ class OutputProtocol:
         self,
         output_type: str,
         data: dict[str, Any],
-        metadata: dict[str, Any | None] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a standardized output structure."""
         if output_type not in self.OUTPUT_TYPES:
@@ -96,8 +96,8 @@ class OutputProtocol:
     def create_error_report_output(
         self,
         errors: list[dict[str, Any]],
-        warnings: list[dict[str, Any]] = None,
-        execution_context: dict[str, Any | None] = None,
+        warnings: list[dict[str, Any]] | None = None,
+        execution_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create error report output."""
         data = {
@@ -143,7 +143,7 @@ class OutputProtocol:
     def create_performance_metrics_output(
         self,
         metrics: dict[str, Any],
-        benchmarks: dict[str, Any | None] = None,
+        benchmarks: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create performance metrics output."""
         data = {
@@ -362,7 +362,7 @@ class OutputManager:
         self,
         errors: list[dict[str, Any]],
         warnings: list[dict[str, Any | None]] = None,
-        execution_context: dict[str, Any | None] = None,
+        execution_context: dict[str, Any] | None = None,
     ) -> str:
         """Save error report using standardized format."""
         output = self.protocol.create_error_report_output(

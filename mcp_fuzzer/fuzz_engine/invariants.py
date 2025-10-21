@@ -130,7 +130,7 @@ def check_response_validity(response: Any) -> bool:
     return True
 
 def check_error_type_correctness(
-    error: Any, expected_codes: list[int | None] = None
+    error: Any, expected_codes: list[int] | None = None
 ) -> bool:
     """
     Check if an error is of the correct type and has the expected code.
@@ -215,7 +215,7 @@ def check_response_schema_conformity(response: Any, schema: dict[str, Any]) -> b
 
 def verify_response_invariants(
     response: Any,
-    expected_error_codes: list[int | None] = None,
+    expected_error_codes: list[int] | None = None,
     schema: dict[str, Any | None] = None,
 ) -> bool:
     """
@@ -247,7 +247,7 @@ def verify_response_invariants(
 
 async def verify_batch_responses(
     responses: list[Any],
-    expected_error_codes: list[int | None] = None,
+    expected_error_codes: list[int] | None = None,
     schema: dict[str, Any | None] = None,
 ) -> dict[int, bool | str]:
     """
@@ -304,7 +304,7 @@ async def verify_batch_responses(
 def check_state_consistency(
     before_state: dict[str, Any],
     after_state: dict[str, Any],
-    expected_changes: list[str | None] = None,
+    expected_changes: list[str] | None = None,
 ) -> bool:
     """
     Check if the state is consistent before and after an operation.

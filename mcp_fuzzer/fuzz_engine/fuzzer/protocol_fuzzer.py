@@ -359,12 +359,9 @@ class ProtocolFuzzer:
     async def _send_fuzzed_request(
         self,
         protocol_type: str,
-        fuzz_data: dict[str | Any, list[dict[str, Any]]],
+        fuzz_data: dict[str, Any] | list[dict[str, Any]],
         generate_only: bool,
-    ) -> tuple[
-        dict[str | Any | None | list[Any, dict[Any, dict[str, Any]]]],
-        str | None,
-    ]:
+    ) -> tuple[dict[str, Any] | list[dict[str, Any]] | None, str | None]:
         """
         Send fuzzed request to server if appropriate.
 
@@ -410,9 +407,7 @@ class ProtocolFuzzer:
         protocol_type: str,
         run_index: int,
         fuzz_data: dict[str, Any],
-        server_response: 
-            dict[str | Any | None | list[Any, dict[Any, dict[str, Any]]]
-        ],
+        server_response: dict[str, Any] | list[dict[str, Any]] | None,
         server_error: str | None,
     ) -> FuzzDataResult:
         """
@@ -557,7 +552,7 @@ class ProtocolFuzzer:
 
     async def fuzz_batch_requests(
         self,
-        protocol_types: list[str] = None,
+        protocol_types: list[str] | None = None,
         runs: int = 5,
         phase: str = "aggressive",
         generate_only: bool = False,
@@ -623,9 +618,7 @@ class ProtocolFuzzer:
         self,
         run_index: int,
         batch_request: list[dict[str, Any]],
-        server_response: 
-            dict[str | Any | None | list[Any, dict[Any, dict[str, Any]]]
-        ],
+        server_response: dict[str, Any] | list[dict[str, Any]] | None,
         server_error: str | None,
     ) -> FuzzDataResult:
         """
