@@ -2,14 +2,13 @@
 """Configuration management for MCP Fuzzer."""
 
 import os
-from typing import Dict, Any
-
+from typing import Any
 
 class Configuration:
     """Centralized configuration management for MCP Fuzzer."""
 
     def __init__(self):
-        self._config: Dict[str, Any] = {}
+        self._config: dict[str, Any] = {}
         self._load_from_env()
 
     def _load_from_env(self) -> None:
@@ -45,10 +44,9 @@ class Configuration:
         """Set a configuration value."""
         self._config[key] = value
 
-    def update(self, config_dict: Dict[str, Any]) -> None:
+    def update(self, config_dict: dict[str, Any]) -> None:
         """Update configuration with values from a dictionary."""
         self._config.update(config_dict)
-
 
 # Global configuration instance
 config = Configuration()

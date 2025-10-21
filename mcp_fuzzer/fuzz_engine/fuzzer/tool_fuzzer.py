@@ -7,7 +7,7 @@ This module contains the orchestration logic for fuzzing MCP tools.
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...safety_system.safety import (
     safety_filter,
@@ -33,8 +33,8 @@ class ToolFuzzer:
         self._logger = logging.getLogger(__name__)
 
     async def fuzz_tool(
-        self, tool: Dict[str, Any], runs: int = 10, phase: str = "aggressive"
-    ) -> List[Dict[str, Any]]:
+        self, tool: dict[str, Any], runs: int = 10, phase: str = "aggressive"
+    ) -> list[dict[str, Any]]:
         """
         Fuzz a tool by calling it with arguments based on the specified phase.
 
@@ -78,8 +78,8 @@ class ToolFuzzer:
         return results
 
     async def _fuzz_tool_single_run(
-        self, tool: Dict[str, Any], run_index: int, phase: str
-    ) -> Optional[Dict[str, Any]]:
+        self, tool: dict[str, Any], run_index: int, phase: str
+    ) -> dict[str, Any] | None:
         """
         Execute a single fuzzing run for a tool.
 
@@ -140,8 +140,8 @@ class ToolFuzzer:
             }
 
     async def fuzz_tool_both_phases(
-        self, tool: Dict[str, Any], runs_per_phase: int = 5
-    ) -> Dict[str, List[Dict[str, Any]]]:
+        self, tool: dict[str, Any], runs_per_phase: int = 5
+    ) -> dict[str, list[dict[str, Any]]]:
         """
         Fuzz a tool in both realistic and aggressive phases.
 
@@ -173,10 +173,10 @@ class ToolFuzzer:
 
     async def fuzz_tools(
         self,
-        tools: List[Dict[str, Any]],
+        tools: list[dict[str, Any]],
         runs_per_tool: int = 10,
         phase: str = "aggressive",
-    ) -> Dict[str, List[Dict[str, Any]]]:
+    ) -> dict[str, list[dict[str, Any]]]:
         """
         Fuzz multiple tools asynchronously.
 
@@ -214,10 +214,10 @@ class ToolFuzzer:
 
     async def _fuzz_single_tool(
         self,
-        tool: Dict[str, Any],
+        tool: dict[str, Any],
         runs_per_tool: int,
         phase: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Fuzz a single tool and log statistics.
 

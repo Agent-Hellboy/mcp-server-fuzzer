@@ -10,7 +10,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from rich.console import Console
 
@@ -32,8 +32,6 @@ try:
     fuzzer_version = version("mcp-fuzzer")
 except PackageNotFoundError:
     fuzzer_version = "unknown"
-
-
 class FuzzerReporter:
     """Centralized reporter for all MCP Fuzzer output and reporting."""
 
@@ -78,10 +76,10 @@ class FuzzerReporter:
         self.safety_reporter = SafetyReporter()
 
         # Track all results for final report
-        self.tool_results: Dict[str, List[Dict[str, Any]]] = {}
-        self.protocol_results: Dict[str, List[Dict[str, Any]]] = {}
-        self.safety_data: Dict[str, Any] = {}
-        self.fuzzing_metadata: Dict[str, Any] = {}
+        self.tool_results: dict[str, list[dict[str, Any]]] = {}
+        self.protocol_results: dict[str, list[dict[str, Any]]] = {}
+        self.safety_data: dict[str, Any] = {}
+        self.fuzzing_metadata: dict[str, Any] = {}
 
         # Use session ID from output manager
         self.session_id = self.output_manager.protocol.session_id
@@ -110,19 +108,19 @@ class FuzzerReporter:
             "fuzzer_version": fuzzer_version,
         }
 
-    def add_tool_results(self, tool_name: str, results: List[Dict[str, Any]]):
+    def add_tool_results(self, tool_name: str, results: list[dict[str, Any]]):
         """Add tool fuzzing results to the reporter."""
         self.tool_results[tool_name] = results
 
-    def add_protocol_results(self, protocol_type: str, results: List[Dict[str, Any]]):
+    def add_protocol_results(self, protocol_type: str, results: list[dict[str, Any]]):
         """Add protocol fuzzing results to the reporter."""
         self.protocol_results[protocol_type] = results
 
-    def add_safety_data(self, safety_data: Dict[str, Any]):
+    def add_safety_data(self, safety_data: dict[str, Any]):
         """Add safety system data to the reporter."""
         self.safety_data.update(safety_data)
 
-    def print_tool_summary(self, results: Dict[str, List[Dict[str, Any]]]):
+    def print_tool_summary(self, results: dict[str, list[dict[str, Any]]]):
         """Print tool fuzzing summary to console."""
         self.console_formatter.print_tool_summary(results)
 
@@ -130,7 +128,7 @@ class FuzzerReporter:
         for tool_name, tool_results in results.items():
             self.add_tool_results(tool_name, tool_results)
 
-    def print_protocol_summary(self, results: Dict[str, List[Dict[str, Any]]]):
+    def print_protocol_summary(self, results: dict[str, list[dict[str, Any]]]):
         """Print protocol fuzzing summary to console."""
         self.console_formatter.print_protocol_summary(results)
 
@@ -140,8 +138,8 @@ class FuzzerReporter:
 
     def print_overall_summary(
         self,
-        tool_results: Dict[str, List[Dict[str, Any]]],
-        protocol_results: Dict[str, List[Dict[str, Any]]],
+        tool_results: dict[str, list[dict[str, Any]]],
+        protocol_results: dict[str, list[dict[str, Any]]],
     ):
         """Print overall summary to console."""
         self.console_formatter.print_overall_summary(tool_results, protocol_results)
@@ -192,9 +190,9 @@ class FuzzerReporter:
 
     def generate_standardized_report(
         self,
-        output_types: List[str] = None,
+        output_types: list[str] = None,
         include_safety: bool = True
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Generate standardized reports using the new output protocol."""
         generated_files = {}
 
@@ -253,7 +251,7 @@ class FuzzerReporter:
 
         return generated_files
 
-    def _generate_summary_stats(self) -> Dict[str, Any]:
+    def _generate_summary_stats(self) -> dict[str, Any]:
         """Generate summary statistics from all results."""
         # Tool statistics
         total_tools = len(self.tool_results)
@@ -328,7 +326,7 @@ class FuzzerReporter:
         """Get the output directory path."""
         return self.output_dir
 
-    def get_current_status(self) -> Dict[str, Any]:
+    def get_current_status(self) -> dict[str, Any]:
         """Get current status of the reporter."""
         return {
             "session_id": self.session_id,
@@ -377,7 +375,7 @@ class FuzzerReporter:
         report_data = self._get_report_data()
         self.markdown_formatter.save_markdown_report(report_data, filename)
 
-    def _get_report_data(self) -> Dict[str, Any]:
+    def _get_report_data(self) -> dict[str, Any]:
         """Get complete report data for export."""
         return {
             "metadata": self.fuzzing_metadata,
@@ -436,7 +434,7 @@ class FuzzerReporter:
 
         return (successful_tests / total_tests) * 100
 
-    def _collect_errors(self) -> List[Dict[str, Any]]:
+    def _collect_errors(self) -> list[dict[str, Any]]:
         """Collect all errors from test results."""
         errors = []
 

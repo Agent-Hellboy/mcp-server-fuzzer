@@ -19,7 +19,7 @@ from issue #12.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 # Optional jsonschema validation support
 try:
@@ -34,9 +34,7 @@ except ImportError:
         """Placeholder when jsonschema is not available."""
         pass
 
-
 logger = logging.getLogger(__name__)
-
 
 class InvariantViolation(Exception):
     """Exception raised when an invariant is violated."""
@@ -45,7 +43,6 @@ class InvariantViolation(Exception):
         self.message = message
         self.response = response
         super().__init__(message)
-
 
 def check_response_validity(response: Any) -> bool:
     """
@@ -132,9 +129,8 @@ def check_response_validity(response: Any) -> bool:
 
     return True
 
-
 def check_error_type_correctness(
-    error: Any, expected_codes: Optional[List[int]] = None
+    error: Any, expected_codes: list[int] | None = None
 ) -> bool:
     """
     Check if an error is of the correct type and has the expected code.
@@ -191,8 +187,7 @@ def check_error_type_correctness(
 
     return True
 
-
-def check_response_schema_conformity(response: Any, schema: Dict[str, Any]) -> bool:
+def check_response_schema_conformity(response: Any, schema: dict[str, Any]) -> bool:
     """
     Check if a response conforms to a given schema.
 
@@ -218,11 +213,10 @@ def check_response_schema_conformity(response: Any, schema: Dict[str, Any]) -> b
         logger.warning("jsonschema package not installed, skipping schema validation")
         return True
 
-
 def verify_response_invariants(
     response: Any,
-    expected_error_codes: Optional[List[int]] = None,
-    schema: Optional[Dict[str, Any]] = None,
+    expected_error_codes: list[int] | None = None,
+    schema: dict[str, Any | None] = None,
 ) -> bool:
     """
     Verify all invariants for a response.
@@ -251,12 +245,11 @@ def verify_response_invariants(
 
     return True
 
-
 async def verify_batch_responses(
-    responses: List[Any],
-    expected_error_codes: Optional[List[int]] = None,
-    schema: Optional[Dict[str, Any]] = None,
-) -> Dict[int, Union[bool, str]]:
+    responses: list[Any],
+    expected_error_codes: list[int] | None = None,
+    schema: dict[str, Any | None] = None,
+) -> dict[int, bool | str]:
     """
     Verify invariants for a batch of responses asynchronously.
 
@@ -266,7 +259,7 @@ async def verify_batch_responses(
         schema: Optional schema to validate against
 
     Returns:
-        Dict[int, Union[bool, str]]: A dictionary mapping response indices to
+        dict[int, bool | str]: A dictionary mapping response indices to
             verification results (True if valid, error message if invalid)
     """
     import asyncio
@@ -308,11 +301,10 @@ async def verify_batch_responses(
 
     return results
 
-
 def check_state_consistency(
-    before_state: Dict[str, Any],
-    after_state: Dict[str, Any],
-    expected_changes: Optional[List[str]] = None,
+    before_state: dict[str, Any],
+    after_state: dict[str, Any],
+    expected_changes: list[str] | None = None,
 ) -> bool:
     """
     Check if the state is consistent before and after an operation.

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
-from typing import Any, Dict, Optional, List, AsyncIterator
+from typing import Any, AsyncIterator
 
 from ..safety_system.safety import (
     safety_filter,
@@ -9,21 +9,20 @@ from ..safety_system.safety import (
     sanitize_tool_call,
 )
 
-
 class TransportProtocol(ABC):
     @abstractmethod
     async def send_request(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] = None
     ) -> Any:
         pass
 
     @abstractmethod
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+    async def send_raw(self, payload: dict[str, Any]) -> Any:
         pass
 
     @abstractmethod
     async def send_notification(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] = None
     ) -> None:
         pass
 
@@ -36,8 +35,8 @@ class TransportProtocol(ABC):
         pass
 
     async def stream_request(
-        self, payload: Dict[str, Any]
-    ) -> AsyncIterator[Dict[str, Any]]:
+        self, payload: dict[str, Any]
+    ) -> AsyncIterator[dict[str, Any]]:
         """Stream a request to the transport.
 
         Args:
@@ -51,12 +50,12 @@ class TransportProtocol(ABC):
 
     @abstractmethod
     async def _stream_request(
-        self, payload: Dict[str, Any]
-    ) -> AsyncIterator[Dict[str, Any]]:
+        self, payload: dict[str, Any]
+    ) -> AsyncIterator[dict[str, Any]]:
         """Subclasses must implement streaming of requests."""
         pass
 
-    async def get_tools(self) -> List[Dict[str, Any]]:
+    async def get_tools(self) -> list[dict[str, Any]]:
         try:
             response = await self.send_request("tools/list")
             logging.debug("Raw server response: %s", response)
@@ -79,7 +78,7 @@ class TransportProtocol(ABC):
             logging.exception("Failed to fetch tools from server: %s", e)
             return []
 
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
+    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         if not is_safe_tool_call(tool_name, arguments):
             safety_filter.log_blocked_operation(
                 tool_name, arguments, "Dangerous tool call blocked in transport"
@@ -101,8 +100,8 @@ class TransportProtocol(ABC):
         return result
 
     async def send_batch_request(
-        self, batch: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, batch: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """
         Send a batch of JSON-RPC requests/notifications.
 
@@ -138,8 +137,8 @@ class TransportProtocol(ABC):
         return responses
 
     def collate_batch_responses(
-        self, requests: List[Dict[str, Any]], responses: List[Dict[str, Any]]
-    ) -> Dict[Any, Dict[str, Any]]:
+        self, requests: list[dict[str, Any]], responses: list[dict[str, Any]]
+    ) -> dict[Any, dict[str, Any]]:
         """
         Collate batch responses by ID, handling out-of-order and missing responses.
 

@@ -8,7 +8,7 @@ This module contains the orchestration logic for fuzzing MCP protocol types.
 import asyncio
 import inspect
 import logging
-from typing import Any, Dict, List, ClassVar, Optional, Tuple, Callable, Union
+from typing import Any, ClassVar, Callable
 
 from ...types import FuzzDataResult
 
@@ -25,7 +25,7 @@ class ProtocolFuzzer:
     """Orchestrates fuzzing of MCP protocol types."""
 
     # Protocol types supported for fuzzing
-    PROTOCOL_TYPES: ClassVar[Tuple[str, ...]] = (
+    PROTOCOL_TYPES: ClassVar[tuple[str, ...]] = (
         "InitializeRequest",
         "ProgressNotification",
         "CancelNotification",
@@ -80,7 +80,7 @@ class ProtocolFuzzer:
     # Seconds to wait for invariant validation of batch responses
     BATCH_VALIDATION_TIMEOUT: ClassVar[float] = 5.0
 
-    def __init__(self, transport: Optional[Any] = None, max_concurrency: int = 5):
+    def __init__(self, transport: Any | None = None, max_concurrency: int = 5):
         """
         Initialize the protocol fuzzer.
 
@@ -113,7 +113,7 @@ class ProtocolFuzzer:
         runs: int = 10,
         phase: str = "aggressive",
         generate_only: bool = False,
-    ) -> List[FuzzDataResult]:
+    ) -> list[FuzzDataResult]:
         """
         Fuzz a specific protocol type with specified phase and analyze responses.
 
@@ -144,7 +144,7 @@ class ProtocolFuzzer:
 
     def _get_fuzzer_method(
         self, protocol_type: str, phase: str = "aggressive"
-    ) -> Optional[Callable[..., Dict[str, Any]]]:
+    ) -> Callable[..., dict[str, Any | None]]:
         """
         Get the appropriate fuzzer method for a protocol type and phase.
 
@@ -166,11 +166,11 @@ class ProtocolFuzzer:
     def _prepare_fuzzing_operations(
         self,
         protocol_type: str,
-        fuzzer_method: Callable[..., Dict[str, Any]],
+        fuzzer_method: Callable[..., dict[str, Any]],
         runs: int,
         phase: str,
         generate_only: bool,
-    ) -> List[Tuple[Callable, List[Any], Dict[str, Any]]]:
+    ) -> list[tuple[Callable, list[Any], dict[str, Any]]]:
         """
         Prepare operations for batch execution.
 
@@ -197,9 +197,9 @@ class ProtocolFuzzer:
 
     async def _execute_and_process_operations(
         self,
-        operations: List[Tuple[Callable, List[Any], Dict[str, Any]]],
+        operations: list[tuple[Callable, list[Any], dict[str, Any]]],
         protocol_type: str,
-    ) -> List[FuzzDataResult]:
+    ) -> list[FuzzDataResult]:
         """
         Execute operations and process results.
 
@@ -237,7 +237,7 @@ class ProtocolFuzzer:
     async def _fuzz_protocol_type_single_run(
         self,
         protocol_type: str,
-        fuzzer_method: Callable[..., Dict[str, Any]],
+        fuzzer_method: Callable[..., dict[str, Any]],
         run_index: int,
         phase: str,
         generate_only: bool = False,
@@ -330,8 +330,8 @@ class ProtocolFuzzer:
             }
 
     async def _generate_fuzz_data(
-        self, fuzzer_method: Callable[..., Dict[str, Any]], phase: str
-    ) -> Dict[str, Any]:
+        self, fuzzer_method: Callable[..., dict[str, Any]], phase: str
+    ) -> dict[str, Any]:
         """
         Generate fuzz data using the strategy method.
 
@@ -359,12 +359,9 @@ class ProtocolFuzzer:
     async def _send_fuzzed_request(
         self,
         protocol_type: str,
-        fuzz_data: Union[Dict[str, Any], List[Dict[str, Any]]],
+        fuzz_data: dict[str, Any] | list[dict[str, Any]],
         generate_only: bool,
-    ) -> Tuple[
-        Optional[Union[Dict[str, Any], List[Any], Dict[Any, Dict[str, Any]]]],
-        Optional[str],
-    ]:
+    ) -> tuple[dict[str, Any] | list[dict[str, Any]] | None, str | None]:
         """
         Send fuzzed request to server if appropriate.
 
@@ -409,11 +406,9 @@ class ProtocolFuzzer:
         self,
         protocol_type: str,
         run_index: int,
-        fuzz_data: Dict[str, Any],
-        server_response: Optional[
-            Union[Dict[str, Any], List[Any], Dict[Any, Dict[str, Any]]]
-        ],
-        server_error: Optional[str],
+        fuzz_data: dict[str, Any],
+        server_response: dict[str, Any] | list[dict[str, Any]] | None,
+        server_error: str | None,
     ) -> FuzzDataResult:
         """
         Create a standardized result dictionary for a fuzzing run.
@@ -441,7 +436,7 @@ class ProtocolFuzzer:
 
     async def fuzz_protocol_type_both_phases(
         self, protocol_type: str, runs_per_phase: int = 5
-    ) -> Dict[str, List[FuzzDataResult]]:
+    ) -> dict[str, list[FuzzDataResult]]:
         """
         Fuzz a protocol type in both realistic and aggressive phases.
 
@@ -472,7 +467,7 @@ class ProtocolFuzzer:
 
     async def fuzz_all_protocol_types(
         self, runs_per_type: int = 5, phase: str = "aggressive"
-    ) -> Dict[str, List[FuzzDataResult]]:
+    ) -> dict[str, list[FuzzDataResult]]:
         """
         Fuzz all known protocol types asynchronously.
 
@@ -492,7 +487,7 @@ class ProtocolFuzzer:
         tasks = []
         sem = self._get_type_semaphore()
 
-        async def _run(pt: str) -> List[Dict[str, Any]]:
+        async def _run(pt: str) -> list[dict[str, Any]]:
             async with sem:
                 return await self._fuzz_single_protocol_type(pt, runs_per_type, phase)
 
@@ -522,7 +517,7 @@ class ProtocolFuzzer:
         protocol_type: str,
         runs: int,
         phase: str,
-    ) -> List[FuzzDataResult]:
+    ) -> list[FuzzDataResult]:
         """
         Fuzz a single protocol type and log statistics.
 
@@ -557,11 +552,11 @@ class ProtocolFuzzer:
 
     async def fuzz_batch_requests(
         self,
-        protocol_types: List[str] = None,
+        protocol_types: list[str] | None = None,
         runs: int = 5,
         phase: str = "aggressive",
         generate_only: bool = False,
-    ) -> List[FuzzDataResult]:
+    ) -> list[FuzzDataResult]:
         """
         Fuzz using JSON-RPC batch requests with mixed protocol types.
 
@@ -622,11 +617,9 @@ class ProtocolFuzzer:
     def _create_batch_fuzz_result(
         self,
         run_index: int,
-        batch_request: List[Dict[str, Any]],
-        server_response: Optional[
-            Union[Dict[str, Any], List[Any], Dict[Any, Dict[str, Any]]]
-        ],
-        server_error: Optional[str],
+        batch_request: list[dict[str, Any]],
+        server_response: dict[str, Any] | list[dict[str, Any]] | None,
+        server_error: str | None,
     ) -> FuzzDataResult:
         """
         Create a standardized result dictionary for a batch fuzzing run.

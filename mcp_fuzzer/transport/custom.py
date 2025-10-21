@@ -6,17 +6,16 @@ implementations that can be used alongside built-in transports.
 """
 
 import logging
-from typing import Dict, Type, Any, Optional, Callable
+from typing import Type, Any, Callable
 from .base import TransportProtocol
 
 logger = logging.getLogger(__name__)
-
 
 class CustomTransportRegistry:
     """Registry for custom transport implementations."""
 
     def __init__(self):
-        self._transports: Dict[str, Dict[str, Any]] = {}
+        self._transports: dict[str, dict[str, Any]] = {}
 
     def clear(self) -> None:
         """Clear all registered transports. Useful for testing."""
@@ -27,8 +26,8 @@ class CustomTransportRegistry:
         name: str,
         transport_class: Type[TransportProtocol],
         description: str = "",
-        config_schema: Optional[Dict[str, Any]] = None,
-        factory_function: Optional[Callable] = None,
+        config_schema: dict[str, Any | None] = None,
+        factory_function: Callable | None = None,
     ) -> None:
         """Register a custom transport.
 
@@ -93,7 +92,7 @@ class CustomTransportRegistry:
             raise KeyError(f"Transport '{name}' is not registered")
         return self._transports[key]["class"]
 
-    def get_transport_info(self, name: str) -> Dict[str, Any]:
+    def get_transport_info(self, name: str) -> dict[str, Any]:
         """Get information about a registered transport.
 
         Args:
@@ -110,7 +109,7 @@ class CustomTransportRegistry:
             raise KeyError(f"Transport '{name}' is not registered")
         return self._transports[key].copy()
 
-    def list_transports(self) -> Dict[str, Dict[str, Any]]:
+    def list_transports(self) -> dict[str, dict[str, Any]]:
         """List all registered custom transports.
 
         Returns:
@@ -149,17 +148,15 @@ class CustomTransportRegistry:
             # Pass through as-is; factories can handle full URLs or endpoints.
             return factory(*args, **kwargs)
 
-
 # Global registry instance
 registry = CustomTransportRegistry()
-
 
 def register_custom_transport(
     name: str,
     transport_class: Type[TransportProtocol],
     description: str = "",
-    config_schema: Optional[Dict[str, Any]] = None,
-    factory_function: Optional[Callable] = None,
+    config_schema: dict[str, Any | None] = None,
+    factory_function: Callable | None = None,
 ) -> None:
     """Register a custom transport with the global registry.
 
@@ -174,7 +171,6 @@ def register_custom_transport(
         name, transport_class, description, config_schema, factory_function
     )
 
-
 def create_custom_transport(name: str, *args, **kwargs) -> TransportProtocol:
     """Create an instance of a registered custom transport.
 
@@ -188,8 +184,7 @@ def create_custom_transport(name: str, *args, **kwargs) -> TransportProtocol:
     """
     return registry.create_transport(name, *args, **kwargs)
 
-
-def list_custom_transports() -> Dict[str, Dict[str, Any]]:
+def list_custom_transports() -> dict[str, dict[str, Any]]:
     """List all registered custom transports.
 
     Returns:

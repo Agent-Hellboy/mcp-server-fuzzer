@@ -14,7 +14,7 @@ import signal as _signal
 import sys
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable
 
 try:
     import psutil
@@ -35,7 +35,7 @@ class WatchdogConfig:
     auto_kill: bool = True  # Whether to automatically kill hanging processes
 
     @classmethod
-    def from_config(cls, config: Dict[str, Any]) -> "WatchdogConfig":
+    def from_config(cls, config: dict[str, Any]) -> "WatchdogConfig":
         """Create WatchdogConfig from configuration dictionary."""
         return cls(
             check_interval=config.get("watchdog_check_interval", 1.0),
@@ -49,14 +49,14 @@ class WatchdogConfig:
 class ProcessWatchdog:
     """Fully asynchronous process monitoring system."""
 
-    def __init__(self, config: Optional[WatchdogConfig] = None):
+    def __init__(self, config: WatchdogConfig | None = None):
         """Initialize the process watchdog."""
         self.config = config or WatchdogConfig()
-        self._processes: Dict[int, Dict[str, Any]] = {}
+        self._processes: dict[int, dict[str, Any]] = {}
         self._lock = None  # Will be created lazily when needed
         self._logger = logging.getLogger(__name__)
         self._stop_event = None  # Will be created lazily when needed
-        self._watchdog_task: Optional[asyncio.Task] = None
+        self._watchdog_task: asyncio.Task | None = None
 
     def _get_lock(self):
         """Get or create the lock lazily."""
@@ -273,7 +273,7 @@ class ProcessWatchdog:
         self,
         pid: int,
         process: Any,
-        activity_callback: Optional[Callable[[], float]],
+        activity_callback: Callable[[], float] | None,
         name: str,
     ) -> None:
         """Register a process for monitoring."""
@@ -328,7 +328,7 @@ class ProcessWatchdog:
                 ),
             }
 
-    async def get_performance_metrics(self) -> Dict[str, Any]:
+    async def get_performance_metrics(self) -> dict[str, Any]:
         """Get performance metrics for monitoring and optimization."""
         try:
             system_metrics = {}

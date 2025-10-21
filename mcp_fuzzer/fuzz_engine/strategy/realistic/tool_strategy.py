@@ -12,13 +12,12 @@ import random
 import string
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
 from hypothesis import strategies as st
 
-
 def base64_strings(
-    min_size: int = 0, max_size: int = 100, alphabet: Optional[str] = None
+    min_size: int = 0, max_size: int = 100, alphabet: str | None = None
 ) -> st.SearchStrategy[str]:
     """
     Generate valid Base64-encoded strings.
@@ -42,8 +41,7 @@ def base64_strings(
         lambda data: base64.b64encode(data).decode("ascii")
     )
 
-
-def uuid_strings(version: Optional[int] = None) -> st.SearchStrategy[str]:
+def uuid_strings(version: int | None = None) -> st.SearchStrategy[str]:
     """
     Generate canonical UUID strings.
 
@@ -75,7 +73,6 @@ def uuid_strings(version: Optional[int] = None) -> st.SearchStrategy[str]:
     else:
         raise ValueError(f"Unsupported UUID version: {version}")
 
-
 def timestamp_strings(
     min_year: int = 2020,
     max_year: int = 2030,
@@ -101,7 +98,6 @@ def timestamp_strings(
             timespec="microseconds" if include_microseconds else "seconds"
         )
     )
-
 
 async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str:
     """Generate realistic text using custom strategies."""
@@ -161,8 +157,7 @@ async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str
     else:
         return "realistic_value"
 
-
-async def fuzz_tool_arguments_realistic(tool: Dict[str, Any]) -> Dict[str, Any]:
+async def fuzz_tool_arguments_realistic(tool: dict[str, Any]) -> dict[str, Any]:
     """Generate realistic tool arguments based on schema."""
     from ..schema_parser import make_fuzz_strategy_from_jsonschema
 

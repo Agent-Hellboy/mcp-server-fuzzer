@@ -3,7 +3,7 @@ import logging
 import uuid
 import time
 import inspect
-from typing import Any, Dict, Optional, AsyncIterator
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -18,7 +18,6 @@ from ..safety_system.policy import (
     resolve_redirect_safely,
 )
 
-
 class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMixin):
     """HTTP transport implementation with reduced code duplication.
 
@@ -30,7 +29,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         self,
         url: str,
         timeout: float = 30.0,
-        auth_headers: Optional[Dict[str, str]] = None,
+        auth_headers: dict[str, str | None] | None = None,
     ):
         self.url = url
         self.timeout = timeout
@@ -58,7 +57,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         """Update last activity timestamp."""
         self._last_activity = time.time()
 
-    def _resolve_redirect_url(self, response: httpx.Response) -> Optional[str]:
+    def _resolve_redirect_url(self, response: httpx.Response) -> str | None:
         """
         Resolve redirect target for 307/308 while enforcing same-origin and
         host policy.
@@ -74,7 +73,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         return resolved
 
     async def send_request(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] | None = None
     ) -> Any:
         """Send a JSON-RPC request and return the response.
 
@@ -117,7 +116,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
             self._handle_http_response_error(response)
             return self._parse_http_response_json(response)
 
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
+    async def send_raw(self, payload: dict[str, Any]) -> Any:
         """Send raw payload and return the response.
 
         Args:
@@ -162,7 +161,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
             return self._parse_http_response_json(response)
 
     async def send_notification(
-        self, method: str, params: Optional[Dict[str, Any]] = None
+        self, method: str, params: dict[str, Any | None] | None = None
     ) -> None:
         """Send a JSON-RPC notification (fire-and-forget).
 
@@ -200,19 +199,19 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
             # Use shared response handling (notifications don't expect response data)
             self._handle_http_response_error(response)
 
-    async def get_process_stats(self) -> Dict[str, Any]:
+    async def get_process_stats(self) -> dict[str, Any]:
         """Get statistics about any managed processes."""
         return await self.process_manager.get_stats()
 
     async def send_timeout_signal_to_all(
         self, signal_type: str = "timeout"
-    ) -> Dict[int, bool]:
+    ) -> dict[int, bool]:
         """Send timeout signals to all managed processes."""
         return await self.process_manager.send_timeout_signal_to_all(signal_type)
 
     async def _stream_request(
-        self, payload: Dict[str, Any]
-    ) -> AsyncIterator[Dict[str, Any]]:
+        self, payload: dict[str, Any]
+    ) -> AsyncIterator[dict[str, Any]]:
         """Stream a request to the transport.
 
         Args:

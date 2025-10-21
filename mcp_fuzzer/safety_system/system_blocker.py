@@ -13,7 +13,6 @@ import shutil
 import stat
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import emoji
 
@@ -22,8 +21,8 @@ class SystemCommandBlocker:
     """Blocks system commands by creating fake executables with higher PATH priority."""
 
     def __init__(self):
-        self.temp_dir: Optional[Path] = None
-        self.original_path: Optional[str] = None
+        self.temp_dir: Path | None = None
+        self.original_path: str | None = None
         self.blocked_commands = [
             "xdg-open",  # Linux
             "open",  # macOS
@@ -37,8 +36,8 @@ class SystemCommandBlocker:
             "opera",
             "brave",
         ]
-        self.created_files: List[Path] = []
-        self.blocked_operations: List[Dict[str, str]] = []
+        self.created_files: list[Path] = []
+        self.blocked_operations: list[dict[str, str]] = []
 
     def start_blocking(self):
         """Start blocking dangerous system commands."""
@@ -154,11 +153,11 @@ sys.exit(0)
             except Exception as e:
                 logging.error(f"Failed to create fake executable for {command}: {e}")
 
-    def get_blocked_commands(self) -> List[str]:
+    def get_blocked_commands(self) -> list[str]:
         """Get list of commands that are being blocked."""
         return self.blocked_commands.copy()
 
-    def get_blocked_operations(self) -> List[Dict[str, str]]:
+    def get_blocked_operations(self) -> list[dict[str, str]]:
         """Get list of operations that were actually blocked during fuzzing."""
         if not self.temp_dir:
             logging.debug("No temp directory found, returning empty list")
@@ -292,7 +291,7 @@ sys.exit(1)
         except Exception as e:
             logging.error(f"Error during cleanup: {e}")
 
-    def get_blocked_operations_log(self) -> List[Dict[str, str]]:
+    def get_blocked_operations_log(self) -> list[dict[str, str]]:
         """Get the log of blocked operations."""
         return self.get_blocked_operations()
 
@@ -316,12 +315,12 @@ def is_system_blocking_active() -> bool:
     return _system_blocker.is_blocking_active()
 
 
-def get_blocked_commands() -> List[str]:
+def get_blocked_commands() -> list[str]:
     """Get list of blocked commands."""
     return _system_blocker.get_blocked_commands()
 
 
-def get_blocked_operations() -> List[Dict[str, str]]:
+def get_blocked_operations() -> list[dict[str, str]]:
     """Get list of operations that were actually blocked during fuzzing."""
     logging.debug("Global get_blocked_operations() called")
     result = _system_blocker.get_blocked_operations()

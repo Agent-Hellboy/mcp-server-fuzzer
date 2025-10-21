@@ -8,9 +8,9 @@ can enforce safety consistently without duplicating logic.
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, Optional, Set, Union
 from urllib.parse import urljoin, urlparse
 import os
+from collections.abc import Iterable
 
 from ..config import (
     SAFETY_LOCAL_HOSTS,
@@ -19,13 +19,13 @@ from ..config import (
     SAFETY_HEADER_DENYLIST,
 )
 
-_POLICY_DENY_NETWORK_DEFAULT_OVERRIDE: Optional[bool] = None
-_POLICY_EXTRA_ALLOWED_HOSTS: Set[str] = set()
+_POLICY_DENY_NETWORK_DEFAULT_OVERRIDE: bool | None = None
+_POLICY_EXTRA_ALLOWED_HOSTS: set[str] = set()
 
 
 def configure_network_policy(
-    deny_network_by_default: Optional[bool] = None,
-    extra_allowed_hosts: Optional[Iterable[str]] = None,
+    deny_network_by_default: bool | None = None,
+    extra_allowed_hosts: Iterable[str] | None = None,
     reset_allowed_hosts: bool = False,
 ) -> None:
     """Configure runtime network policy overrides.
@@ -68,8 +68,8 @@ def configure_network_policy(
 
 def is_host_allowed(
     url: str,
-    allowed_hosts: Union[Iterable[str], None] = None,
-    deny_network_by_default: Union[bool, None] = None,
+    allowed_hosts: Iterable[str] | None = None,
+    deny_network_by_default: bool | None = None,
 ) -> bool:
     """Return True if the URL's host is permitted by policy.
 
@@ -114,10 +114,10 @@ def is_host_allowed(
 
 def resolve_redirect_safely(
     base_url: str,
-    location: Union[str, None],
-    allowed_hosts: Union[Iterable[str], None] = None,
-    deny_network_by_default: Union[bool, None] = None,
-) -> Union[str, None]:
+    location: str | None,
+    allowed_hosts: Iterable[str] | None = None,
+    deny_network_by_default: bool | None = None,
+) -> str | None:
     """Resolve a redirect target while enforcing same-origin and host allow-list.
 
     Returns the resolved URL if allowed, otherwise None.
@@ -139,9 +139,9 @@ def resolve_redirect_safely(
 
 
 def sanitize_subprocess_env(
-    source_env: Union[Dict[str, str], None] = None,
-    proxy_denylist: Union[Iterable[str], None] = None,
-) -> Dict[str, str]:
+    source_env: dict[str, str] | None = None,
+    proxy_denylist: Iterable[str] | None = None,
+) -> dict[str, str]:
     """Return an environment mapping safe to pass to subprocesses.
 
     Removes proxy-related environment variables to avoid accidental egress via proxies.
@@ -155,9 +155,9 @@ def sanitize_subprocess_env(
     return env
 
 
-def sanitize_headers(headers: Dict[str, str]) -> Dict[str, str]:
+def sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
     """Return a copy of headers with denied keys removed (case-insensitive)."""
-    cleaned: Dict[str, str] = {}
+    cleaned: dict[str, str] = {}
     deny_lower = {h.lower() for h in SAFETY_HEADER_DENYLIST}
     for key, value in headers.items():
         if key.lower() in deny_lower:

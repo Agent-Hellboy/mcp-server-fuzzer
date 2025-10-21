@@ -14,7 +14,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable
 
 from .watchdog import ProcessWatchdog, WatchdogConfig
 
@@ -23,16 +23,16 @@ from .watchdog import ProcessWatchdog, WatchdogConfig
 class ProcessConfig:
     """Configuration for a managed process."""
 
-    command: List[str]
-    cwd: Optional[Union[str, Path]] = None
-    env: Optional[Dict[str, str]] = None
+    command: list[str]
+    cwd: str | Path | None = None
+    env: dict[str, str] | None = None
     timeout: float = 30.0
     auto_kill: bool = True
     name: str = "unknown"
-    activity_callback: Optional[Callable[[], float]] = None
+    activity_callback: Callable[[], float] | None = None
 
     @classmethod
-    def from_config(cls, config: Dict[str, Any], **overrides) -> "ProcessConfig":
+    def from_config(cls, config: dict[str, Any], **overrides) -> "ProcessConfig":
         """Create ProcessConfig with values from configuration dictionary."""
         return cls(
             timeout=config.get("process_timeout", 30.0),
@@ -46,8 +46,8 @@ class ProcessManager:
 
     def __init__(
         self,
-        config: Optional[WatchdogConfig] = None,
-        config_dict: Optional[Dict[str, Any]] = None
+        config: WatchdogConfig | None = None,
+        config_dict: dict[str, Any] | None = None
     ):
         """Initialize the async process manager."""
         if config_dict:
@@ -55,7 +55,7 @@ class ProcessManager:
         else:
             self.config = config or WatchdogConfig()
         self.watchdog = ProcessWatchdog(self.config)
-        self._processes: Dict[int, Dict[str, Any]] = {}
+        self._processes: dict[int, dict[str, Any]] = {}
         self._lock = None  # Will be created lazily when needed
         self._logger = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ class ProcessManager:
         tasks = [self.stop_process(pid, force=force) for pid in pids]
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def get_process_status(self, pid: int) -> Optional[Dict[str, Any]]:
+    async def get_process_status(self, pid: int) -> dict[str, Any] | None:
         """Get status information for a specific process."""
         async with self._get_lock():
             if pid not in self._processes:
@@ -219,7 +219,7 @@ class ProcessManager:
 
             return process_info
 
-    async def list_processes(self) -> List[Dict[str, Any]]:
+    async def list_processes(self) -> list[dict[str, Any]]:
         """Get a list of all managed processes with their status."""
         # Copy current PIDs under lock, then fetch statuses outside to avoid
         # re-entrant lock acquisition in get_process_status
@@ -231,12 +231,12 @@ class ProcessManager:
             return_exceptions=True,
         )
         # Filter out None and any exceptions
-        filtered: List[Dict[str, Any]] = [r for r in results if isinstance(r, dict)]
+        filtered: list[dict[str, Any]] = [r for r in results if isinstance(r, dict)]
         return filtered
 
     async def wait_for_process(
-        self, pid: int, timeout: Optional[float] = None
-    ) -> Optional[int]:
+        self, pid: int, timeout: float | None = None
+    ) -> int | None:
         """Wait for a process to complete asynchronously."""
         async with self._get_lock():
             if pid not in self._processes:
@@ -258,7 +258,7 @@ class ProcessManager:
         """Update activity timestamp for a process."""
         await self.watchdog.update_activity(pid)
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get overall statistics about managed processes."""
         process_stats = await self.list_processes()
         watchdog_stats = await self.watchdog.get_stats()
@@ -396,7 +396,7 @@ class ProcessManager:
 
     async def send_timeout_signal_to_all(
         self, signal_type: str = "timeout"
-    ) -> Dict[int, bool]:
+    ) -> dict[int, bool]:
         """Send a timeout signal to all running processes asynchronously."""
         results = {}
         async with self._get_lock():
@@ -422,7 +422,7 @@ class ProcessManager:
         pid: int,
         process: asyncio.subprocess.Process,
         name: str,
-        activity_callback: Optional[Callable[[], float]] = None,
+        activity_callback: Callable[[], float] | None = None,
     ) -> None:
         """Register an already-started subprocess with the manager and watchdog."""
         # Register with watchdog first

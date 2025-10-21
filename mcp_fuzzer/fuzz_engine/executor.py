@@ -10,10 +10,9 @@ import asyncio
 import functools
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable
 
 from hypothesis import strategies as st
-
 
 class AsyncFuzzExecutor:
     """Executes fuzzing operations asynchronously with controlled concurrency."""
@@ -37,8 +36,8 @@ class AsyncFuzzExecutor:
         return self._semaphore
 
     async def execute_batch(
-        self, operations: List[Tuple[Callable, List[Any], Dict[str, Any]]]
-    ) -> Dict[str, List[Any]]:
+        self, operations: list[tuple[Callable, list[Any], dict[str, Any]]]
+    ) -> dict[str, list[Any]]:
         """
         Execute a batch of operations with controlled concurrency.
 
@@ -78,7 +77,7 @@ class AsyncFuzzExecutor:
         return {"results": results, "errors": errors}
 
     async def _execute_single(
-        self, func: Callable, args: List[Any], kwargs: Dict[str, Any]
+        self, func: Callable, args: list[Any], kwargs: dict[str, Any]
     ) -> Any:
         """
         Execute a single operation with semaphore-controlled concurrency.

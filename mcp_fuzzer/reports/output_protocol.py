@@ -11,18 +11,15 @@ import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..exceptions import ValidationError
-
 from importlib.metadata import version, PackageNotFoundError
 
 try:
     TOOL_VERSION = version("mcp-fuzzer")
 except PackageNotFoundError:
     TOOL_VERSION = "unknown"
-
-
 class OutputProtocol:
     """Handles standardized output format with mini-protocol for MCP Fuzzer."""
 
@@ -38,16 +35,16 @@ class OutputProtocol:
         "configuration_dump",
     }
 
-    def __init__(self, session_id: Optional[str] = None):
+    def __init__(self, session_id: str | None = None):
         self.session_id = session_id or str(uuid.uuid4())
         self.logger = logging.getLogger(__name__)
 
     def create_base_output(
         self,
         output_type: str,
-        data: Dict[str, Any],
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        data: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Create a standardized output structure."""
         if output_type not in self.OUTPUT_TYPES:
             raise ValidationError(f"Invalid output type: {output_type}")
@@ -69,13 +66,13 @@ class OutputProtocol:
         mode: str,
         protocol: str,
         endpoint: str,
-        tool_results: Dict[str, List[Dict[str, Any]]],
-        protocol_results: Dict[str, List[Dict[str, Any]]],
+        tool_results: dict[str, list[dict[str, Any]]],
+        protocol_results: dict[str, list[dict[str, Any]]],
         execution_time: str,
         total_tests: int,
         success_rate: float,
         safety_enabled: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create fuzzing results output."""
         data = {
             "mode": mode,
@@ -98,10 +95,10 @@ class OutputProtocol:
 
     def create_error_report_output(
         self,
-        errors: List[Dict[str, Any]],
-        warnings: List[Dict[str, Any]] = None,
-        execution_context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        errors: list[dict[str, Any]],
+        warnings: list[dict[str, Any]] | None = None,
+        execution_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Create error report output."""
         data = {
             "total_errors": len(errors),
@@ -120,10 +117,10 @@ class OutputProtocol:
 
     def create_safety_summary_output(
         self,
-        safety_data: Dict[str, Any],
-        blocked_operations: List[Dict[str, Any]],
+        safety_data: dict[str, Any],
+        blocked_operations: list[dict[str, Any]],
         risk_assessment: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create safety summary output."""
         data = {
             "safety_system_active": safety_data.get("active", False),
@@ -145,9 +142,9 @@ class OutputProtocol:
 
     def create_performance_metrics_output(
         self,
-        metrics: Dict[str, Any],
-        benchmarks: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        metrics: dict[str, Any],
+        benchmarks: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Create performance metrics output."""
         data = {
             "metrics": metrics,
@@ -163,9 +160,9 @@ class OutputProtocol:
 
     def create_configuration_dump_output(
         self,
-        configuration: Dict[str, Any],
+        configuration: dict[str, Any],
         source: str = "runtime",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create configuration dump output."""
         data = {
             "configuration": configuration,
@@ -179,7 +176,7 @@ class OutputProtocol:
 
         return self.create_base_output("configuration_dump", data, metadata)
 
-    def validate_output(self, output: Dict[str, Any]) -> bool:
+    def validate_output(self, output: dict[str, Any]) -> bool:
         """Validate output structure against protocol schema."""
         try:
             # Check required fields
@@ -216,9 +213,9 @@ class OutputProtocol:
 
     def save_output(
         self,
-        output: Dict[str, Any],
+        output: dict[str, Any],
         output_dir: str = "output",
-        filename: Optional[str] = None,
+        filename: str | None = None,
         compress: bool = False,
     ) -> str:
         """Save output to file with proper directory structure."""
@@ -248,8 +245,8 @@ class OutputProtocol:
         return str(filepath)
 
     def _format_tool_results(
-        self, tool_results: Dict[str, List[Dict[str, Any]]]
-    ) -> List[Dict[str, Any]]:
+        self, tool_results: dict[str, list[dict[str, Any]]]
+    ) -> list[dict[str, Any]]:
         """Format tool results for output."""
         formatted = []
 
@@ -285,8 +282,8 @@ class OutputProtocol:
         return formatted
 
     def _format_protocol_results(
-        self, protocol_results: Dict[str, List[Dict[str, Any]]]
-    ) -> List[Dict[str, Any]]:
+        self, protocol_results: dict[str, list[dict[str, Any]]]
+    ) -> list[dict[str, Any]]:
         """Format protocol results for output."""
         formatted = []
 
@@ -309,7 +306,7 @@ class OutputProtocol:
 
         return formatted
 
-    def _calculate_error_severity(self, errors: List[Dict[str, Any]]) -> str:
+    def _calculate_error_severity(self, errors: list[dict[str, Any]]) -> str:
         """Calculate overall error severity."""
         if not errors:
             return "none"
@@ -324,7 +321,6 @@ class OutputProtocol:
         else:
             return "low"
 
-
 class OutputManager:
     """Manages output generation and file organization."""
 
@@ -338,8 +334,8 @@ class OutputManager:
         mode: str,
         protocol: str,
         endpoint: str,
-        tool_results: Dict[str, List[Dict[str, Any]]],
-        protocol_results: Dict[str, List[Dict[str, Any]]],
+        tool_results: dict[str, list[dict[str, Any]]],
+        protocol_results: dict[str, list[dict[str, Any]]],
         execution_time: str,
         total_tests: int,
         success_rate: float,
@@ -364,9 +360,9 @@ class OutputManager:
 
     def save_error_report(
         self,
-        errors: List[Dict[str, Any]],
-        warnings: Optional[List[Dict[str, Any]]] = None,
-        execution_context: Optional[Dict[str, Any]] = None,
+        errors: list[dict[str, Any]],
+        warnings: list[dict[str, Any]] | None = None,
+        execution_context: dict[str, Any] | None = None,
     ) -> str:
         """Save error report using standardized format."""
         output = self.protocol.create_error_report_output(
@@ -379,7 +375,7 @@ class OutputManager:
             output, self.output_dir, compress=self.compress
         )
 
-    def save_safety_summary(self, safety_data: Dict[str, Any]) -> str:
+    def save_safety_summary(self, safety_data: dict[str, Any]) -> str:
         """Save safety summary using standardized format."""
         blocked_operations = safety_data.get("blocked_operations", [])
         risk_assessment = safety_data.get("risk_assessment", "unknown")
@@ -394,12 +390,12 @@ class OutputManager:
             output, self.output_dir, compress=self.compress
         )
 
-    def get_session_directory(self, session_id: Optional[str] = None) -> Path:
+    def get_session_directory(self, session_id: str | None = None) -> Path:
         """Get the session directory path."""
         session_id = session_id or self.protocol.session_id
         return self.output_dir / "sessions" / session_id
 
-    def list_session_outputs(self, session_id: Optional[str] = None) -> List[Path]:
+    def list_session_outputs(self, session_id: str | None = None) -> list[Path]:
         """List all output files for a session."""
         session_dir = self.get_session_directory(session_id)
         if not session_dir.exists():
