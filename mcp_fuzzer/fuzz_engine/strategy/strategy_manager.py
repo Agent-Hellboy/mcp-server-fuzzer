@@ -103,7 +103,7 @@ class ProtocolStrategies:
 
     @staticmethod
     def generate_batch_request(
-        protocol_types: list[str | None] = None,
+        protocol_types: list[str] | None = None,
         phase: str = "aggressive",
         min_batch_size: int = 2,
         max_batch_size: int = 5,
@@ -212,7 +212,7 @@ class ProtocolStrategies:
 
     @staticmethod
     def generate_out_of_order_batch(
-        protocol_types: list[str | None] = None,
+        protocol_types: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Generate a batch with deliberately out-of-order IDs to test server handling.

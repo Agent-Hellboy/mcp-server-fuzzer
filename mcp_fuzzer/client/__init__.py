@@ -16,7 +16,7 @@ from .base import MCPFuzzerClient
 # For backward compatibility
 UnifiedMCPFuzzerClient = MCPFuzzerClient
 
-async def main(argv: list[str | None] = None) -> int:
+async def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI application.
 
     Args:

@@ -361,7 +361,7 @@ class OutputManager:
     def save_error_report(
         self,
         errors: list[dict[str, Any]],
-        warnings: list[dict[str, Any | None]] = None,
+        warnings: list[dict[str, Any]] | None = None,
         execution_context: dict[str, Any] | None = None,
     ) -> str:
         """Save error report using standardized format."""
