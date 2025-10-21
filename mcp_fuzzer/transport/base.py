@@ -12,7 +12,7 @@ from ..safety_system.safety import (
 class TransportProtocol(ABC):
     @abstractmethod
     async def send_request(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any] | None = None
     ) -> Any:
         pass
 
@@ -22,7 +22,7 @@ class TransportProtocol(ABC):
 
     @abstractmethod
     async def send_notification(
-        self, method: str, params: dict[str, Any | None] = None
+        self, method: str, params: dict[str, Any] | None = None
     ) -> None:
         pass
 

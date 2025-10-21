@@ -216,7 +216,7 @@ def check_response_schema_conformity(response: Any, schema: dict[str, Any]) -> b
 def verify_response_invariants(
     response: Any,
     expected_error_codes: list[int] | None = None,
-    schema: dict[str, Any | None] = None,
+    schema: dict[str, Any] | None = None,
 ) -> bool:
     """
     Verify all invariants for a response.
@@ -248,7 +248,7 @@ def verify_response_invariants(
 async def verify_batch_responses(
     responses: list[Any],
     expected_error_codes: list[int] | None = None,
-    schema: dict[str, Any | None] = None,
+    schema: dict[str, Any] | None = None,
 ) -> dict[int, bool | str]:
     """
     Verify invariants for a batch of responses asynchronously.
