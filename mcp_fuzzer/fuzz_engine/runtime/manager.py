@@ -201,7 +201,7 @@ class ProcessManager:
         tasks = [self.stop_process(pid, force=force) for pid in pids]
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def get_process_status(self, pid: int) -> dict[str, Any | None]:
+    async def get_process_status(self, pid: int) -> dict[str, Any] | None:
         """Get status information for a specific process."""
         async with self._get_lock():
             if pid not in self._processes:
