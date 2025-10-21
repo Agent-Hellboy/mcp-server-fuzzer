@@ -14,12 +14,17 @@ from pathlib import Path
 from typing import Any
 
 from ..exceptions import ValidationError
+from importlib.metadata import version, PackageNotFoundError
 
+try:
+    TOOL_VERSION = version("mcp-fuzzer")
+except PackageNotFoundError:
+    TOOL_VERSION = "unknown"
 class OutputProtocol:
     """Handles standardized output format with mini-protocol for MCP Fuzzer."""
 
     PROTOCOL_VERSION = "1.0.0"
-    TOOL_VERSION = "0.1.6"  # TODO: Get from package version
+    TOOL_VERSION = TOOL_VERSION
 
     # Output types
     OUTPUT_TYPES = {

@@ -26,6 +26,12 @@ from .formatters import (
 from .output_protocol import OutputManager
 from .safety_reporter import SafetyReporter
 
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    fuzzer_version = version("mcp-fuzzer")
+except PackageNotFoundError:
+    fuzzer_version = "unknown"
 class FuzzerReporter:
     """Centralized reporter for all MCP Fuzzer output and reporting."""
 
@@ -99,7 +105,7 @@ class FuzzerReporter:
             "endpoint": endpoint,
             "runs": runs,
             "runs_per_type": runs_per_type,
-            "fuzzer_version": "1.0.0",  # TODO: Get from package
+            "fuzzer_version": fuzzer_version,
         }
 
     def add_tool_results(self, tool_name: str, results: list[dict[str, Any]]):
