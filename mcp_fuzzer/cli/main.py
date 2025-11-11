@@ -135,10 +135,20 @@ def _validate_transport(args, cli_module) -> None:
     try:
         from ..transport import create_transport as _create_transport  # type: ignore
 
+        cli_create_transport = (
+            getattr(cli_module, "create_transport", None) if cli_module else None
+        )
+        cli_transport_module = (
+            getattr(cli_create_transport, "__module__", "")
+            if cli_create_transport is not None
+            else ""
+        )
+        use_cli_attribute = (
+            cli_create_transport is not None
+            and not cli_transport_module.startswith("mcp_fuzzer.transport")
+        )
         create_transport_func = (
-            getattr(cli_module, "create_transport", _create_transport)
-            if cli_module
-            else _create_transport
+            cli_create_transport if use_cli_attribute else _create_transport
         )
 
         _ = create_transport_func(
