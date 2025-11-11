@@ -262,6 +262,15 @@ def test_create_safe_mock_response(safety_filter):
     assert "SAFETY BLOCKED" in response["error"]["message"]
 
 
+def test_create_safe_mock_response_without_fixture():
+    """Ensure create_safe_mock_response works without the pytest fixture."""
+    response = SafetyFilter().create_safe_mock_response("test_tool")
+
+    assert response["error"]["code"] == -32603
+    assert "SAFETY BLOCKED" in response["error"]["message"]
+    assert "test_tool" in response["error"]["message"]
+
+
 def test_log_blocked_operation(safety_filter):
     """Test log_blocked_operation."""
     with patch("mcp_fuzzer.safety_system.safety.logging") as mock_logging:
@@ -411,20 +420,6 @@ def test_sanitize_tool_arguments_functionality():
     assert sanitized_args["url"] == "[BLOCKED_URL]"
     assert sanitized_args["safe_arg"] == "value"
     assert sanitized_args["command"] == "[BLOCKED_COMMAND]"
-
-
-def test_create_safe_mock_response():
-    """Test create_safe_mock_response method."""
-    response = SafetyFilter().create_safe_mock_response("test_tool")
-
-    assert "error" in response
-    assert "code" in response["error"]
-    assert response["error"]["code"] == -32603
-    assert "message" in response["error"]
-    assert "SAFETY BLOCKED" in response["error"]["message"]
-    assert "test_tool" in response["error"]["message"]
-
-
 # Integration tests for safety functionality
 @pytest.fixture
 def safety_filter_integration():

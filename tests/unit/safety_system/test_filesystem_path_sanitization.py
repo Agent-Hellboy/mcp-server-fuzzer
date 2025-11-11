@@ -169,7 +169,9 @@ class TestFilesystemPathSanitization:
                 "file": "safe_file.txt",
             }
             
-            with patch("mcp_fuzzer.safety_system.filesystem.sanitizer.logging") as mock_logging:
+            with patch(
+                "mcp_fuzzer.safety_system.filesystem.sanitizer.logging"
+            ) as mock_logging:
                 safety_filter._sanitize_filesystem_paths(arguments, "test_tool")
                 
                 # Should log sanitization of unsafe path

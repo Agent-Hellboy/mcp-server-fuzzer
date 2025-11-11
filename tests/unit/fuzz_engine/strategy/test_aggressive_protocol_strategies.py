@@ -340,7 +340,7 @@ class TestAggressiveProtocolStrategies:
         )
 
     def test_choice_lazy_function(self):
-        """Test that choice_lazy function works correctly with callable and non-callable options."""
+        """Ensure choice_lazy handles callable and non-callable options."""
         # Test with non-callable options
         non_callable_options = [1, 2, 3, "test", None, True]
         result = choice_lazy(non_callable_options)
@@ -366,23 +366,29 @@ class TestAggressiveProtocolStrategies:
         assert result in ["static_value", None] or isinstance(result, (str, dict))
 
     def test_generate_experimental_payload(self):
-        """Test that generate_experimental_payload generates varied experimental values."""
+        """Ensure experimental payload generation returns varied values."""
         # Generate multiple experimental payloads to test variety
         payloads = [generate_experimental_payload() for _ in range(50)]
         
         # Should have some variety
         unique_payloads = set(str(p) for p in payloads)
-        assert len(unique_payloads) > 1, "Should generate different experimental payloads"
+        assert len(unique_payloads) > 1, (
+            "Should generate different experimental payloads"
+        )
         
         # Should include None values
-        assert any(p is None for p in payloads), "Should include None experimental payloads"
+        assert any(p is None for p in payloads), (
+            "Should include None experimental payloads"
+        )
         
         # Should include non-None values
-        assert any(p is not None for p in payloads), "Should include non-None experimental payloads"
+        assert any(p is not None for p in payloads), (
+            "Should include non-None experimental payloads"
+        )
         
         # Should include various types
         types = {type(p) for p in payloads}
-        assert len(types) > 1, "Should generate different types of experimental payloads"
+        assert len(types) > 1, "Should generate different experimental payload types"
 
     def test_lazy_generation_performance(self):
         """Test that lazy generation doesn't eagerly evaluate all options."""
@@ -401,7 +407,9 @@ class TestAggressiveProtocolStrategies:
         
         # Should have variety
         unique_experimental = set(str(v) for v in experimental_values)
-        assert len(unique_experimental) > 1, "Should generate different experimental values"
+        assert len(unique_experimental) > 1, (
+            "Should generate different experimental values"
+        )
 
     def test_lazy_generation_with_lambdas(self):
         """Test that lambda functions in lazy generation work correctly."""
@@ -419,4 +427,6 @@ class TestAggressiveProtocolStrategies:
         # Test that each lambda is called independently
         results = [choice_lazy(lambda_options) for _ in range(20)]
         unique_results = set(str(r) for r in results)
-        assert len(unique_results) > 1, "Lambda functions should generate different results"
+        assert len(unique_results) > 1, (
+            "Lambda functions should generate different results"
+        )

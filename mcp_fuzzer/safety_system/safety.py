@@ -16,7 +16,11 @@ from typing import Any, Protocol, runtime_checkable
 
 import emoji
 
-from .filesystem import initialize_sandbox, get_sandbox, PathSanitizer
+from .filesystem import (
+    PathSanitizer,
+    initialize_sandbox as fs_initialize_sandbox,
+    get_sandbox as fs_get_sandbox,
+)
 from .detection import (
     DEFAULT_DANGEROUS_URL_PATTERNS,
     DEFAULT_DANGEROUS_SCRIPT_PATTERNS,
@@ -57,14 +61,10 @@ class DefaultSandboxProvider(SandboxProvider):
     """Default implementation using existing filesystem sandbox."""
 
     def initialize(self, root: str | Path) -> None:
-        from .filesystem import initialize_sandbox
-
-        initialize_sandbox(str(root))
+        fs_initialize_sandbox(str(root))
 
     def get_sandbox(self) -> Any | None:
-        from .filesystem import get_sandbox
-
-        return get_sandbox()
+        return fs_get_sandbox()
 
 
 class SafetyFilter(SafetyProvider):
@@ -104,9 +104,7 @@ class SafetyFilter(SafetyProvider):
         """Initialize filesystem sandbox with the specified root directory."""
         try:
             self.sandbox_provider.initialize(str(root))
-            logging.info(
-                f"Filesystem sandbox initialized at: {root}"
-            )
+            logging.info("Filesystem sandbox initialized at: %s", root)
         except Exception as e:
             logging.error(
                 f"Failed to initialize filesystem sandbox with root '{root}': {e}"
@@ -278,17 +276,19 @@ class SafetyFilter(SafetyProvider):
         for key, value in arguments.items():
             for nested_key, nested_value in self._iter_string_values(key, value):
                 if self.detector.contains(nested_value, DangerType.URL):
+                    preview = self._preview_value(nested_value)
                     logging.warning(
                         "BLOCKING tool call - dangerous URL in %s: %s",
                         nested_key,
-                        nested_value[:50] + "..." if len(nested_value) > 50 else nested_value,
+                        preview,
                     )
                     return True
                 if self.detector.contains(nested_value, DangerType.COMMAND):
+                    preview = self._preview_value(nested_value)
                     logging.warning(
                         "BLOCKING tool call - dangerous command in %s: %s",
                         nested_key,
-                        nested_value[:50] + "..." if len(nested_value) > 50 else nested_value,
+                        preview,
                     )
                     return True
 
@@ -370,7 +370,7 @@ class SafetyFilter(SafetyProvider):
             - total_blocked: Total number of blocked operations
             - tools_blocked: Dict mapping tool names to block counts
             - reasons: Dict mapping block reasons to counts
-            - dangerous_content_types: Dict of content type counts (URLs, commands, etc.)
+            - dangerous_content_types: Dict of content counts (URLs, commands, etc.)
         """
         if not self.blocked_operations:
             return {"total_blocked": 0, "tools_blocked": {}, "reasons": {}}
@@ -420,3 +420,10 @@ class SafetyFilter(SafetyProvider):
             for sub_key, sub_value in value.items():
                 nested_key = f"{key}.{sub_key}" if key else sub_key
                 yield from self._iter_string_values(nested_key, sub_value)
+
+    @staticmethod
+    def _preview_value(value: str, limit: int = 50) -> str:
+        """Return a short preview string for logging."""
+        if len(value) <= limit:
+            return value
+        return f"{value[:limit]}..."

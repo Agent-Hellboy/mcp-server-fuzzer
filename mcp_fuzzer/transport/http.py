@@ -39,8 +39,8 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
       - Response parsing and serialization checks
 
     This composition allows HTTPTransport to focus on HTTP-specific logic while
-    reusing common network and response handling code. Future HTTP-based transports
-    (e.g., WebSocket over HTTP) can inherit from the same mixins to maintain consistency.
+    reusing common network and response handling code. Future HTTP transports
+    (e.g., WebSocket over HTTP) can inherit from the same mixins to stay consistent.
     """
 
     def __init__(

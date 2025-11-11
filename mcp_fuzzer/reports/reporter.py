@@ -51,7 +51,8 @@ class FuzzerReporter:
         Args:
             output_dir: Output directory for reports
             compress_output: Whether to compress output
-            config_provider: Configuration provider (dict-like). If None, uses global config.
+            config_provider: Configuration provider (dict-like). If None, uses the
+                global config provider.
         """
         # Dependency injection: use provided config or fall back to global
         if config_provider is None:

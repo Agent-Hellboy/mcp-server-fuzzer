@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""Strict shim that stops execution with a non-zero exit code to signal blocking.
+
+This variant intentionally exits with status 1 (default shim exits 0) so that
+callers can detect the block as an error condition instead of a silent no-op.
+"""
 import sys
 import os
 import json
