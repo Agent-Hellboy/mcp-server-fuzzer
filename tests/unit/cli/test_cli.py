@@ -27,6 +27,15 @@ from mcp_fuzzer.cli import (
 import mcp_fuzzer.cli.runner as runner
 from unittest.mock import AsyncMock
 
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.cli,
+    pytest.mark.filterwarnings("ignore:coroutine 'main' was never awaited"),
+    pytest.mark.filterwarnings(
+        "ignore:coroutine 'AsyncMockMixin._execute_mock_call' was never awaited"
+    ),
+]
+
 
 class TestCLI:
     """Test CLI functionality."""
@@ -192,8 +201,8 @@ class TestCLI:
             # Verify console.print was called
             assert mock_console_instance.print.called
 
-    def test_build_unified_client_args_fs_root_and_no_safety(self):
-        """Exercise fs-root setter and disabling safety flags."""
+    def test_build_unified_client_args_fs_root(self):
+        """Exercise fs-root handling."""
         args = argparse.Namespace(
             mode="tools",
             phase="aggressive",
@@ -207,21 +216,17 @@ class TestCLI:
             auth_config=None,
             auth_env=False,
             fs_root="/tmp/fuzzer",
-            safety_plugin=None,
+            enable_safety_system=False,
             no_safety=True,
         )
 
-        with (
-            patch("mcp_fuzzer.cli.safety_filter.set_fs_root") as mock_set_root,
-            patch("mcp_fuzzer.cli.disable_safety") as mock_disable,
-        ):
-            build_unified_client_args(args)
-            mock_set_root.assert_called_once_with("/tmp/fuzzer")
-            mock_disable.assert_called_once()
+        result = build_unified_client_args(args)
+        assert result["fs_root"] == "/tmp/fuzzer"
+        assert result["safety_enabled"] is False
 
-    def test_build_unified_client_args_safety_plugin_loaded_and_failure(self):
-        """Cover both success and failure branches for safety plugin loading."""
-        base_args = dict(
+    def test_build_unified_client_args_safety_default_enabled(self):
+        """Ensure safety remains enabled when flag not provided."""
+        args = argparse.Namespace(
             mode="tools",
             phase="aggressive",
             protocol="http",
@@ -234,20 +239,12 @@ class TestCLI:
             auth_config=None,
             auth_env=False,
             fs_root=None,
+            enable_safety_system=False,
             no_safety=False,
         )
 
-        args_success = argparse.Namespace(**{**base_args, "safety_plugin": "pkg.mod"})
-        with patch("mcp_fuzzer.cli.load_safety_plugin") as mock_load:
-            build_unified_client_args(args_success)
-            mock_load.assert_called_once_with("pkg.mod")
-
-        args_fail = argparse.Namespace(**{**base_args, "safety_plugin": "pkg.bad"})
-        with patch(
-            "mcp_fuzzer.cli.load_safety_plugin", side_effect=Exception("boom")
-        ) as mock_load:
-            build_unified_client_args(args_fail)
-            mock_load.assert_called_once_with("pkg.bad")
+        result = build_unified_client_args(args)
+        assert result["safety_enabled"] is True
 
     def test_runner_prepare_inner_argv(self):
         from mcp_fuzzer.cli.runner import prepare_inner_argv
@@ -574,11 +571,13 @@ class TestCLI:
     @patch("mcp_fuzzer.cli.setup_logging")
     @patch("mcp_fuzzer.cli.build_unified_client_args")
     @patch("mcp_fuzzer.cli.print_startup_info")
-    @patch("mcp_fuzzer.cli.create_transport")
+    @patch("mcp_fuzzer.transport.create_transport")
+    @patch("mcp_fuzzer.cli.asyncio.run")
     @patch("mcp_fuzzer.cli.sys.exit")
     def test_run_cli_transport_error(
         self,
         mock_exit,
+        mock_asyncio_run,
         mock_create_transport,
         mock_print_info,
         mock_build_args,
@@ -614,8 +613,11 @@ class TestCLI:
         mock_build_args.return_value = mock_client_args
 
         mock_create_transport.side_effect = Exception("Transport error")
+        mock_asyncio_run.return_value = None
+        mock_exit.side_effect = SystemExit(1)
 
-        run_cli()
+        with pytest.raises(SystemExit):
+            run_cli()
 
         mock_exit.assert_called_once_with(1)
 
@@ -631,7 +633,10 @@ class TestCLI:
 
         mock_validate.side_effect = ValueError("Invalid arguments")
 
-        run_cli()
+        mock_exit.side_effect = SystemExit(1)
+
+        with pytest.raises(SystemExit):
+            run_cli()
 
         mock_exit.assert_called_once_with(1)
 
@@ -640,7 +645,7 @@ class TestCLI:
     @patch("mcp_fuzzer.cli.setup_logging")
     @patch("mcp_fuzzer.cli.build_unified_client_args")
     @patch("mcp_fuzzer.cli.print_startup_info")
-    @patch("mcp_fuzzer.cli.create_transport")
+    @patch("mcp_fuzzer.transport.create_transport")
     @patch("mcp_fuzzer.cli.sys.exit")
     def test_run_cli_keyboard_interrupt(
         self,
@@ -684,7 +689,10 @@ class TestCLI:
 
         mock_build_args.side_effect = KeyboardInterrupt()
 
-        run_cli()
+        mock_exit.side_effect = SystemExit(0)
+
+        with pytest.raises(SystemExit):
+            run_cli()
 
         mock_exit.assert_called_once_with(0)
 
@@ -693,7 +701,7 @@ class TestCLI:
     @patch("mcp_fuzzer.cli.setup_logging")
     @patch("mcp_fuzzer.cli.build_unified_client_args")
     @patch("mcp_fuzzer.cli.print_startup_info")
-    @patch("mcp_fuzzer.cli.create_transport")
+    @patch("mcp_fuzzer.transport.create_transport")
     @patch("mcp_fuzzer.cli.sys.exit")
     def test_run_cli_unexpected_error(
         self,
@@ -736,7 +744,10 @@ class TestCLI:
 
         mock_build_args.side_effect = Exception("Unexpected error")
 
-        run_cli()
+        mock_exit.side_effect = SystemExit(1)
+
+        with pytest.raises(SystemExit):
+            run_cli()
 
         mock_exit.assert_called_once_with(1)
 
@@ -974,7 +985,7 @@ class TestCLI:
         args.retry_with_safety_on_interrupt = False
         args.no_network = True
         args.allow_hosts = None
-        unified_client_main = AsyncMock()
+        unified_client_main = MagicMock()
         argv = ["test.py", "--mode", "fuzz"]
 
         with patch("asyncio.new_event_loop") as mock_loop:
@@ -1016,7 +1027,7 @@ class TestCLI:
         args.retry_with_safety_on_interrupt = False
         args.no_network = False
         args.allow_hosts = ["example.com", "test.com"]
-        unified_client_main = AsyncMock()
+        unified_client_main = MagicMock()
         argv = ["test.py", "--mode", "fuzz"]
 
         with patch("asyncio.new_event_loop") as mock_loop:
@@ -1081,7 +1092,7 @@ class TestCLI:
         args.enable_safety_system = False
         args.retry_with_safety_on_interrupt = True
 
-        unified_client_main = AsyncMock()
+        unified_client_main = MagicMock()
         argv = ["test.py", "--mode", "fuzz"]
 
         # Create mocks

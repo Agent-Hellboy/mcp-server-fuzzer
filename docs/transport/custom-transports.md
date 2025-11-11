@@ -113,7 +113,7 @@ class MyCustomTransport(TransportProtocol):
 registry.register("my-custom", MyCustomTransport)
 ```
 
-This makes extension simpler – no factory changes needed. The registry is backward-compatible and doesn't affect CLI usage.
+This makes extension simpler – no factory changes needed, and CLI usage remains unchanged.
 
 Note: Self-registration is optional; config-based registration (step 2) still works and is recommended for most cases.
 

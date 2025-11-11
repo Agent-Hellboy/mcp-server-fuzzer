@@ -9,7 +9,7 @@ import logging
 
 from ..auth import AuthManager
 from ..reports import FuzzerReporter
-from ..safety_system.safety import SafetyProvider
+from ..safety_system.safety import SafetyProvider, SafetyFilter
 
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
@@ -29,6 +29,7 @@ class MCPFuzzerClient:
         tool_timeout: float | None = None,
         reporter: FuzzerReporter | None = None,
         safety_system: SafetyProvider | None = None,
+        safety_enabled: bool = True,
         max_concurrency: int = 5,
         tool_client: ToolClient | None = None,
         protocol_client: ProtocolClient | None = None,
@@ -48,21 +49,26 @@ class MCPFuzzerClient:
         """
         self.transport = transport
         self.auth_manager = auth_manager or AuthManager()
-        self._reporter = reporter or FuzzerReporter()
+        self._reporter = reporter or FuzzerReporter(safety_system=safety_system)
         self.tool_timeout = tool_timeout
-        self.safety_system = safety_system
+        self.safety_enabled = safety_enabled
+        if not safety_enabled:
+            self.safety_system = None
+        else:
+            self.safety_system = safety_system or SafetyFilter()
 
         # Create specialized clients if not provided
         self.tool_client = tool_client or ToolClient(
             transport=transport,
             auth_manager=self.auth_manager,
-            safety_system=safety_system,
+            safety_system=self.safety_system,
+            enable_safety=self.safety_enabled,
             max_concurrency=max_concurrency,
         )
 
         self.protocol_client = protocol_client or ProtocolClient(
             transport=transport,
-            safety_system=safety_system,
+            safety_system=self.safety_system,
             max_concurrency=max_concurrency,
         )
 

@@ -19,15 +19,16 @@ class TestSafetyReporter:
 
     def test_init_with_safety_components(self):
         """Test initialization when safety components are available."""
-        with patch("mcp_fuzzer.safety_system.safety.safety_filter") as mock_filter:
+        with patch("mcp_fuzzer.safety_system.safety.SafetyFilter") as mock_filter_cls:
+            mock_filter = mock_filter_cls.return_value
             with patch(
-                "mcp_fuzzer.safety_system.system_blocker.get_blocked_operations"
+                "mcp_fuzzer.safety_system.blocking.get_blocked_operations"
             ) as mock_get_ops:
                 with patch(
-                    "mcp_fuzzer.safety_system.system_blocker.is_system_blocking_active"
+                    "mcp_fuzzer.safety_system.blocking.is_system_blocking_active"
                 ) as mock_is_active:
                     reporter = SafetyReporter()
-                    assert reporter.safety_filter == mock_filter
+                    assert reporter.safety_filter is mock_filter
                     assert reporter.get_blocked_operations == mock_get_ops
                     assert reporter.is_system_blocking_active == mock_is_active
 

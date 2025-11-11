@@ -32,6 +32,9 @@ try:
     fuzzer_version = version("mcp-fuzzer")
 except PackageNotFoundError:
     fuzzer_version = "unknown"
+_AUTO_FILTER = object()
+
+
 class FuzzerReporter:
     """Centralized reporter for all MCP Fuzzer output and reporting."""
 
@@ -40,6 +43,7 @@ class FuzzerReporter:
         output_dir: str = "reports",
         compress_output: bool = False,
         config_provider: dict[str, Any] | None = None,
+        safety_system=_AUTO_FILTER,
     ):
         """
         Initialize the reporter.
@@ -88,7 +92,10 @@ class FuzzerReporter:
         self.output_manager = OutputManager(str(self.output_dir), self.output_compress)
 
         # Initialize safety reporter
-        self.safety_reporter = SafetyReporter()
+        if safety_system is _AUTO_FILTER:
+            self.safety_reporter = SafetyReporter()
+        else:
+            self.safety_reporter = SafetyReporter(safety_system)
 
         # Track all results for final report
         self.tool_results: dict[str, list[dict[str, Any]]] = {}

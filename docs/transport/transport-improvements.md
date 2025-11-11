@@ -231,7 +231,7 @@ async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 
 ### For Existing Code
 
-The improvements are backward compatible. Existing code will continue to work without changes:
+Existing code continues to work without changes:
 
 ```python
 # This still works exactly the same

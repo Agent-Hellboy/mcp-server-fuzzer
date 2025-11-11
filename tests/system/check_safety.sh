@@ -35,7 +35,7 @@ check_warn() {
 echo "🧪 Checking safety prerequisites..."
 
 # Check if safety system is available
-if python -c "from mcp_fuzzer.safety_system.safety import safety_filter; print('Safety system available')" 2>/dev/null; then
+if python -c "from mcp_fuzzer.safety_system.safety import SafetyFilter; SafetyFilter(); print('Safety system available')" 2>/dev/null; then
     check_pass "Safety system module available"
 else
     check_fail "Safety system module not available"

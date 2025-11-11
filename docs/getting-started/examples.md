@@ -151,14 +151,12 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --fs
 
 # Disable argument-level safety (not recommended)
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no-safety
+
 ```
 
 ### Advanced Safety Configuration
 
 ```bash
-# Custom safety plugin
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --safety-plugin my_safety_module.SafetyProvider
-
 # Retry with safety on interrupt
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --retry-with-safety-on-interrupt
 
@@ -925,4 +923,3 @@ mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://loc
 # Monitor performance
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 100 --log-level INFO
 These examples cover the most common use cases and should help you get started with MCP Server Fuzzer. For more advanced configurations and customizations, refer to the [Reference](reference.md), [Architecture](architecture.md), and [Runtime Management](runtime-management.md) documentation.
-

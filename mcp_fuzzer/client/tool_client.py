@@ -11,7 +11,7 @@ from typing import Any
 
 from ..auth import AuthManager
 from ..fuzz_engine.fuzzer import ToolFuzzer
-from ..safety_system.safety import SafetyProvider
+from ..safety_system.safety import SafetyFilter, SafetyProvider
 from ..config import (
     DEFAULT_TOOL_RUNS,
     DEFAULT_MAX_TOOL_TIME,
@@ -28,6 +28,7 @@ class ToolClient:
         auth_manager: AuthManager | None = None,
         safety_system: SafetyProvider | None = None,
         max_concurrency: int = 5,
+        enable_safety: bool = True,
     ):
         """
         Initialize the tool client.
@@ -40,8 +41,16 @@ class ToolClient:
         """
         self.transport = transport
         self.auth_manager = auth_manager or AuthManager()
-        self.safety_system = safety_system
-        self.tool_fuzzer = ToolFuzzer(max_concurrency=max_concurrency)
+        self.enable_safety = enable_safety
+        if not enable_safety:
+            self.safety_system = None
+        else:
+            self.safety_system = safety_system or SafetyFilter()
+        self.tool_fuzzer = ToolFuzzer(
+            max_concurrency=max_concurrency,
+            safety_system=self.safety_system,
+            enable_safety=self.enable_safety,
+        )
         self._logger = logging.getLogger(__name__)
 
     async def _get_tools_from_server(self) -> list[dict[str, Any]]:

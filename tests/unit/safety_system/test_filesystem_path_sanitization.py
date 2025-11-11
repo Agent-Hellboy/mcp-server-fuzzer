@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcp_fuzzer.safety_system.filesystem_sandbox import initialize_sandbox, get_sandbox
+from mcp_fuzzer.safety_system.filesystem import initialize_sandbox, get_sandbox
 from mcp_fuzzer.safety_system.safety import SafetyFilter
 
 
@@ -20,12 +20,12 @@ class TestFilesystemPathSanitization:
     def setup_method(self):
         """Set up test environment."""
         # Clean up any existing sandbox
-        from mcp_fuzzer.safety_system.filesystem_sandbox import cleanup_sandbox
+        from mcp_fuzzer.safety_system.filesystem import cleanup_sandbox
         cleanup_sandbox()
 
     def teardown_method(self):
         """Clean up test environment."""
-        from mcp_fuzzer.safety_system.filesystem_sandbox import cleanup_sandbox
+        from mcp_fuzzer.safety_system.filesystem import cleanup_sandbox
         cleanup_sandbox()
 
     def test_sanitize_filesystem_paths_with_sandbox(self):
@@ -169,7 +169,7 @@ class TestFilesystemPathSanitization:
                 "file": "safe_file.txt",
             }
             
-            with patch("mcp_fuzzer.safety_system.safety.logging") as mock_logging:
+            with patch("mcp_fuzzer.safety_system.filesystem.sanitizer.logging") as mock_logging:
                 safety_filter._sanitize_filesystem_paths(arguments, "test_tool")
                 
                 # Should log sanitization of unsafe path
@@ -349,7 +349,7 @@ class TestFilesystemPathSanitization:
             safety_filter = SafetyFilter()
             
             with unittest.mock.patch(
-                'mcp_fuzzer.safety_system.safety.logging'
+                'mcp_fuzzer.safety_system.filesystem.sanitizer.logging'
             ) as mock_logging:
                 arguments = {"file": "/etc/passwd"}
                 safety_filter._sanitize_filesystem_paths(arguments, "test_tool")

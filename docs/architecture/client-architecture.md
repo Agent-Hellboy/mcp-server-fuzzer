@@ -81,8 +81,6 @@ import asyncio
 asyncio.run(fuzz_server())
 ```
 
-For backward compatibility, the old `UnifiedMCPFuzzerClient` name is still available as an alias for `MCPFuzzerClient`.
-
 ## Future Improvements
 
 1. **Plugin Architecture**: Add support for custom fuzzing strategies via plugins

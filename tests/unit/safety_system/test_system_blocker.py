@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 import shutil
 
-from mcp_fuzzer.safety_system.system_blocker import (
+from mcp_fuzzer.safety_system.blocking.command_blocker import (
     SystemCommandBlocker,
     start_system_blocking,
     stop_system_blocking,
@@ -203,7 +203,21 @@ class TestSystemCommandBlocker(unittest.TestCase):
         finally:
             self.blocker.stop_blocking()
 
-    @patch("mcp_fuzzer.safety_system.system_blocker.logging")
+    def test_block_command_creates_fake_executable(self):
+        """Block a new command while active and ensure executable appears."""
+        self.blocker.start_blocking()
+        try:
+            new_command = "custom_browser"
+            self.blocker.block_command(new_command)
+
+            self.assertIn(new_command, self.blocker.blocked_commands)
+            fake_exec = self.blocker.temp_dir / new_command
+            self.assertTrue(fake_exec.exists())
+            self.assertTrue(os.access(fake_exec, os.X_OK))
+        finally:
+            self.blocker.stop_blocking()
+
+    @patch("mcp_fuzzer.safety_system.blocking.command_blocker.logging")
     def test_error_handling(self, mock_logging):
         """Test error handling in various scenarios."""
         # Test stopping when not started

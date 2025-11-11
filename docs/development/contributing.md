@@ -485,9 +485,9 @@ The project uses semantic versioning:
 
 - **MAJOR**: Incompatible API changes
 
-- **MINOR**: New functionality (backward compatible)
+- **MINOR**: New functionality that preserves the public API
 
-- **PATCH**: Bug fixes (backward compatible)
+- **PATCH**: Bug fixes that do not change the API
 
 ### Release Steps
 

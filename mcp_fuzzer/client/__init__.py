@@ -12,6 +12,7 @@ import emoji
 from ..transport import create_transport
 from ..reports import FuzzerReporter
 from .base import MCPFuzzerClient
+from ..safety_system.safety import SafetyFilter
 
 # For backward compatibility
 UnifiedMCPFuzzerClient = MCPFuzzerClient
@@ -46,10 +47,24 @@ async def main(argv: list[str] | None = None) -> int:
         timeout=config.get("timeout"),
     )
 
+    # Configure safety system
+    safety_enabled = config.get("safety_enabled", True)
+    safety_system = None
+    if safety_enabled:
+        safety_system = SafetyFilter()
+        fs_root = config.get("fs_root")
+        if fs_root:
+            try:
+                safety_system.set_fs_root(fs_root)
+            except Exception as e:
+                logging.warning(f"Failed to set filesystem root '{fs_root}': {e}")
+
     # Create reporter with custom output directory if specified
     reporter = None
     if "output_dir" in config:
-        reporter = FuzzerReporter(output_dir=config["output_dir"])
+        reporter = FuzzerReporter(
+            output_dir=config["output_dir"], safety_system=safety_system
+        )
 
     # Create client
     client = MCPFuzzerClient(
@@ -57,6 +72,8 @@ async def main(argv: list[str] | None = None) -> int:
         auth_manager=config.get("auth_manager"),
         tool_timeout=config.get("tool_timeout"),
         reporter=reporter,
+        safety_system=safety_system,
+        safety_enabled=safety_enabled,
         max_concurrency=config.get("max_concurrency", 5),
     )
 

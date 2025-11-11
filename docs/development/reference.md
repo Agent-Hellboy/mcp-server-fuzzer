@@ -57,9 +57,8 @@ Notes:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--enable-safety-system` | Flag | False | Enable system-level safety features |
+| `--no-safety` | Flag | False | Disable argument-level safety filtering |
 | `--fs-root` | Path | ~/.mcp_fuzzer | Restrict filesystem operations to specified directory |
-| `--safety-plugin` | String | - | Dotted path to custom safety provider |
-| `--no-safety` | Flag | False | Disable argument-level safety filtering (not recommended) |
 | `--retry-with-safety-on-interrupt` | Flag | False | Retry once with safety system enabled on Ctrl-C |
 
 ### Reporting Options
@@ -1103,7 +1102,7 @@ The safety system focuses on containment and preventing external references duri
 
 - Argument-level filtering (`mcp_fuzzer.safety_system.safety.SafetyFilter`):
   - Blocks URLs and risky commands in tool arguments; recursively sanitizes dicts/lists.
-  - Pluggable provider via `--safety-plugin`; `--no-safety` disables filtering.
+  - CLI provides `--fs-root` to redirect sandbox.
   - `set_fs_root(path)` records a sandbox root (for future path checks).
 
 - System-level blocking (`mcp_fuzzer.safety_system.system_blocker.SystemCommandBlocker`):

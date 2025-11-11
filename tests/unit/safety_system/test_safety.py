@@ -6,12 +6,7 @@ Unit tests for Safety module
 import pytest
 from unittest.mock import patch, MagicMock
 
-from mcp_fuzzer.safety_system.safety import (
-    SafetyFilter,
-    is_safe_tool_call,
-    sanitize_tool_call,
-    create_safety_response,
-)
+from mcp_fuzzer.safety_system.safety import SafetyFilter
 
 pytestmark = [pytest.mark.unit, pytest.mark.safety_system]
 
@@ -369,9 +364,9 @@ def test_should_skip_tool_call_with_dict_arguments(safety_filter):
         }
     }
 
-    # This should be checked because we recurse through nested structures
+    # Nested dangerous content should now trigger a block
     result = safety_filter.should_skip_tool_call("test_tool", nested_args)
-    assert not result
+    assert result
 
 
 def test_should_skip_tool_call_with_mixed_types(safety_filter):
@@ -390,38 +385,37 @@ def test_should_skip_tool_call_with_mixed_types(safety_filter):
     assert result  # Should be blocked due to dangerous content
 
 
-# Test cases for global convenience functions
-def test_is_safe_tool_call():
-    """Test global is_safe_tool_call function."""
-    # Safe calls
-    assert is_safe_tool_call("safe_tool", {})
-    assert is_safe_tool_call("tool", {"arg": "safe_value"})
+# Test cases for convenience behaviors
+def test_should_skip_tool_call_behavior():
+    """Test should_skip_tool_call directly on SafetyFilter."""
+    safety = SafetyFilter()
+    assert not safety.should_skip_tool_call("safe_tool", {})
+    assert not safety.should_skip_tool_call("tool", {"arg": "safe_value"})
 
     # Dangerous calls
-    assert not is_safe_tool_call("tool", {"url": "https://danger.com"})
-    assert not is_safe_tool_call("tool", {"command": "xdg-open file"})
+    assert safety.should_skip_tool_call("tool", {"url": "https://danger.com"})
+    assert safety.should_skip_tool_call("tool", {"command": "xdg-open file"})
 
 
-def test_sanitize_tool_call():
-    """Test global sanitize_tool_call function."""
-    tool_name = "test_tool"
+def test_sanitize_tool_arguments_functionality():
+    """Test sanitize_tool_arguments directly on SafetyFilter."""
+    safety = SafetyFilter()
     arguments = {
         "url": "https://example.com",
         "safe_arg": "value",
         "command": "xdg-open file",
     }
 
-    sanitized_name, sanitized_args = sanitize_tool_call(tool_name, arguments)
+    sanitized_args = safety.sanitize_tool_arguments("test_tool", arguments)
 
-    assert sanitized_name == tool_name
     assert sanitized_args["url"] == "[BLOCKED_URL]"
     assert sanitized_args["safe_arg"] == "value"
     assert sanitized_args["command"] == "[BLOCKED_COMMAND]"
 
 
-def test_create_safety_response():
-    """Test global create_safety_response function."""
-    response = create_safety_response("test_tool")
+def test_create_safe_mock_response():
+    """Test create_safe_mock_response method."""
+    response = SafetyFilter().create_safe_mock_response("test_tool")
 
     assert "error" in response
     assert "code" in response["error"]
