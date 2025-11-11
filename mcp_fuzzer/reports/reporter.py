@@ -35,22 +35,37 @@ except PackageNotFoundError:
 class FuzzerReporter:
     """Centralized reporter for all MCP Fuzzer output and reporting."""
 
-    def __init__(self, output_dir: str = "reports", compress_output: bool = False):
-        # Prioritize the output_dir parameter over global config
-        from ..config import config
+    def __init__(
+        self,
+        output_dir: str = "reports",
+        compress_output: bool = False,
+        config_provider: dict[str, Any] | None = None,
+    ):
+        """
+        Initialize the reporter.
 
-        # If a custom output_dir was passed (not the default), use it directly
+        Args:
+            output_dir: Output directory for reports
+            compress_output: Whether to compress output
+            config_provider: Configuration provider (dict-like). If None, uses global config.
+        """
+        # Dependency injection: use provided config or fall back to global
+        if config_provider is None:
+            from ..config import config as default_config
+            config_provider = default_config
+
+        # Prioritize the output_dir parameter over config
         if output_dir != "reports":
             self.output_dir_config = output_dir
         else:
-            # Check global config for custom output directory
-            output_config = config.get("output", {})
-            self.output_dir_config = config.get(
+            # Check config provider for custom output directory
+            output_config = config_provider.get("output", {})
+            self.output_dir_config = config_provider.get(
                 "output_dir", output_config.get("directory", output_dir)
             )
 
-        # Load other configuration from global config
-        output_config = config.get("output", {})
+        # Load other configuration from config provider
+        output_config = config_provider.get("output", {})
         self.output_format = output_config.get("format", "json")
         self.output_types = output_config.get("types")
         self.output_schema = output_config.get("schema")

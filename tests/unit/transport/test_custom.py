@@ -12,6 +12,7 @@ from mcp_fuzzer.transport.custom import (
     list_custom_transports,
 )
 from mcp_fuzzer.transport.factory import create_transport
+from mcp_fuzzer.exceptions import ConnectionError
 
 
 class MockTransport(TransportProtocol):
