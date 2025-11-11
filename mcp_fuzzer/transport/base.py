@@ -79,6 +79,11 @@ class TransportProtocol(ABC):
             return []
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
+        """
+        Calls a tool via the transport.
+
+        Safety checks and sanitization are handled at the client layer.
+        """
         if not is_safe_tool_call(tool_name, arguments):
             safety_filter.log_blocked_operation(
                 tool_name, arguments, "Dangerous tool call blocked in transport"

@@ -15,6 +15,7 @@ from typing import Any
 from .base import TransportProtocol
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ..safety_system.policy import sanitize_subprocess_env
+from ..config.constants import PROCESS_WAIT_TIMEOUT
 
 class StdioTransport(TransportProtocol):
     def __init__(self, command: str, timeout: float = 30.0):
@@ -295,7 +296,9 @@ class StdioTransport(TransportProtocol):
                 await self._get_process_manager().stop_process(self.process.pid, force=True)
                 # Reap the child to avoid zombies
                 try:
-                    await asyncio.wait_for(self.process.wait(), timeout=1.0)
+                    await asyncio.wait_for(
+                        self.process.wait(), timeout=PROCESS_WAIT_TIMEOUT
+                    )
                 except Exception:
                     pass
             elif self.process:

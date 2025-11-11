@@ -42,6 +42,26 @@ class SafetyProvider(Protocol):
     ) -> None: ...
 
 
+@runtime_checkable
+class SandboxProvider(Protocol):
+    """Protocol for pluggable sandbox providers."""
+
+    def initialize(self, root: str | Path) -> None: ...
+    def get_sandbox(self) -> Any | None: ...
+
+
+class DefaultSandboxProvider(SandboxProvider):
+    """Default implementation using existing filesystem sandbox."""
+
+    def initialize(self, root: str | Path) -> None:
+        from .filesystem_sandbox import initialize_sandbox
+        initialize_sandbox(str(root))
+
+    def get_sandbox(self) -> Any | None:
+        from .filesystem_sandbox import get_sandbox
+        return get_sandbox()
+
+
 class SafetyFilter(SafetyProvider):
     """Filters and suppresses dangerous operations during fuzzing."""
 
@@ -51,6 +71,7 @@ class SafetyFilter(SafetyProvider):
         dangerous_script_patterns: list[str] | None = None,
         dangerous_command_patterns: list[str] | None = None,
         dangerous_argument_names: list[str] | None = None,
+        sandbox_provider: SandboxProvider | None = None,
     ):
         # Allow dependency injection of patterns for easier testing and configurability
         self.dangerous_url_patterns = self._compile_patterns(
@@ -71,20 +92,21 @@ class SafetyFilter(SafetyProvider):
         # Track blocked operations for testing and analysis
         self.blocked_operations = []
         self._fs_root: Path | None = None
+        self.sandbox_provider = sandbox_provider or DefaultSandboxProvider()
 
     def set_fs_root(self, root: str | Path) -> None:
         """Initialize filesystem sandbox with the specified root directory."""
         try:
-            sandbox = initialize_sandbox(str(root))
+            self.sandbox_provider.initialize(str(root))
             logging.info(
-                f"Filesystem sandbox initialized at: {sandbox.get_sandbox_root()}"
+                f"Filesystem sandbox initialized at: {root}"
             )
         except Exception as e:
             logging.error(
                 f"Failed to initialize filesystem sandbox with root '{root}': {e}"
             )
             # Initialize with default sandbox
-            initialize_sandbox()
+            self.sandbox_provider.initialize(".")
 
     def _compile_patterns(self, patterns):
         """Compile string patterns into regex Pattern objects."""
@@ -138,7 +160,7 @@ class SafetyFilter(SafetyProvider):
         sanitized_args = self._sanitize_value("root", arguments)
         
         # Then sanitize filesystem paths if sandbox is enabled
-        sandbox = get_sandbox()
+        sandbox = self.sandbox_provider.get_sandbox()
         if sandbox:
             sanitized_args = self._sanitize_filesystem_paths(sanitized_args, tool_name)
             
@@ -148,7 +170,7 @@ class SafetyFilter(SafetyProvider):
         self, arguments: dict[str, Any], tool_name: str
     ) -> dict[str, Any]:
         """Sanitize filesystem paths to ensure they're within the sandbox."""
-        sandbox = get_sandbox()
+        sandbox = self.sandbox_provider.get_sandbox()
         if not sandbox:
             return arguments
             
@@ -531,3 +553,6 @@ def create_safety_response(tool_name: str) -> dict[str, Any]:
 
 # Expose a name for direct use where needed
 safety_filter: SafetyProvider = _current_safety
+
+# Note: Transitioning to explicit safety_system parameter in clients to reduce global state reliance.
+# Backwards compatible helpers remain for legacy code, but new code should use instances.

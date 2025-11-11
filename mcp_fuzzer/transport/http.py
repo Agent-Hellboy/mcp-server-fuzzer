@@ -19,10 +19,28 @@ from ..safety_system.policy import (
 )
 
 class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMixin):
-    """HTTP transport implementation with reduced code duplication.
+    """
+    HTTP transport implementation with reduced code duplication.
 
     This implementation uses mixins to provide shared functionality,
     addressing the code duplication issues identified in GitHub issue #41.
+
+    Mixin Composition:
+    - TransportProtocol (ABC): Defines the core interface (send_request, send_raw, etc.)
+    - NetworkTransportMixin: Provides shared network functionality including:
+      - Connection management and HTTP client creation
+      - Header preparation and validation
+      - Timeout handling and activity tracking
+      - Network request validation and error handling
+    - ResponseParsingMixin: Handles HTTP-specific response processing:
+      - JSON-RPC payload creation and validation
+      - HTTP response error handling (status codes, timeouts)
+      - Redirect resolution with safety policies
+      - Response parsing and serialization checks
+
+    This composition allows HTTPTransport to focus on HTTP-specific logic while
+    reusing common network and response handling code. Future HTTP-based transports
+    (e.g., WebSocket over HTTP) can inherit from the same mixins to maintain consistency.
     """
 
     def __init__(
