@@ -13,24 +13,27 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
+_AUTO_FILTER = object()
+
+
 class SafetyReporter:
     """Handles all safety system reporting functionality."""
 
-    def __init__(self):
+    def __init__(self, safety_filter=_AUTO_FILTER):
         self.console = Console()
-        self.safety_filter = None
-        self.system_blocker = None
+        if safety_filter is _AUTO_FILTER:
+            try:
+                from ..safety_system.safety import SafetyFilter
 
-        # Try to import safety components
-        try:
-            from ..safety_system.safety import safety_filter
-
+                self.safety_filter = SafetyFilter()
+            except ImportError:
+                logging.debug("Safety filter not available")
+                self.safety_filter = None
+        else:
             self.safety_filter = safety_filter
-        except ImportError:
-            logging.debug("Safety filter not available")
 
         try:
-            from ..safety_system.system_blocker import (
+            from ..safety_system.blocking import (
                 get_blocked_operations,
                 is_system_blocking_active,
             )

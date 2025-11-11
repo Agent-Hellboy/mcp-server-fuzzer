@@ -9,7 +9,7 @@ import logging
 
 from ..auth import AuthManager
 from ..reports import FuzzerReporter
-from ..safety_system.safety import SafetyProvider
+from ..safety_system.safety import SafetyProvider, SafetyFilter
 
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
@@ -29,7 +29,10 @@ class MCPFuzzerClient:
         tool_timeout: float | None = None,
         reporter: FuzzerReporter | None = None,
         safety_system: SafetyProvider | None = None,
+        safety_enabled: bool = True,
         max_concurrency: int = 5,
+        tool_client: ToolClient | None = None,
+        protocol_client: ProtocolClient | None = None,
     ):
         """
         Initialize the MCP Fuzzer Client.
@@ -41,28 +44,40 @@ class MCPFuzzerClient:
             reporter: Reporter for fuzzing results
             safety_system: Safety system for filtering operations
             max_concurrency: Maximum number of concurrent operations
+            tool_client: Optional pre-created ToolClient
+            protocol_client: Optional pre-created ProtocolClient
         """
         self.transport = transport
         self.auth_manager = auth_manager or AuthManager()
-        self.reporter = reporter or FuzzerReporter()
+        self._reporter = reporter or FuzzerReporter(safety_system=safety_system)
         self.tool_timeout = tool_timeout
-        self.safety_system = safety_system
+        self.safety_enabled = safety_enabled
+        if not safety_enabled:
+            self.safety_system = None
+        else:
+            self.safety_system = safety_system or SafetyFilter()
 
-        # Create specialized clients
-        self.tool_client = ToolClient(
+        # Create specialized clients if not provided
+        self.tool_client = tool_client or ToolClient(
             transport=transport,
             auth_manager=self.auth_manager,
-            safety_system=safety_system,
+            safety_system=self.safety_system,
+            enable_safety=self.safety_enabled,
             max_concurrency=max_concurrency,
         )
 
-        self.protocol_client = ProtocolClient(
+        self.protocol_client = protocol_client or ProtocolClient(
             transport=transport,
-            safety_system=safety_system,
+            safety_system=self.safety_system,
             max_concurrency=max_concurrency,
         )
 
         self._logger = logging.getLogger(__name__)
+
+    @property
+    def reporter(self) -> FuzzerReporter:
+        """Direct access to the reporter for advanced usage."""
+        return self._reporter
 
     # ============================================================================
     # Tool Fuzzing Methods - Delegate to ToolClient
@@ -115,19 +130,19 @@ class MCPFuzzerClient:
 
     def print_tool_summary(self, results):
         """Print a summary of tool fuzzing results."""
-        self.reporter.print_tool_summary(results)
+        self._reporter.print_tool_summary(results)
 
     def print_protocol_summary(self, results):
         """Print a summary of protocol fuzzing results."""
-        self.reporter.print_protocol_summary(results)
+        self._reporter.print_protocol_summary(results)
 
     def print_safety_statistics(self):
         """Print safety statistics."""
-        self.reporter.print_safety_summary()
+        self._reporter.print_safety_summary()
 
     def print_safety_system_summary(self):
         """Print summary of safety system blocked operations."""
-        self.reporter.print_safety_system_summary()
+        self._reporter.print_safety_system_summary()
 
     def print_blocked_operations_summary(self):
         """Print summary of blocked system operations."""
@@ -135,11 +150,11 @@ class MCPFuzzerClient:
             # Best-effort calls; only if present
             if hasattr(self.safety_system, "get_statistics"):
                 self.safety_system.get_statistics()
-        self.reporter.print_blocked_operations_summary()
+        self._reporter.print_blocked_operations_summary()
 
     def print_overall_summary(self, tool_results, protocol_results):
         """Print overall summary statistics."""
-        self.reporter.print_overall_summary(tool_results, protocol_results)
+        self._reporter.print_overall_summary(tool_results, protocol_results)
 
     def print_comprehensive_safety_report(self):
         """Print a comprehensive safety report."""
@@ -150,18 +165,18 @@ class MCPFuzzerClient:
                 self.safety_system.get_statistics()
             if hasattr(self.safety_system, "get_blocked_examples"):
                 self.safety_system.get_blocked_examples()
-        self.reporter.print_comprehensive_safety_report()
+        self._reporter.print_comprehensive_safety_report()
 
     def generate_standardized_reports(self, output_types=None, include_safety=True):
         """Generate standardized output reports."""
-        return self.reporter.generate_standardized_report(
+        return self._reporter.generate_standardized_report(
             output_types=output_types,
             include_safety=include_safety
         )
 
     def generate_final_report(self, include_safety=True):
         """Generate final comprehensive report."""
-        return self.reporter.generate_final_report(include_safety=include_safety)
+        return self._reporter.generate_final_report(include_safety=include_safety)
 
     # ============================================================================
     # Cleanup Methods

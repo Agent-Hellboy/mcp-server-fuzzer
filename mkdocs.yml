@@ -102,28 +102,13 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started:
-      - Quick Start: getting-started/getting-started.md
       - Examples: getting-started/examples.md
-  - Architecture:
-      - Overview: architecture/architecture.md
-      - Client Architecture: architecture/client-architecture.md
-      - Async Executor: architecture/async-executor.md
-  - Components:
-      - Process Management: components/process-management.md
-      - Process Management Guide: components/process-management-guide.md
-      - Runtime Management: components/runtime-management.md
-      - Safety Guide: components/safety.md
   - Configuration:
-      - Configuration: configuration/configuration.md
       - Configuration Loader: configuration/configuration-loader.md
-      - Network Policy: configuration/network-policy.md
+  - Components:
+      - Safety: components/safety.md
   - Transport:
       - Custom Transports: transport/custom-transports.md
-      - Transport Improvements: transport/transport-improvements.md
+  - Architecture: architecture/architecture.md
   - Development:
       - Contributing: development/contributing.md
-      - Exceptions: development/exceptions.md
-      - Reference: development/reference.md
-      - Standardized Output: development/standardized-output.md
-  - Testing:
-      - Fuzz Results: testing/fuzz-results.md

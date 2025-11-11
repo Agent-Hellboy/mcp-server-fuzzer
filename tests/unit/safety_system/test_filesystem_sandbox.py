@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcp_fuzzer.safety_system.filesystem_sandbox import (
+from mcp_fuzzer.safety_system.filesystem import (
     FilesystemSandbox,
     initialize_sandbox,
     get_sandbox,

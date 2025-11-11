@@ -2,12 +2,6 @@ from abc import ABC, abstractmethod
 import logging
 from typing import Any, AsyncIterator
 
-from ..safety_system.safety import (
-    safety_filter,
-    is_safe_tool_call,
-    create_safety_response,
-    sanitize_tool_call,
-)
 
 class TransportProtocol(ABC):
     @abstractmethod
@@ -79,25 +73,15 @@ class TransportProtocol(ABC):
             return []
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
-        if not is_safe_tool_call(tool_name, arguments):
-            safety_filter.log_blocked_operation(
-                tool_name, arguments, "Dangerous tool call blocked in transport"
-            )
-            return create_safety_response(tool_name)
+        """
+        Call a tool on the server with the given arguments.
 
-        sanitized_tool_name, sanitized_arguments = sanitize_tool_call(
-            tool_name, arguments
-        )
-        safety_sanitized = sanitized_arguments != arguments
-        params = {"name": sanitized_tool_name, "arguments": sanitized_arguments}
-        result = await self.send_request("tools/call", params)
-        if safety_sanitized and isinstance(result, dict):
-            if "_meta" not in result:
-                result["_meta"] = {}
-            result["_meta"]["safety_sanitized"] = True
-            result["_meta"]["original_arguments"] = arguments
-            result["_meta"]["sanitized_arguments"] = sanitized_arguments
-        return result
+        Note: Safety checks and sanitization are handled at the client layer,
+        NOT in the transport. This keeps the transport layer focused on
+        communication concerns only.
+        """
+        params = {"name": tool_name, "arguments": arguments}
+        return await self.send_request("tools/call", params)
 
     async def send_batch_request(
         self, batch: list[dict[str, Any]]

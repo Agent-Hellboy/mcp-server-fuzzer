@@ -9,11 +9,7 @@ import asyncio
 import logging
 from typing import Any
 
-from ...safety_system.safety import (
-    safety_filter,
-    is_safe_tool_call,
-    sanitize_tool_call,
-)
+from ...safety_system.safety import SafetyFilter, SafetyProvider
 from ..executor import AsyncFuzzExecutor
 from ..strategy import ToolStrategies
 
@@ -21,7 +17,12 @@ from ..strategy import ToolStrategies
 class ToolFuzzer:
     """Orchestrates fuzzing of MCP tools."""
 
-    def __init__(self, max_concurrency: int = 5):
+    def __init__(
+        self,
+        max_concurrency: int = 5,
+        safety_system: SafetyProvider | None = None,
+        enable_safety: bool = True,
+    ):
         """
         Initialize the tool fuzzer.
 
@@ -30,6 +31,10 @@ class ToolFuzzer:
         """
         self.strategies = ToolStrategies()
         self.executor = AsyncFuzzExecutor(max_concurrency=max_concurrency)
+        if not enable_safety:
+            self.safety_system = None
+        else:
+            self.safety_system = safety_system or SafetyFilter()
         self._logger = logging.getLogger(__name__)
 
     async def fuzz_tool(
@@ -97,22 +102,28 @@ class ToolFuzzer:
             # Generate fuzz arguments using the strategy with phase
             args = await self.strategies.fuzz_tool_arguments(tool, phase=phase)
 
-            # Apply safety filtering
-            if not is_safe_tool_call(tool_name, args):
-                safety_filter.log_blocked_operation(
-                    tool_name, args, "Dangerous operation detected"
-                )
-                return {
-                    "tool_name": tool_name,
-                    "run": run_index + 1,
-                    "args": args,
-                    "success": False,
-                    "safety_blocked": True,
-                    "safety_reason": "Dangerous operation blocked",
-                }
+            safety_sanitized = False
+            sanitized_args = args
 
-            # Sanitize arguments
-            sanitized_tool_name, sanitized_args = sanitize_tool_call(tool_name, args)
+            if self.safety_system:
+                if self.safety_system.should_skip_tool_call(tool_name, args):
+                    self.safety_system.log_blocked_operation(
+                        tool_name, args, "Dangerous operation detected"
+                    )
+                    return {
+                        "tool_name": tool_name,
+                        "run": run_index + 1,
+                        "args": args,
+                        "success": False,
+                        "safety_blocked": True,
+                        "safety_reason": "Dangerous operation blocked",
+                    }
+
+                # Sanitize arguments
+                sanitized_args = self.safety_system.sanitize_tool_arguments(
+                    tool_name, args
+                )
+                safety_sanitized = sanitized_args != args
 
             # Keep high-level progress at DEBUG to avoid noisy INFO
             self._logger.debug(
@@ -126,7 +137,7 @@ class ToolFuzzer:
                 "args": sanitized_args,
                 "original_args": (args if args != sanitized_args else None),
                 "success": True,
-                "safety_sanitized": args != sanitized_args,
+                "safety_sanitized": safety_sanitized,
             }
 
         except Exception as e:

@@ -61,6 +61,11 @@ class MyCustomTransport(TransportProtocol):
         # Implement notification sending logic
         pass
 
+    async def close(self) -> None:
+        """Close the transport connection."""
+        # Cleanup logic
+        pass
+
     async def _stream_request(
         self, payload: Dict[str, Any]
     ) -> AsyncIterator[Dict[str, Any]]:
@@ -71,72 +76,46 @@ class MyCustomTransport(TransportProtocol):
             yield {}
 ```
 
-### 2. Register the Transport
+### 2. Register Your Transport
 
-#### Option A: Programmatic Registration
-
-```python
-from mcp_fuzzer.transport import register_custom_transport
-
-# Register your custom transport
-register_custom_transport(
-    name="mytransport",
-    transport_class=MyCustomTransport,
-    description="My custom MCP transport implementation",
-    config_schema={
-        "type": "object",
-        "properties": {
-            "timeout": {"type": "number"},
-            "retries": {"type": "integer"}
-        }
-    }
-)
-```
-
-#### Option B: Configuration File Registration
-
-Add to your `mcp-fuzzer.yaml` configuration file:
+Add your custom transport to the configuration file:
 
 ```yaml
+# config.yaml
 custom_transports:
-  mytransport:
+  my-custom:
     module: "my_package.transports"
     class: "MyCustomTransport"
-    description: "My custom MCP transport implementation"
-    config:
-      timeout: 30
-      retries: 3
+    # Optional: additional init kwargs
+    extra_arg: "value"
 ```
 
-### 3. Use the Custom Transport
+### 3. Use in CLI
 
-Once registered, your custom transport can be used in several ways:
+Now you can use your custom transport via the CLI:
 
-#### Via URL Scheme
+```bash
+mcp-fuzzer --protocol my-custom --config config.yaml --endpoint my-endpoint
+```
+
+## Advanced: Self-Registration with Registry
+
+The transport factory now uses a `TransportRegistry` for built-in transports. For custom transports, you can optionally self-register in your module for even easier extension:
 
 ```python
-from mcp_fuzzer.transport import create_transport
+# In my_package/transports.py
+from mcp_fuzzer.transport.factory import registry
 
-# Use custom transport with URL scheme
-transport = create_transport("mytransport://my-endpoint")
+class MyCustomTransport(TransportProtocol):
+    # ... implementation ...
+
+# Self-register (runs when module is imported)
+registry.register("my-custom", MyCustomTransport)
 ```
 
-#### Via Factory Function
+This makes extension simpler – no factory changes needed, and CLI usage remains unchanged.
 
-```python
-from mcp_fuzzer.transport import create_custom_transport
-
-# Create custom transport instance directly
-transport = create_custom_transport("mytransport", "my-endpoint")
-```
-
-#### Via Configuration
-
-```yaml
-# In mcp-fuzzer.yaml
-protocol: mytransport
-endpoint: "my-endpoint"
-```
+Note: Self-registration is optional; config-based registration (step 2) still works and is recommended for most cases.
 
 ## Example: WebSocket Transport
 

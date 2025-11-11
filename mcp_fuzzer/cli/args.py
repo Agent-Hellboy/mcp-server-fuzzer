@@ -6,11 +6,6 @@ from typing import Any
 
 from rich.console import Console
 
-from ..safety_system.safety import (
-    safety_filter,
-    disable_safety,
-    load_safety_plugin,
-)
 from ..config import config
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -164,6 +159,11 @@ Examples:
         ),
     )
     parser.add_argument(
+        "--no-safety",
+        action="store_true",
+        help="Disable argument-level safety filtering (not recommended).",
+    )
+    parser.add_argument(
         "--safety-report",
         action="store_true",
         help=(
@@ -187,19 +187,6 @@ Examples:
         default="reports",
         help="Directory to save reports and exports (default: reports)",
     )
-    parser.add_argument(
-        "--safety-plugin",
-        help=(
-            "Dotted path to a custom safety provider module. The module must expose "
-            "get_safety() or a 'safety' object implementing SafetyProvider."
-        ),
-    )
-    parser.add_argument(
-        "--no-safety",
-        action="store_true",
-        help="Disable argument-level safety filtering (not recommended).",
-    )
-
     parser.add_argument(
         "--retry-with-safety-on-interrupt",
         action="store_true",
@@ -388,7 +375,10 @@ def build_unified_client_args(args: argparse.Namespace) -> dict[str, Any]:
         "verbose": args.verbose,
         "runs": args.runs,
         "runs_per_type": args.runs_per_type,
+        "safety_enabled": not getattr(args, "no_safety", False),
     }
+
+    client_args["fs_root"] = getattr(args, "fs_root", None)
 
     if args.protocol_type:
         client_args["protocol_type"] = args.protocol_type
@@ -412,29 +402,7 @@ def build_unified_client_args(args: argparse.Namespace) -> dict[str, Any]:
 
     fs_root_value = getattr(args, "fs_root", None)
     if fs_root_value:
-        try:
-            safety_filter.set_fs_root(fs_root_value)
-            logging.info(f"Filesystem sandbox root set to: {fs_root_value}")
-        except Exception as e:
-            logging.warning(f"Failed to set fs-root '{fs_root_value}': {e}")
-
-    plugin = getattr(args, "safety_plugin", None)
-    if plugin:
-        try:
-            if cli_module and hasattr(cli_module, "load_safety_plugin"):
-                cli_module.load_safety_plugin(plugin)  # type: ignore[attr-defined]
-            else:
-                load_safety_plugin(plugin)
-            logging.info(f"Loaded safety plugin: {plugin}")
-        except Exception as e:
-            logging.warning(f"Failed to load safety plugin '{plugin}': {e}")
-    if getattr(args, "no_safety", False):
-        # Resolve via package for tests to patch
-        if cli_module and hasattr(cli_module, "disable_safety"):
-            cli_module.disable_safety()  # type: ignore[attr-defined]
-        else:
-            disable_safety()
-        logging.warning("Safety filtering disabled via --no-safety")
+        client_args["fs_root"] = fs_root_value
 
     return client_args
 
@@ -519,12 +487,11 @@ def get_cli_config() -> dict[str, Any]:
             "runs": args.runs,
             "runs_per_type": args.runs_per_type,
             "protocol_type": args.protocol_type,
+            "safety_enabled": not getattr(args, "no_safety", False),
             "enable_safety_system": getattr(args, "enable_safety_system", False),
             "safety_report": getattr(args, "safety_report", False),
             "export_safety_data": getattr(args, "export_safety_data", None),
             "output_dir": getattr(args, "output_dir", "reports"),
-            "safety_plugin": getattr(args, "safety_plugin", None),
-            "no_safety": getattr(args, "no_safety", False),
             "retry_with_safety_on_interrupt": getattr(
                 args, "retry_with_safety_on_interrupt", False
             ),
@@ -564,12 +531,11 @@ def get_cli_config() -> dict[str, Any]:
         "runs": args.runs,
         "runs_per_type": args.runs_per_type,
         "protocol_type": args.protocol_type,
+        "safety_enabled": not getattr(args, "no_safety", False),
         "enable_safety_system": getattr(args, "enable_safety_system", False),
         "safety_report": getattr(args, "safety_report", False),
         "export_safety_data": getattr(args, "export_safety_data", None),
         "output_dir": getattr(args, "output_dir", "reports"),
-        "safety_plugin": getattr(args, "safety_plugin", None),
-        "no_safety": getattr(args, "no_safety", False),
         "retry_with_safety_on_interrupt": getattr(
             args, "retry_with_safety_on_interrupt", False
         ),

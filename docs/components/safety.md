@@ -311,10 +311,6 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no
 ### Advanced Safety Configuration
 
 ```bash
-# Custom safety plugin
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" \
-  --safety-plugin my_safety_module.SafetyProvider
-
 # Retry with safety on interrupt
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" \
   --retry-with-safety-on-interrupt
@@ -388,12 +384,10 @@ class CustomSafetySystem(SafetySystem):
 ```bash
 # Use custom safety provider
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" \
-  --safety-plugin my_safety_module.CustomSafetyProvider
 
 # With configuration
 export MCP_FUZZER_SAFETY_CONFIG=/path/to/safety_config.json
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" \
-  --safety-plugin my_safety_module.CustomSafetyProvider
 ```
 
 ## Safety Alerts and Logging

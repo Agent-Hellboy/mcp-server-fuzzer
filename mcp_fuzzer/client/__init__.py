@@ -12,6 +12,7 @@ import emoji
 from ..transport import create_transport
 from ..reports import FuzzerReporter
 from .base import MCPFuzzerClient
+from ..safety_system.safety import SafetyFilter
 
 # For backward compatibility
 UnifiedMCPFuzzerClient = MCPFuzzerClient
@@ -30,16 +31,13 @@ async def main(argv: list[str] | None = None) -> int:
     # Get configuration from CLI args, env vars, and config files
     config = get_cli_config()
 
-    # Also get the global config which has all the export flags
-    from ..config import config as global_config
-    logging.info(f"Global config object: {global_config}")
-    logging.info(f"Global config dict: {global_config._config}")
+    # Log export flags using local config
     logging.info(
         f"Client received config with export flags: "
-        f"csv={global_config.get('export_csv')}, "
-        f"xml={global_config.get('export_xml')}, "
-        f"html={global_config.get('export_html')}, "
-        f"md={global_config.get('export_markdown')}"
+        f"csv={config.get('export_csv', False)}, "
+        f"xml={config.get('export_xml', False)}, "
+        f"html={config.get('export_html', False)}, "
+        f"md={config.get('export_markdown', False)}"
     )
 
     # Create transport based on configuration
@@ -49,10 +47,24 @@ async def main(argv: list[str] | None = None) -> int:
         timeout=config.get("timeout"),
     )
 
+    # Configure safety system
+    safety_enabled = config.get("safety_enabled", True)
+    safety_system = None
+    if safety_enabled:
+        safety_system = SafetyFilter()
+        fs_root = config.get("fs_root")
+        if fs_root:
+            try:
+                safety_system.set_fs_root(fs_root)
+            except Exception as e:
+                logging.warning(f"Failed to set filesystem root '{fs_root}': {e}")
+
     # Create reporter with custom output directory if specified
     reporter = None
     if "output_dir" in config:
-        reporter = FuzzerReporter(output_dir=config["output_dir"])
+        reporter = FuzzerReporter(
+            output_dir=config["output_dir"], safety_system=safety_system
+        )
 
     # Create client
     client = MCPFuzzerClient(
@@ -60,6 +72,8 @@ async def main(argv: list[str] | None = None) -> int:
         auth_manager=config.get("auth_manager"),
         tool_timeout=config.get("tool_timeout"),
         reporter=reporter,
+        safety_system=safety_system,
+        safety_enabled=safety_enabled,
         max_concurrency=config.get("max_concurrency", 5),
     )
 
@@ -192,39 +206,39 @@ async def main(argv: list[str] | None = None) -> int:
         # Export results to additional formats if requested
         try:
             logging.info(
-                f"Checking export flags: csv={global_config.get('export_csv')}, "
-                f"xml={global_config.get('export_xml')}, "
-                f"html={global_config.get('export_html')}, "
-                f"md={global_config.get('export_markdown')}"
+                f"Checking export flags: csv={config.get('export_csv', False)}, "
+                f"xml={config.get('export_xml', False)}, "
+                f"html={config.get('export_html', False)}, "
+                f"md={config.get('export_markdown', False)}"
             )
             logging.info(f"Client reporter available: {client.reporter is not None}")
 
-            if global_config.get("export_csv"):
-                csv_filename = global_config["export_csv"]
+            if config.get("export_csv"):
+                csv_filename = config["export_csv"]
                 if client.reporter:
                     client.reporter.export_csv(csv_filename)
                     logging.info(f"Exported CSV report to: {csv_filename}")
                 else:
                     logging.warning("No reporter available for CSV export")
 
-            if global_config.get("export_xml"):
-                xml_filename = global_config["export_xml"]
+            if config.get("export_xml"):
+                xml_filename = config["export_xml"]
                 if client.reporter:
                     client.reporter.export_xml(xml_filename)
                     logging.info(f"Exported XML report to: {xml_filename}")
                 else:
                     logging.warning("No reporter available for XML export")
 
-            if global_config.get("export_html"):
-                html_filename = global_config["export_html"]
+            if config.get("export_html"):
+                html_filename = config["export_html"]
                 if client.reporter:
                     client.reporter.export_html(html_filename)
                     logging.info(f"Exported HTML report to: {html_filename}")
                 else:
                     logging.warning("No reporter available for HTML export")
 
-            if global_config.get("export_markdown"):
-                markdown_filename = global_config["export_markdown"]
+            if config.get("export_markdown"):
+                markdown_filename = config["export_markdown"]
                 if client.reporter:
                     client.reporter.export_markdown(markdown_filename)
                     logging.info(f"Exported Markdown report to: {markdown_filename}")

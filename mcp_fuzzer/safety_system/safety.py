@@ -10,19 +10,26 @@ is handled by the system_blocker module.
 """
 
 import logging
-import re
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import emoji
 
-from .filesystem_sandbox import initialize_sandbox, get_sandbox
-from .patterns import (
+from .filesystem import (
+    PathSanitizer,
+    initialize_sandbox as fs_initialize_sandbox,
+    get_sandbox as fs_get_sandbox,
+)
+from .detection import (
     DEFAULT_DANGEROUS_URL_PATTERNS,
     DEFAULT_DANGEROUS_SCRIPT_PATTERNS,
     DEFAULT_DANGEROUS_COMMAND_PATTERNS,
     DEFAULT_DANGEROUS_ARGUMENT_NAMES,
+    DangerDetector,
+    DangerType,
 )
+from .reporting import SafetyEventLogger
 
 
 @runtime_checkable
@@ -42,6 +49,24 @@ class SafetyProvider(Protocol):
     ) -> None: ...
 
 
+@runtime_checkable
+class SandboxProvider(Protocol):
+    """Protocol for pluggable sandbox providers."""
+
+    def initialize(self, root: str | Path) -> None: ...
+    def get_sandbox(self) -> Any | None: ...
+
+
+class DefaultSandboxProvider(SandboxProvider):
+    """Default implementation using existing filesystem sandbox."""
+
+    def initialize(self, root: str | Path) -> None:
+        fs_initialize_sandbox(str(root))
+
+    def get_sandbox(self) -> Any | None:
+        return fs_get_sandbox()
+
+
 class SafetyFilter(SafetyProvider):
     """Filters and suppresses dangerous operations during fuzzing."""
 
@@ -51,17 +76,18 @@ class SafetyFilter(SafetyProvider):
         dangerous_script_patterns: list[str] | None = None,
         dangerous_command_patterns: list[str] | None = None,
         dangerous_argument_names: list[str] | None = None,
+        sandbox_provider: SandboxProvider | None = None,
     ):
         # Allow dependency injection of patterns for easier testing and configurability
-        self.dangerous_url_patterns = self._compile_patterns(
-            dangerous_url_patterns or DEFAULT_DANGEROUS_URL_PATTERNS
+        self.detector = DangerDetector(
+            dangerous_url_patterns or DEFAULT_DANGEROUS_URL_PATTERNS,
+            dangerous_script_patterns or DEFAULT_DANGEROUS_SCRIPT_PATTERNS,
+            dangerous_command_patterns or DEFAULT_DANGEROUS_COMMAND_PATTERNS,
         )
-        self.dangerous_script_patterns = self._compile_patterns(
-            dangerous_script_patterns or DEFAULT_DANGEROUS_SCRIPT_PATTERNS
-        )
-        self.dangerous_command_patterns = self._compile_patterns(
-            dangerous_command_patterns or DEFAULT_DANGEROUS_COMMAND_PATTERNS
-        )
+        # Backwards-compatible attributes used by unit tests/documentation
+        self.dangerous_url_patterns = list(self.detector.url_patterns)
+        self.dangerous_script_patterns = list(self.detector.script_patterns)
+        self.dangerous_command_patterns = list(self.detector.command_patterns)
         # Normalize argument names for case-insensitive membership checks
         self.dangerous_argument_names = {
             n.lower()
@@ -69,62 +95,65 @@ class SafetyFilter(SafetyProvider):
         }
 
         # Track blocked operations for testing and analysis
-        self.blocked_operations = []
+        self.blocked_operations: list[dict[str, Any]] = []
         self._fs_root: Path | None = None
+        self.sandbox_provider = sandbox_provider or DefaultSandboxProvider()
+        self._event_logger = SafetyEventLogger(self.detector)
 
     def set_fs_root(self, root: str | Path) -> None:
         """Initialize filesystem sandbox with the specified root directory."""
         try:
-            sandbox = initialize_sandbox(str(root))
-            logging.info(
-                f"Filesystem sandbox initialized at: {sandbox.get_sandbox_root()}"
-            )
+            self.sandbox_provider.initialize(str(root))
+            logging.info("Filesystem sandbox initialized at: %s", root)
         except Exception as e:
             logging.error(
                 f"Failed to initialize filesystem sandbox with root '{root}': {e}"
             )
             # Initialize with default sandbox
-            initialize_sandbox()
-
-    def _compile_patterns(self, patterns):
-        """Compile string patterns into regex Pattern objects."""
-        compiled = []
-        for p in patterns:
-            if isinstance(p, re.Pattern):
-                compiled.append(p)
-            else:
-                compiled.append(re.compile(p, re.IGNORECASE))
-        return compiled
+            self.sandbox_provider.initialize(".")
 
     def contains_dangerous_url(self, value: str) -> bool:
-        """Check if a string contains a dangerous URL."""
-        if not value:
-            return False
-
-        for pattern in self.dangerous_url_patterns:
-            if pattern.search(value):
-                return True
-        return False
+        """
+        Check if a string contains a dangerous URL pattern.
+        
+        Detects HTTP/HTTPS URLs, FTP, file:// protocols, and common web domains.
+        
+        Args:
+            value: String to check for dangerous URLs
+            
+        Returns:
+            True if dangerous URL pattern found, False otherwise
+        """
+        return self.detector.contains(value, DangerType.URL)
 
     def contains_dangerous_script(self, value: str) -> bool:
-        """Check if a string contains dangerous script injection patterns."""
-        if not value:
-            return False
-
-        for pattern in self.dangerous_script_patterns:
-            if pattern.search(value):
-                return True
-        return False
+        """
+        Check if a string contains dangerous script injection patterns.
+        
+        Detects HTML/JavaScript injection like <script>, event handlers, eval(), etc.
+        
+        Args:
+            value: String to check for script injection patterns
+            
+        Returns:
+            True if dangerous script pattern found, False otherwise
+        """
+        return self.detector.contains(value, DangerType.SCRIPT)
 
     def contains_dangerous_command(self, value: str) -> bool:
-        """Check if a string contains a dangerous command."""
-        if not value:
-            return False
-
-        for pattern in self.dangerous_command_patterns:
-            if pattern.search(value):
-                return True
-        return False
+        """
+        Check if a string contains dangerous command patterns.
+        
+        Detects browser/app launches (xdg-open, start, open), system modification
+        commands (sudo, rm -rf, format, shutdown), and executable patterns.
+        
+        Args:
+            value: String to check for dangerous commands
+            
+        Returns:
+            True if dangerous command pattern found, False otherwise
+        """
+        return self.detector.contains(value, DangerType.COMMAND)
 
     def sanitize_tool_arguments(
         self, tool_name: str, arguments: dict[str, Any]
@@ -138,7 +167,7 @@ class SafetyFilter(SafetyProvider):
         sanitized_args = self._sanitize_value("root", arguments)
         
         # Then sanitize filesystem paths if sandbox is enabled
-        sandbox = get_sandbox()
+        sandbox = self.sandbox_provider.get_sandbox()
         if sandbox:
             sanitized_args = self._sanitize_filesystem_paths(sanitized_args, tool_name)
             
@@ -148,69 +177,27 @@ class SafetyFilter(SafetyProvider):
         self, arguments: dict[str, Any], tool_name: str
     ) -> dict[str, Any]:
         """Sanitize filesystem paths to ensure they're within the sandbox."""
-        sandbox = get_sandbox()
+        sandbox = self.sandbox_provider.get_sandbox()
         if not sandbox:
             return arguments
-            
-        # Common filesystem-related argument names
-        filesystem_args = {
-            'path', 'file', 'filename', 'filepath', 'directory', 'dir', 'folder',
-            'source', 'destination', 'dest', 'target', 'output', 'input',
-            'root', 'base', 'location', 'where', 'to', 'from'
-        }
-        
-        sanitized = {}
-        for key, value in arguments.items():
-            if isinstance(value, (str, Path)):
-                value_str = str(value)
-                looks_like_path = (
-                    key.lower() in filesystem_args
-                    or "/" in value_str
-                    or "\\" in value_str
-                    or value_str.endswith(('.txt', '.json', '.yaml', '.yml', '.log', 
-                                           '.md', '.py', '.js', '.html', '.css', 
-                                           '.xml', '.csv'))
-                )
-                if looks_like_path:
-                    if sandbox.is_path_safe(value_str):
-                        sanitized[key] = value_str
-                    else:
-                        safe_path = sandbox.sanitize_path(value_str)
-                        logging.info(
-                            "Sanitized filesystem path '%s': '%s' -> '%s'",
-                            key,
-                            value_str,
-                            safe_path,
-                        )
-                        sanitized[key] = safe_path
-                else:
-                    sanitized[key] = value
-            elif isinstance(value, dict):
-                sanitized[key] = self._sanitize_filesystem_paths(value, tool_name)
-            elif isinstance(value, list):
-                new_list = []
-                for item in value:
-                    if isinstance(item, dict):
-                        new_list.append(
-                            self._sanitize_filesystem_paths(item, tool_name)
-                        )
-                    elif isinstance(item, (str, Path)):
-                        item_key = f"{key}_item"
-                        new_list.append(
-                            self._sanitize_filesystem_paths(
-                                {item_key: item}, tool_name
-                            )[item_key]
-                        )
-                    else:
-                        new_list.append(item)
-                sanitized[key] = new_list
-            else:
-                sanitized[key] = value
-                
-        return sanitized
+
+        sanitizer = PathSanitizer(sandbox)
+        return sanitizer.sanitize_arguments(arguments, tool_name)
 
     def _sanitize_value(self, key: str, value: Any) -> Any:
-        """Recursively sanitize any value (string, dict, list, etc.)."""
+        """
+        Recursively sanitize any value (string, dict, list, etc.).
+        
+        Handles nested structures by recursively applying sanitization rules.
+        Strings are checked for dangerous patterns; dicts and lists are traversed.
+        
+        Args:
+            key: Argument name/path (used for logging context)
+            value: Value to sanitize (any type)
+            
+        Returns:
+            Sanitized value with dangerous patterns replaced or removed
+        """
         if isinstance(value, str):
             return self._sanitize_string_argument(key, value)
         elif isinstance(value, dict):
@@ -234,20 +221,23 @@ class SafetyFilter(SafetyProvider):
         if not value:
             return value
 
-        # CRITICAL: Check for URLs - completely block them
-        if self.contains_dangerous_url(value):
-            logging.warning(f"BLOCKED dangerous URL in {arg_name}: {value[:50]}...")
-            return "[BLOCKED_URL]"
-
-        # CRITICAL: Check for script injection - completely block them
-        if self.contains_dangerous_script(value):
-            logging.warning(f"BLOCKED dangerous script in {arg_name}: {value[:50]}...")
-            return "[BLOCKED_SCRIPT]"
-
-        # CRITICAL: Check for dangerous commands - completely block them
-        if self.contains_dangerous_command(value):
-            logging.warning(f"BLOCKED dangerous command in {arg_name}: {value[:50]}...")
-            return "[BLOCKED_COMMAND]"
+        # CRITICAL: Detect the first dangerous match (URL > SCRIPT > COMMAND)
+        match = self.detector.first_match(
+            value, [DangerType.URL, DangerType.SCRIPT, DangerType.COMMAND]
+        )
+        if match:
+            danger_label = match.danger_type.value.upper()
+            logging.warning(
+                "BLOCKED dangerous %s in %s: %s",
+                danger_label,
+                arg_name,
+                match.preview,
+            )
+            return {
+                DangerType.URL: "[BLOCKED_URL]",
+                DangerType.SCRIPT: "[BLOCKED_SCRIPT]",
+                DangerType.COMMAND: "[BLOCKED_COMMAND]",
+            }[match.danger_type]
 
         # Extra scrutiny for dangerous argument names
         if arg_name.lower() in self.dangerous_argument_names:
@@ -283,36 +273,24 @@ class SafetyFilter(SafetyProvider):
         if not arguments:
             return False
 
-        # Check ALL arguments for dangerous content
         for key, value in arguments.items():
-            if isinstance(value, str):
-                # BLOCK dangerous URLs (specific dangerous ones)
-                if self.contains_dangerous_url(value):
+            for nested_key, nested_value in self._iter_string_values(key, value):
+                if self.detector.contains(nested_value, DangerType.URL):
+                    preview = self._preview_value(nested_value)
                     logging.warning(
-                        f"BLOCKING tool call - dangerous URL in {key}: {value[:50]}..."
+                        "BLOCKING tool call - dangerous URL in %s: %s",
+                        nested_key,
+                        preview,
                     )
                     return True
-
-                # BLOCK any dangerous commands
-                if self.contains_dangerous_command(value):
+                if self.detector.contains(nested_value, DangerType.COMMAND):
+                    preview = self._preview_value(nested_value)
                     logging.warning(
-                        f"BLOCKING tool call - dangerous command in {key}: "
-                        f"{value[:50]}..."
+                        "BLOCKING tool call - dangerous command in %s: %s",
+                        nested_key,
+                        preview,
                     )
                     return True
-
-            elif isinstance(value, list):
-                # Check list items
-                for item in value:
-                    if isinstance(item, str):
-                        if self.contains_dangerous_url(
-                            item
-                        ) or self.contains_dangerous_command(item):
-                            logging.warning(
-                                f"BLOCKING tool call - dangerous content in {key}: "
-                                f"{item[:50]}..."
-                            )
-                            return True
 
         return False
 
@@ -337,85 +315,63 @@ class SafetyFilter(SafetyProvider):
         """Log details about blocked operations for analysis."""
         # Enhanced logging with more structure
         # Log tool first so tests can assert on the first call containing the tool name
-        logging.warning(f"Tool: {tool_name}")
-        logging.warning(f"Reason: {reason}")
-        logging.warning(f"Timestamp: {self._get_timestamp()}")
+        event = self._event_logger.build_blocked_operation(
+            tool_name, arguments, reason
+        )
+        logging.warning("Tool: %s", tool_name)
+        logging.warning("Reason: %s", reason)
+        logging.warning("Timestamp: %s", event.timestamp)
         logging.warning("=" * 80)
         logging.warning("\U0001f6ab SAFETY BLOCK DETECTED")
         logging.warning("=" * 80)
 
-        if arguments:
+        if event.arguments:
             logging.warning("Blocked Arguments:")
-            # Log arguments but truncate long values and highlight dangerous content
-            safe_args = {}
-            dangerous_content = []
+            logging.warning("Arguments: %s", event.arguments)
 
-            for key, value in arguments.items():
-                if isinstance(value, str):
-                    if len(value) > 100:
-                        safe_args[key] = value[:100] + "..."
-                    else:
-                        safe_args[key] = value
-
-                    # Check for dangerous content in this value
-                    if self.contains_dangerous_url(value):
-                        dangerous_content.append(f"URL in '{key}': {value[:50]}...")
-                    elif self.contains_dangerous_command(value):
-                        dangerous_content.append(f"Command in '{key}': {value[:50]}...")
-
-                elif isinstance(value, list):
-                    # Check list items for dangerous content
-                    if len(value) > 10:
-                        safe_args[key] = f"[{len(value)} items] - {str(value[:3])}..."
-                    else:
-                        safe_args[key] = value
-
-                    # Check for dangerous content in list items
-                    for item in value[:5]:  # Check first 5 items
-                        if isinstance(item, str):
-                            if self.contains_dangerous_url(item):
-                                dangerous_content.append(
-                                    f"URL in '{key}' list: {item[:50]}..."
-                                )
-                            elif self.contains_dangerous_command(item):
-                                dangerous_content.append(
-                                    f"Command in '{key}' list: {item[:50]}..."
-                                )
-                else:
-                    safe_args[key] = value
-
-            logging.warning(f"Arguments: {safe_args}")
-
-            if dangerous_content:
+            if event.dangerous_content:
                 logging.warning(
-                    f"{emoji.emojize(':police_car_light:')} DANGEROUS CONTENT DETECTED:"
+                    "%s DANGEROUS CONTENT DETECTED:",
+                    emoji.emojize(":police_car_light:"),
                 )
-                for content in dangerous_content:
-                    logging.warning(f"  • {content}")
+                for content in event.dangerous_content:
+                    logging.warning(
+                        "  • %s in '%s': %s",
+                        content.match.danger_type.value.upper(),
+                        content.key,
+                        content.match.preview,
+                    )
 
         logging.warning("=" * 80)
 
         # Add to blocked operations list for summary reporting
+        stored_arguments = deepcopy(arguments) if arguments is not None else None
+
         self.blocked_operations.append(
             {
-                "timestamp": self._get_timestamp(),
+                "timestamp": event.timestamp,
                 "tool_name": tool_name,
                 "reason": reason,
-                "arguments": arguments,
-                "dangerous_content": (
-                    dangerous_content if "dangerous_content" in locals() else []
-                ),
+                "arguments": stored_arguments,
+                "dangerous_content": [
+                    f"{entry.match.danger_type.value.upper()} in '{entry.key}': "
+                    f"{entry.match.preview}"
+                    for entry in event.dangerous_content
+                ],
             }
         )
 
-    def _get_timestamp(self) -> str:
-        """Get current timestamp in ISO format."""
-        from datetime import datetime
-
-        return datetime.now().isoformat()
-
     def get_blocked_operations_summary(self) -> dict[str, Any]:
-        """Get a summary of all blocked operations for reporting."""
+        """
+        Get a summary of all blocked operations for reporting.
+        
+        Returns:
+            Dictionary with keys:
+            - total_blocked: Total number of blocked operations
+            - tools_blocked: Dict mapping tool names to block counts
+            - reasons: Dict mapping block reasons to counts
+            - dangerous_content_types: Dict of content counts (URLs, commands, etc.)
+        """
         if not self.blocked_operations:
             return {"total_blocked": 0, "tools_blocked": {}, "reasons": {}}
 
@@ -453,81 +409,21 @@ class SafetyFilter(SafetyProvider):
 
         return summary
 
+    def _iter_string_values(self, key: str, value: Any):
+        """Yield (key_path, string_value) pairs from nested arguments."""
+        if isinstance(value, str):
+            yield key, value
+        elif isinstance(value, list):
+            for idx, item in enumerate(value):
+                yield from self._iter_string_values(f"{key}[{idx}]", item)
+        elif isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                nested_key = f"{key}.{sub_key}" if key else sub_key
+                yield from self._iter_string_values(nested_key, sub_value)
 
-_current_safety: SafetyProvider = SafetyFilter()
-
-
-def set_safety_provider(provider: SafetyProvider) -> None:
-    """Replace the active safety provider at runtime."""
-    global _current_safety
-    if not isinstance(provider, SafetyProvider):
-        raise TypeError("provider must implement SafetyProvider protocol")
-    _current_safety = provider
-
-
-def load_safety_plugin(dotted_path: str) -> None:
-    """
-    Load a safety provider from a module path.
-    The module may expose either `get_safety()` -> SafetyProvider or `safety` object.
-    """
-    import importlib
-
-    module = importlib.import_module(dotted_path)
-    provider: SafetyProvider | None = None
-    if hasattr(module, "get_safety"):
-        provider = getattr(module, "get_safety")()
-    elif hasattr(module, "safety"):
-        provider = getattr(module, "safety")
-    if provider is None:
-        raise ImportError(
-            f"Safety plugin '{dotted_path}' did not expose get_safety() or safety"
-        )
-    set_safety_provider(provider)
-
-
-def disable_safety() -> None:
-    """Disable safety by installing a no-op provider."""
-
-    class _NoopSafety(SafetyProvider):
-        def set_fs_root(self, root: str | Path) -> None:  # noqa: ARG002
-            return
-
-        def sanitize_tool_arguments(
-            self, tool_name: str, arguments: dict[str, Any]
-        ) -> dict[str, Any]:  # noqa: ARG002
-            return arguments
-
-        def should_skip_tool_call(
-            self, tool_name: str, arguments: dict[str, Any]
-        ) -> bool:  # noqa: ARG002
-            return False
-
-        def create_safe_mock_response(self, tool_name: str) -> dict[str, Any]:  # noqa: ARG002
-            return {"result": {"content": [{"text": "[SAFETY DISABLED]"}]}}
-
-        def log_blocked_operation(
-            self, tool_name: str, arguments: dict[str, Any], reason: str
-        ) -> None:  # noqa: ARG002
-            logging.warning("SAFETY DISABLED: %s", reason)
-
-    set_safety_provider(_NoopSafety())
-
-
-# Backwards-compatible helpers
-def is_safe_tool_call(tool_name: str, arguments: dict[str, Any]) -> bool:
-    return not _current_safety.should_skip_tool_call(tool_name, arguments)
-
-
-def sanitize_tool_call(
-    tool_name: str, arguments: dict[str, Any]
-) -> tuple[str, dict[str, Any]]:
-    sanitized_args = _current_safety.sanitize_tool_arguments(tool_name, arguments)
-    return tool_name, sanitized_args
-
-
-def create_safety_response(tool_name: str) -> dict[str, Any]:
-    return _current_safety.create_safe_mock_response(tool_name)
-
-
-# Expose a name for direct use where needed
-safety_filter: SafetyProvider = _current_safety
+    @staticmethod
+    def _preview_value(value: str, limit: int = 50) -> str:
+        """Return a short preview string for logging."""
+        if len(value) <= limit:
+            return value
+        return f"{value[:limit]}..."

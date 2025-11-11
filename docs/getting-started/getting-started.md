@@ -225,7 +225,7 @@ mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
 ### Basic Safety Features
 
 ```bash
-# Enable safety system
+# Enable safety system (default)
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --enable-safety-system
 
 # Set filesystem root
@@ -233,6 +233,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --fs
 
 # Disable argument-level safety (not recommended)
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no-safety
+
 ```
 
 ### Safety System Features

@@ -9,12 +9,28 @@ like Node.js child_process.exec().
 import json
 import logging
 import os
+import re
 import shutil
 import stat
 import tempfile
 from pathlib import Path
 
 import emoji
+
+from .shims import load_shim_template
+
+
+def _sanitize_command_name(command: str | None) -> str | None:
+    """Return a filesystem-safe command name or None."""
+    if not command:
+        return None
+    cleaned = Path(command.strip()).name
+    cleaned = cleaned.strip()
+    if not cleaned:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", cleaned):
+        return None
+    return cleaned
 
 
 class SystemCommandBlocker:
@@ -23,7 +39,7 @@ class SystemCommandBlocker:
     def __init__(self):
         self.temp_dir: Path | None = None
         self.original_path: str | None = None
-        self.blocked_commands = [
+        default_commands = [
             "xdg-open",  # Linux
             "open",  # macOS
             "start",  # Windows (cmd.exe builtin, but we can still block)
@@ -35,6 +51,11 @@ class SystemCommandBlocker:
             "edge",
             "opera",
             "brave",
+        ]
+        self.blocked_commands = [
+            name
+            for cmd in default_commands
+            if (name := _sanitize_command_name(cmd)) is not None
         ]
         self.created_files: list[Path] = []
         self.blocked_operations: list[dict[str, str]] = []
@@ -89,47 +110,12 @@ class SystemCommandBlocker:
         if not self.temp_dir:
             raise RuntimeError("Temp directory not created")
 
-        # Python script content for fake executables
+        # Python script content for fake executables.  Default commands use the
+        # friendlier shim that exits with status 0 so existing shell scripts keep
+        # running even when we intercept browser launches.
         log_file = self.temp_dir / "blocked_operations.log"
-        fake_script_content = f"""#!/usr/bin/env python3
-import sys
-import os
-import json
-from datetime import datetime
-import emoji
-
-command_name = os.path.basename(sys.argv[0])
-args = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else ''
-
-# Log to stderr so it's visible
-print(
-    f"{emoji.emojize(':prohibited:')} [FUZZER BLOCKED] {{command_name}} {{args}}",
-    file=sys.stderr
-)
-print(
-    (
-        f"{emoji.emojize(':shield:')} Command '{{command_name}}' was blocked to "
-        f"prevent external app launch during fuzzing. This is a safety feature."
-    )
-)
-
-# Log to shared file for summary reporting
-try:
-    log_entry = {{
-        "timestamp": datetime.now().isoformat(),
-        "command": command_name,
-        "args": args,
-        "full_command": f"{{command_name}} {{args}}".strip()
-    }}
-
-    with open("{log_file}", "a") as f:
-        f.write(json.dumps(log_entry) + "\\n")
-except Exception:
-    pass  # Don't fail if logging fails
-
-# Exit successfully to avoid breaking the calling process
-sys.exit(0)
-"""
+        shim_template = load_shim_template("default_shim.py")
+        fake_script_content = shim_template.replace("<<<LOG_FILE>>>", str(log_file))
 
         for command in self.blocked_commands:
             fake_exec_path = self.temp_dir / command
@@ -201,11 +187,16 @@ sys.exit(0)
 
     def block_command(self, command: str):
         """Block a specific command by adding it to the blocked commands list."""
-        if command and command not in self.blocked_commands:
-            self.blocked_commands.append(command)
+        normalized = _sanitize_command_name(command)
+        if not normalized:
+            logging.warning("Ignoring invalid command name: %s", command)
+            return
+
+        if normalized not in self.blocked_commands:
+            self.blocked_commands.append(normalized)
             # Create fake executable for the new command if blocking is active
             if self.is_blocking_active():
-                self._create_fake_executable(command)
+                self.create_fake_executable(normalized)
 
     def is_command_blocked(self, command: str) -> bool:
         """Check if a specific command is being blocked."""
@@ -219,34 +210,19 @@ sys.exit(0)
             logging.error("Temp directory not created")
             return
 
-        fake_exec_path = self.temp_dir / command
+        safe_command = _sanitize_command_name(command)
+        if not safe_command:
+            logging.warning("Cannot create shim for invalid command: %s", command)
+            return
+
+        fake_exec_path = self.temp_dir / safe_command
+        log_file = self.temp_dir / "blocked_operations.log"
+        # Dynamically blocked commands get the strict shim so callers can detect
+        # a failure (exit status 1) and react accordingly.
+        shim_template = load_shim_template("strict_shim.py")
         try:
             # Create the fake executable script
-            script_content = f"""#!/usr/bin/env python3
-import json
-import sys
-from pathlib import Path
-
-# Log the blocked operation
-log_file = Path(__file__).parent / "blocked_operations.log"
-blocked_op = {{
-    "command": "{command}",
-    "args": sys.argv[1:],
-    "timestamp": __import__("datetime").datetime.now().isoformat()
-}}
-
-try:
-    with open(log_file, "a") as f:
-        f.write(json.dumps(blocked_op) + "\\n")
-except Exception as e:
-    pass
-
-print(
-    f"[BLOCKED] Command '{{command}}' was blocked by MCP Fuzzer safety system",
-    file=sys.stderr
-)
-sys.exit(1)
-"""
+            script_content = shim_template.replace("<<<LOG_FILE>>>", str(log_file))
 
             with open(fake_exec_path, "w") as f:
                 f.write(script_content)

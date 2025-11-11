@@ -16,6 +16,11 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from ...config.constants import (
+    PROCESS_TERMINATION_TIMEOUT,
+    PROCESS_FORCE_KILL_TIMEOUT,
+)
+
 try:
     import psutil
     HAS_PSUTIL = True
@@ -204,7 +209,9 @@ class ProcessWatchdog:
                 process.terminate()
                 try:
                     # Give it a moment to terminate gracefully
-                    await asyncio.wait_for(process.wait(), timeout=0.5)
+                    await asyncio.wait_for(
+                        process.wait(), timeout=PROCESS_TERMINATION_TIMEOUT
+                    )
                     self._logger.info(
                         f"Gracefully terminated Windows process {pid} ({name})"
                     )
@@ -221,7 +228,9 @@ class ProcessWatchdog:
 
                     try:
                         # Wait a bit for graceful shutdown
-                        await asyncio.wait_for(process.wait(), timeout=0.5)
+                        await asyncio.wait_for(
+                            process.wait(), timeout=PROCESS_TERMINATION_TIMEOUT
+                        )
                         action = "Gracefully terminated"
                         msg = f"{action} Unix process {pid} ({name}) with SIGTERM"
                         self._logger.info(msg)
@@ -243,7 +252,9 @@ class ProcessWatchdog:
                     # Process group not accessible, try direct process termination
                     process.terminate()
                     try:
-                        await asyncio.wait_for(process.wait(), timeout=0.5)
+                        await asyncio.wait_for(
+                            process.wait(), timeout=PROCESS_TERMINATION_TIMEOUT
+                        )
                         action = "Gracefully terminated"
                         method = "process.terminate()"
                         msg = f"{action} Unix process {pid} ({name}) with {method}"
@@ -258,10 +269,13 @@ class ProcessWatchdog:
 
             # Ensure the process is reaped
             try:
-                await asyncio.wait_for(process.wait(), timeout=1.0)
+                await asyncio.wait_for(
+                    process.wait(), timeout=PROCESS_FORCE_KILL_TIMEOUT
+                )
             except asyncio.TimeoutError:
                 self._logger.warning(
-                    f"Process {pid} ({name}) did not exit after kill within 1.0s"
+                    f"Process {pid} ({name}) did not exit after kill within "
+                    f"{PROCESS_FORCE_KILL_TIMEOUT}s"
                 )
 
             self._logger.info(f"Successfully killed hanging process {pid} ({name})")

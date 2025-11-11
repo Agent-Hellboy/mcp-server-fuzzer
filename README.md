@@ -39,6 +39,15 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 - Production Ready: Environment detection and production-safe defaults
 - Intelligent Testing: Hypothesis-based data generation with custom strategies
 
+### Extensibility for Contributors
+MCP Server Fuzzer is designed for easy extension while keeping CLI usage simple:
+
+- **Custom Transports**: Add support for new protocols via config or self-registration (see [docs/transport/custom-transports.md](docs/transport/custom-transports.md)).
+- **Pluggable Safety**: Swap safety providers for custom filtering rules.
+- **Injectable Components**: Advanced users can inject custom clients/reporters for testing or plugins.
+
+The modularity improvements (dependency injection, registries) make it maintainer-friendly without complicating the core CLI experience.
+
 ## Quick Start
 
 ### Installation

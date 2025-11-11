@@ -7,6 +7,39 @@ from .streamable_http import StreamableHTTPTransport
 from .custom import registry as custom_registry
 from urllib.parse import urlparse, urlunparse
 
+class TransportRegistry:
+    """Registry for transport classes."""
+
+    def __init__(self):
+        self._transports: dict[str, type[TransportProtocol]] = {}
+
+    def register(self, name: str, cls: type[TransportProtocol]) -> None:
+        """Register a transport class by name."""
+        self._transports[name.lower()] = cls
+
+    def list_transports(self) -> dict[str, type[TransportProtocol]]:
+        """List all registered transports."""
+        return self._transports.copy()
+
+    def create_transport(self, name: str, *args, **kwargs) -> TransportProtocol:
+        """Create a transport instance by name."""
+        name_lower = name.lower()
+        if name_lower not in self._transports:
+            raise ValueError(f"Unknown transport: {name}")
+        cls = self._transports[name_lower]
+        return cls(*args, **kwargs)
+
+
+# Global registry
+registry = TransportRegistry()
+
+# Register built-in transports
+registry.register("http", HTTPTransport)
+registry.register("https", HTTPTransport)
+registry.register("sse", SSETransport)
+registry.register("stdio", StdioTransport)
+registry.register("streamablehttp", StreamableHTTPTransport)
+
 def create_transport(
     url_or_protocol: str, endpoint: str | None = None, **kwargs
 ) -> TransportProtocol:
@@ -22,22 +55,15 @@ def create_transport(
             return custom_registry.create_transport(key, endpoint, **kwargs)
         except KeyError:
             pass
-        mapping = {
-            "http": HTTPTransport,
-            "https": HTTPTransport,
-            "streamablehttp": StreamableHTTPTransport,
-            "sse": SSETransport,
-            "stdio": StdioTransport,
-        }
+        # Try built-in registry
         try:
-            transport_cls = mapping[key]
-        except KeyError:
+            return registry.create_transport(key, endpoint, **kwargs)
+        except ValueError:
             raise ValueError(
                 f"Unsupported protocol: {url_or_protocol}. "
-                f"Supported: http, https, sse, stdio, streamablehttp; "
+                f"Supported: {', '.join(registry.list_transports().keys())}; "
                 f"custom: {', '.join(sorted(custom_registry.list_transports().keys()))}"
             )
-        return transport_cls(endpoint, **kwargs)
 
     # Single-URL usage
     parsed = urlparse(url_or_protocol)
@@ -58,7 +84,7 @@ def create_transport(
             pass  # Fall through to built-in schemes
 
     if scheme in ("http", "https"):
-        return HTTPTransport(url_or_protocol, **kwargs)
+        return registry.create_transport("http", url_or_protocol, **kwargs)
     if scheme == "sse":
         # Convert sse://host/path to http://host/path (preserve params/query/fragment)
         http_url = urlunparse(
@@ -71,13 +97,13 @@ def create_transport(
                 parsed.fragment,
             )
         )
-        return SSETransport(http_url, **kwargs)
+        return registry.create_transport("sse", http_url, **kwargs)
     if scheme == "stdio":
         # Allow stdio:cmd or stdio://cmd; default empty if none
         has_parts = parsed.netloc or parsed.path
         cmd_source = (parsed.netloc + parsed.path) if has_parts else ""
         cmd = cmd_source.lstrip("/")
-        return StdioTransport(cmd, **kwargs)
+        return registry.create_transport("stdio", cmd, **kwargs)
     if scheme == "streamablehttp":
         http_url = urlunparse(
             (
@@ -89,10 +115,10 @@ def create_transport(
                 parsed.fragment,
             )
         )
-        return StreamableHTTPTransport(http_url, **kwargs)
+        return registry.create_transport("streamablehttp", http_url, **kwargs)
 
     raise ValueError(
         f"Unsupported URL scheme: {scheme or 'none'}. "
-        f"Supported: http, https, sse, stdio, streamablehttp, "
+        f"Supported: {', '.join(registry.list_transports().keys())}, "
         f"custom: {', '.join(sorted(custom_registry.list_transports().keys()))}"
     )
