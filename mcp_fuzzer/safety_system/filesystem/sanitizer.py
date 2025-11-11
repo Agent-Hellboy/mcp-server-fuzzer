@@ -60,19 +60,28 @@ class PathSanitizer:
         self._sandbox = sandbox
 
     def sanitize_arguments(
-        self, arguments: dict[str, Any], tool_name: str
+        self,
+        arguments: dict[str, Any],
+        tool_name: str,
     ) -> dict[str, Any]:
         return self._sanitize_mapping(arguments, tool_name)
 
     # ------------------------------------------------------------------ helpers
-    def _sanitize_mapping(self, data: dict[str, Any], tool_name: str) -> dict[str, Any]:
+    def _sanitize_mapping(
+        self,
+        data: dict[str, Any],
+        tool_name: str,
+    ) -> dict[str, Any]:
         sanitized: dict[str, Any] = {}
         for key, value in data.items():
             sanitized[key] = self._sanitize_value(key, value, tool_name)
         return sanitized
 
     def _sanitize_sequence(
-        self, items: list[Any], key: str, tool_name: str
+        self,
+        items: list[Any],
+        key: str,
+        tool_name: str,
     ) -> list[Any]:
         sanitized_list: list[Any] = []
         for idx, item in enumerate(items):

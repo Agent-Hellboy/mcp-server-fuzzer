@@ -133,7 +133,13 @@ def _handle_check_env() -> None:
 def _validate_transport(args, cli_module) -> None:
     """Validate transport configuration early."""
     try:
-        from ..transport import create_transport as create_transport_func  # type: ignore
+        from ..transport import create_transport as _create_transport  # type: ignore
+
+        create_transport_func = (
+            getattr(cli_module, "create_transport", _create_transport)
+            if cli_module
+            else _create_transport
+        )
 
         _ = create_transport_func(
             args.protocol,

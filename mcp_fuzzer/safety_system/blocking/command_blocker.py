@@ -110,7 +110,9 @@ class SystemCommandBlocker:
         if not self.temp_dir:
             raise RuntimeError("Temp directory not created")
 
-        # Python script content for fake executables
+        # Python script content for fake executables.  Default commands use the
+        # friendlier shim that exits with status 0 so existing shell scripts keep
+        # running even when we intercept browser launches.
         log_file = self.temp_dir / "blocked_operations.log"
         shim_template = load_shim_template("default_shim.py")
         fake_script_content = shim_template.replace("<<<LOG_FILE>>>", str(log_file))
@@ -215,6 +217,8 @@ class SystemCommandBlocker:
 
         fake_exec_path = self.temp_dir / safe_command
         log_file = self.temp_dir / "blocked_operations.log"
+        # Dynamically blocked commands get the strict shim so callers can detect
+        # a failure (exit status 1) and react accordingly.
         shim_template = load_shim_template("strict_shim.py")
         try:
             # Create the fake executable script
