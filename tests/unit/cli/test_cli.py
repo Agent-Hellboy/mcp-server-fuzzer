@@ -251,6 +251,7 @@ class TestCLI:
 
         args = argparse.Namespace(
             mode="tools",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000/mcp/",
             runs=3,
@@ -262,6 +263,7 @@ class TestCLI:
         )
         argv = prepare_inner_argv(args)
         assert "--mode" in argv and "tools" in argv
+        assert "--phase" in argv and "aggressive" in argv
         assert "--protocol" in argv and "http" in argv
         assert "--endpoint" in argv and "http://localhost:8000/mcp/" in argv
         assert "--runs" in argv and "3" in argv
@@ -867,28 +869,53 @@ class TestCLI:
 
     def test_prepare_inner_argv_full_options(self):
         """Test preparation of inner argv with all options."""
-        args = MagicMock()
-        args.mode = "fuzz"
-        args.protocol = "http"
-        args.endpoint = "http://example.com"
-        args.runs = 10
-        args.runs_per_type = 5
-        args.timeout = 30.0
-        args.tool_timeout = 20.0
-        args.protocol_type = "jsonrpc"
-        args.verbose = True
-        args.no_network = True
-        args.allow_hosts = ["example.com", "test.com"]
+        args = argparse.Namespace(
+            mode="fuzz",
+            phase="realistic",
+            protocol="http",
+            endpoint="http://example.com",
+            tool="custom_tool",
+            runs=10,
+            runs_per_type=5,
+            timeout=30.0,
+            tool_timeout=20.0,
+            protocol_type="jsonrpc",
+            fs_root="/tmp/sandbox",
+            output_dir="/tmp/reports",
+            log_level="INFO",
+            export_safety_data="",
+            export_csv="results.csv",
+            export_xml=None,
+            export_html=None,
+            export_markdown=None,
+            output_format="json",
+            output_types=["fuzzing_results", "error_report"],
+            output_schema=None,
+            output_session_id="session-123",
+            verbose=True,
+            enable_aiomonitor=True,
+            output_compress=True,
+            enable_safety_system=True,
+            no_safety=False,
+            safety_report=True,
+            retry_with_safety_on_interrupt=True,
+            no_network=True,
+            allow_hosts=["example.com", "test.com"],
+        )
 
         argv = runner.prepare_inner_argv(args)
         expected_argv = [
             sys.argv[0],
             "--mode",
             "fuzz",
+            "--phase",
+            "realistic",
             "--protocol",
             "http",
             "--endpoint",
             "http://example.com",
+            "--tool",
+            "custom_tool",
             "--runs",
             "10",
             "--runs-per-type",
@@ -899,7 +926,29 @@ class TestCLI:
             "20.0",
             "--protocol-type",
             "jsonrpc",
+            "--fs-root",
+            "/tmp/sandbox",
+            "--output-dir",
+            "/tmp/reports",
+            "--log-level",
+            "INFO",
+            "--export-safety-data",
+            "--export-csv",
+            "results.csv",
+            "--output-format",
+            "json",
+            "--output-types",
+            "fuzzing_results",
+            "--output-types",
+            "error_report",
+            "--output-session-id",
+            "session-123",
             "--verbose",
+            "--enable-aiomonitor",
+            "--output-compress",
+            "--enable-safety-system",
+            "--safety-report",
+            "--retry-with-safety-on-interrupt",
             "--no-network",
             "--allow-host",
             "example.com",
@@ -910,24 +959,28 @@ class TestCLI:
 
     def test_prepare_inner_argv_minimal_options(self):
         """Test preparation of inner argv with minimal options."""
-        args = MagicMock()
-        args.mode = "fuzz"
-        args.protocol = "http"
-        args.endpoint = "http://example.com"
-        args.runs = None
-        args.runs_per_type = None
-        args.timeout = None
-        args.tool_timeout = None
-        args.protocol_type = None
-        args.verbose = False
-        args.no_network = False
-        args.allow_hosts = None
+        args = argparse.Namespace(
+            mode="fuzz",
+            phase="aggressive",
+            protocol="http",
+            endpoint="http://example.com",
+            runs=None,
+            runs_per_type=None,
+            timeout=None,
+            tool_timeout=None,
+            protocol_type=None,
+            verbose=False,
+            no_network=False,
+            allow_hosts=None,
+        )
 
         argv = runner.prepare_inner_argv(args)
         expected_argv = [
             sys.argv[0],
             "--mode",
             "fuzz",
+            "--phase",
+            "aggressive",
             "--protocol",
             "http",
             "--endpoint",
