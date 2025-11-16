@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import logging
 import os
 import signal
 import sys
@@ -11,25 +12,56 @@ from ..transport import create_transport
 from ..safety_system.policy import configure_network_policy
 from ..safety_system import start_system_blocking, stop_system_blocking
 
+logger = logging.getLogger(__name__)
+
 def create_transport_with_auth(args, client_args: dict[str, Any]):
+    """Create a transport with authentication headers if available.
+    
+    This function handles applying auth headers to HTTP/HTTPS transports.
+    For HTTP(S) protocols, it extracts auth headers from the auth_manager
+    and includes them in the transport initialization.
+    
+    Args:
+        args: Arguments object with protocol, endpoint, timeout attributes
+        client_args: Dictionary containing optional auth_manager
+        
+    Returns:
+        Initialized TransportProtocol instance
+        
+    Raises:
+        SystemExit: On transport creation error
+    """
     try:
         auth_headers = None
-        if client_args.get("auth_manager"):
-            auth_headers = client_args["auth_manager"].get_auth_headers_for_tool("")
+        auth_manager = client_args.get("auth_manager")
+        
+        if auth_manager:
+            # Try to get auth for empty tool name (default/global auth)
+            auth_headers = auth_manager.get_auth_headers_for_tool("")
+            if auth_headers:
+                logger.debug(f"Auth headers found for transport: {list(auth_headers.keys())}")
+            else:
+                logger.debug("No auth headers found for default tool mapping")
 
         factory_kwargs = {"timeout": args.timeout}
-        if args.protocol == "http" and auth_headers:
+        
+        # Apply auth headers to HTTP/HTTPS protocols
+        if args.protocol in ("http", "https") and auth_headers:
             factory_kwargs["auth_headers"] = auth_headers
+            logger.debug(f"Adding auth headers to {args.protocol.upper()} transport")
 
+        logger.debug(f"Creating {args.protocol.upper()} transport to {args.endpoint}")
         transport = create_transport(
             args.protocol,
             args.endpoint,
             **factory_kwargs,
         )
+        logger.debug(f"Transport created successfully with auth headers" if auth_headers else f"Transport created successfully")
         return transport
     except Exception as transport_error:
         console = Console()
         console.print(f"[bold red]Unexpected error:[/bold red] {transport_error}")
+        logger.exception("Transport creation failed")
         sys.exit(1)
 
 def prepare_inner_argv(args) -> list[str]:

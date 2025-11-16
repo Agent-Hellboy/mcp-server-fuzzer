@@ -10,6 +10,7 @@ import logging
 import emoji
 
 from ..transport import create_transport
+from ..cli.runner import create_transport_with_auth
 from ..reports import FuzzerReporter
 from .base import MCPFuzzerClient
 from ..safety_system.safety import SafetyFilter
@@ -40,12 +41,25 @@ async def main(argv: list[str] | None = None) -> int:
         f"md={config.get('export_markdown', False)}"
     )
 
-    # Create transport based on configuration
-    transport = create_transport(
-        config["protocol"],
-        config["endpoint"],
-        timeout=config.get("timeout"),
+    # Create transport with auth headers if auth_manager is configured
+    # Prepare args-like object for create_transport_with_auth
+    class Args:
+        def __init__(self, protocol, endpoint, timeout):
+            self.protocol = protocol
+            self.endpoint = endpoint
+            self.timeout = timeout
+    
+    args = Args(
+        protocol=config["protocol"],
+        endpoint=config["endpoint"],
+        timeout=config.get("timeout", 30.0)
     )
+    
+    client_args = {
+        "auth_manager": config.get("auth_manager"),
+    }
+    
+    transport = create_transport_with_auth(args, client_args)
 
     # Configure safety system
     safety_enabled = config.get("safety_enabled", True)

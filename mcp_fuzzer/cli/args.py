@@ -469,6 +469,70 @@ def get_cli_config() -> dict[str, Any]:
         except Exception as e:
             logging.debug(f"Error loading default configuration file: {e}")
 
+    # Transfer all config file values to args if CLI args not provided
+    # CLI arguments take precedence over configuration file
+    _config_keys_to_transfer = [
+        # Core settings
+        ("endpoint", "endpoint"),
+        ("protocol", "protocol"),
+        ("mode", "mode"),
+        ("phase", "phase"),
+        ("timeout", "timeout"),
+        # Tool settings
+        ("tool_timeout", "tool_timeout"),
+        ("tool", "tool"),
+        # Fuzzing parameters
+        ("runs", "runs"),
+        ("runs_per_type", "runs_per_type"),
+        ("protocol_type", "protocol_type"),
+        # Filesystem
+        ("fs_root", "fs_root"),
+        # Safety system
+        ("enable_safety_system", "enable_safety_system"),
+        ("safety_report", "safety_report"),
+        ("export_safety_data", "export_safety_data"),
+        # Output settings
+        ("output_dir", "output_dir"),
+        ("output_format", "output_format"),
+        ("output_types", "output_types"),
+        ("output_schema", "output_schema"),
+        ("output_compress", "output_compress"),
+        ("output_session_id", "output_session_id"),
+        # Export formats
+        ("export_csv", "export_csv"),
+        ("export_xml", "export_xml"),
+        ("export_html", "export_html"),
+        ("export_markdown", "export_markdown"),
+        # Logging
+        ("log_level", "log_level"),
+        ("verbose", "verbose"),
+        # Network
+        ("no_network", "no_network"),
+        ("allow_hosts", "allow_hosts"),
+        # Watchdog settings
+        ("watchdog_check_interval", "watchdog_check_interval"),
+        ("watchdog_process_timeout", "watchdog_process_timeout"),
+        ("watchdog_extra_buffer", "watchdog_extra_buffer"),
+        ("watchdog_max_hang_time", "watchdog_max_hang_time"),
+        # Process management
+        ("process_max_concurrency", "process_max_concurrency"),
+        ("process_retry_count", "process_retry_count"),
+        ("process_retry_delay", "process_retry_delay"),
+        # Utility flags
+        ("validate_config", "validate_config"),
+        ("check_env", "check_env"),
+        ("retry_with_safety_on_interrupt", "retry_with_safety_on_interrupt"),
+    ]
+    
+    for config_key, args_key in _config_keys_to_transfer:
+        config_value = config.get(config_key)
+        args_value = getattr(args, args_key, None)
+        
+        # Only transfer if config has value and args doesn't (CLI takes precedence)
+        if config_value is not None and not args_value:
+            setattr(args, args_key, config_value)
+            logging.debug(f"Using {args_key} from config file: {config_value}")
+
     # CLI arguments take precedence over configuration file
     _validate(args)
     _setup(args)

@@ -65,37 +65,70 @@ def load_auth_config(config_file: str) -> AuthManager:
     providers = config.get("providers", {})
     for name, provider_config in providers.items():
         provider_type = provider_config.get("type")
-        if provider_type == "api_key":
-            auth_manager.add_auth_provider(
-                name,
-                create_api_key_auth(
-                    provider_config["api_key"],
-                    provider_config.get("header_name", "Authorization"),
-                ),
-            )
-        elif provider_type == "basic":
-            auth_manager.add_auth_provider(
-                name,
-                create_basic_auth(
-                    provider_config["username"], provider_config["password"]
-                ),
-            )
-        elif provider_type == "oauth":
-            auth_manager.add_auth_provider(
-                name,
-                create_oauth_auth(
-                    provider_config["token"],
-                    provider_config.get("token_type", "Bearer"),
-                ),
-            )
-        elif provider_type == "custom":
-            headers = provider_config.get("headers")
-            if not isinstance(headers, dict):
-                raise ValueError(f"Provider '{name}' custom headers must be a dict")
-            headers_str: dict[str, str] = {str(k): str(v) for k, v in headers.items()}
-            auth_manager.add_auth_provider(name, create_custom_header_auth(headers_str))
-        else:
-            raise ValueError(f"Unknown provider type: {provider_type}")
+        
+        try:
+            if provider_type == "api_key":
+                if "api_key" not in provider_config:
+                    raise ValueError(
+                        f"Provider '{name}' is type 'api_key' but missing required field 'api_key'. "
+                        f"Expected: {{'type': 'api_key', 'api_key': 'YOUR_API_KEY'}}"
+                    )
+                auth_manager.add_auth_provider(
+                    name,
+                    create_api_key_auth(
+                        provider_config["api_key"],
+                        provider_config.get("header_name", "Authorization"),
+                        provider_config.get("prefix", "Bearer"),
+                    ),
+                )
+            elif provider_type == "basic":
+                if "username" not in provider_config:
+                    raise ValueError(
+                        f"Provider '{name}' is type 'basic' but missing required field 'username'. "
+                        f"Expected: {{'type': 'basic', 'username': 'user', 'password': 'pass'}}"
+                    )
+                if "password" not in provider_config:
+                    raise ValueError(
+                        f"Provider '{name}' is type 'basic' but missing required field 'password'. "
+                        f"Expected: {{'type': 'basic', 'username': 'user', 'password': 'pass'}}"
+                    )
+                auth_manager.add_auth_provider(
+                    name,
+                    create_basic_auth(
+                        provider_config["username"], provider_config["password"]
+                    ),
+                )
+            elif provider_type == "oauth":
+                if "token" not in provider_config:
+                    raise ValueError(
+                        f"Provider '{name}' is type 'oauth' but missing required field 'token'. "
+                        f"Expected: {{'type': 'oauth', 'token': 'YOUR_TOKEN'}}"
+                    )
+                auth_manager.add_auth_provider(
+                    name,
+                    create_oauth_auth(
+                        provider_config["token"],
+                        provider_config.get("token_type", "Bearer"),
+                    ),
+                )
+            elif provider_type == "custom":
+                headers = provider_config.get("headers")
+                if not headers:
+                    raise ValueError(
+                        f"Provider '{name}' is type 'custom' but missing required field 'headers'. "
+                        f"Expected: {{'type': 'custom', 'headers': {{'X-Header': 'value'}}}}"
+                    )
+                if not isinstance(headers, dict):
+                    raise ValueError(f"Provider '{name}' custom headers must be a dict, got {type(headers).__name__}")
+                headers_str: dict[str, str] = {str(k): str(v) for k, v in headers.items()}
+                auth_manager.add_auth_provider(name, create_custom_header_auth(headers_str))
+            else:
+                raise ValueError(
+                    f"Unknown provider type: '{provider_type}' for provider '{name}'. "
+                    f"Supported types: api_key, basic, oauth, custom"
+                )
+        except (KeyError, ValueError) as e:
+            raise ValueError(f"Error configuring auth provider '{name}': {str(e)}")
 
     tool_mappings = config.get("tool_mapping", {})
     for tool_name, auth_provider_name in tool_mappings.items():
