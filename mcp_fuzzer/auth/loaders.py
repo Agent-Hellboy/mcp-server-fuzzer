@@ -70,8 +70,9 @@ def load_auth_config(config_file: str) -> AuthManager:
             if provider_type == "api_key":
                 if "api_key" not in provider_config:
                     raise ValueError(
-                        f"Provider '{name}' is type 'api_key' but missing required field 'api_key'. "
-                        f"Expected: {{'type': 'api_key', 'api_key': 'YOUR_API_KEY'}}"
+                        f"Provider '{name}' is type 'api_key' but missing "
+                        "required field 'api_key'. Expected: "
+                        "{'type': 'api_key', 'api_key': 'YOUR_API_KEY'}"
                     )
                 auth_manager.add_auth_provider(
                     name,
@@ -84,13 +85,15 @@ def load_auth_config(config_file: str) -> AuthManager:
             elif provider_type == "basic":
                 if "username" not in provider_config:
                     raise ValueError(
-                        f"Provider '{name}' is type 'basic' but missing required field 'username'. "
-                        f"Expected: {{'type': 'basic', 'username': 'user', 'password': 'pass'}}"
+                        f"Provider '{name}' is type 'basic' but missing "
+                        "required field 'username'. Expected: "
+                        "{'type': 'basic', 'username': 'user', 'password': 'pass'}"
                     )
                 if "password" not in provider_config:
                     raise ValueError(
-                        f"Provider '{name}' is type 'basic' but missing required field 'password'. "
-                        f"Expected: {{'type': 'basic', 'username': 'user', 'password': 'pass'}}"
+                        f"Provider '{name}' is type 'basic' but missing "
+                        "required field 'password'. Expected: "
+                        "{'type': 'basic', 'username': 'user', 'password': 'pass'}"
                     )
                 auth_manager.add_auth_provider(
                     name,
@@ -101,8 +104,9 @@ def load_auth_config(config_file: str) -> AuthManager:
             elif provider_type == "oauth":
                 if "token" not in provider_config:
                     raise ValueError(
-                        f"Provider '{name}' is type 'oauth' but missing required field 'token'. "
-                        f"Expected: {{'type': 'oauth', 'token': 'YOUR_TOKEN'}}"
+                        f"Provider '{name}' is type 'oauth' but missing "
+                        "required field 'token'. Expected: "
+                        "{'type': 'oauth', 'token': 'YOUR_TOKEN'}"
                     )
                 auth_manager.add_auth_provider(
                     name,
@@ -115,13 +119,21 @@ def load_auth_config(config_file: str) -> AuthManager:
                 headers = provider_config.get("headers")
                 if not headers:
                     raise ValueError(
-                        f"Provider '{name}' is type 'custom' but missing required field 'headers'. "
-                        f"Expected: {{'type': 'custom', 'headers': {{'X-Header': 'value'}}}}"
+                        f"Provider '{name}' is type 'custom' but missing "
+                        "required field 'headers'. Expected: "
+                        "{'type': 'custom', 'headers': {'X-Header': 'value'}}"
                     )
                 if not isinstance(headers, dict):
-                    raise ValueError(f"Provider '{name}' custom headers must be a dict, got {type(headers).__name__}")
-                headers_str: dict[str, str] = {str(k): str(v) for k, v in headers.items()}
-                auth_manager.add_auth_provider(name, create_custom_header_auth(headers_str))
+                    raise ValueError(
+                        f"Provider '{name}' custom headers must be a dict, "
+                        f"got {type(headers).__name__}"
+                    )
+                headers_str: dict[str, str] = {
+                    str(k): str(v) for k, v in headers.items()
+                }
+                auth_manager.add_auth_provider(
+                    name, create_custom_header_auth(headers_str)
+                )
             else:
                 raise ValueError(
                     f"Unknown provider type: '{provider_type}' for provider '{name}'. "

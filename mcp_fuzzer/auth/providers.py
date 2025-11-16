@@ -20,7 +20,12 @@ class APIKeyAuth(AuthProvider):
     - Custom prefix: Authorization: Token <api_key>
     - No prefix: X-API-Key: <api_key>
     """
-    def __init__(self, api_key: str, header_name: str = "Authorization", prefix: str = "Bearer"):
+    def __init__(
+        self,
+        api_key: str,
+        header_name: str = "Authorization",
+        prefix: str = "Bearer",
+    ):
         self.api_key = api_key
         self.header_name = header_name
         self.prefix = prefix
@@ -84,7 +89,11 @@ class CustomHeaderAuth(AuthProvider):
     def get_auth_params(self) -> dict[str, Any]:
         return {}
 
-def create_api_key_auth(api_key: str, header_name: str = "Authorization", prefix: str = "Bearer") -> APIKeyAuth:
+def create_api_key_auth(
+    api_key: str,
+    header_name: str = "Authorization",
+    prefix: str = "Bearer",
+) -> APIKeyAuth:
     return APIKeyAuth(api_key, header_name, prefix)
 
 def create_basic_auth(username: str, password: str) -> BasicAuth:

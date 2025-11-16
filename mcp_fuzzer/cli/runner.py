@@ -39,7 +39,8 @@ def create_transport_with_auth(args, client_args: dict[str, Any]):
             # Try to get auth for empty tool name (default/global auth)
             auth_headers = auth_manager.get_auth_headers_for_tool("")
             if auth_headers:
-                logger.debug(f"Auth headers found for transport: {list(auth_headers.keys())}")
+                header_keys = list(auth_headers.keys())
+                logger.debug(f"Auth headers found for transport: {header_keys}")
             else:
                 logger.debug("No auth headers found for default tool mapping")
 
@@ -56,7 +57,11 @@ def create_transport_with_auth(args, client_args: dict[str, Any]):
             args.endpoint,
             **factory_kwargs,
         )
-        logger.debug(f"Transport created successfully with auth headers" if auth_headers else f"Transport created successfully")
+        if auth_headers:
+            msg = "Transport created successfully with auth headers"
+        else:
+            msg = "Transport created successfully"
+        logger.debug(msg)
         return transport
     except Exception as transport_error:
         console = Console()

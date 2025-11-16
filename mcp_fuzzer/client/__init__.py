@@ -9,7 +9,6 @@ import logging
 
 import emoji
 
-from ..transport import create_transport
 from ..cli.runner import create_transport_with_auth
 from ..reports import FuzzerReporter
 from .base import MCPFuzzerClient
