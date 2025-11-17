@@ -514,6 +514,13 @@ def test_create_transport_stdio():
     assert isinstance(transport, StdioTransport)
 
 
+def test_create_transport_protocol_and_endpoint_builtin():
+    """Ensure built-in transports work with protocol+endpoint usage."""
+    transport = create_transport("stdio", "node server.js")
+    assert isinstance(transport, StdioTransport)
+    assert transport.command == "node server.js"
+
+
 def test_create_transport_invalid_scheme():
     """Test create_transport with invalid URL scheme."""
     with pytest.raises(TransportRegistrationError):

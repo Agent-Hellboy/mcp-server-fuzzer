@@ -54,7 +54,7 @@ def create_transport(
         # Try custom transports first
         try:
             return custom_registry.create_transport(key, endpoint, **kwargs)
-        except KeyError:
+        except TransportRegistrationError:
             pass
         # Try built-in registry
         try:
