@@ -12,7 +12,7 @@ from mcp_fuzzer.transport.custom import (
     list_custom_transports,
 )
 from mcp_fuzzer.transport.factory import create_transport
-from mcp_fuzzer.exceptions import ConnectionError
+from mcp_fuzzer.exceptions import ConnectionError, TransportRegistrationError
 
 
 class MockTransport(TransportProtocol):
@@ -77,7 +77,8 @@ class TestCustomTransportRegistry:
         )
 
         with pytest.raises(
-            ValueError, match="Transport 'mock_transport' is already registered"
+            TransportRegistrationError,
+            match="Transport 'mock_transport' is already registered",
         ):
             registry.register(
                 name="mock_transport",
@@ -93,7 +94,8 @@ class TestCustomTransportRegistry:
             pass
 
         with pytest.raises(
-            ValueError, match="Transport class .* must inherit from TransportProtocol"
+            TransportRegistrationError,
+            match="Transport class .* must inherit from TransportProtocol",
         ):
             registry.register(
                 name="invalid_transport",
@@ -118,7 +120,9 @@ class TestCustomTransportRegistry:
         """Test that unregistering a non-existent transport raises an error."""
         registry = CustomTransportRegistry()
 
-        with pytest.raises(KeyError, match="Transport 'nonexistent' is not registered"):
+        with pytest.raises(
+            TransportRegistrationError, match="Transport 'nonexistent' is not registered"
+        ):
             registry.unregister("nonexistent")
 
     def test_get_transport_class(self):
@@ -233,7 +237,9 @@ class TestTransportFactoryIntegration:
 
     def test_unknown_custom_transport(self):
         """Test that unknown custom transport raises error."""
-        with pytest.raises(ValueError, match="Unsupported URL scheme: unknown"):
+        with pytest.raises(
+            TransportRegistrationError, match="Unsupported URL scheme: unknown"
+        ):
             create_transport("unknown://test-endpoint")
 
     def test_custom_transport_with_config_schema(self):

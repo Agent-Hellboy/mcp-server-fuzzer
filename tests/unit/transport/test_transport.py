@@ -29,6 +29,7 @@ from mcp_fuzzer.transport.mixins import (
     NetworkError,
     PayloadValidationError,
 )
+from mcp_fuzzer.exceptions import TransportRegistrationError
 
 pytestmark = [pytest.mark.unit, pytest.mark.transport]
 
@@ -515,5 +516,5 @@ def test_create_transport_stdio():
 
 def test_create_transport_invalid_scheme():
     """Test create_transport with invalid URL scheme."""
-    with pytest.raises(ValueError):
+    with pytest.raises(TransportRegistrationError):
         create_transport("invalid://example.com")

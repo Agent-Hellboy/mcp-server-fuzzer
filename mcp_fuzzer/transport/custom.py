@@ -8,6 +8,7 @@ implementations that can be used alongside built-in transports.
 import logging
 from typing import Type, Any, Callable
 from .base import TransportProtocol
+from ..exceptions import TransportRegistrationError
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +40,16 @@ class CustomTransportRegistry:
             factory_function: Optional factory function to create transport instances
 
         Raises:
-            ValueError: If transport name is already registered
+            TransportRegistrationError: If transport name is already registered
         """
         key = name.strip().lower()
         if key in self._transports:
-            raise ValueError(f"Transport '{name}' is already registered")
+            raise TransportRegistrationError(
+                f"Transport '{name}' is already registered"
+            )
 
         if not issubclass(transport_class, TransportProtocol):
-            raise ValueError(
+            raise TransportRegistrationError(
                 f"Transport class {transport_class} must inherit from TransportProtocol"
             )
 
@@ -66,11 +69,11 @@ class CustomTransportRegistry:
             name: Name of the transport to unregister
 
         Raises:
-            KeyError: If transport is not registered
+            TransportRegistrationError: If transport is not registered
         """
         key = name.strip().lower()
         if key not in self._transports:
-            raise KeyError(f"Transport '{name}' is not registered")
+            raise TransportRegistrationError(f"Transport '{name}' is not registered")
 
         del self._transports[key]
         logger.info(f"Unregistered custom transport: {key}")
@@ -85,11 +88,11 @@ class CustomTransportRegistry:
             The transport class
 
         Raises:
-            KeyError: If transport is not registered
+            TransportRegistrationError: If transport is not registered
         """
         key = name.strip().lower()
         if key not in self._transports:
-            raise KeyError(f"Transport '{name}' is not registered")
+            raise TransportRegistrationError(f"Transport '{name}' is not registered")
         return self._transports[key]["class"]
 
     def get_transport_info(self, name: str) -> dict[str, Any]:
@@ -102,11 +105,11 @@ class CustomTransportRegistry:
             Dictionary containing transport information
 
         Raises:
-            KeyError: If transport is not registered
+            TransportRegistrationError: If transport is not registered
         """
         key = name.strip().lower()
         if key not in self._transports:
-            raise KeyError(f"Transport '{name}' is not registered")
+            raise TransportRegistrationError(f"Transport '{name}' is not registered")
         return self._transports[key].copy()
 
     def list_transports(self) -> dict[str, dict[str, Any]]:
@@ -129,7 +132,7 @@ class CustomTransportRegistry:
             Transport instance
 
         Raises:
-            KeyError: If transport is not registered
+            TransportRegistrationError: If transport is not registered
         """
         transport_info = self.get_transport_info(name)
         transport_class = transport_info["class"]

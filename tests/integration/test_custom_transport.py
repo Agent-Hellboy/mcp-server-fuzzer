@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from mcp_fuzzer.config import apply_config_file, load_custom_transports
-from mcp_fuzzer.exceptions import ConfigFileError
+from mcp_fuzzer.exceptions import ConfigFileError, TransportRegistrationError
 from mcp_fuzzer.transport import create_transport, register_custom_transport
 from mcp_fuzzer.transport.base import TransportProtocol
 from typing import Any, Dict, Optional, AsyncIterator
@@ -214,7 +214,9 @@ class TestCustomTransportErrorHandling:
         class InvalidTransport:
             pass
 
-        with pytest.raises(ValueError, match="must inherit from TransportProtocol"):
+        with pytest.raises(
+            TransportRegistrationError, match="must inherit from TransportProtocol"
+        ):
             register_custom_transport(name="invalid", transport_class=InvalidTransport)
 
     def test_duplicate_registration(self):
@@ -223,14 +225,16 @@ class TestCustomTransportErrorHandling:
             name="duplicate_test", transport_class=IntegrationTestTransport
         )
 
-        with pytest.raises(ValueError, match="already registered"):
+        with pytest.raises(TransportRegistrationError, match="already registered"):
             register_custom_transport(
                 name="duplicate_test", transport_class=IntegrationTestTransport
             )
 
     def test_unknown_transport_creation(self):
         """Test error handling for unknown transport creation."""
-        with pytest.raises(ValueError, match="Unsupported URL scheme"):
+        with pytest.raises(
+            TransportRegistrationError, match="Unsupported URL scheme"
+        ):
             create_transport("unknown_transport://endpoint")
 
 
