@@ -17,6 +17,7 @@ doc_ref/
 *.so
 notes.md
 /reports/
+docs/interactions/
 docs/transport.md
 mcp_fuzzer/process_mgmt/
 servers

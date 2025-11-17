@@ -51,7 +51,7 @@ flowchart TB
 
   subgraph Safety_System
     E1[SafetyFilter]
-    E2[SystemBlocker]
+    E2[SystemCommandBlocker]
     E3[Network Policy]
   end
 
@@ -131,7 +131,7 @@ graph TD
     D --> E[create_safe_mock_response]
     C -->|No| F[Execute]
 
-    subgraph SystemBlocker
+    subgraph CommandBlocker
         G[Intercept OS commands via PATH shims]
     end
 ```
@@ -142,8 +142,6 @@ graph TD
 mcp_fuzzer/
 ├── __init__.py              # Package initialization and exports
 ├── __main__.py              # Entry point for module execution
-├── config_loader.py         # Configuration loading utilities
-├── config.py                # Configuration management
 ├── exceptions.py            # Custom exception classes
 ├── types.py                 # Type definitions and protocols
 ├── auth/                    # Authentication system
@@ -160,7 +158,13 @@ mcp_fuzzer/
 │   ├── __init__.py
 │   ├── base.py              # Main MCPFuzzerClient
 │   ├── protocol_client.py   # Protocol-level client
-│   └── tool_client.py       # Tool-level client
+│   ├── tool_client.py       # Tool-level client
+│   └── utils.py             # Shared utilities
+├── config/                  # Configuration subsystem
+│   ├── __init__.py
+│   ├── constants.py         # Default values and shared constants
+│   ├── loader.py            # Config file/env loaders
+│   └── manager.py           # Runtime config manager
 ├── fuzz_engine/             # Core fuzzing engine
 │   ├── __init__.py
 │   ├── executor.py          # Async execution framework
@@ -193,10 +197,20 @@ mcp_fuzzer/
 │   └── safety_reporter.py   # Safety system reporting
 ├── safety_system/           # Safety and protection
 │   ├── __init__.py
-│   ├── patterns.py          # Safety pattern definitions
 │   ├── policy.py            # Network policy and host normalization
 │   ├── safety.py            # Core safety logic with SafetyProvider protocol
-│   └── system_blocker.py    # System command blocking
+│   ├── blocking/            # PATH shim command blocking
+│   │   ├── __init__.py
+│   │   ├── command_blocker.py
+│   │   └── shims/
+│   ├── detection/           # Dangerous pattern detection
+│   │   ├── __init__.py
+│   │   ├── detector.py
+│   │   └── patterns.py
+│   └── filesystem/          # Filesystem sandboxing helpers
+│       ├── __init__.py
+│       ├── sandbox.py
+│       └── sanitizer.py
 └── transport/               # Transport layer implementations
     ├── __init__.py
     ├── base.py              # Abstract transport protocol
@@ -330,7 +344,7 @@ The schema parser provides comprehensive support for parsing JSON Schema definit
 
 The module supports both "realistic" and "aggressive" fuzzing strategies, where realistic mode generates valid data conforming to the schema, while aggressive mode intentionally generates edge cases and invalid data to test error handling.
 
-### 5. Invariants System
+### 6. Invariants System
 
 The invariants system provides comprehensive property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
 
@@ -370,7 +384,7 @@ for idx, result in results.items():
 
 These invariants serve as runtime assertions that validate the behavior of the server being tested, helping to identify potential issues that might not be caught by simple error checking.
 
-### 6. Client Architecture
+### 7. Client Architecture
 
 The client architecture provides specialized MCP client implementations for different fuzzing scenarios.
 
@@ -388,29 +402,30 @@ The client architecture provides specialized MCP client implementations for diff
 - **Authentication Support**: Built-in authentication management
 - **Reporting Integration**: Automatic result collection and reporting
 
-### 7. Safety System
+### 8. Safety System
 
 The safety system provides multiple layers of protection against dangerous operations using a pluggable provider architecture.
 
 **Key Components:**
 
-- `safety.py`: Core safety logic with SafetyProvider protocol
-- `patterns.py`: Predefined dangerous pattern definitions
-- `policy.py`: Network policy and host normalization
-- `system_blocker.py`: System command blocking and PATH shimming
+- `safety.py`: Core safety logic with the `SafetyProvider` protocol
+- `policy.py`: Network policy enforcement and host normalization
+- `detection/patterns.py` & `detection/detector.py`: Dangerous pattern definitions and detection pipeline
+- `blocking/command_blocker.py`: `SystemCommandBlocker` PATH shim implementation plus shim templates
+- `filesystem/`: Filesystem sandbox (`sandbox.py`) and path sanitizer helpers
 
 **Safety Features:**
 
 - **Pluggable Safety Providers**: Protocol-based safety system allowing custom implementations
 - **Pattern-Based Filtering**: Comprehensive pattern matching for dangerous content
 - **SafetyFilter Class**: Main implementation with URL/command blocking
-- **System Command Blocking**: Prevents execution of dangerous commands (PATH shims)
+- **System Command Blocking**: The `SystemCommandBlocker` PATH shim prevents execution of dangerous commands
 - **Filesystem Sandboxing**: Confines file operations to specified directories
 - **Process Isolation**: Safe subprocess handling with timeouts
 - **Input Sanitization**: Filters potentially dangerous input
 - **Mock Response Generation**: Safe responses for blocked operations
 
-### 8. Authentication System
+### 9. Authentication System
 
 The authentication system provides comprehensive support for various authentication methods for MCP servers using a flexible provider-based architecture.
 
@@ -478,19 +493,20 @@ auth:
 - **Provider Validation**: Runtime validation of authentication configurations
 - **Error Handling**: Graceful fallback for authentication failures
 
-### 9. Configuration Management
+### 10. Configuration Management
 
 The configuration system provides centralized configuration management with multiple loading strategies.
 
 **Key Components:**
 
-- `config.py`: Main configuration classes and validation
-- `config_loader.py`: Configuration loading utilities
+- `config/constants.py`: Shared defaults and global constant definitions
+- `config/loader.py`: Configuration discovery and parsing from files/env/CLI
+- `config/manager.py`: Runtime configuration manager exposed via `mcp_fuzzer.config`
 
 **Configuration Sources:**
 
 - **Environment Variables**: Runtime configuration via environment
-- **Configuration Files**: YAML/JSON configuration files
+- **Configuration Files**: YAML configuration files
 - **CLI Arguments**: Command-line argument overrides
 - **Default Values**: Sensible defaults for all settings
 
@@ -501,7 +517,7 @@ The configuration system provides centralized configuration management with mult
 - **Runtime Settings**: Execution and concurrency settings
 - **Reporting Settings**: Output and logging configuration
 
-### 9. Reporting System
+### 11. Reporting System
 
 The reporting system provides centralized output management and comprehensive result reporting with multiple output formats and real-time progress tracking.
 
@@ -514,20 +530,20 @@ The reporting system provides centralized output management and comprehensive re
 
 **Reporting Features:**
 
-- **Multi-Format Output**: Support for console, JSON, text, CSV, and XML formats
+- **Multi-Format Output**: Console summaries plus JSON, text, CSV, XML, HTML, and Markdown exports
+- **Standardized Artifacts**: Output protocol produces structured JSON bundles for fuzzing, safety, and error data
 - **Real-time Progress**: Live progress indicators and status updates during fuzzing
 - **Result Aggregation**: Comprehensive statistics, success rates, and performance metrics
 - **Safety Reporting**: Detailed breakdown of blocked operations, risk assessments, and security events
 - **Session Tracking**: Timestamped reports with unique session identification and metadata
-- **Configurable Retention**: Automatic cleanup of old reports based on time or size limits
 
 **Output Formats:**
 
 - **Console**: Interactive tables with colors, progress bars, and real-time updates
-- **JSON**: Machine-readable structured data for CI/CD integration and external analysis
-- **Text**: Human-readable summaries for documentation and sharing
-- **CSV**: Spreadsheet-compatible format for data analysis
-- **XML**: Enterprise-compatible format for integration with existing systems
+- **JSON/Text**: Machine-readable structured data plus readable summaries for doc handoffs
+- **CSV/XML**: Spreadsheet- and enterprise-friendly formats for data analysis
+- **HTML/Markdown**: Presentation-ready exports for reports and runbooks
+- **Standardized Output Protocol**: Currently persisted as JSON files regardless of `--output-format`; other values are reserved for future protocol encodings
 
 **Report Types:**
 
@@ -562,19 +578,19 @@ graph TD
 
 ```yaml
 output:
-  format: "json"                 # json, yaml, csv, xml, console
+  format: "json"                 # Standardized output protocol is JSON today
   directory: "./reports"         # Output directory path
-  compress: true                 # Enable compression for large reports
-  types:                         # Specific report types to generate
+  compress: true                 # Enable compression for standardized output
+  types:                         # Specific standardized output types to generate
     - "fuzzing_results"
     - "error_report"
     - "safety_summary"
     - "performance_metrics"
-  retention:
-    days: 30                     # Retain reports for N days
-    max_size: "1GB"              # Maximum total size before cleanup
   schema: "./custom_schema.json" # Custom output schema file
 ```
+
+CLI flags `--export-csv`, `--export-xml`, `--export-html`, and `--export-markdown`
+invoke the corresponding exporters on top of the standardized protocol output.
 
 **Integration Features:**
 
@@ -777,7 +793,7 @@ The system is designed for extensibility:
 
 Safety is built into every layer:
 
-- **Environment detection** prevents dangerous operations
+- **Danger pattern detection** blocks suspicious URLs, scripts, and command content
 - **Input sanitization** filters potentially dangerous data
 - **System command blocking** prevents command execution
 - **Filesystem sandboxing** confines file operations
@@ -810,8 +826,6 @@ export MCP_FUZZER_STDIO_TIMEOUT=30.0
 
 # Safety configuration
 export MCP_FUZZER_FS_ROOT=~/.mcp_fuzzer
-export MCP_FUZZER_ENABLE_SAFETY=true
-export MCP_FUZZER_DANGEROUS_TESTS_DISABLED=false
 ```
 
 ## Performance Considerations
@@ -841,11 +855,10 @@ Careful resource management ensures stability:
 
 The architecture supports scaling:
 
-- **Multiple worker processes**
-- **Distributed fuzzing** across machines
-- **Configurable concurrency limits**
-- **Resource usage monitoring**
-- **Batch operation execution**
+- **Configurable async concurrency limits** through AsyncFuzzExecutor semaphores
+- **Batch execution** for tool runs and protocol messages
+- **Watchdog performance metrics** to inform resource planning
+- **Standardized output artifacts** for CI/CD and fleet orchestration
 
 ## Security Considerations
 
@@ -854,9 +867,9 @@ The architecture supports scaling:
 All input is validated and sanitized:
 
 - **Argument validation** at CLI level
-- **Transport-level input sanitization**
-- **Safety system filtering**
-- **Environment variable validation**
+- **Transport-level JSON-RPC validation and serialization checks**
+- **Safety system filtering** via the `DangerDetector`
+- **Filesystem path sanitization** through the sandbox
 - **Host normalization** for network access control
 
 ### Access Control
@@ -866,7 +879,7 @@ The system implements access control:
 - **Filesystem sandboxing**
 - **Process isolation**
 - **System command blocking**
-- **Environment detection**
+- **Network policy enforcement** for redirects and outbound requests
 
 ### Audit Logging
 
@@ -899,12 +912,12 @@ Comprehensive logging throughout:
 
 ### Health Checks
 
-Built-in health monitoring:
+Operational status is surfaced through:
 
-- **Transport connectivity checks**
-- **Server availability monitoring**
-- **Safety system status**
-- **Resource usage monitoring**
+- **ProcessWatchdog monitoring** for hung subprocesses and activity callbacks
+- **Reporter metadata** capturing session IDs, timestamps, and completion status
+- **SafetyReporter summaries** indicating whether safety filters are active
+- **Structured logging** of transport failures and retry attempts
 
 ## System Integration
 

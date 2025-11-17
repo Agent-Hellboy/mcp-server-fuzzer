@@ -894,8 +894,16 @@ mcp_fuzzer/
     formatters.py          # Console/JSON/Text formatters
     safety_reporter.py     # Safety-specific report
   safety_system/
-    safety.py              # Argument-level filtering/sanitization
-    system_blocker.py      # System-level command blocking
+    safety.py              # SafetyFilter and SafetyProvider protocol
+    blocking/             # PATH shim command blocker + shims
+      command_blocker.py
+      shims/
+    detection/            # DangerDetector patterns and helpers
+      detector.py
+      patterns.py
+    filesystem/           # Filesystem sandbox + path sanitizer
+      sandbox.py
+      sanitizer.py
   cli/
     args.py, main.py, runner.py
   client.py                # UnifiedMCPFuzzerClient orchestrator
@@ -1043,18 +1051,27 @@ class TransportProtocol(ABC):
 The main client for orchestrating fuzzing operations:
 
 ```python
+from mcp_fuzzer.client import MCPFuzzerClient
+from mcp_fuzzer.safety_system.safety import SafetyFilter
+
 class UnifiedMCPFuzzerClient:
     """Unified client for MCP fuzzing operations."""
 
-    def __init__(self, transport: TransportProtocol, safety_system: Optional[SafetySystem] = None):
+    def __init__(
+        self,
+        transport: TransportProtocol,
+        safety_system: Optional[SafetyFilter] = None,
+    ):
         self.transport = transport
-        self.safety_system = safety_system or SafetySystem()
+        self.safety_system = safety_system or SafetyFilter()
 
-    async def fuzz_tools(self, runs: int = 10, phase: str = "aggressive") -> Dict[str, Any]:
+    async def fuzz_tools(self, runs: int = 10, phase: str = "aggressive"):
         """Fuzz tools with specified number of runs and phase."""
-        # Implementation details...
+        # Implementation details mirror mcp_fuzzer.client.base.MCPFuzzerClient
 
-    async def fuzz_protocol(self, runs_per_type: int = 5, protocol_type: Optional[str] = None, phase: str = "aggressive") -> Dict[str, Any]:
+    async def fuzz_protocol(
+        self, runs_per_type: int = 5, protocol_type: Optional[str] = None, phase: str = "aggressive"
+    ):
         """Fuzz protocol types with specified parameters."""
         # Implementation details...
 ```
@@ -1064,22 +1081,25 @@ class UnifiedMCPFuzzerClient:
 Core safety system for protecting against dangerous operations:
 
 ```python
-class SafetySystem:
-    """Core safety system for protecting against dangerous operations."""
+from mcp_fuzzer.safety_system.safety import SafetyFilter
 
-    def __init__(self, fs_root: Optional[str] = None, enable_system_blocking: bool = True):
-        self.fs_root = fs_root or os.path.expanduser("~/.mcp_fuzzer")
-        self.enable_system_blocking = enable_system_blocking
-        self.system_blocker = SystemBlocker() if enable_system_blocking else None
+safety = SafetyFilter()
+safety.set_fs_root("/tmp/mcp_sandbox")
 
-    def is_safe_environment(self) -> bool:
-        """Check if current environment is safe for dangerous operations."""
-        # Implementation details...
+tool_args = {"url": "https://example.com", "output_path": "/etc/passwd"}
+sanitized = safety.sanitize_tool_arguments("web_tool", tool_args)
 
-    def filter_arguments(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter potentially dangerous arguments."""
-        # Implementation details...
+if safety.should_skip_tool_call("web_tool", tool_args):
+    safe_response = safety.create_safe_mock_response("web_tool")
+else:
+    # Proceed with sanitized arguments
+    transport.call_tool("web_tool", sanitized)
 ```
+
+`SafetyFilter` combines the pattern-based `DangerDetector`, filesystem path
+sanitization, and blocked operation logging. For system-level protection call
+`mcp_fuzzer.safety_system.blocking.start_system_blocking()` to install PATH
+shims that intercept browser launches.
 
 ## Fuzzing Strategies
 
@@ -1191,9 +1211,9 @@ The safety system focuses on containment and preventing external references duri
   - CLI provides `--fs-root` to redirect sandbox.
   - `set_fs_root(path)` records a sandbox root (for future path checks).
 
-- System-level blocking (`mcp_fuzzer.safety_system.system_blocker.SystemCommandBlocker`):
-  - Creates PATH shims for `xdg-open`, `open`, and browsers to prevent app launches.
-  - Enabled with `--enable-safety-system`; cleaned up on exit.
+- System-level blocking (`mcp_fuzzer.safety_system.blocking.command_blocker.SystemCommandBlocker`):
+  - Creates PATH shims for `xdg-open`, `open`, `start`, and common browsers to prevent app launches.
+  - Enabled with `--enable-safety-system`; helper functions live in `mcp_fuzzer.safety_system.blocking`.
 
 - Policy utilities (`mcp_fuzzer.safety_system.policy`):
   - `is_host_allowed(url, allowed_hosts=None, deny_network_by_default=None)`

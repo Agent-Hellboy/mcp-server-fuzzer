@@ -108,41 +108,17 @@ pytest -n auto
 
 ### Test Safety Features
 
-The test suite includes built-in safety measures:
+End-to-end tests often spawn local MCP servers and can trigger external
+processes. Use the same safety features that the CLI exposes when running tests
+manually:
 
-```python
-# Safety check - prevent dangerous tests on production systems
-def is_safe_test_environment():
-    """Check if we're in a safe environment for running potentially dangerous tests."""
-    # Don't run dangerous tests on production systems
-    if (os.getenv("CI") or
-        os.getenv("PRODUCTION") or
-        os.getenv("DANGEROUS_TESTS_DISABLED")):
-        return False
-
-    # Don't run on systems with critical processes
-    try:
-        with open("/proc/1/comm", "r") as f:
-            init_process = f.read().strip()
-            if init_process in ["systemd", "init"]:
-                return False
-    except (OSError, IOError):
-        pass
-
-    return True
-
-# Skip dangerous tests if not in safe environment
-SAFE_ENV = is_safe_test_environment()
-
-# Add safety decorator for dangerous tests
-def safe_test_only(func):
-    """Decorator to skip dangerous tests on production systems."""
-    def wrapper(*args, **kwargs):
-        if not SAFE_ENV:
-            pytest.skip("Dangerous test skipped on production system")
-        return func(*args, **kwargs)
-    return wrapper
-```
+- Set `MCP_FUZZER_SAFETY_ENABLED=true` (or pass `--enable-safety-system` to CLI
+  invocations inside tests) so argument filtering stays active.
+- Provide a dedicated sandbox directory via `MCP_FUZZER_FS_ROOT` or `--fs-root`
+  to contain any files created by tools under test.
+- When you intentionally disable safety (for example, to fuzz filesystem-heavy
+  tools), run inside a disposable VM or container. There is no automatic
+  environment detection, so treat these flags as the final line of defense.
 
 ### Test Coverage
 
@@ -322,13 +298,13 @@ class CustomToolStrategy:
 
 ### Safety Features
 
-To add new safety features:
+To introduce new safety capabilities:
 
-1. **Extend SafetySystem class**
-2. **Implement safety logic**
-3. **Add configuration options**
-4. **Write tests**
-5. **Update documentation**
+1. **Extend or wrap `SafetyFilter`** (for argument-level filtering) or add helpers
+   under `safety_system/blocking`, `detection`, or `filesystem` as appropriate.
+2. **Expose configuration hooks** (CLI flags or config file entries) when needed.
+3. **Write unit tests** covering the new patterns, shims, or sandbox behaviors.
+4. **Document the feature** so operators understand the new protections.
 
 ## Bug Reports
 

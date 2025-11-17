@@ -225,7 +225,7 @@ mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
 ### Basic Safety Features
 
 ```bash
-# Enable safety system (default)
+# Enable system command blocking (argument-level filtering is already on)
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --enable-safety-system
 
 # Set filesystem root
@@ -244,7 +244,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no
 
 - **Process Isolation**: Safe subprocess handling with timeouts
 
-- **Environment Detection**: Automatically detects production systems
+- **Dangerous Content Filtering**: URL/script/command pattern detection with mock responses
 
 ## Reporting and Output
 

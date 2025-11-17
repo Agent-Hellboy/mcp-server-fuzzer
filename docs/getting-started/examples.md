@@ -214,7 +214,6 @@ export MCP_FUZZER_STDIO_TIMEOUT=60.0
 
 # Safety configuration
 export MCP_FUZZER_FS_ROOT=~/.mcp_fuzzer
-export MCP_FUZZER_ENABLE_SAFETY=true
 
 # Run fuzzer
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000

@@ -57,9 +57,9 @@ pip install -e .
 
 ### Safety & Security
 
-- **Built-in Safety System** - Prevents dangerous operations
+- **Built-in Safety System** - Pattern-based filtering plus safety reports
 
-- **Environment Detection** - Automatically detects production systems
+- **System Command Blocking** - PATH shims stop browser/app launches
 
 - **Filesystem Sandboxing** - Confines file operations
 
@@ -97,7 +97,7 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 
 - **Strategy System** - Realistic and aggressive data generation
 
-- **Safety System** - Protection mechanisms and environment detection
+- **Safety System** - Pattern-based filtering, sandboxing, and PATH shims
 
 - **Reporting System** - Centralized output management and comprehensive reporting
 

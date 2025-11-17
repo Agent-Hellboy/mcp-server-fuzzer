@@ -36,7 +36,7 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 - Beautiful Output: Rich, colorized terminal output with detailed reporting
 - Flexible Configuration: CLI args, YAML configs, environment variables
 - Comprehensive Reporting: Multiple output formats (JSON, CSV, HTML, Markdown)
-- Production Ready: Environment detection and production-safe defaults
+- Production Ready: PATH shims, sandbox defaults, and CI-friendly controls
 - Intelligent Testing: Hypothesis-based data generation with custom strategies
 
 ### Extensibility for Contributors
@@ -187,7 +187,7 @@ mcp-fuzzer --timeout 120 --process-retry-count 5 --process-retry-delay 2.0
 |---------|-------------|
 | Two-Phase Fuzzing | Realistic testing + aggressive security testing |
 | Multi-Protocol Support | HTTP, SSE, Stdio, and StreamableHTTP transports |
-| Built-in Safety | Environment detection and system protection |
+| Built-in Safety | Pattern-based filtering, sandboxing, and PATH shims |
 | Intelligent Testing | Hypothesis-based data generation with custom strategies |
 | Rich Reporting | Detailed output with exception tracking and safety reports |
 | Multiple Output Formats | JSON, CSV, HTML, Markdown, and XML export options |
