@@ -41,8 +41,14 @@ types. Refer to the table below for the current registry.
 | 90001 | Fuzzing   | Fuzzing engine error                               |
 | 90002 | Fuzzing   | Fuzzing strategy failed                            |
 | 90003 | Fuzzing   | Async executor encountered an error                |
+| 95001 | Runtime   | Runtime management error                           |
+| 95002 | Runtime   | Failed to start managed process                    |
+| 95003 | Runtime   | Failed to stop managed process                     |
+| 95004 | Runtime   | Failed to send process signal                      |
+| 95005 | Runtime   | Process registration failed                        |
+| 95006 | Runtime   | Process watchdog failed to start                   |
 
 Each exception class in `mcp_fuzzer/exceptions.py` sets its `code` and
 `description` fields so CLI output, logs, and structured reports can reference
 these values. Use `MCPError.to_metadata()` or `get_error_registry()` to fetch
-the mapping programmatically.*** End Patch
+the mapping programmatically.

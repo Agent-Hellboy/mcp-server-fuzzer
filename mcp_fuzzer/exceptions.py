@@ -137,6 +137,49 @@ class RequestTimeoutError(MCPTimeoutError):
     description = "Network request timed out"
 
 
+# Runtime-related exceptions ---------------------------------------------------
+class RuntimeSubsystemError(MCPError):
+    """Raised for errors in the runtime management subsystem."""
+
+    code = "95001"
+    description = "Runtime management error"
+
+
+class ProcessStartError(RuntimeSubsystemError):
+    """Raised when a managed process fails to start."""
+
+    code = "95002"
+    description = "Failed to start managed process"
+
+
+class ProcessStopError(RuntimeSubsystemError):
+    """Raised when a managed process fails to stop."""
+
+    code = "95003"
+    description = "Failed to stop managed process"
+
+
+class ProcessSignalError(RuntimeSubsystemError):
+    """Raised when sending a signal to a managed process fails."""
+
+    code = "95004"
+    description = "Failed to send process signal"
+
+
+class ProcessRegistrationError(RuntimeSubsystemError):
+    """Raised when registering/unregistering processes with the watchdog fails."""
+
+    code = "95005"
+    description = "Process registration failed"
+
+
+class WatchdogStartError(RuntimeSubsystemError):
+    """Raised when the process watchdog cannot be started."""
+
+    code = "95006"
+    description = "Process watchdog failed to start"
+
+
 # Safety-related exceptions ----------------------------------------------------
 class SafetyViolationError(MCPError):
     """Raised when a safety policy is violated."""

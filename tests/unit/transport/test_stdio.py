@@ -9,7 +9,7 @@ import pytest
 # Import the class to test
 from mcp_fuzzer.transport.stdio import StdioTransport
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, WatchdogConfig
-from mcp_fuzzer.exceptions import MCPError
+from mcp_fuzzer.exceptions import MCPError, ServerError, TransportError
 
 
 class TestStdioTransport:
@@ -247,13 +247,24 @@ class TestStdioTransport:
                     }
 
                     # Use pytest's raises context manager
-                    with pytest.raises(Exception, match="Server error") as excinfo:
+                    with pytest.raises(ServerError, match="Server returned error"):
                         await self.transport.send_request(
                             "test_method", {"param": "value"}
                         )
 
                     mock_send.assert_awaited_once()
                     mock_receive.assert_awaited_once()
+    @pytest.mark.asyncio
+    async def test_send_request_no_response(self):
+        """send_request should raise TransportError when no response arrives."""
+        with patch.object(
+            self.transport, "_send_message", new=AsyncMock()
+        ), patch("mcp_fuzzer.transport.stdio.uuid") as mock_uuid, patch.object(
+            self.transport, "_receive_message", new=AsyncMock(return_value=None)
+        ):
+            mock_uuid.uuid4.return_value = "test_id"
+            with pytest.raises(TransportError):
+                await self.transport.send_request("method", {})
 
     @pytest.mark.asyncio
     async def test_send_raw(self):
@@ -287,10 +298,8 @@ class TestStdioTransport:
                 }
 
                 # Use pytest's raises context manager
-                with pytest.raises(Exception) as excinfo:
+                with pytest.raises(ServerError):
                     await self.transport.send_raw({"raw": "data"})
-
-                assert "Test error" in str(excinfo.value)
                 mock_send.assert_awaited_once()
                 mock_receive.assert_awaited_once()
 
@@ -446,3 +455,13 @@ class TestStdioTransport:
         self.transport.process = None
         result = await self.transport.send_timeout_signal("timeout")
         assert result is False
+    @pytest.mark.asyncio
+    async def test_send_raw_no_response(self):
+        """send_raw should raise TransportError when no message arrives."""
+        with patch.object(
+            self.transport, "_send_message", new=AsyncMock()
+        ), patch.object(
+            self.transport, "_receive_message", new=AsyncMock(return_value=None)
+        ):
+            with pytest.raises(TransportError):
+                await self.transport.send_raw({"raw": "data"})

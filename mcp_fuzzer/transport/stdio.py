@@ -13,6 +13,12 @@ import time
 from typing import Any
 
 from .base import TransportProtocol
+from ..exceptions import (
+    ProcessSignalError,
+    ProcessStartError,
+    ServerError,
+    TransportError,
+)
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ..safety_system.policy import sanitize_subprocess_env
 from ..config.constants import PROCESS_WAIT_TIMEOUT
@@ -140,7 +146,10 @@ class StdioTransport(TransportProtocol):
             except Exception as e:
                 logging.error(f"Failed to start stdio transport process: {e}")
                 self._initialized = False
-                raise
+                raise ProcessStartError(
+                    "Failed to start stdio transport process",
+                    context={"command": cmd_parts, "cwd": os.getcwd()},
+                ) from e
 
     def _get_activity_timestamp(self) -> float:
         """Callback for process manager to get last activity timestamp."""
@@ -159,7 +168,10 @@ class StdioTransport(TransportProtocol):
         except Exception as e:
             logging.error(f"Failed to send message to stdio transport: {e}")
             self._initialized = False
-            raise
+            raise TransportError(
+                "Failed to send message over stdio transport",
+                context={"message": message},
+            ) from e
 
     async def _receive_message(self) -> dict[str, Any | None]:
         """Receive a message from the subprocess."""
@@ -177,7 +189,10 @@ class StdioTransport(TransportProtocol):
         except Exception as e:
             logging.error(f"Failed to receive message from stdio transport: {e}")
             self._initialized = False
-            raise
+            raise TransportError(
+                "Failed to receive message from stdio transport",
+                context={"command": self.command},
+            ) from e
 
     async def send_request(
         self, method: str, params: dict[str, Any | None] | None = None
@@ -197,12 +212,18 @@ class StdioTransport(TransportProtocol):
         while True:
             response = await self._receive_message()
             if response is None:
-                raise Exception("No response received from stdio transport")
+                raise TransportError(
+                    "No response received from stdio transport",
+                    context={"request_id": request_id},
+                )
 
             if response.get("id") == request_id:
                 if "error" in response:
                     logging.error(f"Server returned error: {response['error']}")
-                    raise Exception(f"Server error: {response['error']}")
+                    raise ServerError(
+                        "Server returned error",
+                        context={"request_id": request_id, "error": response["error"]},
+                    )
                 result = response.get("result", response)
                 return result if isinstance(result, dict) else {"result": result}
 
@@ -213,11 +234,17 @@ class StdioTransport(TransportProtocol):
         # Wait for response
         response = await self._receive_message()
         if response is None:
-            raise Exception("No response received from stdio transport")
+            raise TransportError(
+                "No response received from stdio transport",
+                context={"payload": payload},
+            )
 
         if "error" in response:
             logging.error(f"Server returned error: {response['error']}")
-            raise Exception(f"Server error: {response['error']}")
+            raise ServerError(
+                "Server returned error",
+                context={"error": response["error"]},
+            )
 
         result = response.get("result", response)
         return result if isinstance(result, dict) else {"result": result}
@@ -238,7 +265,10 @@ class StdioTransport(TransportProtocol):
         if isinstance(line, bytes):
             line = line.decode()
         if not line:
-            raise Exception("No response received on stdio")
+            raise TransportError(
+                "No response received on stdio",
+                context={"payload": payload},
+            )
         return json.loads(line)
 
     async def send_notification(
@@ -437,7 +467,10 @@ class StdioTransport(TransportProtocol):
                             f"{self.process.pid}: {e}"
                         )
                     )
-                    return False
+                    raise ProcessSignalError(
+                        f"Failed to send {signal_type} signal to stdio transport",
+                        context={"pid": self.process.pid, "signal_type": signal_type},
+                    ) from e
         return False
 
     # Avoid destructors for async cleanup; use close()

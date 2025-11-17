@@ -23,6 +23,7 @@ from ..types import (
 )
 
 from .base import TransportProtocol
+from ..exceptions import NetworkPolicyViolation, ServerError, TransportError
 from ..safety_system.policy import (
     is_host_allowed,
     resolve_redirect_safely,
@@ -74,6 +75,14 @@ class StreamableHTTPTransport(TransportProtocol):
         if self.protocol_version:
             headers[MCP_PROTOCOL_VERSION] = self.protocol_version
         return headers
+
+    def _ensure_host_allowed(self) -> None:
+        """Raise if the destination host violates safety policy."""
+        if not is_host_allowed(self.url):
+            raise NetworkPolicyViolation(
+                "Network to non-local host is disallowed by safety policy",
+                context={"url": self.url},
+            )
 
     def _maybe_extract_session_headers(self, response: httpx.Response) -> None:
         sid = response.headers.get(MCP_SESSION_ID)
@@ -187,10 +196,7 @@ class StreamableHTTPTransport(TransportProtocol):
         async with httpx.AsyncClient(
             timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
+            self._ensure_host_allowed()
             response = await self._post_with_retries(
                 client, self.url, payload, sanitize_headers(headers)
             )
@@ -208,8 +214,10 @@ class StreamableHTTPTransport(TransportProtocol):
             if response.status_code == HTTP_ACCEPTED:
                 return {}
             if response.status_code == HTTP_NOT_FOUND:
-                # Session terminated or not found
-                raise Exception("Session terminated or endpoint not found")
+                raise TransportError(
+                    "Session terminated or endpoint not found",
+                    context={"url": self.url, "status": response.status_code},
+                )
 
             response.raise_for_status()
             ct = self._extract_content_type(response)
@@ -251,7 +259,10 @@ class StreamableHTTPTransport(TransportProtocol):
 
                 if isinstance(data, dict):
                     if "error" in data:
-                        raise Exception(f"Server error: {data['error']}")
+                        raise ServerError(
+                            "Server returned error",
+                            context={"url": self.url, "error": data["error"]},
+                        )
                     if "result" in data:
                         # Extract protocol version if present (initialize)
                         self._maybe_extract_protocol_version_from_result(data["result"])
@@ -273,7 +284,10 @@ class StreamableHTTPTransport(TransportProtocol):
                     return {}
                 return parsed if isinstance(parsed, dict) else {"result": parsed}
 
-            raise Exception(f"Unexpected content type: {ct}")
+            raise TransportError(
+                f"Unexpected content type: {ct}",
+                context={"url": self.url, "content_type": ct},
+            )
 
     async def send_notification(
         self, method: str, params: dict[str, Any] | None = None
@@ -283,10 +297,7 @@ class StreamableHTTPTransport(TransportProtocol):
         async with httpx.AsyncClient(
             timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
+            self._ensure_host_allowed()
             safe_headers = sanitize_headers(headers)
             response = await self._post_with_retries(
                 client, self.url, payload, safe_headers
@@ -377,10 +388,7 @@ class StreamableHTTPTransport(TransportProtocol):
         async with httpx.AsyncClient(
             timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
+            self._ensure_host_allowed()
             safe_headers = sanitize_headers(headers)
             response = await client.post(
                 self.url, json=payload, headers=safe_headers, stream=True

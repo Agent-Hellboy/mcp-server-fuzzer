@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mcp_fuzzer.exceptions import ProcessStartError
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
 from mcp_fuzzer.fuzz_engine.runtime.watchdog import ProcessWatchdog, WatchdogConfig
 
@@ -330,7 +331,7 @@ class TestCrossPlatformProcessManagement:
         with patch("asyncio.create_subprocess_exec") as mock_create:
             mock_create.side_effect = FileNotFoundError("Command not found")
 
-            with pytest.raises(FileNotFoundError):
+            with pytest.raises(ProcessStartError):
                 await process_manager.start_process(invalid_config)
 
     def test_process_manager_thread_safety(self, process_manager):

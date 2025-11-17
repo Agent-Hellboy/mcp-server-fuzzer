@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 
 from .base import TransportProtocol
+from ..exceptions import NetworkPolicyViolation, ServerError, TransportError
 from ..safety_system.policy import is_host_allowed, sanitize_headers
 
 class SSETransport(TransportProtocol):
@@ -37,8 +38,9 @@ class SSETransport(TransportProtocol):
             trust_env=False,
         ) as client:
             if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
+                raise NetworkPolicyViolation(
+                    "Network to non-local host is disallowed by safety policy",
+                    context={"url": self.url},
                 )
             safe_headers = sanitize_headers(self.headers)
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -58,7 +60,10 @@ class SSETransport(TransportProtocol):
                 if data is None:
                     return None
                 if "error" in data:
-                    raise Exception(f"Server error: {data['error']}")
+                    raise ServerError(
+                        "Server returned error",
+                        context={"url": self.url, "error": data["error"]},
+                    )
                 result = data.get("result", data)
                 return result if isinstance(result, dict) else {"result": result}
 
@@ -75,12 +80,18 @@ class SSETransport(TransportProtocol):
             try:
                 data = response.json()
                 if "error" in data:
-                    raise Exception(f"Server error: {data['error']}")
+                    raise ServerError(
+                        "Server returned error",
+                        context={"url": self.url, "error": data["error"]},
+                    )
                 result = data.get("result", data)
                 return result if isinstance(result, dict) else {"result": result}
             except json.JSONDecodeError:
                 pass
-            raise Exception("No valid SSE response received")
+            raise TransportError(
+                "No valid SSE response received",
+                context={"url": self.url},
+            )
 
     async def send_notification(
         self, method: str, params: dict[str, Any | None] | None = None
@@ -92,8 +103,9 @@ class SSETransport(TransportProtocol):
             trust_env=False,
         ) as client:
             if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
+                raise NetworkPolicyViolation(
+                    "Network to non-local host is disallowed by safety policy",
+                    context={"url": self.url},
                 )
             safe_headers = sanitize_headers(self.headers)
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -114,8 +126,9 @@ class SSETransport(TransportProtocol):
             trust_env=False,
         ) as client:
             if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
+                raise NetworkPolicyViolation(
+                    "Network to non-local host is disallowed by safety policy",
+                    context={"url": self.url},
                 )
             safe_headers = sanitize_headers(self.headers)
             async with client.stream(
