@@ -124,7 +124,7 @@ def apply_config_file(
     try:
         config_data = load_config_file(file_path)
         load_custom_transports(config_data)
-    except MCPError:
+    except (ConfigFileError, MCPError):
         logger.exception("Failed to load configuration from %s", file_path)
         return False
     config.update(config_data)

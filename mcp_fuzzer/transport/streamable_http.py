@@ -423,15 +423,15 @@ class StreamableHTTPTransport(TransportProtocol):
         ) as client:
             self._ensure_host_allowed()
             safe_headers = sanitize_headers(headers)
-            response = await client.post(
-                self.url, json=payload, headers=safe_headers, stream=True
+            response = await client.stream(
+                "POST", self.url, json=payload, headers=safe_headers
             )
 
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 await response.aclose()
-                response = await client.post(
-                    redirect_url, json=payload, headers=safe_headers, stream=True
+                response = await client.stream(
+                    "POST", redirect_url, json=payload, headers=safe_headers
                 )
 
             try:
