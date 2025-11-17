@@ -121,7 +121,8 @@ class TestCustomTransportRegistry:
         registry = CustomTransportRegistry()
 
         with pytest.raises(
-            TransportRegistrationError, match="Transport 'nonexistent' is not registered"
+            TransportRegistrationError,
+            match="Transport 'nonexistent' is not registered",
         ):
             registry.unregister("nonexistent")
 

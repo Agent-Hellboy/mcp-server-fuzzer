@@ -23,6 +23,7 @@ from mcp_fuzzer.auth import (
     load_auth_config,
     setup_auth_from_env,
 )
+from mcp_fuzzer.exceptions import AuthConfigError, AuthProviderError
 
 pytestmark = [pytest.mark.unit, pytest.mark.auth]
 
