@@ -23,6 +23,7 @@ from mcp_fuzzer.auth import (
     load_auth_config,
     setup_auth_from_env,
 )
+from mcp_fuzzer.exceptions import AuthConfigError, AuthProviderError
 
 pytestmark = [pytest.mark.unit, pytest.mark.auth]
 
@@ -448,7 +449,7 @@ def test_load_auth_config_unknown_provider_type():
         config_file = f.name
 
     try:
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(AuthProviderError) as excinfo:
             load_auth_config(config_file)
 
         assert "Unknown provider type" in str(excinfo.value)
@@ -518,7 +519,7 @@ def test_load_auth_config_rejects_non_dict_provider():
         json.dump(config_data, f)
         config_file = f.name
     try:
-        with pytest.raises(ValueError, match="expected an object"):
+        with pytest.raises(AuthProviderError, match="expected an object"):
             load_auth_config(config_file)
     finally:
         os.unlink(config_file)
@@ -549,7 +550,7 @@ def test_load_auth_config_rejects_both_tool_mapping_keys():
         json.dump(config_data, f)
         config_file = f.name
     try:
-        with pytest.raises(ValueError, match="Both 'tool_mapping' and legacy"):
+        with pytest.raises(AuthConfigError, match="Both 'tool_mapping' and legacy"):
             load_auth_config(config_file)
     finally:
         os.unlink(config_file)

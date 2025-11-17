@@ -6,6 +6,7 @@ from .stdio import StdioTransport
 from .streamable_http import StreamableHTTPTransport
 from .custom import registry as custom_registry
 from urllib.parse import urlparse, urlunparse
+from ..exceptions import TransportRegistrationError
 
 class TransportRegistry:
     """Registry for transport classes."""
@@ -25,7 +26,7 @@ class TransportRegistry:
         """Create a transport instance by name."""
         name_lower = name.lower()
         if name_lower not in self._transports:
-            raise ValueError(f"Unknown transport: {name}")
+            raise TransportRegistrationError(f"Unknown transport: {name}")
         cls = self._transports[name_lower]
         return cls(*args, **kwargs)
 
@@ -53,13 +54,13 @@ def create_transport(
         # Try custom transports first
         try:
             return custom_registry.create_transport(key, endpoint, **kwargs)
-        except KeyError:
+        except TransportRegistrationError:
             pass
         # Try built-in registry
         try:
             return registry.create_transport(key, endpoint, **kwargs)
-        except ValueError:
-            raise ValueError(
+        except TransportRegistrationError:
+            raise TransportRegistrationError(
                 f"Unsupported protocol: {url_or_protocol}. "
                 f"Supported: {', '.join(registry.list_transports().keys())}; "
                 f"custom: {', '.join(sorted(custom_registry.list_transports().keys()))}"
@@ -80,7 +81,7 @@ def create_transport(
     if scheme:
         try:
             return custom_registry.create_transport(scheme, url_or_protocol, **kwargs)
-        except KeyError:
+        except TransportRegistrationError:
             pass  # Fall through to built-in schemes
 
     if scheme in ("http", "https"):
@@ -117,7 +118,7 @@ def create_transport(
         )
         return registry.create_transport("streamablehttp", http_url, **kwargs)
 
-    raise ValueError(
+    raise TransportRegistrationError(
         f"Unsupported URL scheme: {scheme or 'none'}. "
         f"Supported: {', '.join(registry.list_transports().keys())}, "
         f"custom: {', '.join(sorted(custom_registry.list_transports().keys()))}"

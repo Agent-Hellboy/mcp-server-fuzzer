@@ -19,6 +19,12 @@ from .runner import (
     start_safety_if_enabled,
     stop_safety_if_started,
 )
+from ..exceptions import (
+    ArgumentValidationError,
+    CLIError,
+    MCPError,
+    TransportError,
+)
 
 
 def _get_cli_helpers() -> tuple[Any, Any, Any, Any, Any, Any]:
@@ -59,24 +65,15 @@ def _get_cli_helpers() -> tuple[Any, Any, Any, Any, Any, Any]:
 def _handle_validate_config(args) -> None:
     """Handle --validate-config flag."""
     from ..config import load_config_file
-    try:
-        load_config_file(args.validate_config)
-        console = Console()
-        config_file = args.validate_config
-        success_msg = (
-            "[green]:heavy_check_mark: Configuration file '"
-            f"{config_file}' is valid[/green]"
-        )
-        console.print(emoji.emojize(success_msg, language='alias'))
-        sys.exit(0)
-    except Exception as e:
-        console = Console()
-        error_msg = (
-            "[red]:heavy_multiplication_x: Configuration validation failed: "
-            f"{e}[/red]"
-        )
-        console.print(emoji.emojize(error_msg, language='alias'))
-        sys.exit(1)
+    load_config_file(args.validate_config)
+    console = Console()
+    config_file = args.validate_config
+    success_msg = (
+        "[green]:heavy_check_mark: Configuration file "
+        f"'{config_file}' is valid[/green]"
+    )
+    console.print(emoji.emojize(success_msg, language='alias'))
+    sys.exit(0)
 
 
 def _handle_check_env() -> None:
@@ -122,12 +119,10 @@ def _handle_check_env() -> None:
 
     if all_valid:
         console.print("[green]All environment variables are valid[/green]")
-    else:
-        console.print(
-            "[red]Some environment variables have invalid values[/red]"
-        )
-        sys.exit(1)
-    sys.exit(0)
+        sys.exit(0)
+
+    console.print("[red]Some environment variables have invalid values[/red]")
+    raise ArgumentValidationError("Invalid environment variable values")
 
 
 def _validate_transport(args, cli_module) -> None:
@@ -156,10 +151,13 @@ def _validate_transport(args, cli_module) -> None:
             args.endpoint,
             timeout=args.timeout,
         )
+    except MCPError:
+        raise
     except Exception as transport_error:
-        console = Console()
-        console.print(f"[bold red]Error:[/bold red] {transport_error}")
-        sys.exit(1)
+        raise TransportError(
+            "Failed to initialize transport",
+            context={"protocol": args.protocol, "endpoint": args.endpoint},
+        ) from transport_error
 
 
 def _run_fuzzing(args, cli_module) -> None:
@@ -209,19 +207,33 @@ def run_cli() -> None:
             _validate_transport(args, cli_module)
             _run_fuzzing(args, cli_module)
 
-    except ValueError as e:
-        console = Console()
-        console.print(f"[bold red]Error:[/bold red] {e}")
-        sys.exit(1)
     except KeyboardInterrupt:
         console = Console()
         console.print("\n[yellow]Fuzzing interrupted by user[/yellow]")
         sys.exit(0)
-    except Exception as e:
-        console = Console()
-        console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+    except MCPError as err:
+        _print_mcp_error(err)
+        sys.exit(1)
+    except ValueError as exc:
+        error = ArgumentValidationError(str(exc))
+        _print_mcp_error(error)
+        sys.exit(1)
+    except Exception as exc:
+        error = CLIError(
+            "Unexpected CLI failure",
+            context={"stage": "run_cli", "details": str(exc)},
+        )
+        _print_mcp_error(error)
         if logging.getLogger().level <= logging.DEBUG:
             import traceback
 
-            console.print(traceback.format_exc())
+            Console().print(traceback.format_exc())
         sys.exit(1)
+
+
+def _print_mcp_error(error: MCPError) -> None:
+    """Render MCP errors consistently for the CLI."""
+    console = Console()
+    console.print(f"[bold red]Error ({error.code}):[/bold red] {error}")
+    if error.context:
+        console.print(f"[dim]Context: {error.context}[/dim]")

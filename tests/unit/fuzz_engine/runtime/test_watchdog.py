@@ -5,8 +5,10 @@ import signal
 import time
 
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock, call
+from unittest.mock import patch, MagicMock, AsyncMock
 
+# Import error classes
+from mcp_fuzzer.exceptions import ProcessRegistrationError, WatchdogStartError
 # Import the classes to test
 from mcp_fuzzer.fuzz_engine.runtime.watchdog import (
     ProcessWatchdog,
@@ -55,11 +57,9 @@ class TestProcessWatchdog:
         """Test starting the watchdog without a running loop."""
         # Since the start method is now async, we need to simulate a failure inside it
         with patch("asyncio.create_task", side_effect=RuntimeError("Test exception")):
-            try:
+            with pytest.raises(WatchdogStartError) as exc:
                 await self.watchdog.start()
-            except RuntimeError:
-                # Expected exception
-                pass
+            assert exc.value.code == "95006"
             # The task should not be created due to the exception
             assert self.watchdog._watchdog_task is None
 
@@ -103,6 +103,19 @@ class TestProcessWatchdog:
             assert self.watchdog._processes[12345]["process"] == mock_process
 
     @pytest.mark.asyncio
+    async def test_register_process_failure(self):
+        """Test register_process surfaces ProcessRegistrationError."""
+        mock_process = MagicMock()
+        mock_process.pid = 12345
+
+        with patch.object(
+            self.watchdog, "_get_lock", side_effect=RuntimeError("boom")
+        ):
+            with pytest.raises(ProcessRegistrationError) as exc:
+                await self.watchdog.register_process(12345, mock_process, None, "test")
+            assert exc.value.code == "95005"
+
+    @pytest.mark.asyncio
     async def test_unregister_process(self):
         """Test unregistering a process."""
         mock_process = MagicMock()
@@ -117,6 +130,16 @@ class TestProcessWatchdog:
 
             # Assert process was unregistered
             assert 12345 not in self.watchdog._processes
+
+    @pytest.mark.asyncio
+    async def test_unregister_process_failure(self):
+        """Test unregister_process surfaces ProcessRegistrationError."""
+        with patch.object(
+            self.watchdog, "_get_lock", side_effect=RuntimeError("boom")
+        ):
+            with pytest.raises(ProcessRegistrationError) as exc:
+                await self.watchdog.unregister_process(12345)
+            assert exc.value.code == "95005"
 
     @pytest.mark.asyncio
     async def test_update_activity(self):

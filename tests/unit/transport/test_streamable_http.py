@@ -8,6 +8,7 @@ from mcp_fuzzer.transport.streamable_http import (
     CONTENT_TYPE,
 )
 from mcp_fuzzer.config import DEFAULT_PROTOCOL_VERSION
+from mcp_fuzzer.exceptions import TransportError
 
 
 # Force anyio to use asyncio backend for these tests (no trio dependency required)
@@ -79,7 +80,10 @@ class _FakeAsyncClient:
         self.calls.append({"url": url, "json": json, "headers": headers})
         if not self._responses:
             raise AssertionError("No more fake responses queued")
-        return self._responses.pop(0)
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 @pytest.mark.anyio("asyncio")
@@ -150,3 +154,46 @@ async def test_streamable_http_sse_response(monkeypatch):
     # Assert
     assert result == {"ok": True}
     assert t.session_id == "sess-xyz"
+
+
+@pytest.mark.anyio("asyncio")
+async def test_streamable_http_wraps_http_status_error(monkeypatch):
+    import httpx
+
+    bad_request = httpx.Request("POST", "http://test/mcp")
+    bad_response = httpx.Response(500, request=bad_request)
+    fake = _FakeAsyncClient([bad_response])
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
+
+    transport = StreamableHTTPTransport("http://test/mcp", timeout=1)
+    transport._initialized = True
+
+    with pytest.raises(TransportError) as excinfo:
+        await transport.send_raw(
+            {"jsonrpc": "2.0", "id": "1", "method": "tools/list", "params": {}}
+        )
+
+    assert excinfo.value.context["status"] == 500
+    assert excinfo.value.context["url"].startswith("http://test/mcp")
+
+
+@pytest.mark.anyio("asyncio")
+async def test_streamable_http_wraps_connect_errors(monkeypatch):
+    import httpx
+
+    req = httpx.Request("POST", "http://test/mcp")
+    connect_exc = httpx.ConnectError("boom", request=req)
+    fake = _FakeAsyncClient([connect_exc])
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
+
+    transport = StreamableHTTPTransport("http://test/mcp", timeout=1)
+    transport._initialized = True
+
+    with pytest.raises(TransportError) as excinfo:
+        await transport.send_raw(
+            {"jsonrpc": "2.0", "id": "1", "method": "custom.call", "params": {}}
+        )
+
+    assert excinfo.value.context["error_type"] == "ConnectError"
+    assert excinfo.value.context["method"] == "custom.call"
+    assert excinfo.value.context["attempts"] == 1

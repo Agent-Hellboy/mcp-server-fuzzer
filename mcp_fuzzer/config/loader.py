@@ -12,7 +12,7 @@ from typing import Any
 import yaml
 
 from .manager import config
-from ..exceptions import ConfigFileError
+from ..exceptions import ConfigFileError, MCPError
 from ..transport.custom import register_custom_transport
 from ..transport.base import TransportProtocol
 import importlib
@@ -114,26 +114,21 @@ def apply_config_file(
     Returns:
         True if configuration was loaded and applied, False otherwise
     """
-    try:
-        # Find config file
-        file_path = find_config_file(config_path, search_paths, file_names)
-        if not file_path:
-            logger.debug("No configuration file found")
-            return False
-
-        # Load config file
-        logger.info(f"Loading configuration from {file_path}")
-        config_data = load_config_file(file_path)
-
-        # Load custom transports if configured
-        load_custom_transports(config_data)
-
-        # Apply configuration
-        config.update(config_data)
-        return True
-    except Exception as e:
-        logger.error(f"Error loading configuration file: {str(e)}")
+    # Find config file
+    file_path = find_config_file(config_path, search_paths, file_names)
+    if not file_path:
+        logger.debug("No configuration file found")
         return False
+
+    logger.info(f"Loading configuration from {file_path}")
+    try:
+        config_data = load_config_file(file_path)
+        load_custom_transports(config_data)
+    except (ConfigFileError, MCPError):
+        logger.exception("Failed to load configuration from %s", file_path)
+        return False
+    config.update(config_data)
+    return True
 
 def get_config_schema() -> dict[str, Any]:
     """Get the configuration schema.
@@ -380,8 +375,10 @@ def load_custom_transports(config_data: dict[str, Any]) -> None:
                 f"{module_path}.{class_name}"
             )
 
+        except MCPError:
+            raise
         except Exception as e:
             logger.error(f"Failed to load custom transport '{transport_name}': {e}")
             raise ConfigFileError(
                 f"Failed to load custom transport '{transport_name}': {e}"
-            )
+            ) from e

@@ -23,6 +23,7 @@ from mcp_fuzzer.cli import (
     get_cli_config,
 )
 from mcp_fuzzer.config import config as global_config
+from mcp_fuzzer.exceptions import ArgumentValidationError
 
 # Import the functions to test
 import mcp_fuzzer.cli.runner as runner
@@ -399,7 +400,7 @@ class TestCLI:
         )
 
         with pytest.raises(
-            ValueError,
+            ArgumentValidationError,
             match="--protocol-type can only be used with --mode protocol",
         ):
             validate_arguments(args)
@@ -415,7 +416,7 @@ class TestCLI:
             endpoint="http://localhost:8000",
         )
 
-        with pytest.raises(ValueError, match="--runs must be at least 1"):
+        with pytest.raises(ArgumentValidationError, match="--runs must be at least 1"):
             validate_arguments(args)
 
     def test_validate_arguments_invalid_runs_per_type(self):
@@ -429,7 +430,9 @@ class TestCLI:
             endpoint="http://localhost:8000",
         )
 
-        with pytest.raises(ValueError, match="--runs-per-type must be at least 1"):
+        with pytest.raises(
+            ArgumentValidationError, match="--runs-per-type must be at least 1"
+        ):
             validate_arguments(args)
 
     def test_validate_arguments_invalid_timeout(self):
@@ -443,7 +446,7 @@ class TestCLI:
             endpoint="http://localhost:8000",
         )
 
-        with pytest.raises(ValueError, match="--timeout must be positive"):
+        with pytest.raises(ArgumentValidationError, match="--timeout must be positive"):
             validate_arguments(args)
 
     def test_validate_arguments_empty_endpoint(self):
@@ -458,7 +461,8 @@ class TestCLI:
         )
 
         with pytest.raises(
-            ValueError, match="--endpoint is required for fuzzing operations"
+            ArgumentValidationError,
+            match="--endpoint is required for fuzzing operations",
         ):
             validate_arguments(args)
 
@@ -473,7 +477,9 @@ class TestCLI:
             endpoint="   ",
         )
 
-        with pytest.raises(ValueError, match="--endpoint cannot be empty"):
+        with pytest.raises(
+            ArgumentValidationError, match="--endpoint cannot be empty"
+        ):
             validate_arguments(args)
 
     def test_get_cli_config(self):
@@ -745,7 +751,7 @@ class TestCLI:
         mock_args = argparse.Namespace()
         mock_parse.return_value = mock_args
 
-        mock_validate.side_effect = ValueError("Invalid arguments")
+        mock_validate.side_effect = ArgumentValidationError("Invalid arguments")
 
         mock_exit.side_effect = SystemExit(1)
 

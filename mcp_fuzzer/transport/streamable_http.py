@@ -23,6 +23,7 @@ from ..types import (
 )
 
 from .base import TransportProtocol
+from ..exceptions import NetworkPolicyViolation, ServerError, TransportError
 from ..safety_system.policy import (
     is_host_allowed,
     resolve_redirect_safely,
@@ -74,6 +75,27 @@ class StreamableHTTPTransport(TransportProtocol):
         if self.protocol_version:
             headers[MCP_PROTOCOL_VERSION] = self.protocol_version
         return headers
+
+    def _ensure_host_allowed(self) -> None:
+        """Raise if the destination host violates safety policy."""
+        if not is_host_allowed(self.url):
+            raise NetworkPolicyViolation(
+                "Network to non-local host is disallowed by safety policy",
+                context={"url": self.url},
+            )
+
+    def _raise_http_status_error(
+        self, error: httpx.HTTPStatusError, *, method: str | None = None
+    ) -> None:
+        """Convert httpx HTTP status errors into TransportError instances."""
+        request_url = str(error.request.url) if error.request else self.url
+        status = error.response.status_code if error.response else None
+        context: dict[str, Any] = {"url": request_url, "status": status}
+        if method:
+            context["method"] = method
+        raise TransportError(
+            f"HTTP error while communicating with {request_url}", context=context
+        ) from error
 
     def _maybe_extract_session_headers(self, response: httpx.Response) -> None:
         sid = response.headers.get(MCP_SESSION_ID)
@@ -187,10 +209,7 @@ class StreamableHTTPTransport(TransportProtocol):
         async with httpx.AsyncClient(
             timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
+            self._ensure_host_allowed()
             response = await self._post_with_retries(
                 client, self.url, payload, sanitize_headers(headers)
             )
@@ -208,10 +227,15 @@ class StreamableHTTPTransport(TransportProtocol):
             if response.status_code == HTTP_ACCEPTED:
                 return {}
             if response.status_code == HTTP_NOT_FOUND:
-                # Session terminated or not found
-                raise Exception("Session terminated or endpoint not found")
+                raise TransportError(
+                    "Session terminated or endpoint not found",
+                    context={"url": self.url, "status": response.status_code},
+                )
 
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                self._raise_http_status_error(exc, method=method)
             ct = self._extract_content_type(response)
 
             if ct.startswith(JSON_CT):
@@ -251,7 +275,10 @@ class StreamableHTTPTransport(TransportProtocol):
 
                 if isinstance(data, dict):
                     if "error" in data:
-                        raise Exception(f"Server error: {data['error']}")
+                        raise ServerError(
+                            "Server returned error",
+                            context={"url": self.url, "error": data["error"]},
+                        )
                     if "result" in data:
                         # Extract protocol version if present (initialize)
                         self._maybe_extract_protocol_version_from_result(data["result"])
@@ -273,7 +300,10 @@ class StreamableHTTPTransport(TransportProtocol):
                     return {}
                 return parsed if isinstance(parsed, dict) else {"result": parsed}
 
-            raise Exception(f"Unexpected content type: {ct}")
+            raise TransportError(
+                f"Unexpected content type: {ct}",
+                context={"url": self.url, "content_type": ct},
+            )
 
     async def send_notification(
         self, method: str, params: dict[str, Any] | None = None
@@ -283,10 +313,7 @@ class StreamableHTTPTransport(TransportProtocol):
         async with httpx.AsyncClient(
             timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
+            self._ensure_host_allowed()
             safe_headers = sanitize_headers(headers)
             response = await self._post_with_retries(
                 client, self.url, payload, safe_headers
@@ -296,7 +323,10 @@ class StreamableHTTPTransport(TransportProtocol):
                 response = await self._post_with_retries(
                     client, redirect_url, payload, safe_headers
                 )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                self._raise_http_status_error(exc, method=method)
 
     async def _do_initialize(self) -> None:
         """Perform a minimal MCP initialize + initialized notification."""
@@ -356,7 +386,16 @@ class StreamableHTTPTransport(TransportProtocol):
                     "resources/list",
                 )
                 if attempt >= retries or not safe:
-                    raise
+                    context = {
+                        "url": url,
+                        "error_type": type(e).__name__,
+                        "attempts": attempt + 1,
+                    }
+                    if method:
+                        context["method"] = method
+                    raise TransportError(
+                        "Connection failed while contacting server", context=context
+                    ) from e
                 self._logger.debug(
                     "POST retry %d for %s due to %s",
                     attempt + 1,
@@ -374,23 +413,25 @@ class StreamableHTTPTransport(TransportProtocol):
         for the streamable transport and its header/session handling.
         """
         headers = self._prepare_headers()
+        method = None
+        try:
+            method = payload.get("method")
+        except AttributeError:
+            method = None
         async with httpx.AsyncClient(
             timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
-            if not is_host_allowed(self.url):
-                raise Exception(
-                    "Network to non-local host is disallowed by safety policy"
-                )
+            self._ensure_host_allowed()
             safe_headers = sanitize_headers(headers)
-            response = await client.post(
-                self.url, json=payload, headers=safe_headers, stream=True
+            response = await client.stream(
+                "POST", self.url, json=payload, headers=safe_headers
             )
 
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 await response.aclose()
-                response = await client.post(
-                    redirect_url, json=payload, headers=safe_headers, stream=True
+                response = await client.stream(
+                    "POST", redirect_url, json=payload, headers=safe_headers
                 )
 
             try:
@@ -411,5 +452,7 @@ class StreamableHTTPTransport(TransportProtocol):
                             except json.JSONDecodeError:
                                 self._logger.error("Failed to parse SSE data as JSON")
                                 continue
+            except httpx.HTTPStatusError as exc:
+                self._raise_http_status_error(exc, method=method)
             finally:
                 await response.aclose()

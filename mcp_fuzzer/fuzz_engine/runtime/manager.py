@@ -7,6 +7,7 @@ async operations.
 """
 
 import asyncio
+import inspect
 import logging
 import os
 import signal
@@ -16,6 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from ...exceptions import (
+    MCPError,
+    ProcessSignalError,
+    ProcessStartError,
+    ProcessStopError,
+)
 from .watchdog import ProcessWatchdog, WatchdogConfig
 
 
@@ -65,19 +72,31 @@ class ProcessManager:
             self._lock = asyncio.Lock()
         return self._lock
 
+    async def _wait_for_process_exit(
+        self, process: asyncio.subprocess.Process, timeout: float | None = None
+    ) -> Any:
+        """Await process.wait() while tolerating mocked/synchronous implementations."""
+        wait_result = process.wait()
+        if inspect.isawaitable(wait_result):
+            if timeout is None:
+                return await wait_result
+            return await asyncio.wait_for(wait_result, timeout=timeout)
+        # For MagicMock/synchronous waits, return immediately
+        return wait_result
+
     async def start_process(self, config: ProcessConfig) -> asyncio.subprocess.Process:
         """Start a new process asynchronously."""
+        # Prepare execution context for better diagnostics if startup fails
+        cwd = str(config.cwd) if isinstance(config.cwd, Path) else config.cwd
+        env = (
+            {**os.environ, **(config.env or {})}
+            if config.env is not None
+            else os.environ.copy()
+        )
+
         try:
             # Ensure watchdog monitoring is running
             await self.watchdog.start()
-
-            # Start the process using asyncio subprocess
-            cwd = str(config.cwd) if isinstance(config.cwd, Path) else config.cwd
-            env = (
-                {**os.environ, **(config.env or {})}
-                if config.env is not None
-                else os.environ.copy()
-            )
 
             # Start the process with asyncio
             process = await asyncio.create_subprocess_exec(
@@ -112,9 +131,18 @@ class ProcessManager:
             )
             return process
 
+        except MCPError:
+            raise
         except Exception as e:
             self._logger.error(f"Failed to start process {config.name}: {e}")
-            raise
+            raise ProcessStartError(
+                f"Failed to start process {config.name}",
+                context={
+                    "name": config.name,
+                    "command": config.command,
+                    "cwd": cwd,
+                },
+            ) from e
 
     async def stop_process(self, pid: int, force: bool = False) -> bool:
         """Stop a running process asynchronously."""
@@ -144,9 +172,14 @@ class ProcessManager:
 
             return True
 
+        except MCPError:
+            raise
         except Exception as e:
             self._logger.error(f"Failed to stop process {pid} ({name}): {e}")
-            return False
+            raise ProcessStopError(
+                f"Failed to stop process {pid} ({name})",
+                context={"pid": pid, "force": force, "name": name},
+            ) from e
 
     async def _force_kill_process(
         self, pid: int, process: asyncio.subprocess.Process, name: str
@@ -165,7 +198,7 @@ class ProcessManager:
 
         # Wait for the process to actually terminate
         try:
-            await asyncio.wait_for(process.wait(), timeout=1.0)
+            await self._wait_for_process_exit(process, timeout=1.0)
         except asyncio.TimeoutError:
             self._logger.warning(
                 f"Process {pid} ({name}) didn't respond to kill signal"
@@ -186,7 +219,7 @@ class ProcessManager:
 
         # Give process a short window to terminate gracefully
         try:
-            await asyncio.wait_for(process.wait(), timeout=2.0)
+            await self._wait_for_process_exit(process, timeout=2.0)
             self._logger.info(f"Gracefully stopped process {pid} ({name})")
         except asyncio.TimeoutError:
             # Escalate to kill and ensure we reap to avoid zombies
@@ -199,7 +232,22 @@ class ProcessManager:
         async with self._get_lock():
             pids = list(self._processes.keys())
         tasks = [self.stop_process(pid, force=force) for pid in pids]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        failures: list[dict[str, Any]] = []
+        for pid, result in zip(pids, results):
+            if isinstance(result, Exception):
+                failures.append(
+                    {"pid": pid, "error": type(result).__name__, "message": str(result)}
+                )
+            elif result is False:
+                failures.append({"pid": pid, "error": None, "message": "not found"})
+
+        if failures:
+            raise ProcessStopError(
+                "Failed to stop all managed processes",
+                context={"failed_processes": failures},
+            )
 
     async def get_process_status(self, pid: int) -> dict[str, Any] | None:
         """Get status information for a specific process."""
@@ -246,9 +294,9 @@ class ProcessManager:
 
         try:
             if timeout is None:
-                await process.wait()
+                await self._wait_for_process_exit(process)
             else:
-                await asyncio.wait_for(process.wait(), timeout=timeout)
+                await self._wait_for_process_exit(process, timeout=timeout)
             return process.returncode
         except asyncio.TimeoutError:
             # Process didn't complete within timeout, return current status
@@ -334,11 +382,16 @@ class ProcessManager:
 
             return True
 
+        except MCPError:
+            raise
         except Exception as e:
             self._logger.error(
                 f"Failed to send {signal_type} signal to process {pid} ({name}): {e}"
             )
-            return False
+            raise ProcessSignalError(
+                f"Failed to send {signal_type} signal to process {pid} ({name})",
+                context={"pid": pid, "signal_type": signal_type, "name": name},
+            ) from e
 
     async def _send_term_signal(
         self, pid: int, process: asyncio.subprocess.Process, name: str
@@ -398,18 +451,28 @@ class ProcessManager:
         self, signal_type: str = "timeout"
     ) -> dict[int, bool]:
         """Send a timeout signal to all running processes asynchronously."""
-        results = {}
+        results: dict[int, bool] = {}
         async with self._get_lock():
             pids = list(self._processes.keys())
 
         tasks = [self.send_timeout_signal(pid, signal_type) for pid in pids]
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
 
+        failures: list[dict[str, Any]] = []
         for pid, result in zip(pids, results_list):
             if isinstance(result, Exception):
+                failures.append(
+                    {"pid": pid, "error": type(result).__name__, "message": str(result)}
+                )
                 results[pid] = False
             else:
-                results[pid] = result
+                results[pid] = bool(result)
+
+        if failures:
+            raise ProcessSignalError(
+                f"Failed to send {signal_type} signal to some processes",
+                context={"signal_type": signal_type, "failed_processes": failures},
+            )
 
         return results
 

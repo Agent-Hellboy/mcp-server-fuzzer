@@ -20,6 +20,12 @@ from ...config.constants import (
     PROCESS_TERMINATION_TIMEOUT,
     PROCESS_FORCE_KILL_TIMEOUT,
 )
+from ...exceptions import (
+    MCPError,
+    ProcessRegistrationError,
+    ProcessStopError,
+    WatchdogStartError,
+)
 
 try:
     import psutil
@@ -75,12 +81,35 @@ class ProcessWatchdog:
             self._stop_event = asyncio.Event()
         return self._stop_event
 
+    async def _wait_for_process_exit(
+        self, process: Any, timeout: float | None = None
+    ) -> Any:
+        """Await process.wait() while tolerating synchronous/mocked implementations."""
+        wait_result = process.wait()
+        if inspect.isawaitable(wait_result):
+            if timeout is None:
+                return await wait_result
+            return await asyncio.wait_for(wait_result, timeout=timeout)
+        return wait_result
+
     async def start(self) -> None:
         """Start the watchdog monitoring."""
         if self._watchdog_task is None or self._watchdog_task.done():
-            self._get_stop_event().clear()
-            self._watchdog_task = asyncio.create_task(self._watchdog_loop())
-            self._logger.info("Process watchdog started")
+            try:
+                self._get_stop_event().clear()
+                self._watchdog_task = asyncio.create_task(self._watchdog_loop())
+                self._logger.info("Process watchdog started")
+            except MCPError:
+                raise
+            except Exception as e:
+                self._logger.error(f"Failed to start process watchdog: {e}")
+                raise WatchdogStartError(
+                    "Failed to start process watchdog",
+                    context={
+                        "check_interval": self.config.check_interval,
+                        "process_timeout": self.config.process_timeout,
+                    },
+                ) from e
 
     async def stop(self) -> None:
         """Stop the watchdog monitoring."""
@@ -209,8 +238,8 @@ class ProcessWatchdog:
                 process.terminate()
                 try:
                     # Give it a moment to terminate gracefully
-                    await asyncio.wait_for(
-                        process.wait(), timeout=PROCESS_TERMINATION_TIMEOUT
+                    await self._wait_for_process_exit(
+                        process, timeout=PROCESS_TERMINATION_TIMEOUT
                     )
                     self._logger.info(
                         f"Gracefully terminated Windows process {pid} ({name})"
@@ -228,8 +257,8 @@ class ProcessWatchdog:
 
                     try:
                         # Wait a bit for graceful shutdown
-                        await asyncio.wait_for(
-                            process.wait(), timeout=PROCESS_TERMINATION_TIMEOUT
+                        await self._wait_for_process_exit(
+                            process, timeout=PROCESS_TERMINATION_TIMEOUT
                         )
                         action = "Gracefully terminated"
                         msg = f"{action} Unix process {pid} ({name}) with SIGTERM"
@@ -252,8 +281,8 @@ class ProcessWatchdog:
                     # Process group not accessible, try direct process termination
                     process.terminate()
                     try:
-                        await asyncio.wait_for(
-                            process.wait(), timeout=PROCESS_TERMINATION_TIMEOUT
+                        await self._wait_for_process_exit(
+                            process, timeout=PROCESS_TERMINATION_TIMEOUT
                         )
                         action = "Gracefully terminated"
                         method = "process.terminate()"
@@ -269,8 +298,8 @@ class ProcessWatchdog:
 
             # Ensure the process is reaped
             try:
-                await asyncio.wait_for(
-                    process.wait(), timeout=PROCESS_FORCE_KILL_TIMEOUT
+                await self._wait_for_process_exit(
+                    process, timeout=PROCESS_FORCE_KILL_TIMEOUT
                 )
             except asyncio.TimeoutError:
                 self._logger.warning(
@@ -282,6 +311,10 @@ class ProcessWatchdog:
 
         except Exception as e:
             self._logger.error(f"Failed to kill process {pid} ({name}): {e}")
+            raise ProcessStopError(
+                f"Failed to terminate process {pid} ({name})",
+                context={"pid": pid, "name": name},
+            ) from e
 
     async def register_process(
         self,
@@ -291,28 +324,46 @@ class ProcessWatchdog:
         name: str,
     ) -> None:
         """Register a process for monitoring."""
-        async with self._get_lock():
-            self._processes[pid] = {
-                "process": process,
-                "activity_callback": activity_callback,
-                "name": name,
-                "last_activity": time.time(),
-            }
-            self._logger.debug(f"Registered process {pid} ({name}) for monitoring")
+        try:
+            async with self._get_lock():
+                self._processes[pid] = {
+                    "process": process,
+                    "activity_callback": activity_callback,
+                    "name": name,
+                    "last_activity": time.time(),
+                }
+                self._logger.debug(f"Registered process {pid} ({name}) for monitoring")
 
-        # Auto-start watchdog loop if not already active
-        if self._watchdog_task is None or self._watchdog_task.done():
-            await self.start()
+            # Auto-start watchdog loop if not already active
+            if self._watchdog_task is None or self._watchdog_task.done():
+                await self.start()
+        except MCPError:
+            raise
+        except Exception as e:
+            self._logger.error(f"Failed to register process {pid} ({name}): {e}")
+            raise ProcessRegistrationError(
+                f"Failed to register process {pid} ({name})",
+                context={"pid": pid, "name": name},
+            ) from e
 
     async def unregister_process(self, pid: int) -> None:
         """Unregister a process from monitoring."""
-        async with self._get_lock():
-            if pid in self._processes:
-                name = self._processes[pid]["name"]
-                del self._processes[pid]
-                self._logger.debug(
-                    f"Unregistered process {pid} ({name}) from monitoring"
-                )
+        try:
+            async with self._get_lock():
+                if pid in self._processes:
+                    name = self._processes[pid]["name"]
+                    del self._processes[pid]
+                    self._logger.debug(
+                        f"Unregistered process {pid} ({name}) from monitoring"
+                    )
+        except MCPError:
+            raise
+        except Exception as e:
+            self._logger.error(f"Failed to unregister process {pid}: {e}")
+            raise ProcessRegistrationError(
+                f"Failed to unregister process {pid}",
+                context={"pid": pid},
+            ) from e
 
     async def update_activity(self, pid: int) -> None:
         """Update activity timestamp for a process."""

@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+from ..exceptions import AuthConfigError, AuthProviderError
 from .manager import AuthManager
 from .providers import (
     create_api_key_auth,
@@ -81,7 +82,7 @@ def load_auth_config(config_file: str) -> AuthManager:
     providers = config.get("providers", {})
     for name, provider_config in providers.items():
         if not isinstance(provider_config, dict):
-            raise ValueError(
+            raise AuthProviderError(
                 f"Error configuring auth provider '{name}': "
                 f"expected an object, got {type(provider_config).__name__}"
             )
@@ -90,7 +91,7 @@ def load_auth_config(config_file: str) -> AuthManager:
         try:
             if provider_type == "api_key":
                 if "api_key" not in provider_config:
-                    raise ValueError(
+                    raise AuthProviderError(
                         f"Provider '{name}' is type 'api_key' but missing "
                         "required field 'api_key'. Expected: "
                         "{'type': 'api_key', 'api_key': 'YOUR_API_KEY'}"
@@ -105,13 +106,13 @@ def load_auth_config(config_file: str) -> AuthManager:
                 )
             elif provider_type == "basic":
                 if "username" not in provider_config:
-                    raise ValueError(
+                    raise AuthProviderError(
                         f"Provider '{name}' is type 'basic' but missing "
                         "required field 'username'. Expected: "
                         "{'type': 'basic', 'username': 'user', 'password': 'pass'}"
                     )
                 if "password" not in provider_config:
-                    raise ValueError(
+                    raise AuthProviderError(
                         f"Provider '{name}' is type 'basic' but missing "
                         "required field 'password'. Expected: "
                         "{'type': 'basic', 'username': 'user', 'password': 'pass'}"
@@ -124,7 +125,7 @@ def load_auth_config(config_file: str) -> AuthManager:
                 )
             elif provider_type == "oauth":
                 if "token" not in provider_config:
-                    raise ValueError(
+                    raise AuthProviderError(
                         f"Provider '{name}' is type 'oauth' but missing "
                         "required field 'token'. Expected: "
                         "{'type': 'oauth', 'token': 'YOUR_TOKEN'}"
@@ -139,13 +140,13 @@ def load_auth_config(config_file: str) -> AuthManager:
             elif provider_type == "custom":
                 headers = provider_config.get("headers")
                 if not headers:
-                    raise ValueError(
+                    raise AuthProviderError(
                         f"Provider '{name}' is type 'custom' but missing "
                         "required field 'headers'. Expected: "
                         "{'type': 'custom', 'headers': {'X-Header': 'value'}}"
                     )
                 if not isinstance(headers, dict):
-                    raise ValueError(
+                    raise AuthProviderError(
                         f"Provider '{name}' custom headers must be a dict, "
                         f"got {type(headers).__name__}"
                     )
@@ -156,24 +157,28 @@ def load_auth_config(config_file: str) -> AuthManager:
                     name, create_custom_header_auth(headers_str)
                 )
             else:
-                raise ValueError(
+                raise AuthProviderError(
                     f"Unknown provider type: '{provider_type}' for provider '{name}'. "
                     f"Supported types: api_key, basic, oauth, custom"
                 )
-        except (KeyError, ValueError) as e:
-            raise ValueError(f"Error configuring auth provider '{name}': {str(e)}")
+        except AuthProviderError:
+            raise
+        except (KeyError, ValueError, TypeError) as e:
+            raise AuthProviderError(
+                f"Error configuring auth provider '{name}': {str(e)}"
+            ) from e
 
     tool_mappings = config.get("tool_mapping")
     legacy_tool_mappings = config.get("tool_mappings")
     if tool_mappings and legacy_tool_mappings:
-        raise ValueError(
+        raise AuthConfigError(
             "Both 'tool_mapping' and legacy 'tool_mappings' are defined. "
             "Please use only 'tool_mapping'."
         )
 
     final_tool_mappings = tool_mappings or legacy_tool_mappings or {}
     if final_tool_mappings and not isinstance(final_tool_mappings, dict):
-        raise ValueError(
+        raise AuthConfigError(
             f"'tool_mapping' must be a dict, "
             f"got {type(final_tool_mappings).__name__}"
         )
