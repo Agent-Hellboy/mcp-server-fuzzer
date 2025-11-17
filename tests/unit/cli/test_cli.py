@@ -22,6 +22,7 @@ from mcp_fuzzer.cli import (
     validate_arguments,
     get_cli_config,
 )
+from mcp_fuzzer.config import config as global_config
 
 # Import the functions to test
 import mcp_fuzzer.cli.runner as runner
@@ -251,6 +252,7 @@ class TestCLI:
 
         args = argparse.Namespace(
             mode="tools",
+            phase="aggressive",
             protocol="http",
             endpoint="http://localhost:8000/mcp/",
             runs=3,
@@ -262,6 +264,7 @@ class TestCLI:
         )
         argv = prepare_inner_argv(args)
         assert "--mode" in argv and "tools" in argv
+        assert "--phase" in argv and "aggressive" in argv
         assert "--protocol" in argv and "http" in argv
         assert "--endpoint" in argv and "http://localhost:8000/mcp/" in argv
         assert "--runs" in argv and "3" in argv
@@ -480,18 +483,50 @@ class TestCLI:
             patch("mcp_fuzzer.cli.validate_arguments") as mock_validate,
             patch("mcp_fuzzer.cli.setup_logging") as mock_setup,
         ):
-            mock_args = argparse.Namespace(
-                mode="tools",
-                phase="aggressive",
-                protocol="http",
-                endpoint="http://localhost:8000",
-                timeout=30,
-                verbose=False,
-                runs=10,
-                runs_per_type=5,
-                protocol_type=None,
-                config=None,  # Add the config attribute
-            )
+            mock_args = argparse.Namespace()
+            mock_args.mode = "tools"
+            mock_args.phase = "aggressive"
+            mock_args.protocol = "http"
+            mock_args.endpoint = "http://localhost:8000"
+            mock_args.timeout = 30
+            mock_args.verbose = False
+            mock_args.runs = 10
+            mock_args.runs_per_type = 5
+            mock_args.protocol_type = None
+            mock_args.tool_timeout = None
+            mock_args.tool = None
+            mock_args.fs_root = None
+            mock_args.no_safety = False
+            mock_args.enable_safety_system = False
+            mock_args.safety_report = False
+            mock_args.export_safety_data = None
+            mock_args.output_dir = "reports"
+            mock_args.retry_with_safety_on_interrupt = False
+            mock_args.log_level = None
+            mock_args.no_network = False
+            mock_args.allow_hosts = None
+            mock_args.validate_config = None
+            mock_args.check_env = False
+            mock_args.export_csv = None
+            mock_args.export_xml = None
+            mock_args.export_html = None
+            mock_args.export_markdown = None
+            mock_args.watchdog_check_interval = 1.0
+            mock_args.watchdog_process_timeout = 30.0
+            mock_args.watchdog_extra_buffer = 5.0
+            mock_args.watchdog_max_hang_time = 60.0
+            mock_args.process_max_concurrency = 5
+            mock_args.process_retry_count = 1
+            mock_args.process_retry_delay = 1.0
+            mock_args.output_format = "json"
+            mock_args.output_types = None
+            mock_args.output_schema = None
+            mock_args.output_compress = False
+            mock_args.output_session_id = None
+            mock_args.config = None
+            mock_args.auth_config = None
+            mock_args.auth_env = False
+
             mock_parse.return_value = mock_args
 
             config = get_cli_config()
@@ -504,10 +539,89 @@ class TestCLI:
             assert config["runs"] == 10
             assert config["runs_per_type"] == 5
             assert config["protocol_type"] is None
+            assert "tool" in config
+            assert "auth_manager" in config
+            assert config["auth_manager"] is None
 
             mock_parse.assert_called_once()
             mock_validate.assert_called_once_with(mock_args)
             mock_setup.assert_called_once_with(mock_args)
+
+    def test_get_cli_config_uses_config_file_for_truthy_defaults(self):
+        """Config file values should override argparse defaults."""
+        original_config = dict(global_config._config)
+        try:
+            with (
+                patch("mcp_fuzzer.cli.parse_arguments") as mock_parse,
+                patch("mcp_fuzzer.cli.validate_arguments"),
+                patch("mcp_fuzzer.cli.setup_logging"),
+                patch(
+                    "mcp_fuzzer.cli.args.load_config_file",
+                    return_value={
+                        "mode": "tools",
+                        "protocol": "streamablehttp",
+                        "timeout": 60.0,
+                        "tool": "custom_tool",
+                    },
+                ),
+            ):
+                mock_args = argparse.Namespace()
+                mock_args.mode = "both"
+                mock_args.phase = "aggressive"
+                mock_args.protocol = "http"
+                mock_args.endpoint = "http://localhost:8000"
+                mock_args.timeout = 30.0
+                mock_args.verbose = False
+                mock_args.runs = 10
+                mock_args.runs_per_type = 5
+                mock_args.protocol_type = None
+                mock_args.tool_timeout = None
+                mock_args.tool = None
+                mock_args.fs_root = None
+                mock_args.no_safety = False
+                mock_args.enable_safety_system = False
+                mock_args.safety_report = False
+                mock_args.export_safety_data = None
+                mock_args.output_dir = "reports"
+                mock_args.retry_with_safety_on_interrupt = False
+                mock_args.log_level = None
+                mock_args.no_network = False
+                mock_args.allow_hosts = None
+                mock_args.validate_config = None
+                mock_args.check_env = False
+                mock_args.export_csv = None
+                mock_args.export_xml = None
+                mock_args.export_html = None
+                mock_args.export_markdown = None
+                mock_args.watchdog_check_interval = 1.0
+                mock_args.watchdog_process_timeout = 30.0
+                mock_args.watchdog_extra_buffer = 5.0
+                mock_args.watchdog_max_hang_time = 60.0
+                mock_args.process_max_concurrency = 5
+                mock_args.process_retry_count = 1
+                mock_args.process_retry_delay = 1.0
+                mock_args.output_format = "json"
+                mock_args.output_types = None
+                mock_args.output_schema = None
+                mock_args.output_compress = False
+                mock_args.output_session_id = None
+                mock_args.config = "custom.yml"
+                mock_args.auth_config = None
+                mock_args.auth_env = False
+
+                mock_parse.return_value = mock_args
+
+                config = get_cli_config()
+
+                assert config["mode"] == "tools"
+                assert config["protocol"] == "streamablehttp"
+                assert config["timeout"] == 60.0
+                assert config["tool"] == "custom_tool"
+                assert mock_args.mode == "tools"
+                assert mock_args.protocol == "streamablehttp"
+                assert mock_args.timeout == 60.0
+        finally:
+            global_config._config = original_config
 
     @patch("mcp_fuzzer.cli.parse_arguments")
     @patch("mcp_fuzzer.cli.validate_arguments")
@@ -818,7 +932,7 @@ class TestCLI:
         args.endpoint = "http://example.com"
         args.timeout = 30.0
         client_args = {"auth_manager": MagicMock()}
-        client_args["auth_manager"].get_auth_headers_for_tool.return_value = {
+        client_args["auth_manager"].get_default_auth_headers.return_value = {
             "Authorization": "Bearer token"
         }
 
@@ -831,6 +945,75 @@ class TestCLI:
                 auth_headers={"Authorization": "Bearer token"},
             )
             assert transport is not None
+
+    def test_create_transport_with_auth_fallback_to_tool_mapping(self):
+        """Transport auth should fall back to tool mappings when no default."""
+        args = MagicMock()
+        args.protocol = "http"
+        args.endpoint = "http://example.com"
+        args.timeout = 15.0
+        auth_manager = MagicMock()
+        auth_manager.get_default_auth_headers.return_value = {}
+        auth_manager.get_auth_headers_for_tool.return_value = {
+            "Authorization": "Bearer fallback"
+        }
+        client_args = {"auth_manager": auth_manager}
+
+        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
+            runner.create_transport_with_auth(args, client_args)
+            mock_create_transport.assert_called_once_with(
+                "http",
+                "http://example.com",
+                timeout=15.0,
+                auth_headers={"Authorization": "Bearer fallback"},
+            )
+            auth_manager.get_auth_headers_for_tool.assert_called_once_with("")
+
+    def test_create_transport_with_auth_streamablehttp(self):
+        """Auth headers should apply to streamable HTTP transports."""
+        args = MagicMock()
+        args.protocol = "streamablehttp"
+        args.endpoint = "http://example.com"
+        args.timeout = 10.0
+        client_args = {
+            "auth_manager": MagicMock(
+                get_default_auth_headers=MagicMock(
+                    return_value={"Authorization": "Bearer token"}
+                )
+            )
+        }
+
+        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
+            runner.create_transport_with_auth(args, client_args)
+            mock_create_transport.assert_called_once_with(
+                "streamablehttp",
+                "http://example.com",
+                timeout=10.0,
+                auth_headers={"Authorization": "Bearer token"},
+            )
+
+    def test_create_transport_with_auth_sse(self):
+        """Auth headers should apply to SSE transports."""
+        args = MagicMock()
+        args.protocol = "sse"
+        args.endpoint = "http://example.com/sse"
+        args.timeout = 12.0
+        client_args = {
+            "auth_manager": MagicMock(
+                get_default_auth_headers=MagicMock(
+                    return_value={"Authorization": "Bearer token"}
+                )
+            )
+        }
+
+        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
+            runner.create_transport_with_auth(args, client_args)
+            mock_create_transport.assert_called_once_with(
+                "sse",
+                "http://example.com/sse",
+                timeout=12.0,
+                auth_headers={"Authorization": "Bearer token"},
+            )
 
     def test_create_transport_with_auth_no_headers(self):
         """Test transport creation without auth headers."""
@@ -867,28 +1050,53 @@ class TestCLI:
 
     def test_prepare_inner_argv_full_options(self):
         """Test preparation of inner argv with all options."""
-        args = MagicMock()
-        args.mode = "fuzz"
-        args.protocol = "http"
-        args.endpoint = "http://example.com"
-        args.runs = 10
-        args.runs_per_type = 5
-        args.timeout = 30.0
-        args.tool_timeout = 20.0
-        args.protocol_type = "jsonrpc"
-        args.verbose = True
-        args.no_network = True
-        args.allow_hosts = ["example.com", "test.com"]
+        args = argparse.Namespace(
+            mode="fuzz",
+            phase="realistic",
+            protocol="http",
+            endpoint="http://example.com",
+            tool="custom_tool",
+            runs=10,
+            runs_per_type=5,
+            timeout=30.0,
+            tool_timeout=20.0,
+            protocol_type="jsonrpc",
+            fs_root="/tmp/sandbox",
+            output_dir="/tmp/reports",
+            log_level="INFO",
+            export_safety_data="",
+            export_csv="results.csv",
+            export_xml=None,
+            export_html=None,
+            export_markdown=None,
+            output_format="json",
+            output_types=["fuzzing_results", "error_report"],
+            output_schema=None,
+            output_session_id="session-123",
+            verbose=True,
+            enable_aiomonitor=True,
+            output_compress=True,
+            enable_safety_system=True,
+            no_safety=False,
+            safety_report=True,
+            retry_with_safety_on_interrupt=True,
+            no_network=True,
+            allow_hosts=["example.com", "test.com"],
+        )
 
         argv = runner.prepare_inner_argv(args)
         expected_argv = [
             sys.argv[0],
             "--mode",
             "fuzz",
+            "--phase",
+            "realistic",
             "--protocol",
             "http",
             "--endpoint",
             "http://example.com",
+            "--tool",
+            "custom_tool",
             "--runs",
             "10",
             "--runs-per-type",
@@ -899,7 +1107,29 @@ class TestCLI:
             "20.0",
             "--protocol-type",
             "jsonrpc",
+            "--fs-root",
+            "/tmp/sandbox",
+            "--output-dir",
+            "/tmp/reports",
+            "--log-level",
+            "INFO",
+            "--export-safety-data",
+            "--export-csv",
+            "results.csv",
+            "--output-format",
+            "json",
+            "--output-types",
+            "fuzzing_results",
+            "--output-types",
+            "error_report",
+            "--output-session-id",
+            "session-123",
             "--verbose",
+            "--enable-aiomonitor",
+            "--output-compress",
+            "--enable-safety-system",
+            "--safety-report",
+            "--retry-with-safety-on-interrupt",
             "--no-network",
             "--allow-host",
             "example.com",
@@ -910,30 +1140,75 @@ class TestCLI:
 
     def test_prepare_inner_argv_minimal_options(self):
         """Test preparation of inner argv with minimal options."""
-        args = MagicMock()
-        args.mode = "fuzz"
-        args.protocol = "http"
-        args.endpoint = "http://example.com"
-        args.runs = None
-        args.runs_per_type = None
-        args.timeout = None
-        args.tool_timeout = None
-        args.protocol_type = None
-        args.verbose = False
-        args.no_network = False
-        args.allow_hosts = None
+        args = argparse.Namespace(
+            mode="fuzz",
+            phase="aggressive",
+            protocol="http",
+            endpoint="http://example.com",
+            runs=None,
+            runs_per_type=None,
+            timeout=None,
+            tool_timeout=None,
+            protocol_type=None,
+            verbose=False,
+            no_network=False,
+            allow_hosts=None,
+        )
 
         argv = runner.prepare_inner_argv(args)
         expected_argv = [
             sys.argv[0],
             "--mode",
             "fuzz",
+            "--phase",
+            "aggressive",
             "--protocol",
             "http",
             "--endpoint",
             "http://example.com",
         ]
         assert argv == expected_argv
+
+    def test_prepare_inner_argv_magicmock_does_not_emit_unspecified_flags(self):
+        """MagicMock-backed args should not fabricate boolean flags."""
+        args = MagicMock()
+        args.mode = "tools"
+        args.phase = "aggressive"
+        args.protocol = "http"
+        args.endpoint = "http://example.com"
+        args.tool = None
+        args.runs = None
+        args.runs_per_type = None
+        args.timeout = None
+        args.tool_timeout = None
+        args.protocol_type = None
+        args.fs_root = None
+        args.output_dir = None
+        args.log_level = None
+        args.export_safety_data = None
+        args.output_format = None
+        args.output_types = None
+        args.output_schema = None
+        args.output_session_id = None
+        args.allow_hosts = None
+
+        argv = runner.prepare_inner_argv(args)
+
+        assert "--verbose" not in argv
+        assert "--enable-safety-system" not in argv
+        assert "--safety-report" not in argv
+        expected_prefix = [
+            sys.argv[0],
+            "--mode",
+            "tools",
+            "--phase",
+            "aggressive",
+            "--protocol",
+            "http",
+            "--endpoint",
+            "http://example.com",
+        ]
+        assert argv[: len(expected_prefix)] == expected_prefix
 
     def test_start_safety_if_enabled_true(self):
         """Test starting safety system when enabled."""

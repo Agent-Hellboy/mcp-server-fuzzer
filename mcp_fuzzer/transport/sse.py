@@ -8,13 +8,20 @@ from .base import TransportProtocol
 from ..safety_system.policy import is_host_allowed, sanitize_headers
 
 class SSETransport(TransportProtocol):
-    def __init__(self, url: str, timeout: float = 30.0):
+    def __init__(
+        self,
+        url: str,
+        timeout: float = 30.0,
+        auth_headers: dict[str, str | None] | None = None,
+    ):
         self.url = url
         self.timeout = timeout
         self.headers = {
             "Accept": "text/event-stream",
             "Content-Type": "application/json",
         }
+        if auth_headers:
+            self.headers.update(auth_headers)
 
     async def send_request(
         self, method: str, params: dict[str, Any | None] | None = None

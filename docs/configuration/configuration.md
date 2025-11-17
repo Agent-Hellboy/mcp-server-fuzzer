@@ -117,7 +117,7 @@ auth:
       username: "${USERNAME}"
       password: "${PASSWORD}"
 
-  tool_mappings:
+tool_mapping:
     openai_chat: openai_api
     github_search: github_api
     secure_tool: basic_auth
@@ -229,7 +229,7 @@ type = "basic"
 username = "${USERNAME}"
 password = "${PASSWORD}"
 
-[auth.tool_mappings]
+[auth.tool_mapping]
 openai_chat = "openai_api"
 github_search = "github_api"
 secure_tool = "basic_auth"

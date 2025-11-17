@@ -204,13 +204,26 @@ repos:
 
 - **Python**: Follow PEP 8 style guide
 
-- **Line Length**: Maximum 88 characters (Black default)
+- **Line Length**: Maximum 88 characters (enforced by Ruff)
+  - Break long lines across multiple statements
+  - Use implicit line continuation for function signatures and strings
+  - Avoid f-strings without placeholders
+
+- **F-strings**: Always include placeholders when using f-strings
+  - Use regular strings for static messages
+  - Extract complex expressions to variables if needed
 
 - **Imports**: Use absolute imports, group by standard library, third-party, local
 
 - **Type Hints**: Use type hints for all function parameters and return values
 
 - **Documentation**: Include docstrings for all public functions and classes
+
+- **Logging**: Use appropriate logging levels
+  - DEBUG: Tool call notifications and detailed execution flow
+  - INFO: Important state changes and user-facing information
+  - WARNING: Potential issues that don't prevent execution
+  - ERROR: Errors that require attention
 
 ## Documentation
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import logging
 import os
 import signal
 import sys
@@ -11,50 +12,142 @@ from ..transport import create_transport
 from ..safety_system.policy import configure_network_policy
 from ..safety_system import start_system_blocking, stop_system_blocking
 
+logger = logging.getLogger(__name__)
+
 def create_transport_with_auth(args, client_args: dict[str, Any]):
+    """Create a transport with authentication headers if available.
+    
+    This function handles applying auth headers to HTTP-based transports.
+    For HTTP-like protocols, it extracts auth headers from the auth_manager
+    and includes them in the transport initialization.
+    
+    Args:
+        args: Arguments object with protocol, endpoint, timeout attributes
+        client_args: Dictionary containing optional auth_manager
+        
+    Returns:
+        Initialized TransportProtocol instance
+        
+    Raises:
+        SystemExit: On transport creation error
+    """
     try:
         auth_headers = None
-        if client_args.get("auth_manager"):
-            auth_headers = client_args["auth_manager"].get_auth_headers_for_tool("")
+        auth_manager = client_args.get("auth_manager")
+        
+        if auth_manager:
+            # Prefer default provider headers, fall back to explicit tool mapping
+            auth_headers = auth_manager.get_default_auth_headers()
+            if not auth_headers:
+                auth_headers = auth_manager.get_auth_headers_for_tool("")
+            if auth_headers:
+                header_keys = list(auth_headers.keys())
+                logger.debug(f"Auth headers found for transport: {header_keys}")
+            else:
+                logger.debug("No auth headers found for default tool mapping")
 
         factory_kwargs = {"timeout": args.timeout}
-        if args.protocol == "http" and auth_headers:
+        
+        # Apply auth headers to HTTP-based protocols
+        if args.protocol in ("http", "https", "streamablehttp", "sse") and auth_headers:
             factory_kwargs["auth_headers"] = auth_headers
+            logger.debug(f"Adding auth headers to {args.protocol.upper()} transport")
 
+        logger.debug(f"Creating {args.protocol.upper()} transport to {args.endpoint}")
         transport = create_transport(
             args.protocol,
             args.endpoint,
             **factory_kwargs,
         )
+        if auth_headers:
+            msg = "Transport created successfully with auth headers"
+        else:
+            msg = "Transport created successfully"
+        logger.debug(msg)
         return transport
     except Exception as transport_error:
         console = Console()
         console.print(f"[bold red]Unexpected error:[/bold red] {transport_error}")
+        logger.exception("Transport creation failed")
         sys.exit(1)
 
 def prepare_inner_argv(args) -> list[str]:
+    """
+    Rebuild the argument vector for the inner CLI run.
+
+    This ensures that options parsed by the outer runner (which handles things
+    like retries and safety bootstrapping) are faithfully forwarded to the inner
+    invocation of the CLI parser.
+    """
+
+    def _get_attr(name: str, default=None):
+        """Safely get attribute values, even when args is a MagicMock."""
+        if hasattr(args, "__dict__"):
+            value = args.__dict__.get(name, default)
+            if hasattr(value, "_mock_return_value"):
+                return default
+            return value
+        return getattr(args, name, default)
+
+    def _add_value(flag: str, value):
+        if value is None:
+            return
+        argv.extend([flag, str(value)])
+
+    def _add_bool(flag: str, attr_name: str):
+        if _get_attr(attr_name, False):
+            argv.append(flag)
+
+    def _add_list(flag: str, values):
+        if not values:
+            return
+        for val in values:
+            argv.extend([flag, str(val)])
+
     argv: list[str] = [sys.argv[0]]
-    mode = args.mode
-    argv += ["--mode", mode]
-    argv += ["--protocol", args.protocol]
-    argv += ["--endpoint", args.endpoint]
-    if args.runs is not None:
-        argv += ["--runs", str(args.runs)]
-    if args.runs_per_type is not None:
-        argv += ["--runs-per-type", str(args.runs_per_type)]
-    if args.timeout is not None:
-        argv += ["--timeout", str(args.timeout)]
-    if getattr(args, "tool_timeout", None) is not None:
-        argv += ["--tool-timeout", str(args.tool_timeout)]
-    if args.protocol_type:
-        argv += ["--protocol-type", args.protocol_type]
-    if args.verbose:
-        argv += ["--verbose"]
-    if getattr(args, "no_network", False):
-        argv += ["--no-network"]
-    if getattr(args, "allow_hosts", None):
-        for h in args.allow_hosts:
-            argv += ["--allow-host", h]
+
+    _add_value("--mode", _get_attr("mode"))
+    _add_value("--phase", _get_attr("phase", None))
+    _add_value("--protocol", _get_attr("protocol"))
+    _add_value("--endpoint", _get_attr("endpoint"))
+
+    _add_value("--tool", _get_attr("tool", None))
+    _add_value("--runs", _get_attr("runs", None))
+    _add_value("--runs-per-type", _get_attr("runs_per_type", None))
+    _add_value("--timeout", _get_attr("timeout", None))
+    _add_value("--tool-timeout", _get_attr("tool_timeout", None))
+    _add_value("--protocol-type", _get_attr("protocol_type", None))
+    _add_value("--fs-root", _get_attr("fs_root", None))
+    _add_value("--output-dir", _get_attr("output_dir", None))
+    _add_value("--log-level", _get_attr("log_level", None))
+
+    export_safety_data = _get_attr("export_safety_data", None)
+    if export_safety_data is not None:
+        argv.append("--export-safety-data")
+        if export_safety_data:
+            argv.append(str(export_safety_data))
+
+    _add_value("--export-csv", _get_attr("export_csv", None))
+    _add_value("--export-xml", _get_attr("export_xml", None))
+    _add_value("--export-html", _get_attr("export_html", None))
+    _add_value("--export-markdown", _get_attr("export_markdown", None))
+
+    _add_value("--output-format", _get_attr("output_format", None))
+    _add_list("--output-types", _get_attr("output_types", None))
+    _add_value("--output-schema", _get_attr("output_schema", None))
+    _add_value("--output-session-id", _get_attr("output_session_id", None))
+
+    _add_bool("--verbose", "verbose")
+    _add_bool("--enable-aiomonitor", "enable_aiomonitor")
+    _add_bool("--output-compress", "output_compress")
+    _add_bool("--enable-safety-system", "enable_safety_system")
+    _add_bool("--no-safety", "no_safety")
+    _add_bool("--safety-report", "safety_report")
+    _add_bool("--retry-with-safety-on-interrupt", "retry_with_safety_on_interrupt")
+    _add_bool("--no-network", "no_network")
+
+    _add_list("--allow-host", _get_attr("allow_hosts", None))
+
     return argv
 
 def start_safety_if_enabled(args) -> bool:

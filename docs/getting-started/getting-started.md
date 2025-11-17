@@ -196,7 +196,7 @@ Create `auth_config.json`:
       "password": "password"
     }
   },
-  "tool_mappings": {
+  "tool_mapping": {
     "openai_chat": "openai_api",
     "github_search": "github_api",
     "secure_tool": "basic_auth"

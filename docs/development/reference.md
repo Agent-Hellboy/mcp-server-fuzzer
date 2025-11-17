@@ -95,9 +95,95 @@ Notes:
 |----------|-------------|
 | `MCP_API_KEY` | API key for authentication |
 | `MCP_HEADER_NAME` | Header name for API key (default: Authorization) |
+| `MCP_PREFIX` | Prefix for API key value (default: Bearer) |
 | `MCP_USERNAME` | Username for basic authentication |
 | `MCP_PASSWORD` | Password for basic authentication |
 | `MCP_OAUTH_TOKEN` | OAuth token for authentication |
+| `MCP_CUSTOM_HEADERS` | Custom headers as JSON string for authentication |
+| `MCP_TOOL_AUTH_MAPPING` | Map tool names to auth providers as JSON |
+
+## Authentication System Reference
+
+### Authentication Providers
+
+The authentication system supports multiple provider types with configurable options:
+
+#### API Key Authentication
+
+```json
+{
+  "type": "api_key",
+  "api_key": "YOUR_API_KEY",
+  "header_name": "Authorization",
+  "prefix": "Bearer"
+}
+```
+
+- **api_key** (required): The API key value
+- **header_name** (optional): HTTP header to place the key in (default: "Authorization")
+- **prefix** (optional): Value prefix for the header (default: "Bearer"). Set to empty string for no prefix.
+
+#### Basic Authentication
+
+```json
+{
+  "type": "basic",
+  "username": "user",
+  "password": "password"
+}
+```
+
+- **username** (required): Username for basic auth
+- **password** (required): Password for basic auth
+
+#### OAuth Token Authentication
+
+```json
+{
+  "type": "oauth",
+  "token": "YOUR_TOKEN",
+  "token_type": "Bearer"
+}
+```
+
+- **token** (required): OAuth token value
+- **token_type** (optional): Token type for Authorization header (default: "Bearer")
+
+#### Custom Headers Authentication
+
+```json
+{
+  "type": "custom",
+  "headers": {
+    "X-Custom-Header": "value",
+    "X-Another-Header": "another-value"
+  }
+}
+```
+
+- **headers** (required): Dictionary of custom headers to include
+
+### Tool-to-Auth Mapping
+
+Map specific tools to authentication providers:
+
+```json
+{
+  "tool_mapping": {
+    "openai_chat": "openai_api",
+    "github_search": "github_api",
+    "default_tool": "basic_auth"
+  }
+}
+```
+
+### Error Messages
+
+The authentication system provides detailed error messages for configuration issues:
+
+- Missing required fields indicate which provider type and field is missing
+- Expected configuration format is provided in error messages
+- Type validation errors show the received vs. expected type
 
 ## Runtime Management API Reference
 
@@ -1210,7 +1296,7 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-
       "password": "password"
     }
   },
-  "tool_mappings": {
+  "tool_mapping": {
     "openai_chat": "openai_api",
     "github_search": "github_api",
     "secure_tool": "basic_auth"

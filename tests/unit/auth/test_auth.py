@@ -259,6 +259,37 @@ def test_auth_manager_get_auth_params_for_tool_not_mapped(auth_manager):
     assert params == {}
 
 
+def test_auth_manager_set_default_provider(auth_manager):
+    """Test setting default auth provider."""
+    auth_provider = APIKeyAuth("test_key", "Authorization")
+    auth_manager.add_auth_provider("default_provider", auth_provider)
+    auth_manager.set_default_provider("default_provider")
+    assert auth_manager.default_provider == "default_provider"
+
+
+def test_auth_manager_get_default_auth_headers_with_provider(auth_manager):
+    """Test getting default auth headers when default provider is set."""
+    auth_provider = APIKeyAuth("test_key", "Authorization")
+    auth_manager.add_auth_provider("default_provider", auth_provider)
+    auth_manager.set_default_provider("default_provider")
+    headers = auth_manager.get_default_auth_headers()
+    assert "Authorization" in headers
+    assert headers["Authorization"] == "Bearer test_key"
+
+
+def test_auth_manager_get_default_auth_headers_no_provider(auth_manager):
+    """Test getting default auth headers when no default provider is set."""
+    headers = auth_manager.get_default_auth_headers()
+    assert headers == {}
+
+
+def test_auth_manager_get_default_auth_headers_invalid_provider(auth_manager):
+    """Test getting default auth headers when default provider is invalid."""
+    auth_manager.set_default_provider("nonexistent_provider")
+    headers = auth_manager.get_default_auth_headers()
+    assert headers == {}
+
+
 # Test cases for auth factory functions
 def test_create_api_key_auth():
     """Test creating API key auth."""
@@ -421,6 +452,105 @@ def test_load_auth_config_unknown_provider_type():
             load_auth_config(config_file)
 
         assert "Unknown provider type" in str(excinfo.value)
+    finally:
+        os.unlink(config_file)
+
+
+def test_load_auth_config_with_default_provider():
+    """Test loading auth config with default_provider set."""
+    config_data = {
+        "default_provider": "api_key",
+        "providers": {
+            "api_key": {
+                "type": "api_key",
+                "api_key": "test_key",
+                "header_name": "Authorization",
+            }
+        },
+        "tool_mapping": {"tool1": "api_key"},
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(config_data, f)
+        config_file = f.name
+
+    try:
+        auth_manager = load_auth_config(config_file)
+
+        assert isinstance(auth_manager, AuthManager)
+        assert auth_manager.default_provider == "api_key"
+        
+        # Test that default auth headers work
+        headers = auth_manager.get_default_auth_headers()
+        assert "Authorization" in headers
+        assert headers["Authorization"] == "Bearer test_key"
+    finally:
+        os.unlink(config_file)
+
+
+def test_setup_auth_from_env_with_default_provider(monkeypatch):
+    """Test setting up auth from environment with default provider."""
+    monkeypatch.setenv("MCP_API_KEY", "test_key")
+    monkeypatch.setenv("MCP_DEFAULT_AUTH_PROVIDER", "api_key")
+    
+    auth_manager = setup_auth_from_env()
+    
+    assert auth_manager.default_provider == "api_key"
+    
+    # Test that default auth headers work
+    headers = auth_manager.get_default_auth_headers()
+    assert "Authorization" in headers
+
+def test_setup_auth_from_env_custom_header_and_prefix(monkeypatch):
+    """Environment variables should override header name and prefix."""
+    monkeypatch.setenv("MCP_API_KEY", "secret")
+    monkeypatch.setenv("MCP_HEADER_NAME", "X-Auth")
+    monkeypatch.setenv("MCP_PREFIX", "Token")
+
+    auth_manager = setup_auth_from_env()
+    headers = auth_manager.auth_providers["api_key"].get_auth_headers()
+    assert headers["X-Auth"] == "Token secret"
+
+def test_load_auth_config_rejects_non_dict_provider():
+    """Provider entries must be dictionaries."""
+    config_data = {"providers": {"broken": ["not", "a", "dict"]}}
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(config_data, f)
+        config_file = f.name
+    try:
+        with pytest.raises(ValueError, match="expected an object"):
+            load_auth_config(config_file)
+    finally:
+        os.unlink(config_file)
+
+def test_load_auth_config_supports_tool_mappings_alias():
+    """Legacy tool_mappings key should still work."""
+    config_data = {
+        "providers": {"api_key": {"type": "api_key", "api_key": "secret"}},
+        "tool_mappings": {"demo": "api_key"},
+    }
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(config_data, f)
+        config_file = f.name
+    try:
+        auth_manager = load_auth_config(config_file)
+        assert auth_manager.tool_auth_mapping["demo"] == "api_key"
+    finally:
+        os.unlink(config_file)
+
+def test_load_auth_config_rejects_both_tool_mapping_keys():
+    """Providing both tool_mapping keys should raise an error."""
+    config_data = {
+        "providers": {},
+        "tool_mapping": {"demo": "api_key"},
+        "tool_mappings": {"legacy": "api_key"},
+    }
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(config_data, f)
+        config_file = f.name
+    try:
+        with pytest.raises(ValueError, match="Both 'tool_mapping' and legacy"):
+            load_auth_config(config_file)
     finally:
         os.unlink(config_file)
 
