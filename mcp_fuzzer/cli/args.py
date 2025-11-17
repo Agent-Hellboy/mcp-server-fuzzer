@@ -6,7 +6,7 @@ from typing import Any
 
 from rich.console import Console
 
-from ..config import config
+from ..config import config, load_config_file, apply_config_file
 
 def create_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -365,6 +365,28 @@ def setup_logging(args: argparse.Namespace) -> None:
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("psutil").setLevel(logging.WARNING)
 
+def _resolve_auth_manager(args: argparse.Namespace):
+    """Resolve an AuthManager based on CLI flags or the environment."""
+    cli_module = sys.modules.get("mcp_fuzzer.cli")
+    auth_config = getattr(args, "auth_config", None)
+    auth_env = getattr(args, "auth_env", False)
+
+    if auth_config:
+        if cli_module and hasattr(cli_module, "load_auth_config"):
+            return cli_module.load_auth_config(auth_config)  # type: ignore[attr-defined]
+        from ..auth import load_auth_config as _load_auth_config
+
+        return _load_auth_config(auth_config)
+
+    if auth_env:
+        if cli_module and hasattr(cli_module, "setup_auth_from_env"):
+            return cli_module.setup_auth_from_env()  # type: ignore[attr-defined]
+        from ..auth import setup_auth_from_env as _setup_auth_from_env
+
+        return _setup_auth_from_env()
+
+    return None
+
 def build_unified_client_args(args: argparse.Namespace) -> dict[str, Any]:
     client_args = {
         "mode": args.mode,
@@ -383,22 +405,9 @@ def build_unified_client_args(args: argparse.Namespace) -> dict[str, Any]:
     if args.protocol_type:
         client_args["protocol_type"] = args.protocol_type
 
-    # Resolve auth helpers via the package namespace so tests can patch
-    cli_module = sys.modules.get("mcp_fuzzer.cli")
-    if args.auth_config:
-        if cli_module and hasattr(cli_module, "load_auth_config"):
-            client_args["auth_manager"] = cli_module.load_auth_config(args.auth_config)  # type: ignore[attr-defined]
-        else:
-            from ..auth import load_auth_config as _load_auth_config
-
-            client_args["auth_manager"] = _load_auth_config(args.auth_config)
-    elif args.auth_env:
-        if cli_module and hasattr(cli_module, "setup_auth_from_env"):
-            client_args["auth_manager"] = cli_module.setup_auth_from_env()  # type: ignore[attr-defined]
-        else:
-            from ..auth import setup_auth_from_env as _setup_auth_from_env
-
-            client_args["auth_manager"] = _setup_auth_from_env()
+    auth_manager = _resolve_auth_manager(args)
+    if auth_manager:
+        client_args["auth_manager"] = auth_manager
 
     fs_root_value = getattr(args, "fs_root", None)
     if fs_root_value:
@@ -437,6 +446,12 @@ def get_cli_config() -> dict[str, Any]:
         if cli_module
         else setup_logging
     )
+    _parser_factory = (
+        getattr(cli_module, "create_argument_parser", create_argument_parser)
+        if cli_module
+        else create_argument_parser
+    )
+    defaults_parser = _parser_factory()
 
     args = _parse()
 
@@ -451,7 +466,6 @@ def get_cli_config() -> dict[str, Any]:
 
     # Load configuration file if specified
     if args.config:
-        from ..config import load_config_file
         from ..exceptions import ConfigFileError
 
         try:
@@ -463,8 +477,6 @@ def get_cli_config() -> dict[str, Any]:
     else:
         # Try to find and load a configuration file in default locations
         try:
-            from ..config import apply_config_file
-
             apply_config_file()
         except Exception as e:
             logging.debug(f"Error loading default configuration file: {e}")
@@ -526,16 +538,20 @@ def get_cli_config() -> dict[str, Any]:
     
     for config_key, args_key in _config_keys_to_transfer:
         config_value = config.get(config_key)
-        args_value = getattr(args, args_key, None)
+        default_value = defaults_parser.get_default(args_key)
+        if default_value is argparse.SUPPRESS:
+            default_value = None
+        args_value = getattr(args, args_key, default_value)
         
-        # Only transfer if config has value and args doesn't (CLI takes precedence)
-        if config_value is not None and not args_value:
+        # Only transfer if config has value and args is still at its default
+        if config_value is not None and args_value == default_value:
             setattr(args, args_key, config_value)
             logging.debug(f"Using {args_key} from config file: {config_value}")
 
     # CLI arguments take precedence over configuration file
     _validate(args)
     _setup(args)
+    auth_manager = _resolve_auth_manager(args)
 
     # Update centralized configuration with CLI arguments
     config.update(
@@ -546,6 +562,7 @@ def get_cli_config() -> dict[str, Any]:
             "endpoint": args.endpoint,
             "timeout": args.timeout,
             "tool_timeout": getattr(args, "tool_timeout", None),
+            "tool": getattr(args, "tool", None),
             "fs_root": getattr(args, "fs_root", None),
             "verbose": args.verbose,
             "runs": args.runs,
@@ -580,6 +597,7 @@ def get_cli_config() -> dict[str, Any]:
             "output_schema": getattr(args, "output_schema", None),
             "output_compress": getattr(args, "output_compress", False),
             "output_session_id": getattr(args, "output_session_id", None),
+            "auth_manager": auth_manager,
         }
     )
 
@@ -590,6 +608,7 @@ def get_cli_config() -> dict[str, Any]:
         "endpoint": args.endpoint,
         "timeout": args.timeout,
         "tool_timeout": getattr(args, "tool_timeout", None),
+        "tool": getattr(args, "tool", None),
         "fs_root": getattr(args, "fs_root", None),
         "verbose": args.verbose,
         "runs": args.runs,
@@ -612,6 +631,7 @@ def get_cli_config() -> dict[str, Any]:
         "export_xml": getattr(args, "export_xml", None),
         "export_html": getattr(args, "export_html", None),
         "export_markdown": getattr(args, "export_markdown", None),
+        "auth_manager": auth_manager,
     }
 
 def validate_arguments(args: argparse.Namespace) -> None:

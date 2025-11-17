@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 def create_transport_with_auth(args, client_args: dict[str, Any]):
     """Create a transport with authentication headers if available.
     
-    This function handles applying auth headers to HTTP/HTTPS transports.
-    For HTTP(S) protocols, it extracts auth headers from the auth_manager
+    This function handles applying auth headers to HTTP-based transports.
+    For HTTP-like protocols, it extracts auth headers from the auth_manager
     and includes them in the transport initialization.
     
     Args:
@@ -36,8 +36,10 @@ def create_transport_with_auth(args, client_args: dict[str, Any]):
         auth_manager = client_args.get("auth_manager")
         
         if auth_manager:
-            # Try to get auth for empty tool name (default/global auth)
-            auth_headers = auth_manager.get_auth_headers_for_tool("")
+            # Prefer default provider headers, fall back to explicit tool mapping
+            auth_headers = auth_manager.get_default_auth_headers()
+            if not auth_headers:
+                auth_headers = auth_manager.get_auth_headers_for_tool("")
             if auth_headers:
                 header_keys = list(auth_headers.keys())
                 logger.debug(f"Auth headers found for transport: {header_keys}")
@@ -46,8 +48,8 @@ def create_transport_with_auth(args, client_args: dict[str, Any]):
 
         factory_kwargs = {"timeout": args.timeout}
         
-        # Apply auth headers to HTTP/HTTPS protocols
-        if args.protocol in ("http", "https") and auth_headers:
+        # Apply auth headers to HTTP-based protocols
+        if args.protocol in ("http", "https", "streamablehttp", "sse") and auth_headers:
             factory_kwargs["auth_headers"] = auth_headers
             logger.debug(f"Adding auth headers to {args.protocol.upper()} transport")
 
@@ -80,8 +82,11 @@ def prepare_inner_argv(args) -> list[str]:
 
     def _get_attr(name: str, default=None):
         """Safely get attribute values, even when args is a MagicMock."""
-        if hasattr(args, "__dict__") and name in args.__dict__:
-            return args.__dict__[name]
+        if hasattr(args, "__dict__"):
+            value = args.__dict__.get(name, default)
+            if hasattr(value, "_mock_return_value"):
+                return default
+            return value
         return getattr(args, name, default)
 
     def _add_value(flag: str, value):

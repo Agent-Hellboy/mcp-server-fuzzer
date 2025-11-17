@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 from .manager import AuthManager
@@ -9,12 +10,23 @@ from .providers import (
     create_custom_header_auth,
 )
 
+logger = logging.getLogger(__name__)
+
 def setup_auth_from_env() -> AuthManager:
     auth_manager = AuthManager()
 
     api_key = os.getenv("MCP_API_KEY")
+    header_name = os.getenv("MCP_HEADER_NAME")
+    prefix = os.getenv("MCP_PREFIX")
     if api_key:
-        auth_manager.add_auth_provider("api_key", create_api_key_auth(api_key))
+        auth_manager.add_auth_provider(
+            "api_key",
+            create_api_key_auth(
+                api_key,
+                header_name if header_name is not None else "Authorization",
+                prefix if prefix is not None else "Bearer",
+            ),
+        )
 
     username = os.getenv("MCP_USERNAME")
     password = os.getenv("MCP_PASSWORD")
@@ -36,8 +48,8 @@ def setup_auth_from_env() -> AuthManager:
                 auth_manager.add_auth_provider(
                     "custom", create_custom_header_auth(headers)
                 )
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.debug("Failed to parse MCP_CUSTOM_HEADERS as JSON: %s", exc)
 
     tool_mapping = os.getenv("MCP_TOOL_AUTH_MAPPING")
     if tool_mapping:
@@ -48,8 +60,12 @@ def setup_auth_from_env() -> AuthManager:
                     auth_manager.map_tool_to_auth(
                         str(tool_name), str(auth_provider_name)
                     )
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.debug("Failed to parse MCP_TOOL_AUTH_MAPPING as JSON: %s", exc)
+
+    default_provider = os.getenv("MCP_DEFAULT_AUTH_PROVIDER")
+    if default_provider:
+        auth_manager.set_default_provider(default_provider)
 
     return auth_manager
 
@@ -64,6 +80,11 @@ def load_auth_config(config_file: str) -> AuthManager:
 
     providers = config.get("providers", {})
     for name, provider_config in providers.items():
+        if not isinstance(provider_config, dict):
+            raise ValueError(
+                f"Error configuring auth provider '{name}': "
+                f"expected an object, got {type(provider_config).__name__}"
+            )
         provider_type = provider_config.get("type")
         
         try:
@@ -142,8 +163,26 @@ def load_auth_config(config_file: str) -> AuthManager:
         except (KeyError, ValueError) as e:
             raise ValueError(f"Error configuring auth provider '{name}': {str(e)}")
 
-    tool_mappings = config.get("tool_mapping", {})
-    for tool_name, auth_provider_name in tool_mappings.items():
+    tool_mappings = config.get("tool_mapping")
+    legacy_tool_mappings = config.get("tool_mappings")
+    if tool_mappings and legacy_tool_mappings:
+        raise ValueError(
+            "Both 'tool_mapping' and legacy 'tool_mappings' are defined. "
+            "Please use only 'tool_mapping'."
+        )
+
+    final_tool_mappings = tool_mappings or legacy_tool_mappings or {}
+    if final_tool_mappings and not isinstance(final_tool_mappings, dict):
+        raise ValueError(
+            f"'tool_mapping' must be a dict, "
+            f"got {type(final_tool_mappings).__name__}"
+        )
+
+    for tool_name, auth_provider_name in final_tool_mappings.items():
         auth_manager.map_tool_to_auth(tool_name, auth_provider_name)
+
+    default_provider = config.get("default_provider")
+    if default_provider:
+        auth_manager.set_default_provider(default_provider)
 
     return auth_manager

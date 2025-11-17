@@ -107,7 +107,7 @@ Create `auth_config.json`:
       "header_name": "Authorization"
     }
   },
-  "tool_mappings": {
+  "tool_mapping": {
     "openai_chat": "openai_api",
     "github_search": "github_api"
   }
