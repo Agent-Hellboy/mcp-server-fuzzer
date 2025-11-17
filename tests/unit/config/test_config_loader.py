@@ -158,6 +158,40 @@ def test_apply_config_file(mock_config, config_files):
     mock_config.update.assert_not_called()
 
 
+def test_apply_config_file_handles_load_errors(config_files):
+    """apply_config_file should return False if load_config_file fails."""
+    with patch(
+        "mcp_fuzzer.config.loader.config"
+    ) as mock_config, patch(
+        "mcp_fuzzer.config.loader.load_config_file"
+    ) as mock_load_config, patch(
+        "mcp_fuzzer.config.loader.load_custom_transports"
+    ) as mock_load_custom:
+        mock_load_config.side_effect = ConfigFileError("boom")
+        result = apply_config_file(config_path=config_files["yaml_path"])
+
+    assert result is False
+    mock_config.update.assert_not_called()
+    mock_load_custom.assert_not_called()
+
+
+def test_apply_config_file_handles_custom_transport_errors(config_files):
+    """apply_config_file should return False if load_custom_transports fails."""
+    with patch(
+        "mcp_fuzzer.config.loader.config"
+    ) as mock_config, patch(
+        "mcp_fuzzer.config.loader.load_config_file"
+    ) as mock_load_config, patch(
+        "mcp_fuzzer.config.loader.load_custom_transports"
+    ) as mock_load_custom:
+        mock_load_config.return_value = {"custom_transports": {}}
+        mock_load_custom.side_effect = ConfigFileError("bad transport")
+        result = apply_config_file(config_path=config_files["yaml_path"])
+
+    assert result is False
+    mock_config.update.assert_not_called()
+
+
 def test_get_config_schema():
     """Test getting the configuration schema."""
     schema = get_config_schema()

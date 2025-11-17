@@ -84,6 +84,19 @@ class StreamableHTTPTransport(TransportProtocol):
                 context={"url": self.url},
             )
 
+    def _raise_http_status_error(
+        self, error: httpx.HTTPStatusError, *, method: str | None = None
+    ) -> None:
+        """Convert httpx HTTP status errors into TransportError instances."""
+        request_url = str(error.request.url) if error.request else self.url
+        status = error.response.status_code if error.response else None
+        context: dict[str, Any] = {"url": request_url, "status": status}
+        if method:
+            context["method"] = method
+        raise TransportError(
+            f"HTTP error while communicating with {request_url}", context=context
+        ) from error
+
     def _maybe_extract_session_headers(self, response: httpx.Response) -> None:
         sid = response.headers.get(MCP_SESSION_ID)
         if sid:
@@ -219,7 +232,10 @@ class StreamableHTTPTransport(TransportProtocol):
                     context={"url": self.url, "status": response.status_code},
                 )
 
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                self._raise_http_status_error(exc, method=method)
             ct = self._extract_content_type(response)
 
             if ct.startswith(JSON_CT):
@@ -307,7 +323,10 @@ class StreamableHTTPTransport(TransportProtocol):
                 response = await self._post_with_retries(
                     client, redirect_url, payload, safe_headers
                 )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                self._raise_http_status_error(exc, method=method)
 
     async def _do_initialize(self) -> None:
         """Perform a minimal MCP initialize + initialized notification."""
@@ -367,7 +386,16 @@ class StreamableHTTPTransport(TransportProtocol):
                     "resources/list",
                 )
                 if attempt >= retries or not safe:
-                    raise
+                    context = {
+                        "url": url,
+                        "error_type": type(e).__name__,
+                        "attempts": attempt + 1,
+                    }
+                    if method:
+                        context["method"] = method
+                    raise TransportError(
+                        "Connection failed while contacting server", context=context
+                    ) from e
                 self._logger.debug(
                     "POST retry %d for %s due to %s",
                     attempt + 1,
@@ -385,6 +413,11 @@ class StreamableHTTPTransport(TransportProtocol):
         for the streamable transport and its header/session handling.
         """
         headers = self._prepare_headers()
+        method = None
+        try:
+            method = payload.get("method")
+        except AttributeError:
+            method = None
         async with httpx.AsyncClient(
             timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
@@ -419,5 +452,7 @@ class StreamableHTTPTransport(TransportProtocol):
                             except json.JSONDecodeError:
                                 self._logger.error("Failed to parse SSE data as JSON")
                                 continue
+            except httpx.HTTPStatusError as exc:
+                self._raise_http_status_error(exc, method=method)
             finally:
                 await response.aclose()
