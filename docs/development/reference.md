@@ -408,7 +408,7 @@ async def watchdog_example():
 
 ### AsyncFuzzExecutor
 
-The `AsyncFuzzExecutor` provides controlled concurrency and robust error handling for fuzzing operations with configurable timeouts and retry mechanisms.
+The `AsyncFuzzExecutor` provides controlled concurrency for fuzzing operations using semaphore-based concurrency control.
 
 #### Class Definition
 
@@ -417,33 +417,25 @@ class AsyncFuzzExecutor:
     def __init__(
         self,
         max_concurrency: int = 5,      # Maximum concurrent operations
-        timeout: float = 30.0,         # Default timeout for operations
-        retry_count: int = 1,          # Number of retries for failed operations
-        retry_delay: float = 1.0,      # Delay between retries
     ):
 ```
 
 #### Methods
 
-- `async execute(operation: Callable[..., Awaitable[Any]], *args, timeout: Optional[float] = None, **kwargs) -> Any`
-  - Execute a single operation with timeout and error handling
-  - Returns result of the operation
-  - Respects concurrency limits via semaphore
-
-- `async execute_with_retry(operation: Callable[..., Awaitable[Any]], *args, retry_count: Optional[int] = None, retry_delay: Optional[float] = None, **kwargs) -> Any`
-  - Execute an operation with retries on failure
-  - Uses exponential backoff for retry delays
-  - Does not retry on CancelledError
-
-- `async execute_batch(operations: List[Tuple[Callable[..., Awaitable[Any]], List, Dict]], collect_results: bool = True, collect_errors: bool = True) -> Dict[str, List]`
+- `async execute_batch(operations: List[Tuple[Callable, List[Any], Dict[str, Any]]]) -> Dict[str, List[Any]]`
   - Execute a batch of operations concurrently with bounded concurrency
-  - Returns dictionary with 'results' and 'errors' lists
-  - Operations are tuples of (callable, args, kwargs)
+  - Operations are tuples of `(callable, args, kwargs)`
+  - Returns dictionary with `'results'` and `'errors'` lists
+  - Errors are automatically collected; successful results in `'results'`
+  - Handles both async and sync operations (sync runs in thread pool)
 
-- `async shutdown(timeout: float = 5.0) -> None`
-  - Shutdown the executor, waiting for running tasks to complete
-  - Cancels outstanding tasks if timeout is exceeded
-  - Ensures proper cleanup of task tracking
+- `async run_hypothesis_strategy(strategy: st.SearchStrategy) -> Any`
+  - Run a Hypothesis strategy in thread pool to prevent asyncio deadlocks
+  - Returns generated value from the strategy
+
+- `async shutdown() -> None`
+  - Shutdown the executor and clean up thread pool resources
+  - Waits for thread pool to complete all tasks
 
 #### Usage Examples
 
@@ -451,38 +443,26 @@ class AsyncFuzzExecutor:
 from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
 
 async def executor_example():
-    executor = AsyncFuzzExecutor(
-        max_concurrency=3,
-        timeout=10.0,
-        retry_count=2
-    )
+    executor = AsyncFuzzExecutor(max_concurrency=3)
 
-    # Single operation
-    async def sample_operation():
-        await asyncio.sleep(1)
-        return "success"
+    try:
+        # Define async operation
+        async def sample_operation(value):
+            await asyncio.sleep(0.5)
+            return f"processed_{value}"
 
-    result = await executor.execute(sample_operation)
+        # Prepare operations as (function, args, kwargs) tuples
+        operations = [
+            (sample_operation, [i], {}) for i in range(10)
+        ]
 
-    # Operation with retry
-    async def unreliable_operation():
-        if random.random() < 0.5:
-            raise Exception("Random failure")
-        return "success"
+        # Execute batch with automatic error collection
+        results = await executor.execute_batch(operations)
 
-    result = await executor.execute_with_retry(unreliable_operation)
+        print(f"Results: {len(results['results'])}, Errors: {len(results['errors'])}")
 
-    # Batch operations
-    operations = [
-        (sample_operation, [], {}),
-        (unreliable_operation, [], {}),
-        (sample_operation, [], {})
-    ]
-
-    results = await executor.execute_batch(operations)
-    print(f"Results: {len(results['results'])}, Errors: {len(results['errors'])}")
-
-    await executor.shutdown()
+    finally:
+        await executor.shutdown()
 ```
 
 ## CLI Improvements

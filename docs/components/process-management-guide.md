@@ -248,9 +248,7 @@ import os
 
 # Use CPU count for CPU-bound operations
 cpu_executor = AsyncFuzzExecutor(
-    max_concurrency=os.cpu_count(),
-    timeout=60.0,
-    retry_count=1
+    max_concurrency=os.cpu_count()
 )
 ```
 
@@ -259,9 +257,7 @@ cpu_executor = AsyncFuzzExecutor(
 ```python
 # Use higher concurrency for I/O-bound operations
 io_executor = AsyncFuzzExecutor(
-    max_concurrency=os.cpu_count() * 2,
-    timeout=30.0,
-    retry_count=2
+    max_concurrency=os.cpu_count() * 2
 )
 ```
 
@@ -270,37 +266,13 @@ io_executor = AsyncFuzzExecutor(
 ```python
 # Conservative concurrency for network operations
 network_executor = AsyncFuzzExecutor(
-    max_concurrency=10,
-    timeout=15.0,
-    retry_count=3,
-    retry_delay=0.5
+    max_concurrency=10
 )
 ```
 
 ### Error Handling Patterns
 
-#### Retry with Exponential Backoff
-
-```python
-async def robust_operation():
-    executor = AsyncFuzzExecutor(
-        retry_count=3,
-        retry_delay=1.0  # Base delay, will be doubled each retry
-    )
-
-    async def unreliable_operation():
-        # Operation that might fail
-        pass
-
-    try:
-        result = await executor.execute_with_retry(unreliable_operation)
-        return result
-    except Exception as e:
-        logger.error(f"Operation failed after retries: {e}")
-        raise
-```
-
-#### Batch Processing with Error Collection
+#### Batch Processing with Automatic Error Collection
 
 ```python
 async def batch_processing_example():
@@ -473,9 +445,7 @@ debug_config = WatchdogConfig(
 
 ```python
 debug_executor = AsyncFuzzExecutor(
-    max_concurrency=1,       # Single operation for debugging
-    timeout=5.0,             # Shorter timeout
-    retry_count=0            # No retries for debugging
+    max_concurrency=1        # Single operation for debugging
 )
 ```
 

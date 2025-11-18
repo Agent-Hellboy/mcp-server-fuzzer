@@ -45,8 +45,6 @@ safety:
 # Runtime configuration
 runtime:
   max_concurrency: 5
-  retry_count: 1
-  retry_delay: 1.0
 
 # Watchdog configuration
 watchdog:
@@ -159,8 +157,6 @@ retry_with_safety_on_interrupt = false
 # Runtime configuration
 [runtime]
 max_concurrency = 5
-retry_count = 1
-retry_delay = 1.0
 
 # Watchdog configuration
 [watchdog]
@@ -414,7 +410,6 @@ global:
 
 runtime:
   max_concurrency: 10
-  retry_count: 3
 
 servers:
   test_server:

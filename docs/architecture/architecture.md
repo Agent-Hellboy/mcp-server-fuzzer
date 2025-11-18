@@ -665,22 +665,20 @@ The `AsyncFuzzExecutor` provides controlled concurrency and robust error handlin
 
 **Error Handling:**
 
-- **Timeout Management**: Configurable timeouts for individual operations
-- **Retry Logic**: Exponential backoff retry mechanism for failed operations
-- **Exception Collection**: Collects and categorizes errors from batch operations
+- **Automatic Error Collection**: Automatically collects and categorizes errors from batch operations
+- **Thread Pool Support**: Handles both async and sync operations via thread pool
+- **Hypothesis Integration**: Wraps Hypothesis strategies to prevent asyncio deadlocks
+- **Graceful Failure**: Operations can fail without stopping the entire batch
 
 **Configuration Options:**
 
 - `max_concurrency`: Maximum number of concurrent operations (default: 5)
-- `timeout`: Default timeout for operations (default: 30.0 seconds)
-- `retry_count`: Number of retries for failed operations (default: 1)
-- `retry_delay`: Delay between retries (default: 1.0 seconds)
 
 **Usage Patterns:**
 
-- **Single Operations**: Execute individual operations with timeout and error handling
-- **Retry Operations**: Execute operations with automatic retry on failure
-- **Batch Operations**: Execute multiple operations concurrently with bounded concurrency
+- **Batch Operations**: Execute multiple operations concurrently with bounded concurrency and automatic error collection
+- **Mixed Operations**: Handle both async and sync operations in the same batch
+- **Hypothesis Strategies**: Run Hypothesis strategies safely in thread pool
 
 ## Execution Flow
 

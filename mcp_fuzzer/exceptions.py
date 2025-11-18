@@ -25,13 +25,14 @@ class MCPError(Exception):
     def __init__(
         self,
         message: str | None = None,
+        reason: str | None = None,
         *,
         code: str | None = None,
         context: dict[str, Any] | None = None,
     ):
         self.context = context or {}
         self.code = code or self.code
-        super().__init__(message or self.description)
+        super().__init__(message or reason or "")
 
     def to_metadata(self) -> ErrorMetadata:
         """Return structured metadata for logging or serialized output."""
