@@ -45,7 +45,7 @@ git clone https://github.com/YOUR_USERNAME/mcp-server-fuzzer.git
 cd mcp-server-fuzzer
 
 # Create virtual environment
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install development dependencies
@@ -57,6 +57,46 @@ pre-commit install
 # Verify setup
 mcp-fuzzer --help
 ```
+
+> A project-wide `requirements.txt` is included for quick bootstrapping.
+> After activating your virtual environment you can also run
+> `pip install -r requirements.txt` to pull in every dependency the docs and
+> examples rely on.
+
+### Interactive Code Exploration
+
+Once the dependencies are installed, open an interactive session with
+`python3 -i` from the project root and paste the snippet below. It gives you a
+peek into how the client wires transports and tool fuzzers together without
+having to run the entire CLI:
+
+```python
+import asyncio
+from mcp_fuzzer.transport import create_transport
+from mcp_fuzzer.client import MCPFuzzerClient
+
+
+async def explore_client():
+    transport = create_transport("http", "http://localhost:8000", timeout=5.0)
+    client = MCPFuzzerClient(transport=transport, safety_enabled=False)
+    print(f"Initialized {transport.__class__.__name__} at {transport.url}")
+    print(
+        "Tool fuzzer concurrency:",
+        client.tool_client.tool_fuzzer.max_concurrency,
+    )
+    await client.cleanup()
+
+
+asyncio.run(explore_client())
+```
+
+Feel free to swap in any endpoint that matches your local MCP server to inspect
+the objects that back the CLI.
+
+> Need to poke at coroutines without writing helper scripts? Python ships an
+> asyncio-aware REPL: run `python3 -m asyncio` and you get a prompt that accepts
+> top-level `await`. Paste the snippet above, drop the final `asyncio.run(...)`,
+> and simply type `await explore_client()` to drive the coroutine directly.
 
 ### Development Dependencies
 
