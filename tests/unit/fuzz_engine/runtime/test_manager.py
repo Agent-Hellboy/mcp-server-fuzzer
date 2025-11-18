@@ -307,10 +307,10 @@ class TestProcessManager:
         """Test getting status of a finished process."""
         process_config = ProcessConfig(command=["echo", "test"], name="test_process")
 
-        # Setup mock process with returncode to simulate finished process
+        # Setup mock process
         mock_process = AsyncMock()
         mock_process.pid = 12345
-        mock_process.returncode = 0
+        mock_process.returncode = None
 
         # Start the process
         with patch(
@@ -321,6 +321,7 @@ class TestProcessManager:
                     self.manager.watchdog, "register_process", AsyncMock()
                 ):
                     process = await self.manager.start_process(process_config)
+                    process.returncode = 0
 
                     # Get status
                     status = await self.manager.get_process_status(process.pid)
@@ -371,8 +372,13 @@ class TestProcessManager:
         # Setup mock process
         mock_process = AsyncMock()
         mock_process.pid = 12345
-        mock_process.returncode = 0
-        mock_process.wait = AsyncMock(return_value=0)
+        mock_process.returncode = None
+
+        async def wait_side_effect(*args, **kwargs):
+            mock_process.returncode = 0
+            return 0
+
+        mock_process.wait = AsyncMock(side_effect=wait_side_effect)
 
         # Start the process
         with patch(
@@ -487,10 +493,10 @@ class TestProcessManager:
         """Test cleaning up finished processes."""
         process_config = ProcessConfig(command=["echo", "test"], name="test_process")
 
-        # Setup mock process with returncode to simulate finished process
+        # Setup mock process
         mock_process = AsyncMock()
         mock_process.pid = 12345
-        mock_process.returncode = 0
+        mock_process.returncode = None
 
         # Start the process
         with patch(
@@ -501,6 +507,7 @@ class TestProcessManager:
                     self.manager.watchdog, "register_process", AsyncMock()
                 ):
                     process = await self.manager.start_process(process_config)
+                    process.returncode = 0
 
                     # Clean up finished processes
                     with patch.object(
