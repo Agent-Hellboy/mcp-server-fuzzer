@@ -28,6 +28,38 @@ We welcome various types of contributions:
 4. **Make your changes** with proper testing
 5. **Submit a pull request** with clear description
 
+### Understanding the Design Patterns
+
+Before diving into code contributions, we highly recommend reviewing our [Design Pattern Review](../design-pattern-review.md) document. This comprehensive guide is especially valuable for:
+
+**Beginners:**
+- Learn how design patterns are applied in real-world projects
+- Understand the purpose of each module and its patterns
+- See practical examples of Factory, Strategy, Observer, and other patterns
+
+**Intermediate Developers:**
+- Review pattern fit scores and understand architectural decisions
+- Identify areas for improvement and contribution opportunities
+- Learn about cross-cutting concerns and modularity observations
+
+**What the document covers:**
+- Module-by-module pattern analysis with fit scores (0-10)
+- Commentary on what works well and what could be improved
+- Complete pattern map for every module in the codebase
+- Suggested next steps for refactoring and improvements
+
+**Key sections to review based on your contribution area:**
+- Contributing to CLI → Review "CLI Layer" section
+- Adding transports → Review "Transport Layer" section
+- Improving runtime → Review "Runtime & Process Management" section
+- Enhancing safety → Review "Safety System" section
+
+This understanding will help you:
+- Write code that fits the existing architecture
+- Identify the right place for new features
+- Understand why certain design decisions were made
+- Propose improvements that align with the project's goals
+
 ## Development Setup
 
 ### Prerequisites
