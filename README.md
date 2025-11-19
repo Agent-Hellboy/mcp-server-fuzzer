@@ -218,6 +218,21 @@ The system is built with a modular architecture:
 - **Authentication**: Multiple auth provider support
 - **Reporting**: FuzzerReporter, Console/JSON/Text formatters, SafetyReporter
 
+### Understanding the Design Patterns
+
+For developers (beginners to intermediate) who want to understand the design patterns used throughout the codebase, please refer to our comprehensive [Design Pattern Review](docs/design-pattern-review.md). This document provides:
+
+- Module-by-module pattern analysis
+- Design pattern fit scores and recommendations
+- Modularity observations and improvement suggestions
+- Complete pattern map for every module in the codebase
+
+This is especially helpful if you're:
+- Learning about design patterns in real-world applications
+- Planning to contribute to the project
+- Wanting to understand the architectural decisions
+- Looking for areas to improve or extend
+
 ## Troubleshooting
 
 ### Common Issues
