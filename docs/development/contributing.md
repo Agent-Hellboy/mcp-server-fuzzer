@@ -82,7 +82,7 @@ async def explore_client():
     print(f"Initialized {transport.__class__.__name__} at {transport.url}")
     print(
         "Tool fuzzer concurrency:",
-        client.tool_client.tool_fuzzer.max_concurrency,
+        client.tool_client.tool_fuzzer.executor.max_concurrency,
     )
     await client.cleanup()
 
