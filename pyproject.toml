@@ -7,7 +7,7 @@ exclude = ["servers*", "examples*"]
 
 [project]
 name = "mcp-fuzzer"
-version = "0.2.3"
+version = "0.2.4"
 description = "MCP server fuzzer client and utilities"
 readme = "README.md"
 license = {file = "LICENSE"}
