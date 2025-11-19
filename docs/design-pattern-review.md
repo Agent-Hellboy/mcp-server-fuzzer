@@ -29,7 +29,7 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
   argument builders lived in a dedicated factory so the CLI does not own every
   instantiation detail.
 
-**Next steps**
+Next steps:
 - Extract reusable CLI config builders so new commands inherit validation rules.
 - Create smoke tests that cover composite CLI scenarios (auth + transports +
   safety flags) to guard the Facade contract.
@@ -44,7 +44,7 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 - **Gaps & Ideas:** Some transports share retry/backoff logic that could live in
   a Decorator for clarity.
 
-**Next steps**
+Next steps:
 - Introduce a `RetryingTransport` decorator so timeouts/backoff are composable.
 - Document the adapter contract (`open`, `close`, `send_message`) to guide
   community transport additions.
@@ -58,7 +58,7 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 - **Gaps & Ideas:** Template steps are implicit in the engine's methods; naming
   them (`prepare`, `execute`, `finalize`) would make the template clearer.
 
-**Next steps**
+Next steps:
 - Refactor engine workflows into explicit template methods to mitigate control
   flow duplication.
 - Introduce mediator interface tests to guarantee event ordering for reporters
@@ -73,7 +73,7 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 - **Gaps & Ideas:** The builder/prototype separation is blurred; immutable
   strategy inputs would clarify responsibilities.
 
-**Next steps**
+Next steps:
 - Add a registry (simple factory) so experimental strategies can be toggled at
   runtime.
 - Provide examples that show how to extend the `Strategy` interface for new
@@ -88,7 +88,7 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 - **Gaps & Ideas:** Chains are assembled imperatively; a configuration-driven
   builder would make the pattern more obvious.
 
-**Next steps**
+Next steps:
 - Define a `SafetyPolicy` object that declares filter order and parameters.
 - Cover the chain with integration tests to ensure early exits and bypass
   clauses behave as expected.
@@ -102,7 +102,7 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 - **Gaps & Ideas:** Lifecycle transitions are implicit; documenting the state
   diagram would help contributors reason about edge cases.
 
-**Next steps**
+Next steps:
 - Add a state transition table (docs or docstring) for the process manager.
 - Consider extracting the process pool into a reusable module for integration
   with future runners.
@@ -116,7 +116,7 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 - **Gaps & Ideas:** Event payloads are tightly coupled to engine internals;
   defining a stable DTO reduces accidental breakages.
 
-**Next steps**
+Next steps:
 - Formalize event contracts (schema + version) to help external tooling.
 - Add regression tests to ensure reporters stay backward compatible.
 
