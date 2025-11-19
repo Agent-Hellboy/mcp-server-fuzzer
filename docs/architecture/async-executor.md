@@ -1,6 +1,6 @@
 # Async Executor
 
-The AsyncFuzzExecutor is a core component that bridges the strategy components (test case generators) and the fuzzing engine. It provides a robust asynchronous execution framework with concurrency control, error handling, and retry mechanisms.
+The AsyncFuzzExecutor is a core component that bridges the strategy components (test case generators) and the fuzzing engine. It provides a robust asynchronous execution framework with semaphore-based concurrency control and error handling.
 
 ## Architecture
 
@@ -12,21 +12,21 @@ graph TD
     B -->|Execute with Concurrency Control| C[Fuzzing Engine]
     C -->|Results| D[Result Collection]
     B -->|Error Handling| E[Error Processing]
-    B -->|Retry Logic| F[Retry Mechanism]
+    B -->|Thread Pool| F[Sync Operations]
 ```
 
 ## Features
 
-- **Concurrency Control**: Limits the number of concurrent operations to prevent resource exhaustion
-- **Timeout Handling**: Enforces timeouts on operations to prevent hanging
-- **Error Handling**: Captures and processes exceptions from operations
-- **Retry Mechanism**: Automatically retries failed operations with exponential backoff
+- **Concurrency Control**: Uses semaphore to limit the number of concurrent operations
+- **Error Handling**: Captures and collects exceptions from operations automatically
 - **Batch Execution**: Executes multiple operations concurrently with result aggregation
-- **Resource Management**: Proper cleanup of resources during shutdown
+- **Mixed Execution**: Handles both async and sync operations via thread pool
+- **Hypothesis Integration**: Wraps Hypothesis strategies to prevent asyncio deadlocks
+- **Resource Management**: Proper cleanup of thread pool resources during shutdown
 
 ## Usage
 
-### Basic Execution
+### Batch Execution
 
 ```python
 from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
@@ -34,53 +34,79 @@ from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
 # Create an executor with max concurrency of 5
 executor = AsyncFuzzExecutor(max_concurrency=5)
 
-# Execute an async operation
-async def my_operation(value):
-    # Some async operation
+try:
+    # Define an async operation
+    async def my_operation(value):
+        # Some async operation
+        return value * 2
+
+    # Prepare operations as (function, args, kwargs) tuples
+    operations = [
+        (my_operation, [5], {}),
+        (my_operation, [10], {}),
+        (my_operation, [15], {})
+    ]
+
+    # Execute all operations concurrently
+    results = await executor.execute_batch(operations)
+
+    # Process successful results
+    for result in results["results"]:
+        print(f"Success: {result}")
+
+    # Process errors
+    for error in results["errors"]:
+        print(f"Error: {error}")
+
+finally:
+    # Shutdown the executor and clean up resources
+    await executor.shutdown()
+```
+
+### Error Handling
+
+```python
+async def operation_with_errors(value):
+    if value % 2 == 0:
+        raise ValueError(f"Even value not allowed: {value}")
     return value * 2
 
-result = await executor.execute(my_operation, 10)
-```
-
-### Retry Mechanism
-
-```python
-# Execute with retry
-result = await executor.execute_with_retry(
-    my_operation,
-    10,
-    retry_count=3,
-    retry_delay=1.0
-)
-```
-
-### Batch Execution
-
-```python
-# Define multiple operations
-operations = [
-    (my_operation, [5], {}),
-    (my_operation, [10], {}),
-    (my_operation, [15], {})
-]
-
-# Execute all operations concurrently
+# Errors are automatically collected
+operations = [(operation_with_errors, [i], {}) for i in range(10)]
 results = await executor.execute_batch(operations)
 
-# Process successful results
-for result in results["results"]:
-    print(f"Success: {result}")
-
-# Process errors
-for error in results["errors"]:
-    print(f"Error: {error}")
+print(f"Successful: {len(results['results'])}")
+print(f"Failed: {len(results['errors'])}")
 ```
 
-### Cleanup
+### Mixed Async and Sync Operations
 
 ```python
-# Shutdown the executor and clean up resources
-await executor.shutdown()
+# Async operation
+async def async_op():
+    await asyncio.sleep(0.1)
+    return "async"
+
+# Sync operation (runs in thread pool)
+def sync_op():
+    return sum(range(1000))
+
+operations = [
+    (async_op, [], {}),
+    (sync_op, [], {})
+]
+
+results = await executor.execute_batch(operations)
+```
+
+### Hypothesis Strategy Integration
+
+```python
+from hypothesis import strategies as st
+
+# Run Hypothesis strategy without asyncio deadlocks
+int_strategy = st.integers(min_value=0, max_value=100)
+value = await executor.run_hypothesis_strategy(int_strategy)
 ```
 
 ## Integration with Fuzzing Components
@@ -96,6 +122,13 @@ This separation of concerns allows for better maintainability and scalability of
 ## Configuration Options
 
 - **max_concurrency**: Maximum number of concurrent operations (default: 5)
-- **timeout**: Default timeout for operations in seconds (default: 30.0)
-- **retry_count**: Number of retries for failed operations (default: 1)
-- **retry_delay**: Delay between retries in seconds (default: 1.0)
+
+## API Methods
+
+- `async execute_batch(operations) -> Dict[str, List]`: Execute a batch of operations
+  - Operations format: `[(function, args, kwargs), ...]`
+  - Returns: `{"results": [...], "errors": [...]}`
+
+- `async run_hypothesis_strategy(strategy) -> Any`: Run Hypothesis strategy in thread pool
+
+- `async shutdown() -> None`: Shutdown executor and clean up thread pool

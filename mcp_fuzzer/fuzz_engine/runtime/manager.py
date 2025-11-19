@@ -72,6 +72,24 @@ class ProcessManager:
             self._lock = asyncio.Lock()
         return self._lock
 
+    @staticmethod
+    def _normalize_returncode(value: Any) -> int | None:
+        """Return an integer returncode or None, ignore mock objects."""
+        if value is None or isinstance(value, int):
+            return value
+        return None
+
+    @staticmethod
+    def _format_output(data: Any) -> str:
+        """Convert process output into a readable string."""
+        if data is None:
+            return ""
+        if isinstance(data, bytes):
+            return data.decode(errors="replace").strip()
+        if isinstance(data, str):
+            return data.strip()
+        return str(data).strip()
+
     async def _wait_for_process_exit(
         self, process: asyncio.subprocess.Process, timeout: float | None = None
     ) -> Any:
@@ -103,14 +121,44 @@ class ProcessManager:
                 *config.command,
                 cwd=cwd,
                 env=env,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 start_new_session=(os.name != "nt"),
                 creationflags=(
                     subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
                 ),
             )
+            await asyncio.sleep(0.1)
+            
+            # Check if process died immediately otherwise 
+            # stdio stream reading will make it blocking 
+            returncode = self._normalize_returncode(process.returncode)
+            if returncode is not None:
+                # Process exited, read its output to provide diagnostic info
+                stderr = await process.stderr.read()
+                stdout = await process.stdout.read()
 
+                error_output = (
+                    self._format_output(stderr)
+                    or self._format_output(stdout)
+                    or "No output"
+                )
+                raise ProcessStartError(
+                    (
+                        f"Process {config.name} exited with code "
+                        f"{returncode}: {error_output}"
+                    ),
+                    context={
+                        "command": config.command, 
+                        "cwd": cwd, 
+                        "env": env,
+                        "returncode": returncode,
+                        "stderr": self._format_output(stderr),
+                        "stdout": self._format_output(stdout)
+                    }
+                )
+            
+            # Process is running, continue normally
             # Register with watchdog
             await self.watchdog.register_process(
                 process.pid, process, config.activity_callback, config.name
@@ -153,8 +201,20 @@ class ProcessManager:
             process_info = self._processes[pid]
             process = process_info["process"]
             name = process_info["config"].name
-
         try:
+            returncode = self._normalize_returncode(process.returncode)
+            if returncode is not None:
+                self._logger.debug(
+                    "Process %s (%s) already exited with code %s",
+                    pid,
+                    name,
+                    returncode,
+                )
+                async with self._get_lock():
+                    if pid in self._processes:
+                        self._processes[pid]["status"] = "stopped"
+                    await self.watchdog.unregister_process(pid)
+                    return True
             if force:
                 # Force kill
                 await self._force_kill_process(pid, process, name)

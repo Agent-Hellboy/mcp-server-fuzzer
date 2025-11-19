@@ -56,37 +56,28 @@ import asyncio
 async def main():
     # Create executor with concurrency control
     executor = AsyncFuzzExecutor(
-        max_concurrency=5,  # Maximum concurrent operations
-        timeout=30.0,      # Default timeout in seconds
-        retry_count=2,     # Number of retries for failed operations
-        retry_delay=1.0    # Delay between retries in seconds
+        max_concurrency=5  # Maximum concurrent operations
     )
 
-    # Define an async operation
-    async def my_operation(value):
-        await asyncio.sleep(0.1)  # Simulate work
-        return value * 2
+    try:
+        # Define an async operation
+        async def my_operation(value):
+            await asyncio.sleep(0.1)  # Simulate work
+            return value * 2
 
-    # Execute a single operation
-    result = await executor.execute(my_operation, 5)
-    print(f"Single operation result: {result}")
+        # Execute batch operations concurrently
+        operations = [
+            (my_operation, [5], {}),
+            (my_operation, [10], {}),
+            (my_operation, [15], {})
+        ]
 
-    # Execute with retry mechanism
-    result = await executor.execute_with_retry(my_operation, 10)
-    print(f"Operation with retry: {result}")
+        batch_results = await executor.execute_batch(operations)
+        print(f"Batch results: {batch_results['results']}")
 
-    # Execute batch operations concurrently
-    operations = [
-        (my_operation, [5], {}),
-        (my_operation, [10], {}),
-        (my_operation, [15], {})
-    ]
-
-    batch_results = await executor.execute_batch(operations)
-    print(f"Batch results: {batch_results['results']}")
-
-    # Shutdown the executor
-    await executor.shutdown()
+    finally:
+        # Shutdown the executor
+        await executor.shutdown()
 
 asyncio.run(main())
 ```

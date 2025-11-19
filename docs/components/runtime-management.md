@@ -317,19 +317,14 @@ async def watchdog_context_manager():
 
 ## AsyncFuzzExecutor
 
-The `AsyncFuzzExecutor` provides controlled concurrency and robust error handling for fuzzing operations with configurable timeouts and retry mechanisms.
+The `AsyncFuzzExecutor` provides controlled concurrency for fuzzing operations using semaphore-based concurrency control.
 
 ### Concurrency Control
 
 - **Bounded Concurrency**: Uses semaphore to limit concurrent operations
-- **Task Tracking**: Maintains set of running tasks for proper shutdown
 - **Batch Operations**: Execute multiple operations concurrently with result collection
-
-### Error Handling
-
-- **Timeout Management**: Configurable timeouts for individual operations
-- **Retry Logic**: Exponential backoff retry mechanism for failed operations
-- **Exception Collection**: Collects and categorizes errors from batch operations
+- **Thread Pool**: Handles both async and sync operations via thread pool
+- **Hypothesis Integration**: Wraps Hypothesis strategies to prevent asyncio deadlocks
 
 ### Configuration Options
 
@@ -338,132 +333,137 @@ class AsyncFuzzExecutor:
     def __init__(
         self,
         max_concurrency: int = 5,      # Maximum concurrent operations
-        timeout: float = 30.0,         # Default timeout for operations
-        retry_count: int = 1,          # Number of retries for failed operations
-        retry_delay: float = 1.0,      # Delay between retries
     ):
 ```
 
 ### Usage Examples
 
-#### Basic Executor Usage
+#### Basic Batch Operations
 
 ```python
 from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
 
 async def basic_executor_usage():
-    executor = AsyncFuzzExecutor(
-        max_concurrency=3,
-        timeout=10.0,
-        retry_count=2
-    )
-
-    # Execute a single operation
-    async def sample_operation():
-        await asyncio.sleep(1)
-        return "success"
-
-    result = await executor.execute(sample_operation)
-    print(f"Result: {result}")
-
-    # Shutdown executor
-    await executor.shutdown()
-```
-
-#### Executor with Retry Logic
-
-```python
-async def executor_with_retry():
-    executor = AsyncFuzzExecutor(
-        max_concurrency=2,
-        timeout=5.0,
-        retry_count=3,
-        retry_delay=0.5
-    )
-
-    # Operation that might fail
-    async def unreliable_operation():
-        if random.random() < 0.7:  # 70% chance of failure
-            raise Exception("Random failure")
-        return "success"
+    executor = AsyncFuzzExecutor(max_concurrency=3)
 
     try:
-        result = await executor.execute_with_retry(unreliable_operation)
-        print(f"Result after retries: {result}")
-    except Exception as e:
-        print(f"All retries failed: {e}")
+        # Define an async operation
+        async def sample_operation(value):
+            await asyncio.sleep(0.5)
+            return f"processed_{value}"
 
-    await executor.shutdown()
+        # Prepare operations as (function, args, kwargs) tuples
+        operations = [
+            (sample_operation, [i], {}) for i in range(10)
+        ]
+
+        # Execute batch with concurrency control
+        results = await executor.execute_batch(operations)
+        
+        print(f"Successful results: {len(results['results'])}")
+        print(f"Errors: {len(results['errors'])}")
+
+    finally:
+        await executor.shutdown()
 ```
 
-#### Batch Operations
+#### Error Handling
 
 ```python
-async def batch_operations():
+async def batch_with_errors():
     executor = AsyncFuzzExecutor(max_concurrency=5)
 
-    # Define multiple operations
-    operations = []
-    for i in range(10):
-        async def operation(x=i):
+    try:
+        # Operation that may fail
+        async def operation(x):
             await asyncio.sleep(0.1)
+            if x % 3 == 0:  # Some operations fail
+                raise Exception(f"Operation {x} failed")
             return f"result_{x}"
 
-        operations.append((operation, [], {}))
+        # Prepare operations
+        operations = [(operation, [i], {}) for i in range(10)]
 
-    # Execute batch
-    results = await executor.execute_batch(
-        operations,
-        collect_results=True,
-        collect_errors=True
-    )
+        # Execute batch - errors are automatically collected
+        results = await executor.execute_batch(operations)
 
-    print(f"Successful results: {len(results['results'])}")
-    print(f"Errors: {len(results['errors'])}")
+        print(f"Successful: {len(results['results'])}")
+        print(f"Failed: {len(results['errors'])}")
+        
+        # Handle errors
+        for error in results['errors']:
+            print(f"Error: {error}")
 
-    await executor.shutdown()
+    finally:
+        await executor.shutdown()
 ```
 
-#### Custom Timeout and Concurrency
+#### Mixed Async and Sync Operations
 
 ```python
-async def custom_timeout_concurrency():
-    executor = AsyncFuzzExecutor(
-        max_concurrency=10,
-        timeout=60.0
-    )
+async def mixed_operations():
+    executor = AsyncFuzzExecutor(max_concurrency=5)
 
-    # Operation with custom timeout
-    async def long_operation():
-        await asyncio.sleep(2)
-        return "long_result"
+    try:
+        # Async I/O-bound operation
+        async def async_operation():
+            await asyncio.sleep(0.1)
+            return "async_result"
 
-    # Execute with custom timeout
-    result = await executor.execute(long_operation, timeout=120.0)
-    print(f"Long operation result: {result}")
+        # Sync CPU-bound operation (runs in thread pool)
+        def sync_operation():
+            return sum(range(1_000_000))
 
-    await executor.shutdown()
+        operations = [
+            (async_operation, [], {}) for _ in range(5)
+        ] + [
+            (sync_operation, [], {}) for _ in range(5)
+        ]
+
+        results = await executor.execute_batch(operations)
+        print(f"Mixed operations: {len(results['results'])} successful")
+
+    finally:
+        await executor.shutdown()
+```
+
+#### Hypothesis Strategy Integration
+
+```python
+from hypothesis import strategies as st
+
+async def hypothesis_example():
+    executor = AsyncFuzzExecutor(max_concurrency=3)
+
+    try:
+        # Use Hypothesis strategy without asyncio deadlocks
+        int_strategy = st.integers(min_value=0, max_value=100)
+        
+        # Generate values safely in thread pool
+        value = await executor.run_hypothesis_strategy(int_strategy)
+        print(f"Generated value: {value}")
+
+    finally:
+        await executor.shutdown()
 ```
 
 ### API Reference
 
 #### AsyncFuzzExecutor Methods
 
-- `async execute(operation: Callable[..., Awaitable[Any]], *args, timeout: Optional[float] = None, **kwargs) -> Any`
-  - Execute a single operation with timeout and error handling
-  - Returns result of the operation
-
-- `async execute_with_retry(operation: Callable[..., Awaitable[Any]], *args, retry_count: Optional[int] = None, retry_delay: Optional[float] = None, **kwargs) -> Any`
-  - Execute an operation with retries on failure
-  - Uses exponential backoff for retry delays
-
-- `async execute_batch(operations: List[Tuple[Callable[..., Awaitable[Any]], List, Dict]], collect_results: bool = True, collect_errors: bool = True) -> Dict[str, List]`
+- `async execute_batch(operations: List[Tuple[Callable, List[Any], Dict[str, Any]]]) -> Dict[str, List[Any]]`
   - Execute a batch of operations concurrently with bounded concurrency
-  - Returns dictionary with 'results' and 'errors' lists
+  - Operations format: `[(function, args, kwargs), ...]`
+  - Returns dictionary with `'results'` and `'errors'` lists
+  - Errors are automatically collected; successful results in `'results'`
 
-- `async shutdown(timeout: float = 5.0) -> None`
-  - Shutdown the executor, waiting for running tasks to complete
-  - Cancels outstanding tasks if timeout is exceeded
+- `async run_hypothesis_strategy(strategy: st.SearchStrategy) -> Any`
+  - Run a Hypothesis strategy in thread pool to prevent asyncio deadlocks
+  - Returns generated value from the strategy
+
+- `async shutdown() -> None`
+  - Shutdown the executor and clean up thread pool resources
+  - Waits for thread pool to complete all tasks
 
 ## Integration Examples
 
@@ -620,9 +620,7 @@ debug_config = WatchdogConfig(
 
 # Configure executor with debug settings
 debug_executor = AsyncFuzzExecutor(
-    max_concurrency=1,       # Single operation for debugging
-    timeout=5.0,             # Shorter timeout
-    retry_count=0            # No retries for debugging
+    max_concurrency=1        # Single operation for debugging
 )
 ```
 
