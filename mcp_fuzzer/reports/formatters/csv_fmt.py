@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .common import normalize_report_data
+from .common import SupportsToDict, normalize_report_data
 
 
 class CSVFormatter:
@@ -12,13 +12,13 @@ class CSVFormatter:
 
     def save_csv_report(
         self,
-        report_data: dict[str, Any] | Any,
+        report_data: dict[str, Any] | SupportsToDict,
         filename: str,
     ):
         import csv
 
         data = normalize_report_data(report_data)
-        with open(filename, "w", newline="") as f:
+        with open(filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(
                 [

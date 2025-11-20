@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from html import escape
 from typing import Any
 
 from .common import normalize_report_data
@@ -17,11 +18,12 @@ class HTMLFormatter:
         title: str = "Fuzzing Results Report",
     ):
         data = normalize_report_data(report_data)
+        escaped_title = escape(title)
         html_content = f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{title}</title>
+    <title>{escaped_title}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; }}
         h1 {{ color: #333; }}
@@ -33,13 +35,16 @@ class HTMLFormatter:
     </style>
 </head>
 <body>
-    <h1>{title}</h1>
+    <h1>{escaped_title}</h1>
 """
 
         if "metadata" in data:
             html_content += "<h2>Metadata</h2><ul>"
             for key, value in data["metadata"].items():
-                html_content += f"<li><strong>{key}:</strong> {value}</li>"
+                html_content += (
+                    f"<li><strong>{escape(str(key))}:</strong> "
+                    f"{escape(str(value))}</li>"
+                )
             html_content += "</ul>"
 
         if "tool_results" in data:
@@ -51,18 +56,19 @@ class HTMLFormatter:
 
             for tool_name, results in data["tool_results"].items():
                 for i, result in enumerate(results):
-                    success_class = "success" if result.get("success") else "error"
+                    success = result.get("success", False)
+                    success_class = "success" if success else "error"
                     html_content += f"""
 <tr>
-    <td>{tool_name}</td>
+    <td>{escape(str(tool_name))}</td>
     <td>{i + 1}</td>
-    <td class="{success_class}">{result.get("success", False)}</td>
-    <td>{result.get("exception", "")}</td>
+    <td class="{success_class}">{escape(str(success))}</td>
+    <td>{escape(str(result.get("exception", "")))}</td>
 </tr>"""
 
             html_content += "</table>"
 
         html_content += "</body></html>"
 
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             f.write(html_content)

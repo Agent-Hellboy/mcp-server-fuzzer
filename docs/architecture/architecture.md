@@ -191,9 +191,12 @@ mcp_fuzzer/
 │           └── tool_strategy.py
 ├── reports/                 # Reporting and output system
 │   ├── __init__.py
-│   ├── formatters.py        # Output formatters
-│   ├── output_protocol.py   # Output protocol definitions
-│   ├── reporter.py          # Main reporting coordinator
+│   ├── formatters/         # Output formatters
+│   ├── output/              # Standardized output protocol + manager
+│   │   ├── __init__.py
+│   │   ├── protocol.py
+│   │   └── manager.py
+│   ├── reporter/            # Main reporting coordinator package
 │   └── safety_reporter.py   # Safety system reporting
 ├── safety_system/           # Safety and protection
 │   ├── __init__.py
@@ -523,10 +526,10 @@ The reporting system provides centralized output management and comprehensive re
 
 **Key Components:**
 
-- `reporter.py`: Main `FuzzerReporter` class that coordinates all reporting and manages output destinations
-- `formatters.py`: Output formatters for different formats (Console, JSON, Text, CSV, XML)
+- `reporter/`: Main `FuzzerReporter` package that coordinates all reporting and manages output destinations
+- `formatters/`: Output formatters for different formats (Console, JSON, Text, CSV, XML, HTML, Markdown)
 - `safety_reporter.py`: Dedicated safety system reporting with risk assessment and blocked operation analysis
-- `output_protocol.py`: Standardized output protocol definitions for consistent reporting structure
+- `output/`: Standardized output protocol (`protocol.py`) plus persistence manager (`manager.py`) for consistent reporting artifacts
 
 **Reporting Features:**
 

@@ -9,22 +9,29 @@ and result aggregation.
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from rich.console import Console
 
-from .core import FuzzingMetadata, ReportCollector, ReportSnapshot
-from .formatters import (
-    ConsoleFormatter,
-    JSONFormatter,
-    TextFormatter,
+from ..core import FuzzingMetadata, ReportCollector, ReportSnapshot
+from ..formatters import (
     CSVFormatter,
-    XMLFormatter,
     HTMLFormatter,
+    JSONFormatter,
     MarkdownFormatter,
+    TextFormatter,
+    XMLFormatter,
 )
-from .output_protocol import OutputManager
-from .safety_reporter import SafetyReporter
+from ..output import OutputManager
+from .config import ReporterConfig
+from .contracts import (
+    ConsoleSummaryPort,
+    OutputManagerPort,
+    ReportCollectorPort,
+    SafetyReporterPort,
+)
+from .dependencies import FormatterRegistry, ReporterDependencies
+from ..safety_reporter import SafetyReporter
 
 from importlib.metadata import version, PackageNotFoundError
 
@@ -42,12 +49,15 @@ class FuzzerReporter:
         self,
         output_dir: str = "reports",
         compress_output: bool = False,
-        config_provider: dict[str, Any] | None = None,
+        config_provider: Mapping[str, Any] | None = None,
         safety_system=_AUTO_FILTER,
         collector: ReportCollector | None = None,
         output_manager: OutputManager | None = None,
         console: Console | None = None,
         safety_reporter: SafetyReporter | None = None,
+        config: ReporterConfig | None = None,
+        dependencies: ReporterDependencies | None = None,
+        formatter_registry: FormatterRegistry | None = None,
     ):
         """
         Initialize the reporter.
@@ -60,50 +70,58 @@ class FuzzerReporter:
         """
         # Dependency injection: use provided config or fall back to global
         if config_provider is None:
-            from ..config import config as default_config
+            from ...config import config as default_config
+
             config_provider = default_config
 
-        # Prioritize the output_dir parameter over config
-        if output_dir != "reports":
-            self.output_dir_config = output_dir
-        else:
-            # Check config provider for custom output directory
-            output_config = config_provider.get("output", {})
-            self.output_dir_config = config_provider.get(
-                "output_dir", output_config.get("directory", output_dir)
-            )
+        resolved_config = config or ReporterConfig.from_provider(
+            provider=config_provider,
+            requested_output_dir=output_dir,
+            compress_fallback=compress_output,
+        )
+        self._config = resolved_config
+        self.output_format = resolved_config.output_format
+        self.output_types = resolved_config.output_types
+        self.output_schema = resolved_config.output_schema
+        self.output_compress = resolved_config.compress_output
 
-        # Load other configuration from config provider
-        output_config = config_provider.get("output", {})
-        self.output_format = output_config.get("format", "json")
-        self.output_types = output_config.get("types")
-        self.output_schema = output_config.get("schema")
-        self.output_compress = output_config.get("compress", compress_output)
-
-        self.output_dir = Path(self.output_dir_config)
+        self.output_dir = resolved_config.output_dir
         self.output_dir.mkdir(exist_ok=True)
 
+        deps = dependencies
+        if deps is None:
+            safety_dependency: SafetyReporterPort | None = safety_reporter
+            if safety_dependency is None:
+                if safety_system is _AUTO_FILTER:
+                    safety_dependency = SafetyReporter()
+                else:
+                    safety_dependency = SafetyReporter(safety_system)
+
+            deps = ReporterDependencies.build(
+                output_dir=str(self.output_dir),
+                compress_output=self.output_compress,
+                console=console,
+                collector=collector,
+                output_manager=output_manager,
+                safety_reporter=safety_dependency,
+                formatter_registry=formatter_registry,
+            )
+
+        self._deps = deps
+
         # Shared dependencies
-        self.console = console or Console()
-        self.console_formatter = ConsoleFormatter(self.console)
-        self.json_formatter = JSONFormatter()
-        self.text_formatter = TextFormatter()
-        self.csv_formatter = CSVFormatter()
-        self.xml_formatter = XMLFormatter()
-        self.html_formatter = HTMLFormatter()
-        self.markdown_formatter = MarkdownFormatter()
+        self.console = deps.console
+        self.console_formatter: ConsoleSummaryPort = deps.formatters.console
+        self.json_formatter: JSONFormatter = deps.formatters.json
+        self.text_formatter: TextFormatter = deps.formatters.text
+        self.csv_formatter: CSVFormatter = deps.formatters.csv
+        self.xml_formatter: XMLFormatter = deps.formatters.xml
+        self.html_formatter: HTMLFormatter = deps.formatters.html
+        self.markdown_formatter: MarkdownFormatter = deps.formatters.markdown
 
-        self.collector = collector or ReportCollector()
-        self.output_manager = output_manager or OutputManager(
-            str(self.output_dir), self.output_compress
-        )
-
-        if safety_reporter:
-            self.safety_reporter = safety_reporter
-        elif safety_system is _AUTO_FILTER:
-            self.safety_reporter = SafetyReporter()
-        else:
-            self.safety_reporter = SafetyReporter(safety_system)
+        self.collector: ReportCollectorPort = deps.collector
+        self.output_manager: OutputManagerPort = deps.output_manager
+        self.safety_reporter: SafetyReporterPort = deps.safety
 
         self._metadata: FuzzingMetadata | None = None
 
@@ -185,13 +203,11 @@ class FuzzerReporter:
     def generate_final_report(self, include_safety: bool = True) -> str:
         """Generate comprehensive final report and save to file."""
         snapshot = self._prepare_snapshot(include_safety=include_safety, finalize=True)
-        report_dict = snapshot.to_dict()
-
         json_filename = self.output_dir / f"fuzzing_report_{self.session_id}.json"
-        self.json_formatter.save_report(report_dict, str(json_filename))
+        self.json_formatter.save_report(snapshot, str(json_filename))
 
         text_filename = self.output_dir / f"fuzzing_report_{self.session_id}.txt"
-        self.text_formatter.save_text_report(snapshot, text_filename)
+        self.text_formatter.save_text_report(snapshot, str(text_filename))
 
         if include_safety and self.safety_reporter.has_safety_data():
             safety_filename = self.output_dir / f"safety_report_{self.session_id}.json"
@@ -318,10 +334,12 @@ class FuzzerReporter:
             self._finalize_metadata() if finalize else self._ensure_metadata()
         )
         safety_data = self._gather_safety_data(include_safety)
-        if safety_data:
+        if include_safety and safety_data:
             self.collector.update_safety_data(safety_data)
         return self.collector.snapshot(
-            metadata, safety_data if include_safety else None
+            metadata,
+            safety_data=None,
+            include_safety=include_safety,
         )
 
     def _ensure_metadata(self) -> FuzzingMetadata:

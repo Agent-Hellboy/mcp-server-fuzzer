@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from .common import normalize_report_data
+from .common import calculate_tool_success_rate, normalize_report_data
+
+
+def _result_has_failure(result: dict[str, Any]) -> bool:
+    """Return True when a result represents an error condition."""
+    return bool(
+        result.get("exception")
+        or not result.get("success", True)
+        or result.get("error")
+        or result.get("server_error")
+    )
 
 
 class TextFormatter:
@@ -16,7 +26,7 @@ class TextFormatter:
         filename: str,
     ):
         data = normalize_report_data(report_data)
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
             f.write("MCP FUZZER REPORT\n")
             f.write("=" * 80 + "\n\n")
@@ -80,10 +90,8 @@ class TextFormatter:
                     f.write(f"  Safety Blocked: {safety_blocked}\n")
 
                     if results:
-                        success_rate = (
-                            (len(results) - exceptions - safety_blocked)
-                            / len(results)
-                            * 100
+                        success_rate = calculate_tool_success_rate(
+                            len(results), exceptions, safety_blocked
                         )
                         f.write(f"  Success Rate: {success_rate:.1f}%\n")
 
@@ -94,11 +102,12 @@ class TextFormatter:
                     f.write(f"\nProtocol Type: {protocol_type}\n")
                     f.write(f"  Total Runs: {len(results)}\n")
 
-                    errors = sum(1 for r in results if not r.get("success", True))
+                    errors = sum(1 for r in results if _result_has_failure(r))
                     f.write(f"  Errors: {errors}\n")
 
                     if results:
-                        success_rate = (len(results) - errors) / len(results) * 100
+                        successes = max(len(results) - errors, 0)
+                        success_rate = successes / len(results) * 100
                         f.write(f"  Success Rate: {success_rate:.1f}%\n")
 
             if "safety" in data:

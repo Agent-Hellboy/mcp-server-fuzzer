@@ -24,14 +24,14 @@ class ReportCollector:
         self.safety_data: dict[str, Any] = {}
 
     def add_tool_results(self, tool_name: str, results: list[dict[str, Any]]):
-        self.tool_results[tool_name] = [self._coerce_result(r) for r in results]
+        bucket = self.tool_results.setdefault(tool_name, [])
+        bucket.extend(self._coerce_result(r) for r in results)
 
     def add_protocol_results(
         self, protocol_type: str, results: list[dict[str, Any]]
     ):
-        self.protocol_results[protocol_type] = [
-            self._coerce_result(r) for r in results
-        ]
+        bucket = self.protocol_results.setdefault(protocol_type, [])
+        bucket.extend(self._coerce_result(r) for r in results)
 
     def update_safety_data(self, safety_data: dict[str, Any]):
         self.safety_data.update(deepcopy(safety_data))
@@ -69,10 +69,14 @@ class ReportCollector:
         self,
         metadata: FuzzingMetadata,
         safety_data: dict[str, Any] | None = None,
+        include_safety: bool = True,
     ) -> ReportSnapshot:
-        safety = deepcopy(self.safety_data)
-        if safety_data:
-            safety.update(deepcopy(safety_data))
+        if include_safety:
+            safety = deepcopy(self.safety_data)
+            if safety_data:
+                safety.update(deepcopy(safety_data))
+        else:
+            safety = {}
 
         return ReportSnapshot(
             metadata=metadata,
@@ -87,21 +91,27 @@ class ReportCollector:
         errors: list[dict[str, Any]] = []
         for tool_name, runs in self.tool_results.items():
             for idx, run in enumerate(runs):
-                if run.has_exception:
+                if run.has_exception or run.has_error:
+                    message = str(
+                        run.payload.get(
+                            "exception", run.payload.get("error", "Unknown tool error")
+                        )
+                    )
+                    severity = "high" if run.has_exception else "medium"
                     errors.append(
                         {
                             "type": "tool_error",
                             "tool_name": tool_name,
                             "run_number": idx + 1,
-                            "severity": "medium",
-                            "message": str(run.payload.get("exception")),
+                            "severity": severity,
+                            "message": message,
                             "arguments": run.payload.get("args", {}),
                         }
                     )
 
         for protocol_type, runs in self.protocol_results.items():
             for idx, run in enumerate(runs):
-                if not run.payload.get("success", True):
+                if run.has_error:
                     errors.append(
                         {
                             "type": "protocol_error",

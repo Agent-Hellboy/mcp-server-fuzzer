@@ -870,8 +870,9 @@ mcp_fuzzer/
     streamable_http.py     # Streamable HTTP (JSON + SSE, session headers)
     factory.py             # create_transport(...)
   reports/
-    reporter.py            # Aggregates results
-    formatters.py          # Console/JSON/Text formatters
+    reporter/              # Aggregates results + DI plumbing
+    formatters/            # Console/JSON/Text/HTML/etc. formatters
+    output/                # Standardized output protocol + manager
     safety_reporter.py     # Safety-specific report
   safety_system/
     safety.py              # SafetyFilter and SafetyProvider protocol

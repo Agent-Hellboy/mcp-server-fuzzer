@@ -10,6 +10,16 @@ from rich.table import Table
 from .common import calculate_tool_success_rate
 
 
+def _result_has_failure(result: dict[str, Any]) -> bool:
+    """Return True if a result represents a failure condition."""
+    return bool(
+        result.get("exception")
+        or not result.get("success", True)
+        or result.get("error")
+        or result.get("server_error")
+    )
+
+
 class ConsoleFormatter:
     """Handles console output formatting."""
 
@@ -63,10 +73,9 @@ class ConsoleFormatter:
 
         for protocol_type, protocol_results in results.items():
             total_runs = len(protocol_results)
-            errors = sum(1 for r in protocol_results if not r.get("success", True))
-            success_rate = (
-                ((total_runs - errors) / total_runs * 100) if total_runs > 0 else 0
-            )
+            errors = sum(1 for r in protocol_results if _result_has_failure(r))
+            successes = max(total_runs - errors, 0)
+            success_rate = (successes / total_runs * 100) if total_runs > 0 else 0
 
             table.add_row(
                 protocol_type, str(total_runs), str(errors), f"{success_rate:.1f}%"
@@ -90,7 +99,7 @@ class ConsoleFormatter:
             for result in tool_results_list:
                 if "exception" in result:
                     tools_with_exceptions += 1
-                elif "error" in result:
+                elif _result_has_failure(result):
                     tools_with_errors += 1
 
         total_protocol_types = len(protocol_results)
@@ -103,9 +112,7 @@ class ConsoleFormatter:
             for result in protocol_results_list:
                 if "exception" in result:
                     protocol_types_with_exceptions += 1
-                elif "error" in result or (
-                    "server_error" in result and result.get("server_error") is not None
-                ):
+                elif _result_has_failure(result):
                     protocol_types_with_errors += 1
 
         self.console.print("\n[bold]Overall Statistics:[/bold]")

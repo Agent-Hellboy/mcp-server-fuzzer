@@ -21,10 +21,14 @@ class XMLFormatter:
         data = normalize_report_data(report_data)
         root = Element("mcp-fuzzer-report")
 
+        def add_fields(parent: Element, mapping: dict[str, Any]):
+            for key, value in mapping.items():
+                field = SubElement(parent, "field", name=str(key))
+                field.text = str(value)
+
         if "metadata" in data:
             metadata_elem = SubElement(root, "metadata")
-            for key, value in data["metadata"].items():
-                SubElement(metadata_elem, key).text = str(value)
+            add_fields(metadata_elem, data["metadata"])
 
         if "tool_results" in data:
             tools_elem = SubElement(root, "tool-results")
@@ -32,10 +36,9 @@ class XMLFormatter:
                 tool_elem = SubElement(tools_elem, "tool", name=tool_name)
                 for result in results:
                     result_elem = SubElement(tool_elem, "result")
-                    for key, value in result.items():
-                        SubElement(result_elem, key).text = str(value)
+                    add_fields(result_elem, result)
 
         rough_string = tostring(root, "utf-8")
         reparsed = minidom.parseString(rough_string)
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             f.write(reparsed.toprettyxml(indent="  "))

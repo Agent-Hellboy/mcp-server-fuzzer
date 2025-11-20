@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-"""
-MCP Fuzzer Output Protocol
+"""Standardized output protocol builder for MCP Fuzzer."""
 
-Defines the standardized output format and mini-protocol for tool communication.
-Provides schema validation and structured output generation.
-"""
+from __future__ import annotations
 
 import json
 import logging
@@ -13,21 +10,33 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..exceptions import ValidationError
-from .core import ReportSnapshot
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
+
+from ...exceptions import ValidationError
+from ..core import ReportSnapshot
 
 try:
     TOOL_VERSION = version("mcp-fuzzer")
 except PackageNotFoundError:
     TOOL_VERSION = "unknown"
+
+
+def _result_has_failure(result: dict[str, Any]) -> bool:
+    """Return True when a result indicates a failure."""
+    return bool(
+        result.get("exception")
+        or not result.get("success", True)
+        or result.get("error")
+        or result.get("server_error")
+    )
+
+
 class OutputProtocol:
     """Handles standardized output format with mini-protocol for MCP Fuzzer."""
 
     PROTOCOL_VERSION = "1.0.0"
     TOOL_VERSION = TOOL_VERSION
 
-    # Output types
     OUTPUT_TYPES = {
         "fuzzing_results",
         "error_report",
@@ -50,7 +59,7 @@ class OutputProtocol:
         if output_type not in self.OUTPUT_TYPES:
             raise ValidationError(f"Invalid output type: {output_type}")
 
-        base_output = {
+        return {
             "protocol_version": self.PROTOCOL_VERSION,
             "timestamp": datetime.now().isoformat(),
             "tool_version": self.TOOL_VERSION,
@@ -59,8 +68,6 @@ class OutputProtocol:
             "data": data,
             "metadata": metadata or {},
         }
-
-        return base_output
 
     def create_fuzzing_results_output(
         self,
@@ -84,14 +91,12 @@ class OutputProtocol:
             "tools_tested": self._format_tool_results(tool_results),
             "protocol_types_tested": self._format_protocol_results(protocol_results),
         }
-
         metadata = {
             "execution_time": execution_time,
             "total_tests": total_tests,
             "success_rate": success_rate,
             "safety_enabled": safety_enabled,
         }
-
         return self.create_base_output("fuzzing_results", data, metadata)
 
     def create_fuzzing_results_from_snapshot(
@@ -108,7 +113,6 @@ class OutputProtocol:
             name: [run.to_dict() for run in runs]
             for name, runs in snapshot.protocol_results.items()
         }
-
         return self.create_fuzzing_results_output(
             mode=snapshot.metadata.mode,
             protocol=snapshot.metadata.protocol,
@@ -135,12 +139,10 @@ class OutputProtocol:
             "warnings": warnings or [],
             "execution_context": execution_context or {},
         }
-
         metadata = {
             "error_severity": self._calculate_error_severity(errors),
             "has_critical_errors": any(e.get("severity") == "critical" for e in errors),
         }
-
         return self.create_base_output("error_report", data, metadata)
 
     def create_safety_summary_output(
@@ -157,7 +159,6 @@ class OutputProtocol:
             "risk_assessment": risk_assessment,
             "safety_statistics": safety_data.get("statistics", {}),
         }
-
         metadata = {
             "safety_enabled": safety_data.get("active", False),
             "total_blocked": len(blocked_operations),
@@ -165,7 +166,6 @@ class OutputProtocol:
                 set(op.get("tool_name", "") for op in blocked_operations)
             ),
         }
-
         return self.create_base_output("safety_summary", data, metadata)
 
     def create_performance_metrics_output(
@@ -174,16 +174,11 @@ class OutputProtocol:
         benchmarks: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create performance metrics output."""
-        data = {
-            "metrics": metrics,
-            "benchmarks": benchmarks or {},
-        }
-
+        data = {"metrics": metrics, "benchmarks": benchmarks or {}}
         metadata = {
             "collection_timestamp": datetime.now().isoformat(),
             "metrics_count": len(metrics),
         }
-
         return self.create_base_output("performance_metrics", data, metadata)
 
     def create_configuration_dump_output(
@@ -192,22 +187,16 @@ class OutputProtocol:
         source: str = "runtime",
     ) -> dict[str, Any]:
         """Create configuration dump output."""
-        data = {
-            "configuration": configuration,
-            "source": source,
-        }
-
+        data = {"configuration": configuration, "source": source}
         metadata = {
             "config_keys_count": len(configuration),
             "dump_timestamp": datetime.now().isoformat(),
         }
-
         return self.create_base_output("configuration_dump", data, metadata)
 
     def validate_output(self, output: dict[str, Any]) -> bool:
         """Validate output structure against protocol schema."""
         try:
-            # Check required fields
             required_fields = [
                 "protocol_version",
                 "timestamp",
@@ -217,26 +206,22 @@ class OutputProtocol:
                 "data",
                 "metadata",
             ]
-
             for field in required_fields:
                 if field not in output:
                     raise ValidationError(f"Missing required field: {field}")
 
-            # Validate output type
             if output["output_type"] not in self.OUTPUT_TYPES:
                 raise ValidationError(f"Invalid output type: {output['output_type']}")
 
-            # Validate protocol version
             if output["protocol_version"] != self.PROTOCOL_VERSION:
                 self.logger.warning(
-                    f"Protocol version mismatch: {output['protocol_version']} "
-                    f"(expected {self.PROTOCOL_VERSION})"
+                    "Protocol version mismatch: %s (expected %s)",
+                    output["protocol_version"],
+                    self.PROTOCOL_VERSION,
                 )
-
             return True
-
-        except Exception as e:
-            self.logger.error(f"Output validation failed: {e}")
+        except Exception as exc:  # noqa: BLE001 - log validation issues
+            self.logger.error("Output validation failed: %s", exc)
             return False
 
     def save_output(
@@ -253,23 +238,18 @@ class OutputProtocol:
         output_path = Path(output_dir)
         output_path.mkdir(exist_ok=True)
 
-        # Create session directory
         session_dir = output_path / "sessions" / self.session_id
         session_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate filename if not provided
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_type = output["output_type"]
-            filename = f"{timestamp}_{output_type}.json"
+            filename = f"{timestamp}_{output['output_type']}.json"
 
         filepath = session_dir / filename
+        with open(filepath, "w") as handle:
+            json.dump(output, handle, indent=2, default=str)
 
-        # Save output
-        with open(filepath, "w") as f:
-            json.dump(output, f, indent=2, default=str)
-
-        self.logger.info(f"Output saved to: {filepath}")
+        self.logger.info("Output saved to: %s", filepath)
         return str(filepath)
 
     def _format_tool_results(
@@ -277,36 +257,35 @@ class OutputProtocol:
     ) -> list[dict[str, Any]]:
         """Format tool results for output."""
         formatted = []
-
         for tool_name, results in tool_results.items():
             total_runs = len(results)
             exceptions = sum(1 for r in results if "exception" in r)
             safety_blocked = sum(1 for r in results if r.get("safety_blocked", False))
-            successful = total_runs - exceptions - safety_blocked
+            successful = max(total_runs - exceptions - safety_blocked, 0)
             success_rate = (successful / total_runs * 100) if total_runs > 0 else 0
-
-            tool_data = {
-                "name": tool_name,
-                "runs": total_runs,
-                "successful": successful,
-                "exceptions": exceptions,
-                "safety_blocked": safety_blocked,
-                "success_rate": success_rate,
-                "exception_details": [
-                    {
-                        "type": (
-                            type(r.get("exception")).__name__
-                            if r.get("exception") else "Unknown"
-                        ),
-                        "message": str(r.get("exception", "")),
-                        "arguments": r.get("args", {}),
-                    }
-                    for r in results
-                    if "exception" in r
-                ],
-            }
-            formatted.append(tool_data)
-
+            formatted.append(
+                {
+                    "name": tool_name,
+                    "runs": total_runs,
+                    "successful": successful,
+                    "exceptions": exceptions,
+                    "safety_blocked": safety_blocked,
+                    "success_rate": success_rate,
+                    "exception_details": [
+                        {
+                            "type": (
+                                type(r.get("exception")).__name__
+                                if r.get("exception")
+                                else "Unknown"
+                            ),
+                            "message": str(r.get("exception", "")),
+                            "arguments": r.get("args", {}),
+                        }
+                        for r in results
+                        if "exception" in r
+                    ],
+                }
+            )
         return formatted
 
     def _format_protocol_results(
@@ -314,133 +293,31 @@ class OutputProtocol:
     ) -> list[dict[str, Any]]:
         """Format protocol results for output."""
         formatted = []
-
         for protocol_type, results in protocol_results.items():
             total_runs = len(results)
-            errors = sum(1 for r in results if not r.get("success", True))
-            success_rate = (
-                ((total_runs - errors) / total_runs * 100)
-                if total_runs > 0 else 0
+            errors = sum(1 for r in results if _result_has_failure(r))
+            successes = max(total_runs - errors, 0)
+            success_rate = (successes / total_runs * 100) if total_runs > 0 else 0
+            formatted.append(
+                {
+                    "type": protocol_type,
+                    "runs": total_runs,
+                    "successful": successes,
+                    "errors": errors,
+                    "success_rate": success_rate,
+                }
             )
-
-            protocol_data = {
-                "type": protocol_type,
-                "runs": total_runs,
-                "successful": total_runs - errors,
-                "errors": errors,
-                "success_rate": success_rate,
-            }
-            formatted.append(protocol_data)
-
         return formatted
 
     def _calculate_error_severity(self, errors: list[dict[str, Any]]) -> str:
         """Calculate overall error severity."""
         if not errors:
             return "none"
-
         severities = [e.get("severity", "low") for e in errors]
         if "critical" in severities:
             return "critical"
-        elif "high" in severities:
+        if "high" in severities:
             return "high"
-        elif "medium" in severities:
+        if "medium" in severities:
             return "medium"
-        else:
-            return "low"
-
-class OutputManager:
-    """Manages output generation and file organization."""
-
-    def __init__(self, output_dir: str = "output", compress: bool = False):
-        self.output_dir = Path(output_dir)
-        self.compress = compress
-        self.protocol = OutputProtocol()
-
-    def save_fuzzing_results(
-        self,
-        mode: str,
-        protocol: str,
-        endpoint: str,
-        tool_results: dict[str, list[dict[str, Any]]],
-        protocol_results: dict[str, list[dict[str, Any]]],
-        execution_time: str,
-        total_tests: int,
-        success_rate: float,
-        safety_enabled: bool = False,
-    ) -> str:
-        """Save fuzzing results using standardized format."""
-        output = self.protocol.create_fuzzing_results_output(
-            mode=mode,
-            protocol=protocol,
-            endpoint=endpoint,
-            tool_results=tool_results,
-            protocol_results=protocol_results,
-            execution_time=execution_time,
-            total_tests=total_tests,
-            success_rate=success_rate,
-            safety_enabled=safety_enabled,
-        )
-
-        return self.protocol.save_output(
-            output, self.output_dir, compress=self.compress
-        )
-
-    def save_fuzzing_snapshot(
-        self,
-        snapshot: ReportSnapshot,
-        safety_enabled: bool = False,
-    ) -> str:
-        """Save fuzzing results using a ReportSnapshot."""
-        output = self.protocol.create_fuzzing_results_from_snapshot(
-            snapshot=snapshot,
-            safety_enabled=safety_enabled,
-        )
-        return self.protocol.save_output(
-            output, self.output_dir, compress=self.compress
-        )
-
-    def save_error_report(
-        self,
-        errors: list[dict[str, Any]],
-        warnings: list[dict[str, Any]] | None = None,
-        execution_context: dict[str, Any] | None = None,
-    ) -> str:
-        """Save error report using standardized format."""
-        output = self.protocol.create_error_report_output(
-            errors=errors,
-            warnings=warnings,
-            execution_context=execution_context,
-        )
-
-        return self.protocol.save_output(
-            output, self.output_dir, compress=self.compress
-        )
-
-    def save_safety_summary(self, safety_data: dict[str, Any]) -> str:
-        """Save safety summary using standardized format."""
-        blocked_operations = safety_data.get("blocked_operations", [])
-        risk_assessment = safety_data.get("risk_assessment", "unknown")
-
-        output = self.protocol.create_safety_summary_output(
-            safety_data=safety_data,
-            blocked_operations=blocked_operations,
-            risk_assessment=risk_assessment,
-        )
-
-        return self.protocol.save_output(
-            output, self.output_dir, compress=self.compress
-        )
-
-    def get_session_directory(self, session_id: str | None = None) -> Path:
-        """Get the session directory path."""
-        session_id = session_id or self.protocol.session_id
-        return self.output_dir / "sessions" / session_id
-
-    def list_session_outputs(self, session_id: str | None = None) -> list[Path]:
-        """List all output files for a session."""
-        session_dir = self.get_session_directory(session_id)
-        if not session_dir.exists():
-            return []
-
-        return list(session_dir.glob("*.json"))
+        return "low"

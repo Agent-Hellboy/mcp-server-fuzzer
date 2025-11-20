@@ -134,7 +134,7 @@ class FuzzingMetadata:
 
 @dataclass
 class ReportSnapshot:
-    """Immutable snapshot of the current report."""
+    """Snapshot of the current report state."""
 
     metadata: FuzzingMetadata
     tool_results: dict[str, list[RunRecord]]
@@ -153,14 +153,11 @@ class ReportSnapshot:
             return 0.0
 
         successful = 0
-        for runs in self.tool_results.values():
+        for runs in list(self.tool_results.values()) + list(
+            self.protocol_results.values()
+        ):
             for run in runs:
-                if not run.has_exception and not run.safety_blocked:
-                    successful += 1
-
-        for runs in self.protocol_results.values():
-            for run in runs:
-                if run.payload.get("success", True):
+                if (not run.has_error) and (not run.safety_blocked):
                     successful += 1
 
         return (successful / total_tests) * 100
@@ -183,3 +180,11 @@ class ReportSnapshot:
             "summary": self.summary.to_dict(),
             "safety": self.safety_data,
         }
+
+    def __contains__(self, item: object) -> bool:
+        """Allow dict-style membership checks for compatibility."""
+        return item in self.to_dict()
+
+    def __getitem__(self, key: str) -> Any:
+        """Allow dict-style indexing for compatibility with existing tests."""
+        return self.to_dict()[key]

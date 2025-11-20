@@ -76,10 +76,16 @@ class JSONFormatter:
         summary = {}
         for protocol_type, protocol_results in results.items():
             total_runs = len(protocol_results)
-            errors = sum(1 for r in protocol_results if not r.get("success", True))
-            success_rate = (
-                ((total_runs - errors) / total_runs * 100) if total_runs > 0 else 0
+            errors = sum(
+                1
+                for r in protocol_results
+                if r.get("exception")
+                or not r.get("success", True)
+                or r.get("error")
+                or r.get("server_error")
             )
+            successes = max(total_runs - errors, 0)
+            success_rate = (successes / total_runs * 100) if total_runs > 0 else 0
 
             summary[protocol_type] = {
                 "total_runs": total_runs,

@@ -102,7 +102,7 @@ class TestStandardizedOutputIntegration:
 
     def test_output_directory_structure(self):
         """Test that output directory structure is created correctly."""
-        from mcp_fuzzer.reports.output_protocol import OutputManager
+        from mcp_fuzzer.reports.output import OutputManager
 
         manager = OutputManager(self.temp_dir)
 
@@ -145,7 +145,7 @@ class TestStandardizedOutputIntegration:
 
     def test_error_report_generation(self):
         """Test error report generation with various error types."""
-        from mcp_fuzzer.reports.output_protocol import OutputManager
+        from mcp_fuzzer.reports.output import OutputManager
 
         manager = OutputManager(self.temp_dir)
 
@@ -189,7 +189,7 @@ class TestStandardizedOutputIntegration:
 
     def test_safety_summary_generation(self):
         """Test safety summary generation with blocked operations."""
-        from mcp_fuzzer.reports.output_protocol import OutputManager
+        from mcp_fuzzer.reports.output import OutputManager
 
         manager = OutputManager(self.temp_dir)
 
@@ -277,7 +277,7 @@ class TestStandardizedOutputIntegration:
 
     def test_output_file_naming_convention(self):
         """Test that output files follow the expected naming convention."""
-        from mcp_fuzzer.reports.output_protocol import OutputManager
+        from mcp_fuzzer.reports.output import OutputManager
         import re
 
         manager = OutputManager(self.temp_dir)
@@ -295,7 +295,7 @@ class TestStandardizedOutputIntegration:
 
     def test_session_isolation(self):
         """Test that different sessions create separate directories."""
-        from mcp_fuzzer.reports.output_protocol import OutputProtocol
+        from mcp_fuzzer.reports.output import OutputProtocol
 
         # Create two different sessions
         protocol1 = OutputProtocol("session1")
