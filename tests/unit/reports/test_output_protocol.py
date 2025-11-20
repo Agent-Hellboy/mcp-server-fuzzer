@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcp_fuzzer.reports.output_protocol import OutputProtocol, OutputManager
+from mcp_fuzzer.reports.output import OutputProtocol, OutputManager
 
 from importlib.metadata import version, PackageNotFoundError
 

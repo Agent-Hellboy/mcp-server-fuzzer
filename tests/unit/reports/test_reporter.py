@@ -3,15 +3,62 @@
 Tests for FuzzerReporter class.
 """
 
-import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+from types import SimpleNamespace
+from uuid import uuid4
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mcp_fuzzer.reports.core import ReportCollector
 from mcp_fuzzer.reports.reporter import FuzzerReporter
+from mcp_fuzzer.reports.reporter.config import ReporterConfig
+from mcp_fuzzer.reports.reporter.dependencies import (
+    FormatterRegistry,
+    ReporterDependencies,
+)
+from mcp_fuzzer.reports.safety_reporter import SafetyReporter
+
+
+def make_dependencies(temp_output_dir: str, session_id: str | None = None) -> ReporterDependencies:
+    """Helper to build dependency bundle with controllable collaborators."""
+
+    console = MagicMock()
+    formatter_registry = FormatterRegistry(
+        console=MagicMock(),
+        json=MagicMock(),
+        text=MagicMock(),
+        csv=MagicMock(),
+        xml=MagicMock(),
+        html=MagicMock(),
+        markdown=MagicMock(),
+    )
+
+    collector = ReportCollector()
+    resolved_session = session_id or str(uuid4())
+    output_manager = MagicMock()
+    output_manager.protocol = SimpleNamespace(session_id=resolved_session)
+    output_manager.save_fuzzing_snapshot.return_value = str(
+        Path(temp_output_dir) / "fuzzing_results.json"
+    )
+    output_manager.save_safety_summary.return_value = str(
+        Path(temp_output_dir) / "safety_summary.json"
+    )
+    output_manager.save_error_report.return_value = str(
+        Path(temp_output_dir) / "error_report.json"
+    )
+
+    safety = MagicMock(spec=SafetyReporter)
+
+    return ReporterDependencies(
+        console=console,
+        formatters=formatter_registry,
+        collector=collector,
+        output_manager=output_manager,
+        safety=safety,
+    )
 
 
 class TestFuzzerReporter:
@@ -24,56 +71,71 @@ class TestFuzzerReporter:
             yield temp_dir
 
     @pytest.fixture
-    def reporter(self, temp_output_dir):
-        """Create a FuzzerReporter instance for testing."""
-        with patch("mcp_fuzzer.reports.reporter.Console") as mock_console:
-            with patch(
-                "mcp_fuzzer.reports.reporter.ConsoleFormatter"
-            ) as mock_console_formatter:
-                with patch(
-                    "mcp_fuzzer.reports.reporter.JSONFormatter"
-                ) as mock_json_formatter:
-                    with patch(
-                        "mcp_fuzzer.reports.reporter.TextFormatter"
-                    ) as mock_text_formatter:
-                        with patch(
-                            "mcp_fuzzer.reports.reporter.SafetyReporter"
-                        ) as mock_safety_reporter:
-                            reporter = FuzzerReporter(output_dir=temp_output_dir)
-                            reporter.console = mock_console.return_value
-                            reporter.console_formatter = (
-                                mock_console_formatter.return_value
-                            )
-                            reporter.json_formatter = mock_json_formatter.return_value
-                            reporter.text_formatter = mock_text_formatter.return_value
-                            reporter.safety_reporter = mock_safety_reporter.return_value
-                            return reporter
+    def config_stub(self, temp_output_dir):
+        """Provide a deterministic ReporterConfig for fixtures."""
+        return ReporterConfig(
+            output_dir=Path(temp_output_dir),
+            compress_output=False,
+            output_format="json",
+            output_types=None,
+            output_schema=None,
+        )
+
+    @pytest.fixture
+    def reporter(self, temp_output_dir, config_stub):
+        """Create a FuzzerReporter instance with injected dependencies."""
+        deps = make_dependencies(temp_output_dir)
+        with patch(
+            "mcp_fuzzer.reports.reporter.ReporterDependencies.build",
+            return_value=deps,
+        ):
+            reporter = FuzzerReporter(
+                output_dir=temp_output_dir,
+                config_provider={"output": {}},
+                config=config_stub,
+            )
+        reporter._test_dependencies = deps
+        return reporter
 
     def test_init_default_output_dir(self):
         """Test initialization with default output directory."""
-        with patch("mcp_fuzzer.reports.reporter.Path.mkdir") as mock_mkdir:
-            with patch("mcp_fuzzer.reports.reporter.Console") as mock_console:
-                with patch("mcp_fuzzer.reports.reporter.ConsoleFormatter"):
-                    with patch("mcp_fuzzer.reports.reporter.JSONFormatter"):
-                        with patch("mcp_fuzzer.reports.reporter.TextFormatter"):
-                            with patch("mcp_fuzzer.reports.reporter.SafetyReporter"):
-                                with patch("mcp_fuzzer.config.config") as mock_config:
-                                    # Mock config for output and output_dir
-                                    def mock_get(key, default=None):
-                                        return {} if key == "output" else default
-
-                                    mock_config.get.side_effect = mock_get
-                                    reporter = FuzzerReporter()
-                                    assert reporter.output_dir == Path("reports")
-                                    mock_mkdir.assert_called_once_with(exist_ok=True)
+        deps = make_dependencies("reports")
+        cfg = ReporterConfig(
+            output_dir=Path("reports"),
+            compress_output=False,
+            output_format="json",
+            output_types=None,
+            output_schema=None,
+        )
+        with patch(
+            "mcp_fuzzer.reports.reporter.ReporterDependencies.build",
+            return_value=deps,
+        ):
+            with patch("mcp_fuzzer.reports.reporter.Path.mkdir") as mock_mkdir:
+                reporter = FuzzerReporter(config_provider={"output": {}}, config=cfg)
+        assert reporter.output_dir == Path("reports")
+        mock_mkdir.assert_called_once_with(exist_ok=True)
 
     def test_init_custom_output_dir(self, temp_output_dir):
         """Test initialization with custom output directory."""
-        with patch("mcp_fuzzer.config.config") as mock_config:
-            # Mock config to return None for output directory so it uses the parameter
-            mock_config.get.return_value = {}
-            reporter = FuzzerReporter(output_dir=temp_output_dir)
-            assert reporter.output_dir == Path(temp_output_dir)
+        deps = make_dependencies(temp_output_dir)
+        cfg = ReporterConfig(
+            output_dir=Path(temp_output_dir),
+            compress_output=False,
+            output_format="json",
+            output_types=None,
+            output_schema=None,
+        )
+        with patch(
+            "mcp_fuzzer.reports.reporter.ReporterDependencies.build",
+            return_value=deps,
+        ):
+            reporter = FuzzerReporter(
+                output_dir=temp_output_dir,
+                config_provider={"output": {}},
+                config=cfg,
+            )
+        assert reporter.output_dir == Path(temp_output_dir)
 
     def test_session_id_generation(self, reporter):
         """Test that session ID is generated correctly."""
@@ -192,33 +254,25 @@ class TestFuzzerReporter:
 
         reporter.safety_reporter.print_blocked_operations_summary.assert_called_once()
 
-    def test_generate_final_report_without_safety(self, reporter, temp_output_dir):
+    def test_generate_final_report_without_safety(self, reporter):
         """Test generating final report without safety data."""
         # Set up test data
         reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
         reporter.add_tool_results("test_tool", [{"success": True}])
         reporter.add_protocol_results("test_protocol", [{"success": True}])
 
-        # Mock file operations
-        with patch("builtins.open", mock_open()) as mock_file:
-            with patch("json.dump") as mock_json_dump:
-                with patch.object(
-                    reporter.text_formatter, "save_text_report"
-                ) as mock_save_text:
-                    result = reporter.generate_final_report(include_safety=False)
+        result = reporter.generate_final_report(include_safety=False)
 
-                    # Verify JSON file was created
-                    assert result.endswith(".json")
-                    assert "fuzzing_report_" in result
-                    assert reporter.session_id in result
+        # Verify JSON file was created
+        assert result.endswith(".json")
+        assert "fuzzing_report_" in result
+        assert reporter.session_id in result
 
-                    # Verify JSON dump was called
-                    mock_json_dump.assert_called_once()
+        reporter.json_formatter.save_report.assert_called_once()
+        reporter.text_formatter.save_text_report.assert_called_once()
+        reporter.safety_reporter.export_safety_data.assert_not_called()
 
-                    # Verify text report was saved
-                    mock_save_text.assert_called_once()
-
-    def test_generate_final_report_with_safety(self, reporter, temp_output_dir):
+    def test_generate_final_report_with_safety(self, reporter):
         """Test generating final report with safety data."""
         # Set up test data
         reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
@@ -231,20 +285,15 @@ class TestFuzzerReporter:
         reporter.safety_reporter.has_safety_data.return_value = True
         reporter.safety_reporter.export_safety_data.return_value = "safety_file.json"
 
-        # Mock file operations
-        with patch("builtins.open", mock_open()) as mock_file:
-            with patch("json.dump") as mock_json_dump:
-                with patch.object(reporter.text_formatter, "save_text_report"):
-                    result = reporter.generate_final_report(include_safety=True)
+        result = reporter.generate_final_report(include_safety=True)
 
-                    # Verify safety data was included
-                    call_args = mock_json_dump.call_args[0]
-                    report_data = call_args[0]
-                    assert "safety" in report_data
-                    assert report_data["safety"]["blocked_operations"] == 5
+        args, _ = reporter.json_formatter.save_report.call_args
+        saved_report = args[0]
+        assert "safety" in saved_report
+        assert saved_report["safety"]["blocked_operations"] == 5
 
-                    # Verify safety export was called
-                    reporter.safety_reporter.export_safety_data.assert_called_once()
+        reporter.text_formatter.save_text_report.assert_called_once()
+        reporter.safety_reporter.export_safety_data.assert_called_once()
 
     def test_generate_summary_stats_empty_results(self, reporter):
         """Test generating summary stats with empty results."""
@@ -338,38 +387,39 @@ class TestFuzzerReporter:
 
     def test_session_id_uniqueness(self):
         """Test that session IDs are unique across instances."""
-        with patch("mcp_fuzzer.reports.reporter.Console"):
-            with patch("mcp_fuzzer.reports.reporter.ConsoleFormatter"):
-                with patch("mcp_fuzzer.reports.reporter.JSONFormatter"):
-                    with patch("mcp_fuzzer.reports.reporter.TextFormatter"):
-                        with patch("mcp_fuzzer.reports.reporter.SafetyReporter"):
-                            reporter1 = FuzzerReporter()
-                            reporter2 = FuzzerReporter()
+        deps1 = make_dependencies("reports")
+        deps2 = make_dependencies("reports")
+        cfg = ReporterConfig(
+            output_dir=Path("reports"),
+            compress_output=False,
+            output_format="json",
+            output_types=None,
+            output_schema=None,
+        )
+        with patch(
+            "mcp_fuzzer.reports.reporter.ReporterDependencies.build",
+            side_effect=[deps1, deps2],
+        ):
+            reporter1 = FuzzerReporter(config_provider={"output": {}}, config=cfg)
+            reporter2 = FuzzerReporter(config_provider={"output": {}}, config=cfg)
 
-                            # Session IDs should be different (UUID format)
-                            assert reporter1.session_id != reporter2.session_id
+        assert reporter1.session_id != reporter2.session_id
 
-                            # Also test session ID format (UUID v4)
-                            import re
+        import re
 
-                            uuid_pattern = (
-                                r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-"
-                                r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-                            )
-                            assert re.match(uuid_pattern, reporter1.session_id)
-                            assert re.match(uuid_pattern, reporter2.session_id)
+        uuid_pattern = (
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-"
+            r"[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        )
+        assert re.match(uuid_pattern, reporter1.session_id)
+        assert re.match(uuid_pattern, reporter2.session_id)
 
-    def test_metadata_end_time_set(self, reporter, temp_output_dir):
+    def test_metadata_end_time_set(self, reporter):
         """Test that end time is set in final report."""
         reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
 
-        with patch("builtins.open", mock_open()):
-            with patch("json.dump") as mock_json_dump:
-                with patch.object(reporter.text_formatter, "save_text_report"):
-                    reporter.generate_final_report()
+        reporter.generate_final_report()
 
-                    call_args = mock_json_dump.call_args[0]
-                    report_data = call_args[0]
-
-                    assert "end_time" in report_data["metadata"]
-                    assert report_data["metadata"]["end_time"] is not None
+        saved_report = reporter.json_formatter.save_report.call_args[0][0]
+        assert "end_time" in saved_report["metadata"]
+        assert saved_report["metadata"]["end_time"] is not None

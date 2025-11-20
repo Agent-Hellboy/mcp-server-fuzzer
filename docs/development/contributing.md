@@ -732,52 +732,61 @@ analyze_safety_report("reports/safety_report_20250812_143000.json")
 #### Programmatic Report Creation
 
 ```python
+from pathlib import Path
 from mcp_fuzzer.reports.reporter import FuzzerReporter
-from mcp_fuzzer.reports.formatters import ConsoleFormatter, JSONFormatter, TextFormatter
+
 
 async def custom_report_generation():
-    # Create reporter with custom configuration
     reporter = FuzzerReporter(
-        output_dir="custom_reports",
-        enable_console=True,
-        enable_json=True,
-        enable_text=True
+        config_provider={
+            "output": {
+                "directory": "custom_reports",
+                "types": ["fuzzing_results", "safety_summary"],
+                "compress": False,
+            }
+        }
     )
 
-    # Simulate fuzzing results
-    tool_results = {
-        "test_tool": [
+    reporter.set_fuzzing_metadata(
+        mode="tools",
+        protocol="stdio",
+        endpoint="test-endpoint",
+        runs=3,
+    )
+
+    reporter.add_tool_results(
+        "test_tool",
+        [
             {"run": 1, "success": True, "args": {"param": "value1"}},
             {"run": 2, "success": False, "exception": "Invalid argument"},
             {"run": 3, "success": True, "args": {"param": "value2"}},
-        ]
-    }
+        ],
+    )
 
-    protocol_results = {
-        "InitializeRequest": [
+    reporter.add_protocol_results(
+        "InitializeRequest",
+        [
             {"run": 1, "success": True},
             {"run": 2, "success": True},
-        ]
-    }
-
-    safety_data = {
-        "blocked_operations": [
-            {"operation": "file_write", "reason": "Outside sandbox", "timestamp": "2025-08-12T14:30:00"}
         ],
-        "risk_assessments": {"high": 1, "medium": 0, "low": 0}
-    }
+    )
 
-    # Generate reports
-    await reporter.generate_reports(
-        tool_results=tool_results,
-        protocol_results=protocol_results,
-        safety_data=safety_data,
-        metadata={
-            "session_id": "custom_session",
-            "mode": "tools",
-            "protocol": "stdio",
-            "runs": 3
+    reporter.add_safety_data(
+        {
+            "blocked_operations": [
+                {
+                    "operation": "file_write",
+                    "reason": "Outside sandbox",
+                    "timestamp": "2025-08-12T14:30:00",
+                }
+            ],
+            "risk_assessments": {"high": 1, "medium": 0, "low": 0},
         }
+    )
+
+    reporter.generate_final_report(include_safety=True)
+    reporter.generate_standardized_report(
+        output_types=["fuzzing_results", "error_report"], include_safety=True
     )
 
     print("Custom reports generated in 'custom_reports' directory")

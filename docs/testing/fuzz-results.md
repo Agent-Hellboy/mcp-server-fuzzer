@@ -247,7 +247,7 @@ mcp-fuzzer --mode both --protocol stdio --endpoint "node DesktopCommanderMCP/dis
   • start_process: 4/5 exceptions (80.0%)
 
 
-2025-09-08 01:46:22,814 - mcp_fuzzer.reports.output_protocol - INFO - Output saved to: reports/sessions/3296f219-9edd-49c8-b903-2241c3084e09/20250908_014622_fuzzing_results.json
+2025-09-08 01:46:22,814 - mcp_fuzzer.reports.output.protocol - INFO - Output saved to: reports/sessions/3296f219-9edd-49c8-b903-2241c3084e09/20250908_014622_fuzzing_results.json
 2025-09-08 01:46:22,815 - root - INFO - Generated standardized reports: ['fuzzing_results']
 2025-09-08 01:46:22,815 - root - INFO - Checking export flags: csv=None, xml=None, html=None, md=None
 2025-09-08 01:46:22,815 - root - INFO - Client reporter available: True

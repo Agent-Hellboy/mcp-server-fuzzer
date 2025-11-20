@@ -304,7 +304,7 @@ Example filenames:
 All outputs are validated against the protocol schema before saving. Invalid outputs will raise a `ValidationError`.
 
 ```python
-from mcp_fuzzer.reports.output_protocol import OutputProtocol
+from mcp_fuzzer.reports.output import OutputProtocol
 
 protocol = OutputProtocol()
 output = protocol.create_fuzzing_results_output(...)
@@ -336,7 +336,7 @@ with open('output/sessions/*/fuzzing_results.json') as f:
 ### Python Integration
 
 ```python
-from mcp_fuzzer.reports.output_protocol import OutputManager
+from mcp_fuzzer.reports.output import OutputManager
 
 # Create output manager
 manager = OutputManager("./output")

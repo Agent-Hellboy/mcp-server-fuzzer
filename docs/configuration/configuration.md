@@ -120,20 +120,16 @@ tool_mapping:
     github_search: github_api
     secure_tool: basic_auth
 
-# Reporting configuration
-reporting:
-  enable_console: true
-  enable_json: true
-  enable_text: true
-  safety_report: false
-  export_safety_data: false
-  custom_formatters:
-    - name: "csv"
-      enabled: true
-      output_file: "results.csv"
-    - name: "xml"
-      enabled: false
-      output_file: "results.xml"
+# Output / reporting configuration
+output:
+  directory: "./reports"
+  format: "json"
+  compress: false
+  types:
+    - "fuzzing_results"
+    - "safety_summary"
+  schema: null
+# Optional ad-hoc exports triggered via CLI flags (csv/xml/html/md)
 ```
 
 ### TOML Configuration
@@ -230,22 +226,17 @@ openai_chat = "openai_api"
 github_search = "github_api"
 secure_tool = "basic_auth"
 
-# Reporting configuration
-[reporting]
-enable_console = true
-enable_json = true
-enable_text = true
-safety_report = false
-export_safety_data = false
-
-[reporting.custom_formatters.csv]
-enabled = true
-output_file = "results.csv"
-
-[reporting.custom_formatters.xml]
-enabled = false
-output_file = "results.xml"
+# Output / reporting configuration
+[output]
+directory = "./reports"
+format = "json"
+compress = false
+types = ["fuzzing_results", "safety_summary"]
+schema = ""
 ```
+
+CSV/XML/HTML/Markdown exports are controlled via CLI flags (`--export-csv`,
+`--export-xml`, etc.) so they do not require additional configuration file entries.
 
 ## Using Configuration Files
 

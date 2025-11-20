@@ -11,6 +11,8 @@ testing-servers/
 *$py.pywz
 cleints/
 servers/
+issues
+test.py
 sdks/
 doc_ref/
 # C extensions
