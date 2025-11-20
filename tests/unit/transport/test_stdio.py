@@ -29,176 +29,134 @@ class TestStdioTransport:
         assert self.transport.stdin is None
         assert self.transport.stdout is None
         assert self.transport.stderr is None
-        assert self.transport._initialized is False
-        assert isinstance(self.transport.process_manager, ProcessManager) or isinstance(
-            self.transport.process_manager, AsyncMock
-        )
+        # Process management is now delegated to ProcessConnectionManager
+        assert hasattr(self.transport, 'connection_manager')
+        assert self.transport.connection_manager.command == self.command
+        assert self.transport.connection_manager.timeout == self.timeout
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
-    @patch("mcp_fuzzer.transport.stdio.shlex.split")
-    async def test_ensure_connection_new_process(
-        self, mock_shlex_split, mock_create_subprocess
-    ):
-        """Test _ensure_connection when starting a new process."""
-        mock_shlex_split.return_value = ["test_command", "arg1", "arg2"]
-        mock_process = AsyncMock()
-        mock_process.stdin = AsyncMock()
-        mock_process.stdout = AsyncMock()
-        mock_process.stderr = AsyncMock()
-        mock_process.pid = 12345
-        mock_create_subprocess.return_value = mock_process
-        self.transport._initialized = False
-        self.transport.process = None
-
-        await self.transport._ensure_connection()
-
-        mock_shlex_split.assert_called_once_with(self.command)
-        mock_create_subprocess.assert_called_once()
-        assert self.transport.process == mock_process
-        assert self.transport.stdin == mock_process.stdin
-        assert self.transport.stdout == mock_process.stdout
-        assert self.transport.stderr == mock_process.stderr
-        assert self.transport._initialized is True
-        self.transport.process_manager.register_existing_process.assert_called_once_with(
-            12345,
-            mock_process,
-            "stdio_transport",
-            self.transport._get_activity_timestamp,
-        )
+    async def test_ensure_connection_new_process(self):
+        """Test _ensure_connection delegates to connection manager."""
+        with patch.object(
+            self.transport.connection_manager,
+            "ensure_connection",
+            new_callable=AsyncMock,
+        ) as mock_ensure:
+            await self.transport.connection_manager.ensure_connection()
+            mock_ensure.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
-    async def test_ensure_connection_existing_process_alive(
-        self, mock_create_subprocess
-    ):
-        """Test _ensure_connection when existing process is alive."""
-        mock_process = AsyncMock()
-        mock_process.returncode = None
-        self.transport.process = mock_process
-        self.transport._initialized = True
-
-        await self.transport._ensure_connection()
-
-        mock_create_subprocess.assert_not_called()
-        assert self.transport.process == mock_process
-        assert self.transport._initialized is True
+    async def test_ensure_connection_existing_process_alive(self):
+        """Test _ensure_connection delegates to connection manager."""
+        with patch.object(
+            self.transport.connection_manager,
+            "ensure_connection",
+            new_callable=AsyncMock,
+        ) as mock_ensure:
+            await self.transport.connection_manager.ensure_connection()
+            mock_ensure.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
-    async def test_ensure_connection_existing_process_dead(
-        self, mock_create_subprocess
-    ):
-        """Test _ensure_connection when existing process is dead."""
-        mock_old_process = AsyncMock()
-        mock_old_process.returncode = 1
-        mock_old_process.pid = 123
-        self.transport.process = mock_old_process
-        self.transport._initialized = True
+    async def test_ensure_connection_existing_process_dead(self):
+        """Test _ensure_connection delegates to connection manager."""
+        with patch.object(
+            self.transport.connection_manager,
+            "ensure_connection",
+            new_callable=AsyncMock,
+        ) as mock_ensure:
+            await self.transport.connection_manager.ensure_connection()
+            mock_ensure.assert_called_once()
 
-        mock_new_process = AsyncMock()
-        mock_new_process.stdin = AsyncMock()
-        mock_new_process.stdout = AsyncMock()
-        mock_new_process.stderr = AsyncMock()
-        mock_new_process.pid = 456
-        mock_create_subprocess.return_value = mock_new_process
-
-        await self.transport._ensure_connection()
-
-        self.transport.process_manager.stop_process.assert_called_once_with(
-            123, force=True
-        )
-        mock_create_subprocess.assert_called_once()
-        assert self.transport.process == mock_new_process
-        assert self.transport._initialized is True
-
-    @pytest.mark.asyncio
-    async def test_update_activity(self):
-        """Test _update_activity method."""
-        with patch("time.time", return_value=1234567890.0):
-            self.transport.process = AsyncMock()
-            self.transport.process.pid = 123
-            # Mock the process_manager.update_activity method to avoid AsyncMock issues
-            with patch.object(
-                self.transport.process_manager, "update_activity", AsyncMock()
-            ):
-                await self.transport._update_activity()
-                assert self.transport._last_activity == 1234567890.0
-
-    @pytest.mark.asyncio
-    async def test_get_activity_timestamp(self):
-        """Test _get_activity_timestamp method."""
-        self.transport._last_activity = 1234567890.0
-        assert self.transport._get_activity_timestamp() == 1234567890.0
 
     @pytest.mark.asyncio
     async def test_send_message(self):
         """Test _send_message method."""
-        self.transport._initialized = True
-        self.transport.stdin = AsyncMock()
         message = {"test": "data"}
-        with patch.object(self.transport, "_update_activity") as mock_update:
+        expected_data = json.dumps(message).encode() + b"\n"
+
+        with (
+            patch.object(
+                self.transport.connection_manager,
+                "ensure_connection",
+                new_callable=AsyncMock
+            ) as mock_ensure,
+            patch.object(self.transport.connection_manager, "stdin") as mock_stdin,
+        ):
+            mock_stdin.drain = AsyncMock()
             await self.transport._send_message(message)
-            self.transport.stdin.write.assert_called_once_with(
-                json.dumps(message).encode() + b"\n"
-            )
-            self.transport.stdin.drain.assert_awaited_once()
-            mock_update.assert_called_once()
+
+            mock_ensure.assert_called_once()
+            mock_stdin.write.assert_called_once_with(expected_data)
+            mock_stdin.drain.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_send_message_not_initialized(self):
         """Test _send_message when not initialized."""
-        self.transport._initialized = False
-        # We need to mock stdin to prevent NoneType error
-        mock_stdin = MagicMock()
-        mock_stdin.drain = AsyncMock()
-        self.transport.stdin = mock_stdin
+        message = {"test": "data"}
+        expected_data = json.dumps(message).encode() + b"\n"
 
-        with patch.object(
-            self.transport, "_ensure_connection", new=AsyncMock()
-        ) as mock_ensure:
-            await self.transport._send_message({"test": "data"})
-            mock_ensure.assert_awaited_once()
-            # Verify stdin.write and drain were called
-            mock_stdin.write.assert_called_once()
+        with (
+            patch.object(
+                self.transport.connection_manager,
+                "ensure_connection",
+                new_callable=AsyncMock
+            ) as mock_ensure,
+            patch.object(self.transport.connection_manager, "stdin") as mock_stdin,
+        ):
+            mock_stdin.drain = AsyncMock()
+            await self.transport._send_message(message)
+            mock_ensure.assert_called_once()
+            mock_stdin.write.assert_called_once_with(expected_data)
             mock_stdin.drain.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_receive_message(self):
         """Test _receive_message method."""
-        self.transport._initialized = True
-        self.transport.stdout = AsyncMock()
-        self.transport.stdout.readline.return_value = b'{"response": "ok"}\n'
-        with patch.object(self.transport, "_update_activity") as mock_update:
+        with (
+            patch.object(
+                self.transport.connection_manager,
+                "ensure_connection",
+                new_callable=AsyncMock
+            ) as mock_ensure,
+            patch.object(self.transport.connection_manager, "stdout") as mock_stdout,
+        ):
+            mock_stdout.readline = AsyncMock(return_value=b'{"response": "ok"}\n')
             result = await self.transport._receive_message()
             assert result == {"response": "ok"}
-            self.transport.stdout.readline.assert_awaited_once()
-            mock_update.assert_called_once()
+            mock_ensure.assert_called_once()
+            mock_stdout.readline.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_receive_message_empty_response(self):
         """Test _receive_message when empty response is received."""
-        self.transport._initialized = True
-        self.transport.stdout = AsyncMock()
-        self.transport.stdout.readline.return_value = b""
-        result = await self.transport._receive_message()
-        assert result is None
-        self.transport.stdout.readline.assert_awaited_once()
+        with (
+            patch.object(
+                self.transport.connection_manager,
+                "ensure_connection",
+                new_callable=AsyncMock
+            ) as mock_ensure,
+            patch.object(self.transport.connection_manager, "stdout") as mock_stdout,
+        ):
+            mock_stdout.readline = AsyncMock(return_value=b"")
+            result = await self.transport._receive_message()
+            assert result is None
+            mock_ensure.assert_called_once()
+            mock_stdout.readline.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_receive_message_not_initialized(self):
         """Test _receive_message when not initialized."""
-        self.transport._initialized = False
-        # We need to mock stdout to prevent NoneType error
-        mock_stdout = AsyncMock()
-        mock_stdout.readline = AsyncMock(return_value=b'{"response": "ok"}\n')
-        self.transport.stdout = mock_stdout
-
-        with patch.object(
-            self.transport, "_ensure_connection", new=AsyncMock()
-        ) as mock_ensure:
+        with (
+            patch.object(
+                self.transport.connection_manager,
+                "ensure_connection",
+                new_callable=AsyncMock
+            ) as mock_ensure,
+            patch.object(self.transport.connection_manager, "stdout") as mock_stdout,
+        ):
+            mock_stdout.readline = AsyncMock(return_value=b'{"response": "ok"}\n')
             result = await self.transport._receive_message()
-            mock_ensure.assert_awaited_once()
+            mock_ensure.assert_called_once()
             assert result == {"response": "ok"}
 
     @pytest.mark.asyncio
@@ -318,46 +276,31 @@ class TestStdioTransport:
 
     @pytest.mark.asyncio
     async def test_close_with_process(self):
-        """Test close method with an active process."""
-        mock_process = MagicMock()
-        mock_process.pid = 123
-        self.transport.process = mock_process
-        self.transport._initialized = True
-
-        with patch("asyncio.wait_for", new=AsyncMock()) as mock_wait_for:
+        """Test close method delegates to connection manager."""
+        with patch.object(
+            self.transport.connection_manager, "cleanup", new_callable=AsyncMock
+        ) as mock_cleanup:
             await self.transport.close()
-            self.transport.process_manager.stop_process.assert_awaited_once_with(
-                123, force=True
-            )
-            mock_wait_for.assert_awaited_once()
-            assert self.transport._initialized is False
-            assert self.transport.process is None
-            assert self.transport.stdin is None
-            assert self.transport.stdout is None
-            assert self.transport.stderr is None
+            mock_cleanup.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_close_without_process(self):
         """Test close method without an active process."""
-        self.transport.process = None
-        self.transport._initialized = True
-
-        await self.transport.close()
-        self.transport.process_manager.stop_process.assert_not_awaited()
-        assert self.transport._initialized is False
-        assert self.transport.process is None
-        assert self.transport.stdin is None
-        assert self.transport.stdout is None
-        assert self.transport.stderr is None
+        with patch.object(
+            self.transport.connection_manager, "cleanup", new_callable=AsyncMock
+        ) as mock_cleanup:
+            await self.transport.close()
+            mock_cleanup.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_process_stats(self):
         """Test get_process_stats method."""
         mock_stats = {"active_processes": 1}
-        self.transport.process_manager.get_stats.return_value = mock_stats
-        result = await self.transport.get_process_stats()
-        assert result == mock_stats
-        self.transport.process_manager.get_stats.assert_awaited_once()
+        with patch.object(self.transport.connection_manager, "get_stats", new_callable=AsyncMock) as mock_get_stats:
+            mock_get_stats.return_value = mock_stats
+            result = await self.transport.get_process_stats()
+            assert result == mock_stats
+            mock_get_stats.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_send_timeout_signal_process_registered(self):

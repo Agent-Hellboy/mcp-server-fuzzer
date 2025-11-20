@@ -79,6 +79,11 @@ class MCPFuzzerClient:
         """Direct access to the reporter for advanced usage."""
         return self._reporter
 
+    @property
+    def tool_executor_max_concurrency(self) -> int:
+        """Expose the tool fuzzer concurrency without reaching through components."""
+        return self.tool_client.executor_max_concurrency
+
     # ============================================================================
     # Tool Fuzzing Methods - Delegate to ToolClient
     # ============================================================================

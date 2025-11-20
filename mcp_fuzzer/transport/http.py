@@ -9,6 +9,7 @@ import httpx
 
 from .base import TransportProtocol
 from .mixins import NetworkTransportMixin, ResponseParsingMixin
+from .response import HTTPResponseView
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ..config import (
     JSON_CONTENT_TYPE,
@@ -82,7 +83,8 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         """
         if response.status_code not in (307, 308):
             return None
-        location = response.headers.get("location")
+        view = HTTPResponseView(response)
+        location = view.get_header("location")
         if not location:
             return None
         resolved = resolve_redirect_safely(self.url, location)

@@ -3,7 +3,9 @@
 Integration tests for CLI argument handling with reporting options.
 """
 
+import sys
 import tempfile
+
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -12,7 +14,15 @@ import pytest
 from mcp_fuzzer.cli.args import create_argument_parser
 from mcp_fuzzer.reports.reporter import FuzzerReporter
 
-pytestmark = [pytest.mark.integration, pytest.mark.cli, pytest.mark.reports]
+pytestmark = [
+    pytest.mark.skipif(
+        sys.version_info < (3, 10),
+        reason="CLI modules require Python 3.10+ type syntax",
+    ),
+    pytest.mark.integration,
+    pytest.mark.cli,
+    pytest.mark.reports,
+]
 
 
 class TestCLIReportingIntegration:

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from rich.console import Console
 from rich.table import Table
+
+from typing import Any
 
 from .common import calculate_tool_success_rate
 

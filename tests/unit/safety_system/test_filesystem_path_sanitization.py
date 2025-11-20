@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.helpers import MISSING, get_nested
+
 from mcp_fuzzer.safety_system.filesystem import initialize_sandbox, get_sandbox
 from mcp_fuzzer.safety_system.safety import SafetyFilter
 
@@ -149,8 +151,18 @@ class TestFilesystemPathSanitization:
             sandbox_root = get_sandbox().get_sandbox_root()
             assert sanitized["config"]["input_file"].startswith(sandbox_root)
             assert sanitized["config"]["output_dir"].startswith(sandbox_root)
-            assert sanitized["config"]["settings"]["log_file"].startswith(sandbox_root)
-            assert sanitized["config"]["settings"]["data"] == "not a path"
+            settings_log = get_nested(
+                sanitized, "config", "settings", "log_file", default=MISSING
+            )
+            assert (
+                settings_log is not MISSING
+                and settings_log.startswith(sandbox_root)
+            )
+
+            settings_data = get_nested(
+                sanitized, "config", "settings", "data", default=MISSING
+            )
+            assert settings_data == "not a path"
             
             # List items should be sanitized
             assert sanitized["files"][0].startswith(sandbox_root)

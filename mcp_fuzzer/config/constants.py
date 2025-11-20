@@ -24,7 +24,7 @@ WATCHDOG_MAX_HANG_ADDITIONAL: float = 10.0
 # Hosts allowed for network operations by default. Keep local-only.
 SAFETY_LOCAL_HOSTS: set[str] = {"localhost", "127.0.0.1", "::1"}
 # Default to deny network to non-local hosts
-SAFETY_NO_NETWORK_DEFAULT: bool = False
+SAFETY_NO_NETWORK_DEFAULT: bool = True
 # Headers that should never be forwarded by default to avoid leakage
 SAFETY_HEADER_DENYLIST: set[str] = {"authorization", "cookie"}
 # Environment variables related to proxies that should be stripped by default

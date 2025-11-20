@@ -166,7 +166,7 @@ async def test_streamable_http_wraps_http_status_error(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
 
     transport = StreamableHTTPTransport("http://test/mcp", timeout=1)
-    transport._initialized = True
+    transport.initialized = True
 
     with pytest.raises(TransportError) as excinfo:
         await transport.send_raw(
@@ -187,7 +187,7 @@ async def test_streamable_http_wraps_connect_errors(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
 
     transport = StreamableHTTPTransport("http://test/mcp", timeout=1)
-    transport._initialized = True
+    transport.initialized = True
 
     with pytest.raises(TransportError) as excinfo:
         await transport.send_raw(

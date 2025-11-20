@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from .providers import AuthProvider
 
@@ -8,7 +8,7 @@ class AuthManager:
     def __init__(self):
         self.auth_providers: dict[str, AuthProvider] = {}
         self.tool_auth_mapping: dict[str, str] = {}
-        self.default_provider: str | None = None
+        self.default_provider: Optional[str] = None
 
     def add_auth_provider(self, name: str, provider: AuthProvider):
         self.auth_providers[name] = provider
@@ -24,7 +24,7 @@ class AuthManager:
         """
         self.default_provider = provider_name
 
-    def get_auth_for_tool(self, tool_name: str) -> AuthProvider | None:
+    def get_auth_for_tool(self, tool_name: str) -> Optional[AuthProvider]:
         auth_provider_name = self.tool_auth_mapping.get(tool_name)
         if auth_provider_name:
             return self.auth_providers.get(auth_provider_name)

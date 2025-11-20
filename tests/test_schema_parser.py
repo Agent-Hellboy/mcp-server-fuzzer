@@ -7,6 +7,8 @@ import unittest
 import json
 from typing import Any, Dict, List
 
+from tests.helpers import MISSING, get_nested
+
 from mcp_fuzzer.fuzz_engine.strategy.schema_parser import (
     make_fuzz_strategy_from_jsonschema,
     _handle_enum,
@@ -350,50 +352,44 @@ class TestSchemaParser(unittest.TestCase):
                     "tags should have unique items",
                 )
 
-        # Check metadata if present
-        if "metadata" in result:
-            self.assertIsInstance(
-                result["metadata"], dict, "metadata should be a dictionary"
-            )
+        metadata = get_nested(result, "metadata", default=MISSING)
+        if metadata is not MISSING:
+            self.assertIsInstance(metadata, dict, "metadata should be a dictionary")
 
-            # Check created if present
-            if "created" in result["metadata"]:
-                self.assertIsInstance(
-                    result["metadata"]["created"], str, "created should be a string"
-                )
+            created = get_nested(result, "metadata", "created", default=MISSING)
+            if created is not MISSING:
+                self.assertIsInstance(created, str, "created should be a string")
 
-            # Check priority if present
-            if "priority" in result["metadata"]:
-                self.assertIsInstance(
-                    result["metadata"]["priority"], int, "priority should be an integer"
-                )
-                self.assertGreaterEqual(
-                    result["metadata"]["priority"], 1, "priority should meet minimum"
-                )
-                self.assertLessEqual(
-                    result["metadata"]["priority"], 5, "priority should meet maximum"
-                )
+            priority = get_nested(result, "metadata", "priority", default=MISSING)
+            if priority is not MISSING:
+                self.assertIsInstance(priority, int, "priority should be an integer")
+                self.assertGreaterEqual(priority, 1, "priority should meet minimum")
+                self.assertLessEqual(priority, 5, "priority should meet maximum")
 
-            # Check settings if present
-            if "settings" in result["metadata"]:
+            settings = get_nested(result, "metadata", "settings", default=MISSING)
+            if settings is not MISSING:
                 self.assertIsInstance(
-                    result["metadata"]["settings"],
+                    settings,
                     dict,
                     "settings should be a dictionary",
                 )
 
-                # Check enabled if present
-                if "enabled" in result["metadata"]["settings"]:
+                enabled = get_nested(
+                    result, "metadata", "settings", "enabled", default=MISSING
+                )
+                if enabled is not MISSING:
                     self.assertIsInstance(
-                        result["metadata"]["settings"]["enabled"],
+                        enabled,
                         bool,
                         "enabled should be a boolean",
                     )
 
-                # Check visibility if present
-                if "visibility" in result["metadata"]["settings"]:
+                visibility = get_nested(
+                    result, "metadata", "settings", "visibility", default=MISSING
+                )
+                if visibility is not MISSING:
                     self.assertIn(
-                        result["metadata"]["settings"]["visibility"],
+                        visibility,
                         ["public", "private", "restricted"],
                         "visibility should be a valid enum value",
                     )

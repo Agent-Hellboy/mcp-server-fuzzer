@@ -112,10 +112,7 @@ async def explore_client():
     transport = create_transport("http", "http://localhost:8000", timeout=5.0)
     client = MCPFuzzerClient(transport=transport, safety_enabled=False)
     print(f"Initialized {transport.__class__.__name__} at {transport.url}")
-    print(
-        "Tool fuzzer concurrency:",
-        client.tool_client.tool_fuzzer.executor.max_concurrency,
-    )
+    print("Tool fuzzer concurrency:", client.tool_executor_max_concurrency)
     await client.cleanup()
 
 

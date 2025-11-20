@@ -176,7 +176,8 @@ async def test_http_transport_send_request(http_transport):
     test_payload = {"method": "test.method", "params": {"key": "value"}}
     test_response = {"result": "success"}
 
-    with patch.object(httpx.AsyncClient, "post") as mock_post:
+    with patch.object(httpx.AsyncClient, "post") as mock_post, \
+         patch("mcp_fuzzer.safety_system.policy.is_host_allowed", return_value=True):
         mock_response = MagicMock()
         mock_response.json.return_value = test_response
         mock_response.status_code = 200
@@ -199,7 +200,8 @@ async def test_http_transport_send_request_error(http_transport):
     """Test HTTPTransport send_request with error response."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
 
-    with patch.object(httpx.AsyncClient, "post") as mock_post:
+    with patch.object(httpx.AsyncClient, "post") as mock_post, \
+         patch("mcp_fuzzer.safety_system.policy.is_host_allowed", return_value=True):
         mock_post.side_effect = httpx.RequestError("Connection error")
 
         # Test send_request with error
@@ -216,7 +218,8 @@ async def test_http_transport_stream_request(http_transport):
         {"id": 2, "result": "complete"},
     ]
 
-    with patch.object(httpx.AsyncClient, "post") as mock_post:
+    with patch.object(httpx.AsyncClient, "post") as mock_post, \
+         patch("mcp_fuzzer.safety_system.policy.is_host_allowed", return_value=True):
         # Create a proper AsyncMock for the response
         mock_response = AsyncMock()
 
@@ -274,7 +277,8 @@ async def test_http_transport_stream_request_error(http_transport):
     """Test HTTPTransport stream_request with error."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
 
-    with patch.object(httpx.AsyncClient, "post") as mock_post:
+    with patch.object(httpx.AsyncClient, "post") as mock_post, \
+         patch("mcp_fuzzer.safety_system.policy.is_host_allowed", return_value=True):
         mock_post.side_effect = httpx.RequestError("Connection error")
 
         # Test stream_request with error
@@ -333,7 +337,8 @@ async def test_sse_transport_stream_request(sse_transport):
         ),
     ]
 
-    with patch.object(httpx.AsyncClient, "stream") as mock_stream:
+    with patch.object(httpx.AsyncClient, "stream") as mock_stream, \
+         patch("mcp_fuzzer.safety_system.policy.is_host_allowed", return_value=True):
         # Mock streaming response
         mock_response = MagicMock()
         mock_response.aiter_text.return_value = sse_events
@@ -356,7 +361,8 @@ async def test_sse_transport_stream_request_error(sse_transport):
     """Test SSETransport stream_request with error."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
 
-    with patch.object(httpx.AsyncClient, "stream") as mock_stream:
+    with patch.object(httpx.AsyncClient, "stream") as mock_stream, \
+         patch("mcp_fuzzer.safety_system.policy.is_host_allowed", return_value=True):
         mock_stream.side_effect = httpx.RequestError("Connection error")
 
         # Test stream_request with error

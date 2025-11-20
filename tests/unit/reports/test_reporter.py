@@ -22,7 +22,9 @@ from mcp_fuzzer.reports.reporter.dependencies import (
 from mcp_fuzzer.reports.safety_reporter import SafetyReporter
 
 
-def make_dependencies(temp_output_dir: str, session_id: str | None = None) -> ReporterDependencies:
+def make_dependencies(
+    temp_output_dir: str, session_id: str | None = None
+) -> ReporterDependencies:
     """Helper to build dependency bundle with controllable collaborators."""
 
     console = MagicMock()
@@ -40,6 +42,7 @@ def make_dependencies(temp_output_dir: str, session_id: str | None = None) -> Re
     resolved_session = session_id or str(uuid4())
     output_manager = MagicMock()
     output_manager.protocol = SimpleNamespace(session_id=resolved_session)
+    output_manager.session_id = resolved_session
     output_manager.save_fuzzing_snapshot.return_value = str(
         Path(temp_output_dir) / "fuzzing_results.json"
     )

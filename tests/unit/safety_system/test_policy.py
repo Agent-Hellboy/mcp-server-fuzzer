@@ -11,8 +11,8 @@ from mcp_fuzzer.safety_system.policy import (
 
 
 def test_is_host_allowed_defaults():
-    # With default config SAFETY_NO_NETWORK_DEFAULT=False, all hosts allowed
-    assert is_host_allowed("http://example.com") is True
+    # With default config SAFETY_NO_NETWORK_DEFAULT=True, only loopback hosts allowed
+    assert is_host_allowed("http://example.com") is False
     assert is_host_allowed("http://localhost") is True
 
 

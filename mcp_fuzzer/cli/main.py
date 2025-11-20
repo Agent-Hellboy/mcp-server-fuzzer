@@ -1,215 +1,66 @@
 #!/usr/bin/env python3
-import emoji
-from rich.console import Console
-import sys
-import os
+"""Clean CLI entry point using SOLID principles."""
+
 import logging
+import sys
 from typing import Any
 
-from .args import (
-    build_unified_client_args,
-    parse_arguments,
-    print_startup_info,
-    setup_logging,
-    validate_arguments,
-)
-from .runner import (
-    prepare_inner_argv,
-    run_with_retry_on_interrupt,
-    start_safety_if_enabled,
-    stop_safety_if_started,
-)
-from ..exceptions import (
-    ArgumentValidationError,
-    CLIError,
-    MCPError,
-    TransportError,
-)
+from rich.console import Console
+
+from .args import parse_arguments, validate_arguments, get_cli_config
+from .commands import get_cli_commands, get_execution_strategies
+from ..exceptions import ArgumentValidationError, CLIError, MCPError
 
 
-def _get_cli_helpers() -> tuple[Any, Any, Any, Any, Any, Any]:
-    """Resolve CLI helper functions, allowing unit test patches to apply."""
-    cli_module = sys.modules.get("mcp_fuzzer.cli")
-    _parse = (
-        getattr(cli_module, "parse_arguments", parse_arguments)
-        if cli_module
-        else parse_arguments
-    )
-    _validate = (
-        getattr(cli_module, "validate_arguments", validate_arguments)
-        if cli_module
-        else validate_arguments
-    )
-    _setup = (
-        getattr(cli_module, "setup_logging", setup_logging)
-        if cli_module
-        else setup_logging
-    )
-    _build = (
-        getattr(
-            cli_module,
-            "build_unified_client_args",
-            build_unified_client_args,
-        )
-        if cli_module
-        else build_unified_client_args
-    )
-    _print_info = (
-        getattr(cli_module, "print_startup_info", print_startup_info)
-        if cli_module
-        else print_startup_info
-    )
-    return _parse, _validate, _setup, _build, _print_info, cli_module
+def _execute_command(commands, args) -> None:
+    """Execute the first command that can handle the arguments."""
+    for command in commands:
+        if command.can_handle(args):
+            command.execute(args)
+            return
+
+    # No command handled the arguments, this is a fuzzing operation
+    raise ValueError("No command found for arguments")
 
 
-def _handle_validate_config(args) -> None:
-    """Handle --validate-config flag."""
-    from ..config import load_config_file
-    load_config_file(args.validate_config)
-    console = Console()
-    config_file = args.validate_config
-    success_msg = (
-        "[green]:heavy_check_mark: Configuration file "
-        f"'{config_file}' is valid[/green]"
-    )
-    console.print(emoji.emojize(success_msg, language='alias'))
-    sys.exit(0)
+def _execute_fuzzing_operation(strategies, args, config: dict[str, Any]) -> int:
+    """Execute fuzzing using the appropriate strategy."""
+    for strategy in strategies:
+        if strategy.can_handle(args):
+            return strategy.execute(args, config)
 
-
-def _handle_check_env() -> None:
-    """Handle --check-env flag."""
-    console = Console()
-    console.print("[bold]Environment variables check:[/bold]")
-
-    env_vars = [
-        ('MCP_FUZZER_TIMEOUT', '30.0'),
-        ('MCP_FUZZER_LOG_LEVEL', 'INFO'),
-        ('MCP_FUZZER_SAFETY_ENABLED', 'false'),
-        ('MCP_FUZZER_FS_ROOT', '~/.mcp_fuzzer'),
-        ('MCP_FUZZER_AUTO_KILL', 'true'),
-    ]
-
-    all_valid = True
-    for var_name, default in env_vars:
-        value = os.getenv(var_name, default)
-        if var_name == 'MCP_FUZZER_LOG_LEVEL':
-            valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-            if value.upper() not in valid_levels:
-                valid_list = ', '.join(valid_levels)
-                invalid_msg = (
-                    f"[red]:heavy_multiplication_x: {var_name}={value} "
-                    f"(must be one of: {valid_list})[/red]"
-                )
-                console.print(emoji.emojize(invalid_msg, language='alias'))
-                all_valid = False
-            else:
-                console.print(
-                    emoji.emojize(
-                        f"[green]:heavy_check_mark: {var_name}={value}[/green]",
-                        language='alias'
-                    )
-                )
-        else:
-            console.print(
-                emoji.emojize(
-                    f"[green]:heavy_check_mark: {var_name}={value}[/green]",
-                    language='alias'
-                )
-            )
-
-    if all_valid:
-        console.print("[green]All environment variables are valid[/green]")
-        sys.exit(0)
-
-    console.print("[red]Some environment variables have invalid values[/red]")
-    raise ArgumentValidationError("Invalid environment variable values")
-
-
-def _validate_transport(args, cli_module) -> None:
-    """Validate transport configuration early."""
-    try:
-        from ..transport import create_transport as _create_transport  # type: ignore
-
-        cli_create_transport = (
-            getattr(cli_module, "create_transport", None) if cli_module else None
-        )
-        cli_transport_module = (
-            getattr(cli_create_transport, "__module__", "")
-            if cli_create_transport is not None
-            else ""
-        )
-        use_cli_attribute = (
-            cli_create_transport is not None
-            and not cli_transport_module.startswith("mcp_fuzzer.transport")
-        )
-        create_transport_func = (
-            cli_create_transport if use_cli_attribute else _create_transport
-        )
-
-        _ = create_transport_func(
-            args.protocol,
-            args.endpoint,
-            timeout=args.timeout,
-        )
-    except MCPError:
-        raise
-    except Exception as transport_error:
-        raise TransportError(
-            "Failed to initialize transport",
-            context={"protocol": args.protocol, "endpoint": args.endpoint},
-        ) from transport_error
-
-
-def _run_fuzzing(args, cli_module) -> None:
-    """Run the main fuzzing operation."""
-    from ..client import main as unified_client_main
-
-    started_system_blocker = start_safety_if_enabled(args)
-    try:
-        # Under pytest, call the patched asyncio.run from mcp_fuzzer.cli
-        if os.environ.get("PYTEST_CURRENT_TEST"):
-            asyncio_mod = getattr(cli_module, "asyncio", None)
-            if asyncio_mod is None:
-                import asyncio as asyncio_mod  # type: ignore
-            # Call the unified client main coroutine
-            asyncio_mod.run(unified_client_main())
-        else:
-            argv = prepare_inner_argv(args)
-            run_with_retry_on_interrupt(args, unified_client_main, argv)
-    finally:
-        stop_safety_if_started(started_system_blocker)
+    raise ValueError("No execution strategy found for arguments")
 
 
 def run_cli() -> None:
+    """Clean CLI entry point using SOLID principles and Command Pattern."""
     try:
-        _parse, _validate, _setup, _build, _print_info, cli_module = _get_cli_helpers()
+        # Parse and validate arguments
+        args = parse_arguments()
+        validate_arguments(args)
 
-        args = _parse()
-        _validate(args)
-        _setup(args)
+        # Get available commands and strategies
+        commands = get_cli_commands()
+        strategies = get_execution_strategies()
 
-        # Handle special CLI flags that exit early
-        if getattr(args, 'validate_config', None):
-            _handle_validate_config(args)
+        # Try to execute a utility command first
+        try:
+            _execute_command(commands, args)
+            # If we reach here, a command was executed and exited
+            return
+        except ValueError:
+            # No command handled it, proceed with fuzzing
+            pass
 
-        if getattr(args, 'check_env', False):
-            _handle_check_env()
+        # Load configuration for fuzzing operations
+        config = get_cli_config()
 
-        _ = _build(args)
-        # Check if this is a utility command that doesn't need endpoint
-        is_utility_command = (
-            getattr(args, 'check_env', False) or
-            getattr(args, 'validate_config', None) is not None
-        )
-
-        if not is_utility_command:
-            _print_info(args)
-            _validate_transport(args, cli_module)
-            _run_fuzzing(args, cli_module)
+        # Execute fuzzing operation
+        exit_code = _execute_fuzzing_operation(strategies, args, config)
+        sys.exit(exit_code)
 
     except KeyboardInterrupt:
-        console = Console()
-        console.print("\n[yellow]Fuzzing interrupted by user[/yellow]")
+        print("\nFuzzing interrupted by user")
         sys.exit(0)
     except MCPError as err:
         _print_mcp_error(err)
@@ -226,7 +77,6 @@ def run_cli() -> None:
         _print_mcp_error(error)
         if logging.getLogger().level <= logging.DEBUG:
             import traceback
-
             Console().print(traceback.format_exc())
         sys.exit(1)
 

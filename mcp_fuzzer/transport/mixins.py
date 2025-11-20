@@ -22,7 +22,8 @@ try:
 except ImportError:  # pragma: no cover
     from typing_extensions import NotRequired
 
-from ..safety_system.policy import is_host_allowed, sanitize_headers
+from ..safety_system import policy
+from ..safety_system.policy import sanitize_headers
 
 class JSONRPCRequest(TypedDict):
     """Type definition for JSON-RPC request structure."""
@@ -272,7 +273,7 @@ class NetworkTransportMixin(BaseTransportMixin):
         Raises:
             NetworkError: If URL violates safety policies
         """
-        if not is_host_allowed(url):
+        if not policy.is_host_allowed(url):
             raise NetworkError(
                 "Network to non-local host is disallowed by safety policy"
             )

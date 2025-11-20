@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Configuration module for MCP Fuzzer."""
+"""Simple configuration API for MCP Fuzzer."""
 
-# Import all constants explicitly
 from .constants import (
     DEFAULT_PROTOCOL_VERSION,
     CONTENT_TYPE_HEADER,
@@ -27,21 +26,30 @@ from .constants import (
     DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT,
     DEFAULT_FORCE_KILL_TIMEOUT,
 )
-
-# Import configuration manager and global instance
-from .manager import config
-
-# Import loader functions
+from .manager import config, load_env_config
 from .loader import (
+    load_config,
+    apply_config_file,
     find_config_file,
     load_config_file,
-    apply_config_file,
+    normalize_config_data,
+    validate_config_data,
+    load_config_model,
+    model_to_config_dict,
     get_config_schema,
     load_custom_transports,
 )
+from .views import (
+    ConfigViews,
+    SafetySettings,
+    OutputSettings,
+    TransportSettings,
+    RuntimeSettings,
+    build_views_from_dict,
+    build_views_from_model,
+)
 
 __all__ = [
-    # Constants
     "DEFAULT_PROTOCOL_VERSION",
     "CONTENT_TYPE_HEADER",
     "JSON_CONTENT_TYPE",
@@ -65,12 +73,23 @@ __all__ = [
     "DEFAULT_MAX_TOTAL_FUZZING_TIME",
     "DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT",
     "DEFAULT_FORCE_KILL_TIMEOUT",
-    # Manager
     "config",
-    # Loader functions
+    "load_env_config",
+    "load_config",
+    "apply_config_file",
     "find_config_file",
     "load_config_file",
-    "apply_config_file",
+    "normalize_config_data",
+    "validate_config_data",
+    "load_config_model",
+    "model_to_config_dict",
     "get_config_schema",
     "load_custom_transports",
+    "ConfigViews",
+    "SafetySettings",
+    "OutputSettings",
+    "TransportSettings",
+    "RuntimeSettings",
+    "build_views_from_dict",
+    "build_views_from_model",
 ]

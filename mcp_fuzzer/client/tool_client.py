@@ -53,6 +53,11 @@ class ToolClient:
         )
         self._logger = logging.getLogger(__name__)
 
+    @property
+    def executor_max_concurrency(self) -> int:
+        """Expose tool-fuzzer executor concurrency without reaching into internals."""
+        return self.tool_fuzzer.executor.max_concurrency
+
     async def _get_tools_from_server(self) -> list[dict[str, Any]]:
         """Get tools from the server.
 
@@ -275,9 +280,7 @@ class ToolClient:
 
         successful = len([r for r in results if r.get("success", False)])
         total = len(results)
-        self.reporter.console.print(
-            f"  {phase.title()} phase: {successful}/{total} successful"
-        )
+        self.reporter.print_phase_progress(phase, successful, total)
 
     async def _fuzz_single_tool_both_phases(
         self, tool: dict[str, Any], runs_per_phase: int

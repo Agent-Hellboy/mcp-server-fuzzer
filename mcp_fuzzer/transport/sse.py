@@ -6,7 +6,8 @@ import httpx
 
 from .base import TransportProtocol
 from ..exceptions import NetworkPolicyViolation, ServerError, TransportError
-from ..safety_system.policy import is_host_allowed, sanitize_headers
+from ..safety_system import policy
+from ..safety_system.policy import sanitize_headers
 
 class SSETransport(TransportProtocol):
     def __init__(
@@ -37,7 +38,7 @@ class SSETransport(TransportProtocol):
             follow_redirects=False,
             trust_env=False,
         ) as client:
-            if not is_host_allowed(self.url):
+            if not policy.is_host_allowed(self.url):
                 raise NetworkPolicyViolation(
                     "Network to non-local host is disallowed by safety policy",
                     context={"url": self.url},
@@ -102,7 +103,7 @@ class SSETransport(TransportProtocol):
             follow_redirects=False,
             trust_env=False,
         ) as client:
-            if not is_host_allowed(self.url):
+            if not policy.is_host_allowed(self.url):
                 raise NetworkPolicyViolation(
                     "Network to non-local host is disallowed by safety policy",
                     context={"url": self.url},
@@ -125,7 +126,7 @@ class SSETransport(TransportProtocol):
             follow_redirects=False,
             trust_env=False,
         ) as client:
-            if not is_host_allowed(self.url):
+            if not policy.is_host_allowed(self.url):
                 raise NetworkPolicyViolation(
                     "Network to non-local host is disallowed by safety policy",
                     context={"url": self.url},

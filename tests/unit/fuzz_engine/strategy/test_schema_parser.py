@@ -8,6 +8,8 @@ from typing import Any, Dict, List
 
 import pytest
 
+from tests.helpers import MISSING, get_nested
+
 from mcp_fuzzer.fuzz_engine.strategy.schema_parser import (
     make_fuzz_strategy_from_jsonschema,
     _handle_enum,
@@ -332,40 +334,34 @@ def test_complex_nested_schema():
                 "tags should have unique items"
             )
 
-    # Check metadata if present
-    if "metadata" in result:
-        assert isinstance(result["metadata"], dict), "metadata should be a dictionary"
+    metadata = get_nested(result, "metadata", default=MISSING)
+    if metadata is not MISSING:
+        assert isinstance(metadata, dict), "metadata should be a dictionary"
 
-        # Check created if present
-        if "created" in result["metadata"]:
-            assert isinstance(result["metadata"]["created"], str), (
-                "created should be a string"
+        created = get_nested(result, "metadata", "created", default=MISSING)
+        if created is not MISSING:
+            assert isinstance(created, str), "created should be a string"
+
+        priority = get_nested(result, "metadata", "priority", default=MISSING)
+        if priority is not MISSING:
+            assert isinstance(priority, int), "priority should be an integer"
+            assert priority >= 1, "priority should meet minimum"
+            assert priority <= 5, "priority should meet maximum"
+
+        settings = get_nested(result, "metadata", "settings", default=MISSING)
+        if settings is not MISSING:
+            assert isinstance(settings, dict), "settings should be a dictionary"
+
+            enabled = get_nested(
+                result, "metadata", "settings", "enabled", default=MISSING
             )
+            if enabled is not MISSING:
+                assert isinstance(enabled, bool), "enabled should be a boolean"
 
-        # Check priority if present
-        if "priority" in result["metadata"]:
-            assert isinstance(result["metadata"]["priority"], int), (
-                "priority should be an integer"
+            visibility = get_nested(
+                result, "metadata", "settings", "visibility", default=MISSING
             )
-            assert result["metadata"]["priority"] >= 1, "priority should meet minimum"
-            assert result["metadata"]["priority"] <= 5, "priority should meet maximum"
-
-        # Check settings if present
-        if "settings" in result["metadata"]:
-            assert isinstance(result["metadata"]["settings"], dict), (
-                "settings should be a dictionary"
-            )
-
-            # Check enabled if present
-            if "enabled" in result["metadata"]["settings"]:
-                assert isinstance(result["metadata"]["settings"]["enabled"], bool), (
-                    "enabled should be a boolean"
+            if visibility is not MISSING:
+                assert visibility in ["public", "private", "restricted"], (
+                    "visibility should be a valid enum value"
                 )
-
-            # Check visibility if present
-            if "visibility" in result["metadata"]["settings"]:
-                assert result["metadata"]["settings"]["visibility"] in [
-                    "public",
-                    "private",
-                    "restricted",
-                ], "visibility should be a valid enum value"

@@ -11,7 +11,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
-from rich.console import Console
 
 from ..core import FuzzingMetadata, ReportCollector, ReportSnapshot
 from ..formatters import (
@@ -53,7 +52,7 @@ class FuzzerReporter:
         safety_system=_AUTO_FILTER,
         collector: ReportCollector | None = None,
         output_manager: OutputManager | None = None,
-        console: Console | None = None,
+        console: Any | None = None,
         safety_reporter: SafetyReporter | None = None,
         config: ReporterConfig | None = None,
         dependencies: ReporterDependencies | None = None,
@@ -126,7 +125,7 @@ class FuzzerReporter:
         self._metadata: FuzzingMetadata | None = None
 
         # Use session ID from output manager
-        self.session_id = self.output_manager.protocol.session_id
+        self.session_id = self.output_manager.session_id
 
         logging.info(
             f"FuzzerReporter initialized with output directory: {self.output_dir}"
@@ -199,6 +198,10 @@ class FuzzerReporter:
     def print_blocked_operations_summary(self):
         """Print blocked operations summary to console."""
         self.safety_reporter.print_blocked_operations_summary()
+
+    def print_phase_progress(self, phase: str, successful: int, total: int):
+        """Print short per-phase progress to console."""
+        self.console.print(f"  {phase.title()} phase: {successful}/{total} successful")
 
     def generate_final_report(self, include_safety: bool = True) -> str:
         """Generate comprehensive final report and save to file."""

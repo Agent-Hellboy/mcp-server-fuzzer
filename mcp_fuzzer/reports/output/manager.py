@@ -18,6 +18,11 @@ class OutputManager:
         self.compress = compress
         self.protocol = OutputProtocol()
 
+    @property
+    def session_id(self) -> str:
+        """Expose the current session identifier without leaking protocol details."""
+        return self.protocol.session_id
+
     def save_fuzzing_results(
         self,
         mode: str,
@@ -91,7 +96,7 @@ class OutputManager:
 
     def get_session_directory(self, session_id: str | None = None) -> Path:
         """Get the session directory path."""
-        session_id = session_id or self.protocol.session_id
+        session_id = session_id or self.session_id
         return self.output_dir / "sessions" / session_id
 
     def list_session_outputs(self, session_id: str | None = None) -> list[Path]:

@@ -19,7 +19,7 @@ def client_setup():
     transport = StreamableHTTPTransport(base_url)
     # Skip initialize handshake in tests to avoid mocking extra POSTs
     try:
-        transport._initialized = True
+        transport.initialized = True
     except Exception:
         pass
     client = ProtocolClient(transport)

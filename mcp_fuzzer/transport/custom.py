@@ -120,6 +120,14 @@ class CustomTransportRegistry:
         """
         return self._transports.copy()
 
+    def get_transport_names(self) -> list[str]:
+        """Return the registered custom transport names."""
+        return sorted(self._transports.keys())
+
+    def has_transport(self, name: str) -> bool:
+        """Return True if a custom transport with the given name exists."""
+        return name.strip().lower() in self._transports
+
     def create_transport(self, name: str, *args, **kwargs) -> TransportProtocol:
         """Create an instance of a registered transport.
 

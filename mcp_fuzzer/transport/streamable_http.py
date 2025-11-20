@@ -4,6 +4,8 @@ import logging
 from typing import Any
 
 import httpx
+
+from ..config import SAFETY_NO_NETWORK_DEFAULT, config as global_config
 from ..config import (
     DEFAULT_PROTOCOL_VERSION,
     CONTENT_TYPE_HEADER,
@@ -23,6 +25,7 @@ from ..types import (
 )
 
 from .base import TransportProtocol
+from .response import HTTPResponseView
 from ..exceptions import NetworkPolicyViolation, ServerError, TransportError
 from ..safety_system.policy import (
     is_host_allowed,
@@ -68,6 +71,15 @@ class StreamableHTTPTransport(TransportProtocol):
         self._init_lock: asyncio.Lock = asyncio.Lock()
         self._initializing: bool = False
 
+    @property
+    def initialized(self) -> bool:
+        """Expose whether the transport has already completed initialization."""
+        return self._initialized
+
+    @initialized.setter
+    def initialized(self, value: bool) -> None:
+        self._initialized = bool(value)
+
     def _prepare_headers(self) -> dict[str, str]:
         headers = dict(self.headers)
         if self.session_id:
@@ -78,7 +90,17 @@ class StreamableHTTPTransport(TransportProtocol):
 
     def _ensure_host_allowed(self) -> None:
         """Raise if the destination host violates safety policy."""
-        if not is_host_allowed(self.url):
+        # Honor safety toggle; if safety is off, allow all.
+        if not global_config.get("safety_enabled", False):
+            return
+
+        deny_network = global_config.get("no_network", SAFETY_NO_NETWORK_DEFAULT)
+        allowed_hosts = global_config.get("allow_hosts")
+        if not is_host_allowed(
+            self.url,
+            allowed_hosts=allowed_hosts,
+            deny_network_by_default=deny_network,
+        ):
             raise NetworkPolicyViolation(
                 "Network to non-local host is disallowed by safety policy",
                 context={"url": self.url},
@@ -98,7 +120,8 @@ class StreamableHTTPTransport(TransportProtocol):
         ) from error
 
     def _maybe_extract_session_headers(self, response: httpx.Response) -> None:
-        sid = response.headers.get(MCP_SESSION_ID)
+        view = HTTPResponseView(response)
+        sid = view.session_id
         if sid:
             # Update session id if server sends one
             self.session_id = sid
@@ -163,7 +186,8 @@ class StreamableHTTPTransport(TransportProtocol):
         redirect_codes = (HTTP_REDIRECT_TEMPORARY, HTTP_REDIRECT_PERMANENT)
         if response.status_code not in redirect_codes:
             return None
-        location = response.headers.get("location")
+        view = HTTPResponseView(response)
+        location = view.get_header("location")
         if not location and not self.url.endswith("/"):
             location = self.url + "/"
         if not location:
@@ -176,7 +200,8 @@ class StreamableHTTPTransport(TransportProtocol):
         return resolved
 
     def _extract_content_type(self, response: httpx.Response) -> str:
-        return response.headers.get(CONTENT_TYPE, "").lower()
+        view = HTTPResponseView(response)
+        return view.content_type.lower()
 
     async def send_request(
         self, method: str, params: dict[str, Any] | None = None

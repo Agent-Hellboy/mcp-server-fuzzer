@@ -11,9 +11,15 @@ from mcp_fuzzer.config import (
     load_config_file,
     apply_config_file,
     get_config_schema,
+    load_config_model,
+    model_to_config_dict,
+    normalize_config_data,
+    validate_config_data,
+    build_views_from_dict,
+    load_config,
     config,
 )
-from mcp_fuzzer.exceptions import ConfigFileError, ValidationError
+from mcp_fuzzer.exceptions import ConfigFileError
 
 
 @pytest.fixture
@@ -132,8 +138,59 @@ def test_load_config_file_invalid_extension(config_files):
     with pytest.raises(ConfigFileError):
         load_config_file(invalid_ext_path)
 
+def test_normalize_config_data_handles_nested_blocks():
+    """Nested blocks should be flattened without losing originals."""
+    raw = {
+        "global": {"timeout": 15.0},
+        "safety": {"enabled": True, "no_network": True, "local_hosts": ["a"]},
+        "watchdog": {"check_interval": 2.0},
+        "output": {"directory": "out", "types": ["fuzzing_results"]},
+        "runtime": {"max_concurrency": 7},
+    }
+    normalized = normalize_config_data(raw)
+    assert normalized["timeout"] == 15.0
+    assert normalized["safety_enabled"] is True
+    assert normalized["no_network"] is True
+    assert normalized["allow_hosts"] == ["a"]
+    assert normalized["watchdog_check_interval"] == 2.0
+    assert normalized["output_dir"] == "out"
+    assert normalized["output_types"] == ["fuzzing_results"]
+    assert normalized["process_max_concurrency"] == 7
+    # Original blocks still present
+    assert "safety" in normalized and isinstance(normalized["safety"], dict)
 
-@patch("mcp_fuzzer.config.loader.config")
+def test_validate_config_data_rejects_unknown_keys():
+    with pytest.raises(ConfigFileError):
+        validate_config_data({"unknown_key": True})
+
+
+def test_load_config_model_applies_defaults_and_dump():
+    raw = {
+        "global": {"timeout": 10},
+        "mode": "tools",
+    }
+    normalized = normalize_config_data(raw)
+    model = load_config_model(normalized)
+    dumped = model_to_config_dict(model)
+    assert dumped["timeout"] == 10
+    assert dumped["mode"] == "tools"
+
+
+def test_build_views_from_dict_applies_aliases():
+    raw = {
+        "global": {"timeout": 10},
+        "safety": {"enabled": True, "no_network": True},
+        "output": {"directory": "outdir"},
+        "protocol": "http",
+        "endpoint": "http://localhost",
+    }
+    views = build_views_from_dict(normalize_config_data(raw))
+    assert views.safety.enabled is True
+    assert views.safety.no_network is True
+    assert views.output.output_dir == "outdir"
+    assert views.transport.protocol == "http"
+
+@patch("mcp_fuzzer.config.manager.config")
 def test_apply_config_file(mock_config, config_files):
     """Test applying a config file."""
     # Test with explicit path
@@ -161,7 +218,7 @@ def test_apply_config_file(mock_config, config_files):
 def test_apply_config_file_handles_load_errors(config_files):
     """apply_config_file should return False if load_config_file fails."""
     with patch(
-        "mcp_fuzzer.config.loader.config"
+        "mcp_fuzzer.config.manager.config"
     ) as mock_config, patch(
         "mcp_fuzzer.config.loader.load_config_file"
     ) as mock_load_config, patch(
@@ -178,7 +235,7 @@ def test_apply_config_file_handles_load_errors(config_files):
 def test_apply_config_file_handles_custom_transport_errors(config_files):
     """apply_config_file should return False if load_custom_transports fails."""
     with patch(
-        "mcp_fuzzer.config.loader.config"
+        "mcp_fuzzer.config.manager.config"
     ) as mock_config, patch(
         "mcp_fuzzer.config.loader.load_config_file"
     ) as mock_load_config, patch(
