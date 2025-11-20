@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from ..exceptions import ValidationError
+from .core import ReportSnapshot
 from importlib.metadata import version, PackageNotFoundError
 
 try:
@@ -92,6 +93,33 @@ class OutputProtocol:
         }
 
         return self.create_base_output("fuzzing_results", data, metadata)
+
+    def create_fuzzing_results_from_snapshot(
+        self,
+        snapshot: ReportSnapshot,
+        safety_enabled: bool = False,
+    ) -> dict[str, Any]:
+        """Create fuzzing results output from a report snapshot."""
+        tool_results = {
+            name: [run.to_dict() for run in runs]
+            for name, runs in snapshot.tool_results.items()
+        }
+        protocol_results = {
+            name: [run.to_dict() for run in runs]
+            for name, runs in snapshot.protocol_results.items()
+        }
+
+        return self.create_fuzzing_results_output(
+            mode=snapshot.metadata.mode,
+            protocol=snapshot.metadata.protocol,
+            endpoint=snapshot.metadata.endpoint,
+            tool_results=tool_results,
+            protocol_results=protocol_results,
+            execution_time=snapshot.metadata.execution_time_iso(),
+            total_tests=snapshot.total_tests(),
+            success_rate=snapshot.overall_success_rate(),
+            safety_enabled=safety_enabled,
+        )
 
     def create_error_report_output(
         self,
@@ -354,6 +382,20 @@ class OutputManager:
             safety_enabled=safety_enabled,
         )
 
+        return self.protocol.save_output(
+            output, self.output_dir, compress=self.compress
+        )
+
+    def save_fuzzing_snapshot(
+        self,
+        snapshot: ReportSnapshot,
+        safety_enabled: bool = False,
+    ) -> str:
+        """Save fuzzing results using a ReportSnapshot."""
+        output = self.protocol.create_fuzzing_results_from_snapshot(
+            snapshot=snapshot,
+            safety_enabled=safety_enabled,
+        )
         return self.protocol.save_output(
             output, self.output_dir, compress=self.compress
         )

@@ -6,7 +6,6 @@ Handles all reporting functionality including console output, file exports,
 and result aggregation.
 """
 
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +13,7 @@ from typing import Any
 
 from rich.console import Console
 
+from .core import FuzzingMetadata, ReportCollector, ReportSnapshot
 from .formatters import (
     ConsoleFormatter,
     JSONFormatter,
@@ -44,6 +44,10 @@ class FuzzerReporter:
         compress_output: bool = False,
         config_provider: dict[str, Any] | None = None,
         safety_system=_AUTO_FILTER,
+        collector: ReportCollector | None = None,
+        output_manager: OutputManager | None = None,
+        console: Console | None = None,
+        safety_reporter: SafetyReporter | None = None,
     ):
         """
         Initialize the reporter.
@@ -79,8 +83,8 @@ class FuzzerReporter:
         self.output_dir = Path(self.output_dir_config)
         self.output_dir.mkdir(exist_ok=True)
 
-        # Initialize formatters
-        self.console = Console()
+        # Shared dependencies
+        self.console = console or Console()
         self.console_formatter = ConsoleFormatter(self.console)
         self.json_formatter = JSONFormatter()
         self.text_formatter = TextFormatter()
@@ -89,20 +93,19 @@ class FuzzerReporter:
         self.html_formatter = HTMLFormatter()
         self.markdown_formatter = MarkdownFormatter()
 
-        # Initialize standardized output manager
-        self.output_manager = OutputManager(str(self.output_dir), self.output_compress)
+        self.collector = collector or ReportCollector()
+        self.output_manager = output_manager or OutputManager(
+            str(self.output_dir), self.output_compress
+        )
 
-        # Initialize safety reporter
-        if safety_system is _AUTO_FILTER:
+        if safety_reporter:
+            self.safety_reporter = safety_reporter
+        elif safety_system is _AUTO_FILTER:
             self.safety_reporter = SafetyReporter()
         else:
             self.safety_reporter = SafetyReporter(safety_system)
 
-        # Track all results for final report
-        self.tool_results: dict[str, list[dict[str, Any]]] = {}
-        self.protocol_results: dict[str, list[dict[str, Any]]] = {}
-        self.safety_data: dict[str, Any] = {}
-        self.fuzzing_metadata: dict[str, Any] = {}
+        self._metadata: FuzzingMetadata | None = None
 
         # Use session ID from output manager
         self.session_id = self.output_manager.protocol.session_id
@@ -120,28 +123,28 @@ class FuzzerReporter:
         runs_per_type: int = None,
     ):
         """Set metadata about the current fuzzing session."""
-        self.fuzzing_metadata = {
-            "session_id": self.session_id,
-            "start_time": datetime.now().isoformat(),
-            "mode": mode,
-            "protocol": protocol,
-            "endpoint": endpoint,
-            "runs": runs,
-            "runs_per_type": runs_per_type,
-            "fuzzer_version": fuzzer_version,
-        }
+        self._metadata = FuzzingMetadata(
+            session_id=self.session_id,
+            mode=mode,
+            protocol=protocol,
+            endpoint=endpoint,
+            runs=runs,
+            runs_per_type=runs_per_type,
+            fuzzer_version=fuzzer_version,
+            start_time=datetime.now(),
+        )
 
     def add_tool_results(self, tool_name: str, results: list[dict[str, Any]]):
         """Add tool fuzzing results to the reporter."""
-        self.tool_results[tool_name] = results
+        self.collector.add_tool_results(tool_name, results)
 
     def add_protocol_results(self, protocol_type: str, results: list[dict[str, Any]]):
         """Add protocol fuzzing results to the reporter."""
-        self.protocol_results[protocol_type] = results
+        self.collector.add_protocol_results(protocol_type, results)
 
     def add_safety_data(self, safety_data: dict[str, Any]):
         """Add safety system data to the reporter."""
-        self.safety_data.update(safety_data)
+        self.collector.update_safety_data(safety_data)
 
     def print_tool_summary(self, results: dict[str, list[dict[str, Any]]]):
         """Print tool fuzzing summary to console."""
@@ -181,29 +184,15 @@ class FuzzerReporter:
 
     def generate_final_report(self, include_safety: bool = True) -> str:
         """Generate comprehensive final report and save to file."""
-        report_data = {
-            "metadata": self.fuzzing_metadata,
-            "tool_results": self.tool_results,
-            "protocol_results": self.protocol_results,
-            "summary": self._generate_summary_stats(),
-        }
+        snapshot = self._prepare_snapshot(include_safety=include_safety, finalize=True)
+        report_dict = snapshot.to_dict()
 
-        if include_safety:
-            report_data["safety"] = self.safety_reporter.get_comprehensive_safety_data()
-
-        # Add end time
-        report_data["metadata"]["end_time"] = datetime.now().isoformat()
-
-        # Save JSON report
         json_filename = self.output_dir / f"fuzzing_report_{self.session_id}.json"
-        with open(json_filename, "w") as f:
-            json.dump(report_data, f, indent=2, default=str)
+        self.json_formatter.save_report(report_dict, str(json_filename))
 
-        # Save text report
         text_filename = self.output_dir / f"fuzzing_report_{self.session_id}.txt"
-        self.text_formatter.save_text_report(report_data, text_filename)
+        self.text_formatter.save_text_report(snapshot, text_filename)
 
-        # Save safety-specific report if available
         if include_safety and self.safety_reporter.has_safety_data():
             safety_filename = self.output_dir / f"safety_report_{self.session_id}.json"
             self.safety_reporter.export_safety_data(str(safety_filename))
@@ -218,6 +207,7 @@ class FuzzerReporter:
     ) -> dict[str, str]:
         """Generate standardized reports using the new output protocol."""
         generated_files = {}
+        snapshot = self._prepare_snapshot(include_safety=include_safety, finalize=True)
 
         # Use configured output types if none specified
         if output_types is None:
@@ -231,19 +221,8 @@ class FuzzerReporter:
         # Generate fuzzing results
         if "fuzzing_results" in output_types:
             try:
-                execution_time = self._calculate_execution_time()
-                total_tests = self._get_total_test_count()
-                success_rate = self._calculate_overall_success_rate()
-
-                filepath = self.output_manager.save_fuzzing_results(
-                    mode=self.fuzzing_metadata.get("mode", "unknown"),
-                    protocol=self.fuzzing_metadata.get("protocol", "unknown"),
-                    endpoint=self.fuzzing_metadata.get("endpoint", "unknown"),
-                    tool_results=self.tool_results,
-                    protocol_results=self.protocol_results,
-                    execution_time=execution_time,
-                    total_tests=total_tests,
-                    success_rate=success_rate,
+                filepath = self.output_manager.save_fuzzing_snapshot(
+                    snapshot=snapshot,
                     safety_enabled=include_safety,
                 )
                 generated_files["fuzzing_results"] = filepath
@@ -253,7 +232,7 @@ class FuzzerReporter:
         # Generate safety summary
         if "safety_summary" in output_types and include_safety:
             try:
-                safety_data = self.safety_reporter.get_comprehensive_safety_data()
+                safety_data = snapshot.safety_data or self._gather_safety_data(True)
                 filepath = self.output_manager.save_safety_summary(safety_data)
                 generated_files["safety_summary"] = filepath
             except Exception as e:
@@ -262,84 +241,17 @@ class FuzzerReporter:
         # Generate error report if there are errors
         if "error_report" in output_types:
             try:
-                errors = self._collect_errors()
+                errors = self.collector.collect_errors()
                 if errors:
                     filepath = self.output_manager.save_error_report(
                         errors=errors,
-                        execution_context=self.fuzzing_metadata
+                        execution_context=snapshot.metadata.to_dict(),
                     )
                     generated_files["error_report"] = filepath
             except Exception as e:
                 logging.error(f"Failed to generate standardized error report: {e}")
 
         return generated_files
-
-    def _generate_summary_stats(self) -> dict[str, Any]:
-        """Generate summary statistics from all results."""
-        # Tool statistics
-        total_tools = len(self.tool_results)
-        tools_with_errors = 0
-        tools_with_exceptions = 0
-        total_tool_runs = 0
-
-        for tool_results in self.tool_results.values():
-            total_tool_runs += len(tool_results)
-            for result in tool_results:
-                if "error" in result:
-                    tools_with_errors += 1
-                if "exception" in result:
-                    tools_with_exceptions += 1
-
-        # Protocol statistics
-        total_protocol_types = len(self.protocol_results)
-        protocol_types_with_errors = 0
-        protocol_types_with_exceptions = 0
-        total_protocol_runs = 0
-
-        for protocol_results in self.protocol_results.values():
-            total_protocol_runs += len(protocol_results)
-            for result in protocol_results:
-                if "error" in result:
-                    protocol_types_with_errors += 1
-                if "exception" in result:
-                    protocol_types_with_exceptions += 1
-
-        return {
-            "tools": {
-                "total_tools": total_tools,
-                "total_runs": total_tool_runs,
-                "tools_with_errors": tools_with_errors,
-                "tools_with_exceptions": tools_with_exceptions,
-                "success_rate": (
-                    (
-                        (total_tool_runs - tools_with_errors - tools_with_exceptions)
-                        / total_tool_runs
-                        * 100
-                    )
-                    if total_tool_runs > 0
-                    else 0
-                ),
-            },
-            "protocols": {
-                "total_protocol_types": total_protocol_types,
-                "total_runs": total_protocol_runs,
-                "protocol_types_with_errors": protocol_types_with_errors,
-                "protocol_types_with_exceptions": protocol_types_with_exceptions,
-                "success_rate": (
-                    (
-                        (
-                            total_protocol_runs
-                            - protocol_types_with_errors
-                            - protocol_types_with_exceptions
-                        )
-                        / total_protocol_runs
-                        * 100
-                    )
-                    if total_protocol_runs > 0
-                    else 0
-                ),
-            },
-        }
 
     def export_safety_data(self, filename: str = None) -> str:
         """Export safety data to JSON file."""
@@ -354,9 +266,9 @@ class FuzzerReporter:
         return {
             "session_id": self.session_id,
             "output_directory": str(self.output_dir),
-            "tool_results_count": len(self.tool_results),
-            "protocol_results_count": len(self.protocol_results),
-            "safety_data_available": bool(self.safety_data),
+            "tool_results_count": len(self.collector.tool_results),
+            "protocol_results_count": len(self.collector.protocol_results),
+            "safety_data_available": bool(self.collector.safety_data),
             "metadata": self.fuzzing_metadata,
         }
 
@@ -380,114 +292,102 @@ class FuzzerReporter:
 
     def export_csv(self, filename: str):
         """Export report data to CSV format."""
-        report_data = self._get_report_data()
-        self.csv_formatter.save_csv_report(report_data, filename)
+        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        self.csv_formatter.save_csv_report(snapshot, filename)
 
     def export_xml(self, filename: str):
         """Export report data to XML format."""
-        report_data = self._get_report_data()
-        self.xml_formatter.save_xml_report(report_data, filename)
+        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        self.xml_formatter.save_xml_report(snapshot, filename)
 
     def export_html(self, filename: str, title: str = "Fuzzing Results Report"):
         """Export report data to HTML format."""
-        report_data = self._get_report_data()
-        self.html_formatter.save_html_report(report_data, filename, title)
+        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        self.html_formatter.save_html_report(snapshot, filename, title)
 
     def export_markdown(self, filename: str):
         """Export report data to Markdown format."""
-        report_data = self._get_report_data()
-        self.markdown_formatter.save_markdown_report(report_data, filename)
+        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        self.markdown_formatter.save_markdown_report(snapshot, filename)
 
-    def _get_report_data(self) -> dict[str, Any]:
-        """Get complete report data for export."""
+    def _prepare_snapshot(
+        self, include_safety: bool, finalize: bool
+    ) -> ReportSnapshot:
+        """Create a snapshot of the current report state."""
+        metadata = (
+            self._finalize_metadata() if finalize else self._ensure_metadata()
+        )
+        safety_data = self._gather_safety_data(include_safety)
+        if safety_data:
+            self.collector.update_safety_data(safety_data)
+        return self.collector.snapshot(
+            metadata, safety_data if include_safety else None
+        )
+
+    def _ensure_metadata(self) -> FuzzingMetadata:
+        """Ensure metadata exists and return it."""
+        if self._metadata:
+            return self._metadata
+        self._metadata = FuzzingMetadata(
+            session_id=self.session_id,
+            mode="unknown",
+            protocol="unknown",
+            endpoint="unknown",
+            runs=0,
+            runs_per_type=None,
+            fuzzer_version=fuzzer_version,
+            start_time=datetime.now(),
+        )
+        return self._metadata
+
+    def _finalize_metadata(self) -> FuzzingMetadata:
+        """Ensure metadata has an end_time and return it."""
+        metadata = self._ensure_metadata()
+        closed = metadata.close()
+        self._metadata = closed
+        return closed
+
+    def _gather_safety_data(self, include_safety: bool) -> dict[str, Any]:
+        if not include_safety:
+            return {}
+        try:
+            return self.safety_reporter.get_comprehensive_safety_data()
+        except Exception as exc:
+            logging.error("Failed to gather safety data: %s", exc)
+            return {}
+
+    def _generate_summary_stats(self) -> dict[str, Any]:
+        """Backward-compatible summary helper used in tests."""
+        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        return snapshot.summary.to_dict()
+
+    @property
+    def fuzzing_metadata(self) -> dict[str, Any]:
+        """Expose metadata as a serializable dict for compatibility."""
+        if not self._metadata:
+            return {}
+        return self._metadata.to_dict()
+
+    @property
+    def tool_results(self) -> dict[str, list[dict[str, Any]]]:
+        """Expose collected tool results as dictionaries."""
         return {
-            "metadata": self.fuzzing_metadata,
-            "tool_results": self.tool_results,
-            "protocol_results": self.protocol_results,
-            "summary": self._generate_summary_stats(),
-            "safety": (
-                self.safety_reporter.get_comprehensive_safety_data()
-                if self.safety_data
-                else {}
-            ),
+            name: [run.to_dict() for run in runs]
+            for name, runs in self.collector.tool_results.items()
         }
 
-    def _calculate_execution_time(self) -> str:
-        """Calculate total execution time."""
-        start_time = self.fuzzing_metadata.get("start_time")
-        end_time = self.fuzzing_metadata.get("end_time", datetime.now().isoformat())
+    @property
+    def protocol_results(self) -> dict[str, list[dict[str, Any]]]:
+        """Expose collected protocol results as dictionaries."""
+        return {
+            name: [run.to_dict() for run in runs]
+            for name, runs in self.collector.protocol_results.items()
+        }
 
-        if start_time:
-            try:
-                start = datetime.fromisoformat(start_time)
-                end = datetime.fromisoformat(end_time)
-                duration = end - start
-                return f"PT{duration.total_seconds()}S"
-            except Exception:
-                pass
-
-        return "PT0S"
-
-    def _get_total_test_count(self) -> int:
-        """Get total number of tests run."""
-        tool_tests = sum(len(results) for results in self.tool_results.values())
-        protocol_tests = sum(len(results) for results in self.protocol_results.values())
-        return tool_tests + protocol_tests
-
-    def _calculate_overall_success_rate(self) -> float:
-        """Calculate overall success rate across all tests."""
-        total_tests = self._get_total_test_count()
-        if total_tests == 0:
-            return 0.0
-
-        successful_tests = 0
-
-        # Count successful tool tests
-        for tool_results in self.tool_results.values():
-            for result in tool_results:
-                if ("exception" not in result and
-                    not result.get("safety_blocked", False)):
-                    successful_tests += 1
-
-        # Count successful protocol tests
-        for protocol_results in self.protocol_results.values():
-            for result in protocol_results:
-                if result.get("success", True):
-                    successful_tests += 1
-
-        return (successful_tests / total_tests) * 100
-
-    def _collect_errors(self) -> list[dict[str, Any]]:
-        """Collect all errors from test results."""
-        errors = []
-
-        # Collect tool errors
-        for tool_name, tool_results in self.tool_results.items():
-            for i, result in enumerate(tool_results):
-                if "exception" in result:
-                    errors.append({
-                        "type": "tool_error",
-                        "tool_name": tool_name,
-                        "run_number": i + 1,
-                        "severity": "medium",
-                        "message": str(result["exception"]),
-                        "arguments": result.get("args", {}),
-                    })
-
-        # Collect protocol errors
-        for protocol_type, protocol_results in self.protocol_results.items():
-            for i, result in enumerate(protocol_results):
-                if not result.get("success", True):
-                    errors.append({
-                        "type": "protocol_error",
-                        "protocol_type": protocol_type,
-                        "run_number": i + 1,
-                        "severity": "medium",
-                        "message": result.get("error", "Unknown protocol error"),
-                        "details": result,
-                    })
-
-        return errors
+    @property
+    def safety_data(self) -> dict[str, Any]:
+        """Expose current safety data."""
+        return dict(self.collector.safety_data)
 
     def cleanup(self):
         """Clean up reporter resources."""

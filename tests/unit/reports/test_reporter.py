@@ -3,11 +3,10 @@
 Tests for FuzzerReporter class.
 """
 
-import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import patch
 
 import pytest
 
@@ -200,23 +199,22 @@ class TestFuzzerReporter:
         reporter.add_protocol_results("test_protocol", [{"success": True}])
 
         # Mock file operations
-        with patch("builtins.open", mock_open()) as mock_file:
-            with patch("json.dump") as mock_json_dump:
-                with patch.object(
-                    reporter.text_formatter, "save_text_report"
-                ) as mock_save_text:
-                    result = reporter.generate_final_report(include_safety=False)
+        with patch.object(reporter.json_formatter, "save_report") as mock_save_json:
+            with patch.object(
+                reporter.text_formatter, "save_text_report"
+            ) as mock_save_text:
+                result = reporter.generate_final_report(include_safety=False)
 
-                    # Verify JSON file was created
-                    assert result.endswith(".json")
-                    assert "fuzzing_report_" in result
-                    assert reporter.session_id in result
+                # Verify JSON file was created
+                assert result.endswith(".json")
+                assert "fuzzing_report_" in result
+                assert reporter.session_id in result
 
-                    # Verify JSON dump was called
-                    mock_json_dump.assert_called_once()
+                # Verify JSON formatter was called
+                mock_save_json.assert_called_once()
 
-                    # Verify text report was saved
-                    mock_save_text.assert_called_once()
+                # Verify text report was saved
+                mock_save_text.assert_called_once()
 
     def test_generate_final_report_with_safety(self, reporter, temp_output_dir):
         """Test generating final report with safety data."""
@@ -232,19 +230,18 @@ class TestFuzzerReporter:
         reporter.safety_reporter.export_safety_data.return_value = "safety_file.json"
 
         # Mock file operations
-        with patch("builtins.open", mock_open()) as mock_file:
-            with patch("json.dump") as mock_json_dump:
-                with patch.object(reporter.text_formatter, "save_text_report"):
-                    result = reporter.generate_final_report(include_safety=True)
+        with patch.object(reporter.json_formatter, "save_report") as mock_save_json:
+            with patch.object(reporter.text_formatter, "save_text_report"):
+                result = reporter.generate_final_report(include_safety=True)
 
-                    # Verify safety data was included
-                    call_args = mock_json_dump.call_args[0]
-                    report_data = call_args[0]
-                    assert "safety" in report_data
-                    assert report_data["safety"]["blocked_operations"] == 5
+                # Verify safety data was included in snapshot passed to formatter
+                args, kwargs = mock_save_json.call_args
+                saved_report = args[0]
+                assert "safety" in saved_report
+                assert saved_report["safety"]["blocked_operations"] == 5
 
-                    # Verify safety export was called
-                    reporter.safety_reporter.export_safety_data.assert_called_once()
+                # Verify safety export was called
+                reporter.safety_reporter.export_safety_data.assert_called_once()
 
     def test_generate_summary_stats_empty_results(self, reporter):
         """Test generating summary stats with empty results."""
@@ -363,13 +360,10 @@ class TestFuzzerReporter:
         """Test that end time is set in final report."""
         reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
 
-        with patch("builtins.open", mock_open()):
-            with patch("json.dump") as mock_json_dump:
-                with patch.object(reporter.text_formatter, "save_text_report"):
-                    reporter.generate_final_report()
+        with patch.object(reporter.json_formatter, "save_report") as mock_save_json:
+            with patch.object(reporter.text_formatter, "save_text_report"):
+                reporter.generate_final_report()
 
-                    call_args = mock_json_dump.call_args[0]
-                    report_data = call_args[0]
-
-                    assert "end_time" in report_data["metadata"]
-                    assert report_data["metadata"]["end_time"] is not None
+                saved_report = mock_save_json.call_args[0][0]
+                assert "end_time" in saved_report["metadata"]
+                assert saved_report["metadata"]["end_time"] is not None
