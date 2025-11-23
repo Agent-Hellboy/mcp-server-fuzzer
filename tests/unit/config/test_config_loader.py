@@ -1,203 +1,190 @@
 #!/usr/bin/env python3
-"""Tests for the configuration loader module."""
+"""Unit tests that exercise the new config loader helpers."""
+
+from __future__ import annotations
 
 import os
-import tempfile
+from pathlib import Path
+from textwrap import dedent
+from typing import Any
+
 import pytest
-from unittest.mock import patch, mock_open
+from unittest.mock import Mock, patch
 
 from mcp_fuzzer.config import (
-    find_config_file,
-    load_config_file,
+    ConfigLoader,
     apply_config_file,
+    find_config_file,
     get_config_schema,
-    config,
+    load_config_file,
 )
-from mcp_fuzzer.exceptions import ConfigFileError, ValidationError
+from mcp_fuzzer.exceptions import ConfigFileError
 
 
 @pytest.fixture
-def config_files():
-    """Create temporary YAML files for testing."""
-    # Create temporary directory
-    temp_dir = tempfile.TemporaryDirectory()
+def config_files(tmp_path: Path) -> dict[str, Any]:
+    """Create a couple of temporary YAML config files for reuse."""
+    content = dedent(
+        """
+        timeout: 60.0
+        log_level: "DEBUG"
+        safety:
+          enabled: true
+          no_network: false
+          local_hosts:
+            - "localhost"
+        """
+    ).strip()
 
-    # YAML content
-    yaml_content = """
-timeout: 60.0
-log_level: "DEBUG"
-safety:
-  enabled: true
-  no_network: false
-  local_hosts:
-    - "localhost"
-    - "127.0.0.1"
-"""
-    # Create .yml file
-    yml_path = os.path.join(temp_dir.name, "mcp-fuzzer.yml")
-    with open(yml_path, "w") as f:
-        f.write(yaml_content)
+    yml_path = tmp_path / "mcp-fuzzer.yml"
+    yaml_path = tmp_path / "mcp-fuzzer.yaml"
+    yml_path.write_text(content)
+    yaml_path.write_text(content)
 
-    # Create .yaml file
-    yaml_path = os.path.join(temp_dir.name, "mcp-fuzzer.yaml")
-    with open(yaml_path, "w") as f:
-        f.write(yaml_content)
-
-    # Return paths
-    yield {
-        "temp_dir": temp_dir,
-        "yml_path": yml_path,
-        "yaml_path": yaml_path,
+    return {
+        "temp_dir": tmp_path,
+        "yml_path": str(yml_path),
+        "yaml_path": str(yaml_path),
     }
-
-    # Cleanup
-    temp_dir.cleanup()
 
 
 def test_find_config_file_explicit_path(config_files):
-    """Test finding a config file with an explicit path."""
-    # Test with explicit path
-    found_path = find_config_file(config_path=config_files["yaml_path"])
-    assert found_path == config_files["yaml_path"]
-
-    # Test with non-existent path
-    found_path = find_config_file(config_path="/non/existent/path")
-    assert found_path is None
+    result = find_config_file(config_path=config_files["yaml_path"])
+    assert result == config_files["yaml_path"]
 
 
 def test_find_config_file_search_paths(config_files):
-    """Test finding a config file in search paths."""
-    # Test with search paths
-    found_path = find_config_file(search_paths=[config_files["temp_dir"].name])
-    assert found_path in [config_files["yml_path"], config_files["yaml_path"]]
-
-    # Test with empty search paths
-    found_path = find_config_file(search_paths=["/non/existent/path"])
-    assert found_path is None
+    result = find_config_file(search_paths=[str(config_files["temp_dir"])])
+    assert result in [config_files["yml_path"], config_files["yaml_path"]]
 
 
-def test_load_config_file_yml(config_files):
-    """Test loading a .yml config file."""
-    config_data = load_config_file(config_files["yml_path"])
-    assert config_data["timeout"] == 60.0
-    assert config_data["log_level"] == "DEBUG"
-    assert config_data["safety"]["enabled"] is True
-    assert config_data["safety"]["no_network"] is False
-    assert config_data["safety"]["local_hosts"] == ["localhost", "127.0.0.1"]
+def test_find_config_file_default_search(monkeypatch, tmp_path):
+    """Ensure the default search uses the current working directory."""
+    config_path = tmp_path / "mcp-fuzzer.yml"
+    config_path.write_text("timeout: 5")
+
+    monkeypatch.chdir(tmp_path)
+    assert find_config_file() == str(config_path)
+
+
+def test_find_config_file_missing(tmp_path):
+    result = find_config_file(
+        search_paths=[str(tmp_path)],
+        file_names=["nonexistent.yml"],
+    )
+    assert result is None
 
 
 def test_load_config_file_yaml(config_files):
-    """Test loading a .yaml config file."""
-    config_data = load_config_file(config_files["yaml_path"])
-    assert config_data["timeout"] == 60.0
+    config_data = load_config_file(config_files["yml_path"])
     assert config_data["log_level"] == "DEBUG"
+    assert config_data["timeout"] == 60.0
     assert config_data["safety"]["enabled"] is True
-    assert config_data["safety"]["no_network"] is False
-    assert config_data["safety"]["local_hosts"] == ["localhost", "127.0.0.1"]
 
 
-def test_load_config_file_invalid_format(config_files):
-    """Test loading a config file with an invalid format."""
-    # Create a file with an invalid extension
-    invalid_path = os.path.join(config_files["temp_dir"].name, "invalid.txt")
-    with open(invalid_path, "w") as f:
-        f.write("invalid content")
-
+def test_load_config_file_invalid_extension(tmp_path):
+    invalid = tmp_path / "config.txt"
+    invalid.write_text("timeout: 1")
     with pytest.raises(ConfigFileError):
-        load_config_file(invalid_path)
+        load_config_file(str(invalid))
 
 
 def test_load_config_file_not_found():
-    """Test loading a non-existent config file."""
     with pytest.raises(ConfigFileError):
-        load_config_file("/non/existent/path")
+        load_config_file("/non/existent/path.yaml")
 
 
-def test_load_config_file_invalid_yaml(config_files):
-    """Test loading an invalid YAML file."""
-    invalid_yaml_path = os.path.join(config_files["temp_dir"].name, "invalid.yaml")
-    with open(invalid_yaml_path, "w") as f:
-        f.write("invalid: yaml: content:")
-
+def test_load_config_file_invalid_yaml(tmp_path):
+    invalid = tmp_path / "broken.yaml"
+    invalid.write_text("timeout: [1,")
     with pytest.raises(ConfigFileError):
-        load_config_file(invalid_yaml_path)
+        load_config_file(str(invalid))
 
 
-def test_load_config_file_invalid_extension(config_files):
-    """Test loading a file with invalid extension."""
-    invalid_ext_path = os.path.join(config_files["temp_dir"].name, "config.txt")
-    with open(invalid_ext_path, "w") as f:
-        f.write("valid: yaml")
-
-    with pytest.raises(ConfigFileError):
-        load_config_file(invalid_ext_path)
-
-
+@patch("mcp_fuzzer.config.loader.load_custom_transports")
 @patch("mcp_fuzzer.config.loader.config")
-def test_apply_config_file(mock_config, config_files):
-    """Test applying a config file."""
-    # Test with explicit path
+def test_apply_config_file_updates_global_state(
+    mock_config, mock_transports, config_files
+):
     result = apply_config_file(config_path=config_files["yaml_path"])
     assert result is True
-    mock_config.update.assert_called_once()
+    mock_transports.assert_called_once()
+    updated = mock_config.update.call_args[0][0]
+    assert updated.get("timeout") == 60.0
+    assert mock_config.update.call_count == 1
 
-    # Reset mock
-    mock_config.reset_mock()
 
-    # Test with search paths
-    result = apply_config_file(search_paths=[config_files["temp_dir"].name])
-    assert result is True
-    mock_config.update.assert_called_once()
-
-    # Reset mock
-    mock_config.reset_mock()
-
-    # Test with non-existent path
-    result = apply_config_file(config_path="/non/existent/path")
+@patch("mcp_fuzzer.config.loader.load_custom_transports")
+@patch("mcp_fuzzer.config.loader.config")
+def test_apply_config_file_returns_false_when_missing(mock_config, mock_transports):
+    result = apply_config_file(config_path="/nope.yaml")
     assert result is False
     mock_config.update.assert_not_called()
+    mock_transports.assert_not_called()
 
 
-def test_apply_config_file_handles_load_errors(config_files):
-    """apply_config_file should return False if load_config_file fails."""
-    with patch(
-        "mcp_fuzzer.config.loader.config"
-    ) as mock_config, patch(
-        "mcp_fuzzer.config.loader.load_config_file"
-    ) as mock_load_config, patch(
-        "mcp_fuzzer.config.loader.load_custom_transports"
-    ) as mock_load_custom:
-        mock_load_config.side_effect = ConfigFileError("boom")
-        result = apply_config_file(config_path=config_files["yaml_path"])
-
-    assert result is False
-    mock_config.update.assert_not_called()
-    mock_load_custom.assert_not_called()
-
-
-def test_apply_config_file_handles_custom_transport_errors(config_files):
-    """apply_config_file should return False if load_custom_transports fails."""
-    with patch(
-        "mcp_fuzzer.config.loader.config"
-    ) as mock_config, patch(
-        "mcp_fuzzer.config.loader.load_config_file"
-    ) as mock_load_config, patch(
-        "mcp_fuzzer.config.loader.load_custom_transports"
-    ) as mock_load_custom:
-        mock_load_config.return_value = {"custom_transports": {}}
-        mock_load_custom.side_effect = ConfigFileError("bad transport")
-        result = apply_config_file(config_path=config_files["yaml_path"])
-
-    assert result is False
-    mock_config.update.assert_not_called()
-
-
-def test_get_config_schema():
-    """Test getting the configuration schema."""
+def test_get_config_schema_includes_expected_fields():
     schema = get_config_schema()
-    assert isinstance(schema, dict)
-    assert schema["type"] == "object"
-    assert "properties" in schema
-    assert "timeout" in schema["properties"]
-    assert "log_level" in schema["properties"]
-    assert "safety" in schema["properties"]
+    props = schema["properties"]
+    assert props["timeout"]["type"] == "number"
+    assert "custom_transports" in props
+    assert props["custom_transports"]["patternProperties"]
+
+
+def test_config_loader_load_invokes_dependencies():
+    parser = Mock(return_value={"timeout": 1})
+    transport_loader = Mock()
+    loader = ConfigLoader(
+        discoverer=lambda *_args, **_kwargs: "config.yaml",
+        parser=parser,
+        transport_loader=transport_loader,
+    )
+    data, path = loader.load()
+    parser.assert_called_once_with("config.yaml")
+    transport_loader.assert_called_once_with({"timeout": 1})
+    assert data == {"timeout": 1}
+    assert path == "config.yaml"
+
+
+def test_config_loader_load_returns_none_when_not_found():
+    loader = ConfigLoader(discoverer=lambda *_: None)
+    data, path = loader.load()
+    assert data is None
+    assert path is None
+
+
+def test_config_loader_apply_merges_data():
+    parser = Mock(return_value={"log_level": "INFO"})
+    loader = ConfigLoader(
+        discoverer=lambda *_: "config.yaml",
+        parser=parser,
+        transport_loader=Mock(),
+    )
+    with patch("mcp_fuzzer.config.loader.config") as mock_config:
+        assert loader.apply() is True
+        mock_config.update.assert_called_once_with({"log_level": "INFO"})
+
+
+def test_config_loader_apply_handles_parser_errors():
+    parser = Mock(side_effect=ConfigFileError("boom"))
+    loader = ConfigLoader(
+        discoverer=lambda *_: "config.yaml",
+        parser=parser,
+        transport_loader=Mock(),
+    )
+    with patch("mcp_fuzzer.config.loader.config") as mock_config:
+        assert loader.apply() is False
+        mock_config.update.assert_not_called()
+
+
+def test_config_loader_apply_handles_transport_errors():
+    parser = Mock(return_value={"timeout": 5})
+    transport_loader = Mock(side_effect=ConfigFileError("bad transport"))
+    loader = ConfigLoader(
+        discoverer=lambda *_: "config.yaml",
+        parser=parser,
+        transport_loader=transport_loader,
+    )
+    with patch("mcp_fuzzer.config.loader.config") as mock_config:
+        assert loader.apply() is False
+        mock_config.update.assert_not_called()

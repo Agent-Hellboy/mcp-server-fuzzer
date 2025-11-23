@@ -33,6 +33,7 @@ from .manager import config
 
 # Import loader functions
 from .loader import (
+    ConfigLoader,
     find_config_file,
     load_config_file,
     apply_config_file,
@@ -67,7 +68,8 @@ __all__ = [
     "DEFAULT_FORCE_KILL_TIMEOUT",
     # Manager
     "config",
-    # Loader functions
+    # Loader helpers
+    "ConfigLoader",
     "find_config_file",
     "load_config_file",
     "apply_config_file",
