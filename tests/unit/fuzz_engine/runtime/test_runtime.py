@@ -55,6 +55,7 @@ class TestProcessManager:
         # Set up a mock for the watchdog
         manager.watchdog = AsyncMock()
         manager.watchdog.unregister_process = AsyncMock()
+        manager.lifecycle.watchdog = manager.watchdog
 
         # Mock the process
         mock_process = AsyncMock()
@@ -63,17 +64,17 @@ class TestProcessManager:
 
         try:
             # Set up a process in the manager
-            async with manager._get_lock():
-                manager._processes[12345] = {
-                    "process": mock_process,
-                    "config": ProcessConfig(command=["test"], name="test_process"),
-                    "started_at": time.time(),
-                    "status": "running",
-                }
+            await manager.registry.register(
+                12345,
+                mock_process,
+                ProcessConfig(command=["test"], name="test_process"),
+                started_at=time.time(),
+                status="running",
+            )
 
             # Test stopping the process
             with patch.object(
-                manager, "_graceful_terminate_process", AsyncMock()
+                manager.lifecycle, "_graceful_terminate_process", AsyncMock()
             ) as mock_terminate:
                 result = await manager.stop_process(12345)
                 assert result is True
@@ -95,13 +96,13 @@ class TestProcessManager:
 
         try:
             # Set up a process in the manager
-            async with manager._get_lock():
-                manager._processes[12345] = {
-                    "process": mock_process,
-                    "config": ProcessConfig(command=["test"], name="test_process"),
-                    "started_at": time.time(),
-                    "status": "running",
-                }
+            await manager.registry.register(
+                12345,
+                mock_process,
+                ProcessConfig(command=["test"], name="test_process"),
+                started_at=time.time(),
+                status="running",
+            )
 
             # Get status for a running process
             status = await manager.get_process_status(12345)
@@ -138,20 +139,20 @@ class TestProcessManager:
 
         try:
             # Set up two processes in the manager
-            async with manager._get_lock():
-                manager._processes[12345] = {
-                    "process": mock_process1,
-                    "config": ProcessConfig(command=["test1"], name="test_process1"),
-                    "started_at": time.time(),
-                    "status": "running",
-                }
-
-                manager._processes[67890] = {
-                    "process": mock_process2,
-                    "config": ProcessConfig(command=["test2"], name="test_process2"),
-                    "started_at": time.time(),
-                    "status": "finished",
-                }
+            await manager.registry.register(
+                12345,
+                mock_process1,
+                ProcessConfig(command=["test1"], name="test_process1"),
+                started_at=time.time(),
+                status="running",
+            )
+            await manager.registry.register(
+                67890,
+                mock_process2,
+                ProcessConfig(command=["test2"], name="test_process2"),
+                started_at=time.time(),
+                status="finished",
+            )
 
             # Just verify we can call list_processes without error
             processes = await manager.list_processes()

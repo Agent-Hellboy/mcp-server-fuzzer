@@ -48,6 +48,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         url: str,
         timeout: float = 30.0,
         auth_headers: dict[str, str | None] | None = None,
+        process_manager: ProcessManager | None = None,
     ):
         self.url = url
         self.timeout = timeout
@@ -62,14 +63,17 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         self._last_activity = time.time()
 
         # Initialize process manager for any subprocesses (like proxy servers)
-        watchdog_config = WatchdogConfig(
-            check_interval=1.0,
-            process_timeout=timeout,
-            extra_buffer=5.0,
-            max_hang_time=timeout + 10.0,
-            auto_kill=True,
-        )
-        self.process_manager = ProcessManager(watchdog_config)
+        if process_manager is None:
+            watchdog_config = WatchdogConfig(
+                check_interval=1.0,
+                process_timeout=timeout,
+                extra_buffer=5.0,
+                max_hang_time=timeout + 10.0,
+                auto_kill=True,
+            )
+            self.process_manager = ProcessManager(watchdog_config)
+        else:
+            self.process_manager = process_manager
 
     async def _update_activity(self):
         """Update last activity timestamp."""

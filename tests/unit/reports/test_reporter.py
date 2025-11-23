@@ -22,7 +22,9 @@ from mcp_fuzzer.reports.reporter.dependencies import (
 from mcp_fuzzer.reports.safety_reporter import SafetyReporter
 
 
-def make_dependencies(temp_output_dir: str, session_id: str | None = None) -> ReporterDependencies:
+def make_dependencies(
+    temp_output_dir: str, session_id: str | None = None
+) -> ReporterDependencies:
     """Helper to build dependency bundle with controllable collaborators."""
 
     console = MagicMock()

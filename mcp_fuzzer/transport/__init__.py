@@ -4,6 +4,7 @@ from .sse import SSETransport
 from .stdio import StdioTransport
 from .streamable_http import StreamableHTTPTransport
 from .factory import create_transport
+from .manager import TransportManager, TransportProcessState
 from .custom import (
     CustomTransportRegistry,
     register_custom_transport,
@@ -17,6 +18,8 @@ __all__ = [
     "SSETransport",
     "StdioTransport",
     "StreamableHTTPTransport",
+    "TransportManager",
+    "TransportProcessState",
     "create_transport",
     "CustomTransportRegistry",
     "register_custom_transport",

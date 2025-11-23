@@ -65,7 +65,7 @@ echo "Project root: $PROJECT_ROOT"
 # Run comprehensive fuzzing test with safety system
 echo "🧪 Running comprehensive tool fuzzing test with safety system..."
 echo "🔍 Debug: MCP Fuzzer will show detailed tool call information"
-python -m mcp_fuzzer \
+python3 -m mcp_fuzzer \
     --protocol stdio \
     --endpoint "node $SERVER_DIR/dist/index.js" \
     --mode tools \
