@@ -14,7 +14,7 @@ import signal as _signal
 import sys
 import time
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, TypedDict
 
 from ...config.constants import (
     PROCESS_TERMINATION_TIMEOUT,
@@ -57,17 +57,39 @@ class WatchdogConfig:
         )
 
 
+class WatchdogProcessInfo(TypedDict):
+    """Shape for stored watchdog process metadata."""
+
+    process: Any
+    activity_callback: Callable[[], float] | None
+    name: str
+    last_activity: float
+
+
+class WatchdogProcessTable(dict[int, WatchdogProcessInfo]):
+    """Typed mapping for watchdog-managed processes."""
+
+    def snapshot(self) -> dict[int, WatchdogProcessInfo]:
+        """Return a shallow copy for safe inspection in tests/monitoring."""
+        return dict(self)
+
+
 class ProcessWatchdog:
     """Fully asynchronous process monitoring system."""
 
     def __init__(self, config: WatchdogConfig | None = None):
         """Initialize the process watchdog."""
         self.config = config or WatchdogConfig()
-        self._processes: dict[int, dict[str, Any]] = {}
+        self._processes: WatchdogProcessTable = WatchdogProcessTable()
         self._lock = None  # Will be created lazily when needed
         self._logger = logging.getLogger(__name__)
         self._stop_event = None  # Will be created lazily when needed
         self._watchdog_task: asyncio.Task | None = None
+
+    @property
+    def processes(self) -> WatchdogProcessTable:
+        """Public access to the typed process table (read/update with care)."""
+        return self._processes
 
     def _get_lock(self):
         """Get or create the lock lazily."""
@@ -200,7 +222,7 @@ class ProcessWatchdog:
             for pid in processes_to_remove:
                 del self._processes[pid]
 
-    async def _get_last_activity(self, process_info: dict) -> float:
+    async def _get_last_activity(self, process_info: WatchdogProcessInfo) -> float:
         """Get the last activity timestamp for a process."""
         # Try to get activity from callback first
         if process_info["activity_callback"]:

@@ -69,15 +69,15 @@ class TestCrossPlatformProcessManagement:
             mock_create.return_value = mock_process
 
             with patch.object(process_manager.watchdog, "start", return_value=None):
-                with patch.object(
-                    process_manager.watchdog, "register_process", return_value=None
-                ):
-                    process = await process_manager.start_process(config)
+                    with patch.object(
+                        process_manager.watchdog, "register_process", return_value=None
+                    ):
+                        process = await process_manager.start_process(config)
 
-                    assert process == mock_process
-                    assert process.pid in process_manager.registry._processes
-                    proc_info = process_manager.registry._processes[process.pid]
-                    assert proc_info["status"] == "running"
+                        assert process == mock_process
+                        assert process.pid in process_manager.registry.processes
+                        proc_info = process_manager.registry.processes[process.pid]
+                        assert proc_info["status"] == "running"
 
     @pytest.mark.asyncio
     async def test_process_manager_signal_handling(self, process_manager):
@@ -134,7 +134,7 @@ class TestCrossPlatformProcessManagement:
         await watchdog.register_process(
             mock_process.pid, mock_process, None, "test_process"
         )
-        assert mock_process.pid in watchdog._processes
+        assert mock_process.pid in watchdog.processes
 
         # Test process monitoring
         with patch.object(watchdog, "_check_processes") as mock_check:
@@ -216,20 +216,22 @@ class TestCrossPlatformProcessManagement:
         mock_process2.pid = 67890
         mock_process2.returncode = None
 
-        # Add processes to manager
-        process_manager.registry._processes[12345] = {
-            "process": mock_process1,
-            "config": ProcessConfig(command=["test1"], name="test1"),
-            "status": "running",
-            "start_time": time.time(),
-        }
+        # Add processes to manager via the registry API
+        await process_manager.registry.register(
+            12345,
+            mock_process1,
+            ProcessConfig(command=["test1"], name="test1"),
+            started_at=time.time(),
+            status="running",
+        )
 
-        process_manager.registry._processes[67890] = {
-            "process": mock_process2,
-            "config": ProcessConfig(command=["test2"], name="test2"),
-            "status": "running",
-            "start_time": time.time(),
-        }
+        await process_manager.registry.register(
+            67890,
+            mock_process2,
+            ProcessConfig(command=["test2"], name="test2"),
+            started_at=time.time(),
+            status="running",
+        )
 
         # Test cleanup
         with patch.object(process_manager, "send_timeout_signal") as mock_signal:
@@ -296,13 +298,13 @@ class TestCrossPlatformProcessManagement:
 
                     # Verify all processes were started
                     assert len(processes) == 3
-                    assert len(process_manager.registry._processes) == 3
+                    assert len(process_manager.registry.processes) == 3
 
                     # Verify all processes are tracked
                     for process in processes:
-                        assert process.pid in process_manager.registry._processes
+                        assert process.pid in process_manager.registry.processes
                         assert (
-                            process_manager.registry._processes[process.pid]["status"]
+                            process_manager.registry.processes[process.pid]["status"]
                             == "running"
                         )
 
@@ -349,11 +351,11 @@ class TestCrossPlatformProcessManagement:
             mock_process.returncode = None
 
             with lock:
-                process_manager.registry._processes[mock_process.pid] = {
+                process_manager.registry.processes[mock_process.pid] = {
                     "process": mock_process,
                     "config": ProcessConfig(command=["test"], name="test"),
                     "status": "running",
-                    "start_time": time.time(),
+                    "started_at": time.time(),
                 }
                 results.append(mock_process.pid)
 
@@ -370,7 +372,7 @@ class TestCrossPlatformProcessManagement:
 
         # Verify all processes were added
         assert len(results) == 5
-        assert len(process_manager.registry._processes) == 5
+        assert len(process_manager.registry.processes) == 5
 
     @pytest.mark.asyncio
     async def test_watchdog_process_detection(self, watchdog):

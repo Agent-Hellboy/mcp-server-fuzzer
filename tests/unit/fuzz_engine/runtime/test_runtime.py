@@ -207,13 +207,13 @@ class TestProcessWatchdog:
 
             # Check if process is registered
             async with watchdog._lock:
-                assert 12345 in watchdog._processes
-                assert watchdog._processes[12345]["name"] == "test_process"
+                assert 12345 in watchdog.processes
+                assert watchdog.processes[12345]["name"] == "test_process"
 
             # Unregister the process
             await watchdog.unregister_process(12345)
             async with watchdog._lock:
-                assert 12345 not in watchdog._processes
+                assert 12345 not in watchdog.processes
         finally:
             await watchdog.stop()
 
@@ -241,7 +241,7 @@ class TestProcessWatchdog:
             # Store original timestamp
             original_timestamp = None
             async with watchdog._lock:
-                original_timestamp = watchdog._processes[12345]["last_activity"]
+                original_timestamp = watchdog.processes[12345]["last_activity"]
 
             # Wait a small amount of time to ensure timestamp would be different
             await asyncio.sleep(0.01)
@@ -251,7 +251,7 @@ class TestProcessWatchdog:
 
             # Check that timestamp was updated
             async with watchdog._lock:
-                new_timestamp = watchdog._processes[12345]["last_activity"]
+                new_timestamp = watchdog.processes[12345]["last_activity"]
                 assert new_timestamp > original_timestamp
         finally:
             await watchdog.stop()

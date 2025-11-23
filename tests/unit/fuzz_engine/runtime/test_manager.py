@@ -44,8 +44,8 @@ class TestProcessManager:
                     process = await self.manager.start_process(process_config)
 
                     assert process == self.mock_process
-                    assert process.pid in self.manager.registry._processes
-                    proc_info = self.manager.registry._processes[process.pid]
+                    assert process.pid in self.manager.registry.processes
+                    proc_info = self.manager.registry.processes[process.pid]
                     assert proc_info["config"] == process_config
                     assert proc_info["status"] == "running"
 
@@ -132,7 +132,7 @@ class TestProcessManager:
                         # Verify results
                         assert result is True
                         process.terminate.assert_called_once()
-                        proc_info = self.manager.registry._processes[process.pid]
+                        proc_info = self.manager.registry.processes[process.pid]
                         assert proc_info["status"] == "stopped"
 
     @pytest.mark.asyncio
@@ -168,7 +168,7 @@ class TestProcessManager:
                         # Verify results
                         assert result is True
                         process.kill.assert_called_once()
-                        proc_info = self.manager.registry._processes[process.pid]
+                        proc_info = self.manager.registry.processes[process.pid]
                         assert proc_info["status"] == "stopped"
 
     @pytest.mark.asyncio
@@ -252,8 +252,8 @@ class TestProcessManager:
                         mock_process2.terminate.assert_called_once()
 
                         # Verify both processes are marked as stopped
-                        proc1_info = self.manager.registry._processes[proc1.pid]
-                        proc2_info = self.manager.registry._processes[proc2.pid]
+                        proc1_info = self.manager.registry.processes[proc1.pid]
+                        proc2_info = self.manager.registry.processes[proc2.pid]
                         assert proc1_info["status"] == "stopped"
                         assert proc2_info["status"] == "stopped"
 
@@ -510,7 +510,7 @@ class TestProcessManager:
 
                         # Verify cleanup
                         assert cleaned == 1
-                        assert process.pid not in self.manager.registry._processes
+                        assert process.pid not in self.manager.registry.processes
 
     @pytest.mark.asyncio
     async def test_shutdown(self):
@@ -717,9 +717,9 @@ class TestProcessManager:
                 activity_callback,
                 "existing_process",
             )
-            assert self.mock_process.pid in self.manager.registry._processes
+            assert self.mock_process.pid in self.manager.registry.processes
             assert (
-                self.manager.registry._processes[self.mock_process.pid]["config"].name
+                self.manager.registry.processes[self.mock_process.pid]["config"].name
                 == "existing_process"
             )
 

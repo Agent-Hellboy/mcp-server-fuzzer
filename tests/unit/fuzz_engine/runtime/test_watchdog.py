@@ -36,7 +36,7 @@ class TestProcessWatchdog:
         """Test initialization of the watchdog."""
         watchdog = ProcessWatchdog()
         assert watchdog.config is not None
-        assert watchdog._processes == {}
+        assert watchdog.processes == {}
         assert watchdog._watchdog_task is None
 
         # Test with custom config
@@ -98,9 +98,9 @@ class TestProcessWatchdog:
             await self.watchdog.register_process(12345, mock_process, None, "test")
 
             # Assert process was registered
-            assert 12345 in self.watchdog._processes
-            assert self.watchdog._processes[12345]["name"] == "test"
-            assert self.watchdog._processes[12345]["process"] == mock_process
+            assert 12345 in self.watchdog.processes
+            assert self.watchdog.processes[12345]["name"] == "test"
+            assert self.watchdog.processes[12345]["process"] == mock_process
 
     @pytest.mark.asyncio
     async def test_register_process_failure(self):
@@ -129,7 +129,7 @@ class TestProcessWatchdog:
             await self.watchdog.unregister_process(12345)
 
             # Assert process was unregistered
-            assert 12345 not in self.watchdog._processes
+            assert 12345 not in self.watchdog.processes
 
     @pytest.mark.asyncio
     async def test_unregister_process_failure(self):
@@ -152,7 +152,7 @@ class TestProcessWatchdog:
             await self.watchdog.register_process(12345, mock_process, None, "test")
 
             # Get initial activity time
-            initial_time = self.watchdog._processes[12345]["last_activity"]
+            initial_time = self.watchdog.processes[12345]["last_activity"]
 
             # Wait a bit
             await asyncio.sleep(0.1)
@@ -161,7 +161,7 @@ class TestProcessWatchdog:
             await self.watchdog.update_activity(12345)
 
             # Assert activity time was updated
-            assert self.watchdog._processes[12345]["last_activity"] > initial_time
+            assert self.watchdog.processes[12345]["last_activity"] > initial_time
 
     @pytest.mark.asyncio
     async def test_get_stats(self):

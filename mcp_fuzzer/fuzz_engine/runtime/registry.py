@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""
+Process registry storage for MCP Fuzzer runtime.
+"""
+
+import asyncio
+import time
+from typing import TypedDict
+
+from .config import ProcessConfig
+
+
+class ManagedProcessInfo(TypedDict):
+    process: asyncio.subprocess.Process
+    config: ProcessConfig
+    started_at: float
+    status: str
+
+
+class ManagedProcessTable(dict[int, ManagedProcessInfo]):
+    """Typed mapping for processes tracked by ProcessRegistry."""
+
+    def snapshot(self) -> dict[int, ManagedProcessInfo]:
+        """Return a shallow copy for safe inspection/testing."""
+        return dict(self)
+
+
+class ProcessRegistry:
+    """SINGLE responsibility: Track running processes."""
+
+    def __init__(self) -> None:
+        self._processes: ManagedProcessTable = ManagedProcessTable()
+        self._lock: asyncio.Lock | None = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
+    @property
+    def processes(self) -> ManagedProcessTable:
+        """Expose the typed process table for inspection."""
+        return self._processes
+
+    async def register(
+        self,
+        pid: int,
+        process: asyncio.subprocess.Process,
+        config: ProcessConfig,
+        started_at: float | None = None,
+        status: str = "running",
+    ) -> None:
+        async with self._get_lock():
+            self._processes[pid] = {
+                "process": process,
+                "config": config,
+                "started_at": started_at or time.time(),
+                "status": status,
+            }
+
+    async def unregister(self, pid: int) -> None:
+        async with self._get_lock():
+            self._processes.pop(pid, None)
+
+    async def get_process(self, pid: int) -> ManagedProcessInfo | None:
+        async with self._get_lock():
+            return self._processes.get(pid)
+
+    async def list_pids(self) -> list[int]:
+        async with self._get_lock():
+            return list(self._processes.keys())
+
+    async def update_status(self, pid: int, status: str) -> None:
+        async with self._get_lock():
+            if pid in self._processes:
+                self._processes[pid]["status"] = status
+
+    async def clear(self) -> None:
+        async with self._get_lock():
+            self._processes.clear()
