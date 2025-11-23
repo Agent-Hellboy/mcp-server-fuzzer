@@ -10,10 +10,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 # Import error classes
 from mcp_fuzzer.exceptions import ProcessRegistrationError, WatchdogStartError
 # Import the classes to test
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import (
-    ProcessWatchdog,
-    WatchdogConfig,
-)
+from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
 
 
 class TestProcessWatchdog:
@@ -98,9 +95,10 @@ class TestProcessWatchdog:
             await self.watchdog.register_process(12345, mock_process, None, "test")
 
             # Assert process was registered
-            assert 12345 in self.watchdog.processes
-            assert self.watchdog.processes[12345]["name"] == "test"
-            assert self.watchdog.processes[12345]["process"] == mock_process
+            proc_info = await self.watchdog.get_process_snapshot(12345)
+            assert proc_info is not None
+            assert proc_info["name"] == "test"
+            assert proc_info["process"] == mock_process
 
     @pytest.mark.asyncio
     async def test_register_process_failure(self):
@@ -109,7 +107,7 @@ class TestProcessWatchdog:
         mock_process.pid = 12345
 
         with patch.object(
-            self.watchdog, "_get_lock", side_effect=RuntimeError("boom")
+            self.watchdog._store, "get_lock", side_effect=RuntimeError("boom")
         ):
             with pytest.raises(ProcessRegistrationError) as exc:
                 await self.watchdog.register_process(12345, mock_process, None, "test")
@@ -135,7 +133,7 @@ class TestProcessWatchdog:
     async def test_unregister_process_failure(self):
         """Test unregister_process surfaces ProcessRegistrationError."""
         with patch.object(
-            self.watchdog, "_get_lock", side_effect=RuntimeError("boom")
+            self.watchdog._store, "get_lock", side_effect=RuntimeError("boom")
         ):
             with pytest.raises(ProcessRegistrationError) as exc:
                 await self.watchdog.unregister_process(12345)
@@ -161,7 +159,9 @@ class TestProcessWatchdog:
             await self.watchdog.update_activity(12345)
 
             # Assert activity time was updated
-            assert self.watchdog.processes[12345]["last_activity"] > initial_time
+            proc_info = await self.watchdog.get_process_snapshot(12345)
+            assert proc_info is not None
+            assert proc_info["last_activity"] > initial_time
 
     @pytest.mark.asyncio
     async def test_get_stats(self):

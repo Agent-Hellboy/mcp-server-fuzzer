@@ -64,7 +64,7 @@ class StdioTransport(TransportProtocol):
                 max_hang_time=self.timeout + 10.0,
                 auto_kill=True,
             )
-            self.process_manager = ProcessManager.create_with_config(watchdog_config)
+            self.process_manager = ProcessManager.from_config(watchdog_config)
             self._last_activity = time.time()
         return self.process_manager
 

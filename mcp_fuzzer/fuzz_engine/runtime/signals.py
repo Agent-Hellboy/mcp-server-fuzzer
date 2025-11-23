@@ -8,14 +8,14 @@ import os
 import signal
 from typing import Any, Protocol
 
-from .registry import ManagedProcessInfo, ProcessRegistry
+from .registry import ProcessRecord, ProcessRegistry
 
 
 class ProcessSignalStrategy(Protocol):
     """Strategy interface for sending signals to processes."""
 
     async def send(
-        self, pid: int, process_info: ManagedProcessInfo | None = None
+        self, pid: int, process_info: ProcessRecord | None = None
     ) -> bool: ...
 
 
@@ -27,7 +27,7 @@ class _BaseSignalStrategy:
         self._logger = logger
 
     async def _resolve_process(
-        self, pid: int, process_info: ManagedProcessInfo | None = None
+        self, pid: int, process_info: ProcessRecord | None = None
     ) -> tuple[Any, str] | tuple[None, None]:
         info = process_info or await self._registry.get_process(pid)
         if not info:
@@ -39,7 +39,7 @@ class _BaseSignalStrategy:
 
 class TermSignalStrategy(_BaseSignalStrategy):
     async def send(
-        self, pid: int, process_info: ManagedProcessInfo | None = None
+        self, pid: int, process_info: ProcessRecord | None = None
     ) -> bool:
         process, name = await self._resolve_process(pid, process_info)
         if not process:
@@ -60,7 +60,7 @@ class TermSignalStrategy(_BaseSignalStrategy):
 
 class KillSignalStrategy(_BaseSignalStrategy):
     async def send(
-        self, pid: int, process_info: ManagedProcessInfo | None = None
+        self, pid: int, process_info: ProcessRecord | None = None
     ) -> bool:
         process, name = await self._resolve_process(pid, process_info)
         if not process:
@@ -81,7 +81,7 @@ class KillSignalStrategy(_BaseSignalStrategy):
 
 class InterruptSignalStrategy(_BaseSignalStrategy):
     async def send(
-        self, pid: int, process_info: ManagedProcessInfo | None = None
+        self, pid: int, process_info: ProcessRecord | None = None
     ) -> bool:
         process, name = await self._resolve_process(pid, process_info)
         if not process:
@@ -106,7 +106,7 @@ class InterruptSignalStrategy(_BaseSignalStrategy):
         return True
 
 
-class ProcessSignalHandler:
+class SignalDispatcher:
     """SINGLE responsibility: Send signals to processes using pluggable strategies."""
 
     def __init__(self, registry: ProcessRegistry, logger: logging.Logger) -> None:
@@ -122,7 +122,7 @@ class ProcessSignalHandler:
         self._signal_map[name] = strategy
 
     async def send(
-        self, signal_type: str, pid: int, process_info: ManagedProcessInfo | None = None
+        self, signal_type: str, pid: int, process_info: ProcessRecord | None = None
     ) -> bool:
         handler = self._signal_map.get(signal_type)
         if handler is None:

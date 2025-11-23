@@ -14,7 +14,7 @@ from mcp_fuzzer.exceptions import (
     ProcessStopError,
 )
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import WatchdogConfig
+from mcp_fuzzer.fuzz_engine.runtime import WatchdogConfig
 
 
 class TestProcessManager:
@@ -22,7 +22,7 @@ class TestProcessManager:
     def setup_method(self):
         """Set up test fixtures."""
         self.config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        self.manager = ProcessManager.create_with_config(self.config)
+        self.manager = ProcessManager.from_config(self.config)
         self.mock_process = MagicMock(spec=subprocess.Popen)
         self.mock_process.pid = 12345
         self.mock_process.returncode = None
@@ -384,7 +384,7 @@ class TestProcessManager:
                     process = await self.manager.start_process(process_config)
 
                     # Wait for process
-                    returncode = await self.manager.wait_for_process(process.pid)
+                    returncode = await self.manager.wait(process.pid)
 
                     # Verify return code
                     assert returncode == 0
@@ -412,7 +412,7 @@ class TestProcessManager:
                     process = await self.manager.start_process(process_config)
 
                     # Wait for process with timeout
-                    returncode = await self.manager.wait_for_process(
+                    returncode = await self.manager.wait(
                         process.pid, timeout=1.0
                     )
 
@@ -593,7 +593,7 @@ class TestProcessManager:
         )
 
         with patch.object(
-            self.manager.signal_handler,
+            self.manager.signal_dispatcher,
             "send",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):

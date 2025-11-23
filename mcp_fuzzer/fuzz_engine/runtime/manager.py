@@ -11,12 +11,12 @@ import logging
 from typing import Any, Callable
 
 from ...exceptions import MCPError, ProcessSignalError
-from .config import ProcessConfig
-from .lifecycle import ProcessLifecycleManager
-from .monitor import ProcessMonitor
+from .config import ProcessConfig, WatchdogConfig
+from .lifecycle import ProcessLifecycle
+from .monitor import ProcessInspector
 from .registry import ProcessRegistry
-from .signals import ProcessSignalHandler
-from .watchdog import ProcessWatchdog, WatchdogConfig
+from .signals import SignalDispatcher
+from .watchdog import ProcessWatchdog
 
 
 class ProcessManager:
@@ -26,22 +26,22 @@ class ProcessManager:
         self,
         watchdog: ProcessWatchdog,
         registry: ProcessRegistry,
-        signal_handler: ProcessSignalHandler,
-        lifecycle: ProcessLifecycleManager,
-        monitor: ProcessMonitor,
+        signal_handler: SignalDispatcher,
+        lifecycle: ProcessLifecycle,
+        monitor: ProcessInspector,
         logger: logging.Logger,
     ):
         """Initialize with fully constructed dependencies."""
         self.watchdog = watchdog
         self.registry = registry
-        self.signal_handler = signal_handler
+        self.signal_dispatcher = signal_handler
         self.lifecycle = lifecycle
         self.monitor = monitor
         self._logger = logger
         self._observers: list[Callable[[str, dict[str, Any]], None]] = []
 
     @classmethod
-    def create_with_config(
+    def from_config(
         cls,
         config: WatchdogConfig | None = None,
         config_dict: dict[str, Any] | None = None,
@@ -58,11 +58,11 @@ class ProcessManager:
         resolved_logger = logger or logging.getLogger(__name__)
         watchdog = ProcessWatchdog(cfg)
         registry = ProcessRegistry()
-        signal_handler = ProcessSignalHandler(registry, resolved_logger)
-        lifecycle = ProcessLifecycleManager(
+        signal_handler = SignalDispatcher(registry, resolved_logger)
+        lifecycle = ProcessLifecycle(
             watchdog, registry, signal_handler, resolved_logger
         )
-        monitor = ProcessMonitor(registry, watchdog, resolved_logger)
+        monitor = ProcessInspector(registry, watchdog, resolved_logger)
         return cls(
             watchdog, registry, signal_handler, lifecycle, monitor, resolved_logger
         )
@@ -96,7 +96,7 @@ class ProcessManager:
         return result
 
     async def stop_all_processes(self, force: bool = False) -> None:
-        await self.lifecycle.stop_all(force=force)
+        await self.lifecycle.stop_all(force=force) 
         self._emit_event("stopped_all", force=force)
 
     async def get_process_status(self, pid: int) -> dict[str, Any] | None:
@@ -105,9 +105,7 @@ class ProcessManager:
     async def list_processes(self) -> list[dict[str, Any]]:
         return await self.monitor.list_processes()
 
-    async def wait_for_process(
-        self, pid: int, timeout: float | None = None
-    ) -> int | None:
+    async def wait(self, pid: int, timeout: float | None = None) -> int | None:
         return await self.monitor.wait_for_completion(pid, timeout=timeout)
 
     async def update_activity(self, pid: int) -> None:
@@ -121,9 +119,14 @@ class ProcessManager:
 
     async def shutdown(self) -> None:
         self._logger.info("Shutting down process manager")
-        await self.stop_all_processes()
-        await self.watchdog.stop()
-        await self.registry.clear()
+        try:
+            await self.stop_all_processes()
+        except Exception:
+            self._logger.error("Failed to stop all processes", exc_info=True)
+            raise
+        finally:
+            await self.watchdog.stop()
+            await self.registry.clear()
         self._logger.info("Process manager shutdown complete")
         self._emit_event("shutdown")
 
@@ -139,7 +142,7 @@ class ProcessManager:
             if process.returncode is not None:
                 return False
 
-            result = await self.signal_handler.send(signal_type, pid, process_info)
+            result = await self.signal_dispatcher.send(signal_type, pid, process_info)
             self._emit_event(
                 "signal",
                 pid=pid,

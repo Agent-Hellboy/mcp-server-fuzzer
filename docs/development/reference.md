@@ -241,7 +241,7 @@ class ProcessConfig:
   - Get list of all managed processes with their status
   - Returns comprehensive process information
 
-- `async wait_for_process(pid: int, timeout: Optional[float] = None) -> Optional[int]`
+- `async wait(pid: int, timeout: Optional[float] = None) -> Optional[int]`
   - Wait for a process to complete
   - Returns exit code or None if timeout
   - Non-blocking with configurable timeout
@@ -278,7 +278,7 @@ class ProcessConfig:
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
 
 async def process_manager_example():
-    manager = ProcessManager.create_with_config()
+    manager = ProcessManager.from_config()
 
     # Start a process
     config = ProcessConfig(
@@ -373,7 +373,7 @@ async with ProcessWatchdog(config) as watchdog:
 #### Usage Examples
 
 ```python
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import ProcessWatchdog, WatchdogConfig
+from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
 
 async def watchdog_example():
     config = WatchdogConfig(

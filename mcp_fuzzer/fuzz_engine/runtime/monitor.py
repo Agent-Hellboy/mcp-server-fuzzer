@@ -7,12 +7,11 @@ import asyncio
 import logging
 from typing import Any
 
-from .lifecycle import _wait_for_process_exit
 from .registry import ProcessRegistry
-from .watchdog import ProcessWatchdog
+from .watchdog import ProcessWatchdog, wait_for_process_exit
 
 
-class ProcessMonitor:
+class ProcessInspector:
     """SINGLE responsibility: Monitor process health."""
 
     def __init__(
@@ -32,9 +31,13 @@ class ProcessMonitor:
 
         info_copy = process_info.copy()
         process = info_copy["process"]
+        registry_status = info_copy.get("status")
+
         if process.returncode is None:
-            info_copy["status"] = "running"
+            # Honor registry status (e.g., "stopped") while running
+            info_copy["status"] = registry_status or "running"
         else:
+            # Return code present means process finished
             info_copy["status"] = "finished"
             info_copy["exit_code"] = process.returncode
         return info_copy
@@ -89,9 +92,9 @@ class ProcessMonitor:
         process = process_info["process"]
         try:
             if timeout is None:
-                await _wait_for_process_exit(process)
+                await wait_for_process_exit(process)
             else:
-                await _wait_for_process_exit(process, timeout=timeout)
+                await wait_for_process_exit(process, timeout=timeout)
             return process.returncode
         except asyncio.TimeoutError:
             return process.returncode

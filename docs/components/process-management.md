@@ -131,7 +131,7 @@ import asyncio
 
 async def main():
     # Default wiring via factory (watchdog, registry, signals, lifecycle, monitor)
-    manager = ProcessManager.create_with_config()
+    manager = ProcessManager.from_config()
 
     # Start a process
     config = ProcessConfig(
@@ -146,7 +146,7 @@ async def main():
     print(f"Process started with PID: {process.pid}")
 
     # Wait for completion
-    exit_code = await manager.wait_for_process(process.pid, timeout=120.0)
+    exit_code = await manager.wait(process.pid, timeout=120.0)
 
     # Get statistics
     stats = await manager.get_stats()
@@ -235,7 +235,7 @@ from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def main():
     # Create manager
-    manager = ProcessManager.create_with_config()
+    manager = ProcessManager.from_config()
 
     try:
         # Start a long-running process
@@ -269,7 +269,7 @@ import asyncio
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def run_multiple_processes():
-    manager = ProcessManager.create_with_config()
+    manager = ProcessManager.from_config()
 
     try:
         # Start multiple processes concurrently
@@ -285,7 +285,7 @@ async def run_multiple_processes():
         processes = await asyncio.gather(*tasks)
 
         # Wait for all to complete
-        wait_tasks = [manager.wait_for_process(process.pid) for process in processes]
+        wait_tasks = [manager.wait(process.pid) for process in processes]
         results = await asyncio.gather(*wait_tasks)
         print(f"All processes completed with exit codes: {results}")
 
@@ -318,7 +318,7 @@ class CustomProcess:
 
 async def main():
     # Create process manager
-    manager = ProcessManager.create_with_config()
+    manager = ProcessManager.from_config()
 
     # Create custom process
     custom_proc = CustomProcess()
@@ -354,7 +354,7 @@ import asyncio
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def main():
-    manager = ProcessManager.create_with_config()
+    manager = ProcessManager.from_config()
 
     try:
         # Start a long-running process
@@ -430,6 +430,6 @@ The Process Management system integrates seamlessly with the MCP Fuzzer architec
 
 For complete API documentation, see the individual module docstrings:
 
-- `mcp_fuzzer.fuzz_engine.runtime.watchdog`
+- `mcp_fuzzer.fuzz_engine.runtime`
 - `mcp_fuzzer.fuzz_engine.runtime.manager`
 - `mcp_fuzzer.fuzz_engine.executor`

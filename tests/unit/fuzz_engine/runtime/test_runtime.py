@@ -28,7 +28,7 @@ class TestProcessManager:
     async def test_start_process_success(self):
         """Test starting a process successfully."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        manager = ProcessManager.create_with_config(config)
+        manager = ProcessManager.from_config(config)
 
         # Set up a mock for the watchdog
         manager.watchdog = AsyncMock()
@@ -50,7 +50,7 @@ class TestProcessManager:
     async def test_stop_process(self):
         """Test stopping a process."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        manager = ProcessManager.create_with_config(config)
+        manager = ProcessManager.from_config(config)
 
         # Set up a mock for the watchdog
         manager.watchdog = AsyncMock()
@@ -87,7 +87,7 @@ class TestProcessManager:
     async def test_get_process_status(self):
         """Test getting process status."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        manager = ProcessManager.create_with_config(config)
+        manager = ProcessManager.from_config(config)
 
         # Mock the process
         mock_process = AsyncMock()
@@ -126,7 +126,7 @@ class TestProcessManager:
     async def test_list_processes(self):
         """Test listing processes."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        manager = ProcessManager.create_with_config(config)
+        manager = ProcessManager.from_config(config)
 
         # Mock the processes
         mock_process1 = AsyncMock()
@@ -206,14 +206,14 @@ class TestProcessWatchdog:
             await watchdog.register_process(12345, mock_process, None, "test_process")
 
             # Check if process is registered
-            async with watchdog._lock:
-                assert 12345 in watchdog.processes
-                assert watchdog.processes[12345]["name"] == "test_process"
+            proc_info = await watchdog.get_process_snapshot(12345)
+            assert proc_info is not None
+            assert proc_info["name"] == "test_process"
 
             # Unregister the process
             await watchdog.unregister_process(12345)
-            async with watchdog._lock:
-                assert 12345 not in watchdog.processes
+            registered = await watchdog.list_registered_pids()
+            assert 12345 not in registered
         finally:
             await watchdog.stop()
 
@@ -239,9 +239,9 @@ class TestProcessWatchdog:
             await watchdog.register_process(12345, mock_process, None, "test_process")
 
             # Store original timestamp
-            original_timestamp = None
-            async with watchdog._lock:
-                original_timestamp = watchdog.processes[12345]["last_activity"]
+            proc_info = await watchdog.get_process_snapshot(12345)
+            assert proc_info is not None
+            original_timestamp = proc_info["last_activity"]
 
             # Wait a small amount of time to ensure timestamp would be different
             await asyncio.sleep(0.01)
@@ -250,8 +250,8 @@ class TestProcessWatchdog:
             await watchdog.update_activity(12345)
 
             # Check that timestamp was updated
-            async with watchdog._lock:
-                new_timestamp = watchdog.processes[12345]["last_activity"]
-                assert new_timestamp > original_timestamp
+            updated_info = await watchdog.get_process_snapshot(12345)
+            assert updated_info is not None
+            assert updated_info["last_activity"] > original_timestamp
         finally:
             await watchdog.stop()

@@ -4,7 +4,6 @@ Process lifecycle management for MCP Fuzzer runtime.
 """
 
 import asyncio
-import inspect
 import logging
 import os
 import subprocess
@@ -12,10 +11,9 @@ from typing import Any
 
 from ...exceptions import MCPError, ProcessStartError, ProcessStopError
 from .config import ProcessConfig, merge_env
-from .registry import ManagedProcessInfo, ProcessRegistry
-from .signals import ProcessSignalHandler
+from .registry import ProcessRecord, ProcessRegistry
+from .signals import SignalDispatcher
 from .watchdog import ProcessWatchdog, wait_for_process_exit
-from mcp_fuzzer.fuzz_engine.runtime import watchdog
 
 
 def _normalize_returncode(value: Any) -> int | None:
@@ -37,14 +35,14 @@ def _format_output(data: Any) -> str:
 
 
 
-class ProcessLifecycleManager:
+class ProcessLifecycle:
     """SINGLE responsibility: Start and stop processes."""
 
     def __init__(
         self,
         watchdog: ProcessWatchdog,
         registry: ProcessRegistry,
-        signal_handler: ProcessSignalHandler,
+        signal_handler: SignalDispatcher,
         logger: logging.Logger,
     ) -> None:
         self.watchdog = watchdog
@@ -157,28 +155,28 @@ class ProcessLifecycleManager:
             ) from e
 
     async def _force_kill_process(
-        self, pid: int, process_info: ManagedProcessInfo
+        self, pid: int, process_info: ProcessRecord
     ) -> None:
         """Force kill a process."""
         process = process_info["process"]
         name = process_info["config"].name
         await self.signal_handler.send("force", pid, process_info)
         try:
-            await watchdog.wait_for_process_exit(process, timeout=1.0)
+            await wait_for_process_exit(process, timeout=1.0)
         except asyncio.TimeoutError:
             self._logger.warning(
                 f"Process {pid} ({name}) didn't respond to kill signal"
             )
 
     async def _graceful_terminate_process(
-        self, pid: int, process_info: ManagedProcessInfo
+        self, pid: int, process_info: ProcessRecord
     ) -> None:
         """Gracefully terminate a process."""
         process = process_info["process"]
         name = process_info["config"].name
         await self.signal_handler.send("timeout", pid, process_info)
         try:
-            await watchdog.wait_for_process_exit(process, timeout=2.0)
+            await wait_for_process_exit(process, timeout=2.0)
             self._logger.info(f"Gracefully stopped process {pid} ({name})")
         except asyncio.TimeoutError:
             self._logger.info(f"Escalating to SIGKILL for process {pid} ({name})")

@@ -17,7 +17,7 @@ import pytest
 
 from mcp_fuzzer.exceptions import ProcessStartError
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import ProcessWatchdog, WatchdogConfig
+from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
 
 pytestmark = [pytest.mark.integration, pytest.mark.runtime, pytest.mark.process]
 
@@ -29,7 +29,7 @@ class TestCrossPlatformProcessManagement:
     def process_manager(self):
         """Create a ProcessManager instance for testing."""
         config = WatchdogConfig(process_timeout=5.0, check_interval=0.1)
-        return ProcessManager.create_with_config(config)
+        return ProcessManager.from_config(config)
 
     @pytest.fixture
     def watchdog(self):
@@ -137,8 +137,8 @@ class TestCrossPlatformProcessManagement:
         assert mock_process.pid in watchdog.processes
 
         # Test process monitoring
-        with patch.object(watchdog, "_check_processes") as mock_check:
-            await watchdog._check_processes()
+        with patch.object(watchdog, "_scan_processes") as mock_check:
+            await watchdog._scan_processes()
             mock_check.assert_called()
 
         # Test watchdog stop
@@ -390,7 +390,7 @@ class TestCrossPlatformProcessManagement:
 
         # Test process detection
         # The process should be detected as finished and removed from monitoring
-        await watchdog._check_processes()
+        await watchdog._scan_processes()
 
         # Verify the process was removed from monitoring
         is_registered = await watchdog.is_process_registered(mock_process.pid)

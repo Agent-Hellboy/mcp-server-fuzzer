@@ -31,6 +31,28 @@ class ProcessConfig:
         )
 
 
+@dataclass
+class WatchdogConfig:
+    """Configuration for the process watchdog."""
+
+    check_interval: float = 1.0  # How often to check processes (seconds)
+    process_timeout: float = 30.0  # Time before process is considered hanging (seconds)
+    extra_buffer: float = 5.0  # Extra time before auto-kill (seconds)
+    max_hang_time: float = 60.0  # Maximum time before force kill (seconds)
+    auto_kill: bool = True  # Whether to automatically kill hanging processes
+
+    @classmethod
+    def from_config(cls, config: dict[str, Any]) -> "WatchdogConfig":
+        """Create WatchdogConfig from configuration dictionary."""
+        return cls(
+            check_interval=config.get("watchdog_check_interval", 1.0),
+            process_timeout=config.get("watchdog_process_timeout", 30.0),
+            extra_buffer=config.get("watchdog_extra_buffer", 5.0),
+            max_hang_time=config.get("watchdog_max_hang_time", 60.0),
+            auto_kill=config.get("auto_kill", True),
+        )
+
+
 class ProcessConfigBuilder:
     """Builder to compose ProcessConfig instances with clear, chainable options."""
 

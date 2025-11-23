@@ -71,7 +71,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
                 max_hang_time=timeout + 10.0,
                 auto_kill=True,
             )
-            self.process_manager = ProcessManager.create_with_config(watchdog_config)
+            self.process_manager = ProcessManager.from_config(watchdog_config)
         else:
             self.process_manager = process_manager
 

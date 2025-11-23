@@ -10,17 +10,17 @@ from typing import TypedDict
 from .config import ProcessConfig
 
 
-class ManagedProcessInfo(TypedDict):
+class ProcessRecord(TypedDict):
     process: asyncio.subprocess.Process
     config: ProcessConfig
     started_at: float
     status: str
 
 
-class ManagedProcessTable(dict[int, ManagedProcessInfo]):
+class ProcessRegistryTable(dict[int, ProcessRecord]):
     """Typed mapping for processes tracked by ProcessRegistry."""
 
-    def snapshot(self) -> dict[int, ManagedProcessInfo]:
+    def snapshot(self) -> dict[int, ProcessRecord]:
         """Return a shallow copy for safe inspection/testing."""
         return dict(self)
 
@@ -29,7 +29,7 @@ class ProcessRegistry:
     """SINGLE responsibility: Track running processes."""
 
     def __init__(self) -> None:
-        self._processes: ManagedProcessTable = ManagedProcessTable()
+        self._processes: ProcessRegistryTable = ProcessRegistryTable()
         self._lock: asyncio.Lock | None = None
 
     def _get_lock(self) -> asyncio.Lock:
@@ -38,7 +38,7 @@ class ProcessRegistry:
         return self._lock
 
     @property
-    def processes(self) -> ManagedProcessTable:
+    def processes(self) -> ProcessRegistryTable:
         """Expose the typed process table for inspection."""
         return self._processes
 
@@ -62,7 +62,7 @@ class ProcessRegistry:
         async with self._get_lock():
             self._processes.pop(pid, None)
 
-    async def get_process(self, pid: int) -> ManagedProcessInfo | None:
+    async def get_process(self, pid: int) -> ProcessRecord | None:
         async with self._get_lock():
             return self._processes.get(pid)
 
