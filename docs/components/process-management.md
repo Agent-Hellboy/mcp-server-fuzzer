@@ -130,7 +130,8 @@ from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 import asyncio
 
 async def main():
-    manager = ProcessManager()
+    # Default wiring via factory (watchdog, registry, signals, lifecycle, monitor)
+    manager = ProcessManager.create_with_config()
 
     # Start a process
     config = ProcessConfig(
@@ -234,7 +235,7 @@ from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def main():
     # Create manager
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     try:
         # Start a long-running process
@@ -268,7 +269,7 @@ import asyncio
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def run_multiple_processes():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     try:
         # Start multiple processes concurrently
@@ -317,7 +318,7 @@ class CustomProcess:
 
 async def main():
     # Create process manager
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     # Create custom process
     custom_proc = CustomProcess()
@@ -353,7 +354,7 @@ import asyncio
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def main():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     try:
         # Start a long-running process

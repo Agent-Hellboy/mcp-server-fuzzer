@@ -405,7 +405,7 @@ async def basic_process_management():
     )
 
     # Create process manager
-    manager = ProcessManager(watchdog_config)
+    manager = ProcessManager.create_with_config(watchdog_config)
 
     try:
         # Start a test server
@@ -439,7 +439,7 @@ if __name__ == "__main__":
 import time
 
 async def process_with_activity_monitoring():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     # Activity callback for hang detection
     last_activity = time.time()
@@ -477,7 +477,7 @@ async def process_with_activity_monitoring():
 
 ```python
 async def multiple_process_management():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     try:
         # Start multiple worker processes

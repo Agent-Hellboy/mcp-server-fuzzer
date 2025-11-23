@@ -7,6 +7,7 @@ This guide provides comprehensive information on managing processes, configuring
 ### Starting Processes
 
 When starting processes with the ProcessManager, follow these best practices:
+Use `ProcessManager.create_with_config(...)` for the default runtime wiring, or build your own dependencies and pass them to the `ProcessManager` constructor when you need custom registries, signal strategies, or watchdog settings.
 
 #### 1. Use Descriptive Names
 
@@ -105,7 +106,7 @@ async def periodic_activity_update(manager, pid, interval=5.0):
 
 ```python
 async def graceful_shutdown_example():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     # Start process
     config = ProcessConfig(command=["python", "server.py"], name="server")
@@ -201,7 +202,7 @@ prod_config = WatchdogConfig(
 ```python
 async def managed_process_example():
     watchdog_config = WatchdogConfig(auto_kill=True)
-    manager = ProcessManager(watchdog_config)
+    manager = ProcessManager.create_with_config(watchdog_config)
 
     # Processes are automatically registered with watchdog
     config = ProcessConfig(command=["python", "server.py"], name="server")

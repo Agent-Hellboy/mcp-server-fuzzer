@@ -22,7 +22,7 @@ class TestProcessManager:
     def setup_method(self):
         """Set up test fixtures."""
         self.config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        self.manager = ProcessManager(self.config)
+        self.manager = ProcessManager.create_with_config(self.config)
         self.mock_process = MagicMock(spec=subprocess.Popen)
         self.mock_process.pid = 12345
         self.mock_process.returncode = None

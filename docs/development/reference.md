@@ -278,7 +278,7 @@ class ProcessConfig:
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
 
 async def process_manager_example():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     # Start a process
     config = ProcessConfig(

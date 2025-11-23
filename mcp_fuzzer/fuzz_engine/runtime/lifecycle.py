@@ -14,7 +14,8 @@ from ...exceptions import MCPError, ProcessStartError, ProcessStopError
 from .config import ProcessConfig, merge_env
 from .registry import ManagedProcessInfo, ProcessRegistry
 from .signals import ProcessSignalHandler
-from .watchdog import ProcessWatchdog
+from .watchdog import ProcessWatchdog, wait_for_process_exit
+from mcp_fuzzer.fuzz_engine.runtime import watchdog
 
 
 def _normalize_returncode(value: Any) -> int | None:
@@ -34,17 +35,6 @@ def _format_output(data: Any) -> str:
         return data.strip()
     return str(data).strip()
 
-
-async def _wait_for_process_exit(
-    process: asyncio.subprocess.Process, timeout: float | None = None
-) -> Any:
-    """Await process.wait() while tolerating mocked/synchronous implementations."""
-    wait_result = process.wait()
-    if inspect.isawaitable(wait_result):
-        if timeout is None:
-            return await wait_result
-        return await asyncio.wait_for(wait_result, timeout=timeout)
-    return wait_result
 
 
 class ProcessLifecycleManager:
@@ -174,7 +164,7 @@ class ProcessLifecycleManager:
         name = process_info["config"].name
         await self.signal_handler.send("force", pid, process_info)
         try:
-            await _wait_for_process_exit(process, timeout=1.0)
+            await watchdog.wait_for_process_exit(process, timeout=1.0)
         except asyncio.TimeoutError:
             self._logger.warning(
                 f"Process {pid} ({name}) didn't respond to kill signal"
@@ -188,7 +178,7 @@ class ProcessLifecycleManager:
         name = process_info["config"].name
         await self.signal_handler.send("timeout", pid, process_info)
         try:
-            await _wait_for_process_exit(process, timeout=2.0)
+            await watchdog.wait_for_process_exit(process, timeout=2.0)
             self._logger.info(f"Gracefully stopped process {pid} ({name})")
         except asyncio.TimeoutError:
             self._logger.info(f"Escalating to SIGKILL for process {pid} ({name})")

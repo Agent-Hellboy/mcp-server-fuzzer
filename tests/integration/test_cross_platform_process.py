@@ -29,7 +29,7 @@ class TestCrossPlatformProcessManagement:
     def process_manager(self):
         """Create a ProcessManager instance for testing."""
         config = WatchdogConfig(process_timeout=5.0, check_interval=0.1)
-        return ProcessManager(config)
+        return ProcessManager.create_with_config(config)
 
     @pytest.fixture
     def watchdog(self):

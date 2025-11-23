@@ -14,6 +14,11 @@ The runtime management system provides robust, asynchronous subprocess lifecycle
 
 The `ProcessManager` provides fully asynchronous subprocess lifecycle management with comprehensive process tracking and signal handling.
 
+### Construction Patterns
+
+- **Default wiring**: `ProcessManager.create_with_config()` constructs a manager with default watchdog/registry/signal handler/lifecycle/monitor components.
+- **Custom wiring**: You can instantiate collaborators yourself and pass them to the `ProcessManager` constructor to fully control dependencies (useful in tests).
+
 ### Core Features
 
 - **Async Process Creation**: Uses `asyncio.create_subprocess_exec` for non-blocking process spawning
@@ -51,7 +56,7 @@ class ProcessConfig:
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
 
 async def basic_process_management():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     # Start a process
     config = ProcessConfig(
@@ -78,7 +83,7 @@ async def basic_process_management():
 import time
 
 async def process_with_activity_monitoring():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     # Activity callback that reports current time
     def activity_callback():
@@ -106,7 +111,7 @@ async def process_with_activity_monitoring():
 
 ```python
 async def multiple_process_management():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
 
     # Start multiple processes
     processes = []
@@ -171,6 +176,23 @@ async def multiple_process_management():
 
 - `async shutdown() -> None`
   - Shutdown the process manager and stop all processes
+
+### Custom Signal Strategies
+
+`ProcessSignalHandler` now supports registering custom strategies:
+
+```python
+from mcp_fuzzer.fuzz_engine.runtime.signals import ProcessSignalStrategy
+
+class NoopSignal(ProcessSignalStrategy):
+    async def send(self, pid: int, process_info=None) -> bool:
+        return True  # override behavior as needed
+
+manager = ProcessManager.create_with_config()
+manager.signal_handler.register_strategy("noop", NoopSignal())
+```
+
+Registering with an existing key overrides the default handler (e.g., `"timeout"`).
 
 ## ProcessWatchdog
 
@@ -484,7 +506,7 @@ async def complete_runtime_example():
     )
 
     # Create runtime components
-    manager = ProcessManager(watchdog_config)
+    manager = ProcessManager.create_with_config(watchdog_config)
     executor = AsyncFuzzExecutor(max_concurrency=3)
 
     try:
@@ -551,7 +573,7 @@ class ManagedStdioTransport(StdioTransport):
 
 # Usage
 async def managed_transport_example():
-    manager = ProcessManager()
+    manager = ProcessManager.create_with_config()
     transport = ManagedStdioTransport("python test_server.py", manager)
 
     try:

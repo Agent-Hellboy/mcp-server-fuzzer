@@ -28,7 +28,7 @@ class TestProcessManager:
     async def test_start_process_success(self):
         """Test starting a process successfully."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        manager = ProcessManager(config)
+        manager = ProcessManager.create_with_config(config)
 
         # Set up a mock for the watchdog
         manager.watchdog = AsyncMock()
@@ -50,7 +50,7 @@ class TestProcessManager:
     async def test_stop_process(self):
         """Test stopping a process."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        manager = ProcessManager(config)
+        manager = ProcessManager.create_with_config(config)
 
         # Set up a mock for the watchdog
         manager.watchdog = AsyncMock()
@@ -87,7 +87,7 @@ class TestProcessManager:
     async def test_get_process_status(self):
         """Test getting process status."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        manager = ProcessManager(config)
+        manager = ProcessManager.create_with_config(config)
 
         # Mock the process
         mock_process = AsyncMock()
@@ -126,7 +126,7 @@ class TestProcessManager:
     async def test_list_processes(self):
         """Test listing processes."""
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        manager = ProcessManager(config)
+        manager = ProcessManager.create_with_config(config)
 
         # Mock the processes
         mock_process1 = AsyncMock()

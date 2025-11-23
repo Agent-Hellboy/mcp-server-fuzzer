@@ -24,33 +24,30 @@ class ProcessManager:
 
     def __init__(
         self,
+        watchdog: ProcessWatchdog,
+        registry: ProcessRegistry,
+        signal_handler: ProcessSignalHandler,
+        lifecycle: ProcessLifecycleManager,
+        monitor: ProcessMonitor,
+        logger: logging.Logger,
+    ):
+        """Initialize with fully constructed dependencies."""
+        self.watchdog = watchdog
+        self.registry = registry
+        self.signal_handler = signal_handler
+        self.lifecycle = lifecycle
+        self.monitor = monitor
+        self._logger = logger
+        self._observers: list[Callable[[str, dict[str, Any]], None]] = []
+
+    @classmethod
+    def create_with_config(
+        cls,
         config: WatchdogConfig | None = None,
         config_dict: dict[str, Any] | None = None,
-        *,
-        watchdog: ProcessWatchdog | None = None,
-        registry: ProcessRegistry | None = None,
-        signal_handler: ProcessSignalHandler | None = None,
-        lifecycle: ProcessLifecycleManager | None = None,
-        monitor: ProcessMonitor | None = None,
         logger: logging.Logger | None = None,
-    ):
-        """Initialize the async process manager with injectable dependencies."""
-        inferred_logger = (
-            logger
-            or getattr(lifecycle, "_logger", None)
-            or getattr(signal_handler, "_logger", None)
-            or logging.getLogger(__name__)
-        )
-
-        if lifecycle is not None:
-            registry = registry or lifecycle.registry
-            signal_handler = signal_handler or lifecycle.signal_handler
-            watchdog = watchdog or lifecycle.watchdog
-
-        if monitor is not None:
-            registry = registry or monitor.registry
-            watchdog = watchdog or monitor.watchdog
-
+    ) -> "ProcessManager":
+        """Factory method for creating a ProcessManager with default components."""
         cfg = (
             WatchdogConfig.from_config(config_dict)
             if config_dict
@@ -58,32 +55,17 @@ class ProcessManager:
             if config
             else WatchdogConfig()
         )
-        self.config = cfg
-        self.watchdog = watchdog or ProcessWatchdog(cfg)
-        self._logger = inferred_logger
-        self.registry = registry or ProcessRegistry()
-        self.signal_handler = signal_handler or ProcessSignalHandler(
-            self.registry, self._logger
+        resolved_logger = logger or logging.getLogger(__name__)
+        watchdog = ProcessWatchdog(cfg)
+        registry = ProcessRegistry()
+        signal_handler = ProcessSignalHandler(registry, resolved_logger)
+        lifecycle = ProcessLifecycleManager(
+            watchdog, registry, signal_handler, resolved_logger
         )
-        if lifecycle is not None:
-            self.lifecycle = lifecycle
-            self.lifecycle.watchdog = self.watchdog
-            self.lifecycle.registry = self.registry
-            self.lifecycle.signal_handler = self.signal_handler
-        else:
-            self.lifecycle = ProcessLifecycleManager(
-                self.watchdog, self.registry, self.signal_handler, self._logger
-            )
-
-        if monitor is not None:
-            self.monitor = monitor
-            self.monitor.watchdog = self.watchdog
-            self.monitor.registry = self.registry
-        else:
-            self.monitor = ProcessMonitor(
-                self.registry, self.watchdog, self._logger
-            )
-        self._observers: list[Callable[[str, dict[str, Any]], None]] = []
+        monitor = ProcessMonitor(registry, watchdog, resolved_logger)
+        return cls(
+            watchdog, registry, signal_handler, lifecycle, monitor, resolved_logger
+        )
 
     def add_observer(self, callback: Callable[[str, dict[str, Any]], None]) -> None:
         """Register an observer for process lifecycle events."""

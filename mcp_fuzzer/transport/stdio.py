@@ -49,16 +49,6 @@ class StdioTransport(TransportProtocol):
             self._lock = asyncio.Lock()
         return self._lock
 
-    async def _apply_backoff(self) -> float:
-        """Apply exponential backoff when restarting the transport process."""
-        self._restart_attempts += 1
-        delay = min(
-            self._backoff_base * (2 ** (self._restart_attempts - 1)), self._backoff_cap
-        )
-        if delay > 0:
-            await asyncio.sleep(delay)
-        return delay
-
     def add_observer(self, callback: Callable[[str, dict[str, Any]], None]) -> None:
         """Register an observer for lifecycle events."""
         self.manager.add_observer(callback)
@@ -74,7 +64,7 @@ class StdioTransport(TransportProtocol):
                 max_hang_time=self.timeout + 10.0,
                 auto_kill=True,
             )
-            self.process_manager = ProcessManager(watchdog_config)
+            self.process_manager = ProcessManager.create_with_config(watchdog_config)
             self._last_activity = time.time()
         return self.process_manager
 

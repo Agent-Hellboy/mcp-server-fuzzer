@@ -112,11 +112,14 @@ class ProcessSignalHandler:
     def __init__(self, registry: ProcessRegistry, logger: logging.Logger) -> None:
         self._registry = registry
         self._logger = logger
-        self._signal_map: dict[str, ProcessSignalStrategy] = {
-            "timeout": TermSignalStrategy(registry, logger),
-            "force": KillSignalStrategy(registry, logger),
-            "interrupt": InterruptSignalStrategy(registry, logger),
-        }
+        self._signal_map: dict[str, ProcessSignalStrategy] = {}
+        self.register_strategy("timeout", TermSignalStrategy(registry, logger))
+        self.register_strategy("force", KillSignalStrategy(registry, logger))
+        self.register_strategy("interrupt", InterruptSignalStrategy(registry, logger))
+
+    def register_strategy(self, name: str, strategy: ProcessSignalStrategy) -> None:
+        """Register or override a signal strategy."""
+        self._signal_map[name] = strategy
 
     async def send(
         self, signal_type: str, pid: int, process_info: ManagedProcessInfo | None = None
