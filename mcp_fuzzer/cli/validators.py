@@ -15,6 +15,7 @@ from ..exceptions import ArgumentValidationError
 from ..config import load_config_file
 from ..transport.factory import create_transport
 from ..exceptions import MCPError, TransportError
+from ..env import ENVIRONMENT_VARIABLES, ValidationType
 
 
 class ValidationManager:
@@ -35,7 +36,9 @@ class ValidationManager:
             )
 
         if args.mode == "protocol" and not args.protocol_type:
-            pass
+            raise ArgumentValidationError(
+                "--protocol-type is required when --mode protocol"
+            )
 
         if args.protocol_type and args.mode != "protocol":
             raise ArgumentValidationError(
@@ -76,7 +79,6 @@ class ValidationManager:
         """Print environment variable status and exit."""
         self.console.print("[bold]Environment variables check:[/bold]")
 
-        from ..env import ENVIRONMENT_VARIABLES
 
         all_valid = True
         for env_var in ENVIRONMENT_VARIABLES:
@@ -110,40 +112,40 @@ class ValidationManager:
         raise ArgumentValidationError("Invalid environment variable values")
 
     def _validate_env_var(
-        self, value: str, validation_type: str, params: dict
+        self, value: str, validation_type: ValidationType, params: dict
     ) -> bool:
         """Validate a single environment variable."""
-        if validation_type == "choice":
+        if validation_type == ValidationType.CHOICE:
             return value.upper() in [c.upper() for c in params.get("choices", [])]
-        elif validation_type == "boolean":
+        elif validation_type == ValidationType.BOOLEAN:
             return value.lower() in ["true", "false"]
-        elif validation_type == "numeric":
+        elif validation_type == ValidationType.NUMERIC:
             try:
                 float(value)
                 return True
             except ValueError:
                 return False
-        if validation_type == "string":
+        elif validation_type == ValidationType.STRING:
             return True
         return False
 
     def _get_validation_error_msg(
-        self, name: str, value: str, validation_type: str, params: dict
+        self, name: str, value: str, validation_type: ValidationType, params: dict
     ) -> str:
         """Generate validation error message."""
-        if validation_type == "choice":
+        if validation_type == ValidationType.CHOICE:
             choices = params.get("choices", [])
             choices_str = ", ".join(choices)
             return (
                 "[red]:heavy_multiplication_x: "
                 f"{name}={value} (must be one of: {choices_str})[/red]"
             )
-        if validation_type == "boolean":
+        elif validation_type == ValidationType.BOOLEAN:
             return (
                 "[red]:heavy_multiplication_x: "
                 f"{name}={value} (must be 'true' or 'false')[/red]"
             )
-        if validation_type == "numeric":
+        elif validation_type == ValidationType.NUMERIC:
             return (
                 "[red]:heavy_multiplication_x: "
                 f"{name}={value} (must be numeric)[/red]"

@@ -14,7 +14,7 @@ class EnvironmentVariable(TypedDict):
 
     name: str
     default: str
-    validation_type: str  # ValidationType value
+    validation_type: ValidationType
     validation_params: dict[str, Any]  # e.g., {"choices": ["DEBUG", "INFO", ...]}
     description: str
 
@@ -23,14 +23,14 @@ ENVIRONMENT_VARIABLES: list[EnvironmentVariable] = [
     {
         "name": "MCP_FUZZER_TIMEOUT",
         "default": "30.0",
-        "validation_type": "numeric",
+        "validation_type": ValidationType.NUMERIC,
         "validation_params": {},
         "description": "Request timeout in seconds",
     },
     {
         "name": "MCP_FUZZER_LOG_LEVEL",
         "default": "INFO",
-        "validation_type": "choice",
+        "validation_type": ValidationType.CHOICE,
         "validation_params": {
             "choices": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         },
@@ -39,21 +39,21 @@ ENVIRONMENT_VARIABLES: list[EnvironmentVariable] = [
     {
         "name": "MCP_FUZZER_SAFETY_ENABLED",
         "default": "false",
-        "validation_type": "boolean",
+        "validation_type": ValidationType.BOOLEAN,
         "validation_params": {},
         "description": "Enable safety system features",
     },
     {
         "name": "MCP_FUZZER_FS_ROOT",
         "default": "~/.mcp_fuzzer",
-        "validation_type": "string",
+        "validation_type": ValidationType.STRING,
         "validation_params": {},
         "description": "Filesystem sandbox root directory",
     },
     {
         "name": "MCP_FUZZER_AUTO_KILL",
         "default": "true",
-        "validation_type": "boolean",
+        "validation_type": ValidationType.BOOLEAN,
         "validation_params": {},
         "description": "Automatically kill hanging processes",
     },
