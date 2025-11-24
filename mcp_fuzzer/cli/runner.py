@@ -47,7 +47,12 @@ def create_transport_with_auth(args, client_args: dict[str, Any]):
                 logger.debug("No auth headers found for default tool mapping")
 
         factory_kwargs = {"timeout": args.timeout}
-        
+
+        # Get safety settings
+        safety_enabled = client_args.get("safety_enabled", True)
+        if safety_enabled:
+            factory_kwargs["safety_enabled"] = safety_enabled
+
         # Apply auth headers to HTTP-based protocols
         if args.protocol in ("http", "https", "streamablehttp", "sse") and auth_headers:
             factory_kwargs["auth_headers"] = auth_headers

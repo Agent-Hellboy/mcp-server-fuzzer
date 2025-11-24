@@ -56,6 +56,7 @@ async def main(argv: list[str] | None = None) -> int:
     
     client_args = {
         "auth_manager": config.get("auth_manager"),
+        "safety_enabled": config.get("safety_enabled", True),
     }
     
     transport = create_transport_with_auth(args, client_args)
