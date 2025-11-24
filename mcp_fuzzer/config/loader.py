@@ -168,7 +168,7 @@ def get_config_schema() -> dict[str, Any]:
                 "type": "number",
                 "description": "STDIO transport timeout in seconds",
             },
-            "mode": {"type": "string", "enum": ["tools", "protocol", "both"]},
+            "mode": {"type": "string", "enum": ["tools", "tool", "protocol", "both"]},
             "phase": {"type": "string", "enum": ["realistic", "aggressive", "both"]},
             "protocol": {
                 "type": "string",

@@ -5,28 +5,20 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any, Callable
+from typing import Any
 
 from rich.console import Console
 
-from ..exceptions import (
-    ArgumentValidationError,
-    CLIError,
-    MCPError,
-    TransportError,
-)
-from ..transport.factory import create_transport
+from ..exceptions import ArgumentValidationError, CLIError, MCPError
 from ..client.main import unified_client_main
 from ..client.runtime import prepare_inner_argv, run_with_retry_on_interrupt
 from ..client.safety import SafetyController
 from ..client.settings import ClientSettings
-from .auth_resolver import resolve_auth_manager
 from .config_merge import build_cli_config
-from .env_tools import handle_check_env, handle_validate_config
-from .logging_setup import setup_logging
+from .validators import ValidationManager
+from ..logging import setup_logging
 from .parser import parse_arguments
 from .startup_info import print_startup_info
-from .validators import validate_arguments
 
 
 def _print_mcp_error(error: MCPError) -> None:
@@ -36,42 +28,29 @@ def _print_mcp_error(error: MCPError) -> None:
         console.print(f"[dim]Context: {error.context}[/dim]")
 
 
-def _validate_transport(args: Any) -> None:
-    try:
-        _ = create_transport(
-            args.protocol,
-            args.endpoint,
-            timeout=args.timeout,
-        )
-    except MCPError:
-        raise
-    except Exception as transport_error:
-        raise TransportError(
-            "Failed to initialize transport",
-            context={"protocol": args.protocol, "endpoint": args.endpoint},
-        ) from transport_error
-
 
 def run_cli() -> None:
     safety: SafetyController | None = None
     try:
         args = parse_arguments()
-        validate_arguments(args)
         setup_logging(args)
-
-        if getattr(args, "validate_config", None):
-            handle_validate_config(args.validate_config)
-
-        if getattr(args, "check_env", False):
-            handle_check_env()
+        validator = ValidationManager()
+        validator.validate_arguments(args)
+        if args.validate_config:
+            validator.validate_config_file(args.validate_config)
+        if args.check_env:
+            validator.check_environment_variables()
 
         cli_config = build_cli_config(args)
         config = cli_config.merged
 
-        is_utility_command = config.get("check_env") or config.get("validate_config")
+        is_utility_command = getattr(args, "check_env", False) or getattr(
+            args, "validate_config", None
+        ) is not None
         if not is_utility_command:
-            print_startup_info(args)
-            _validate_transport(args)
+            print_startup_info(args, config)
+
+        validator.validate_transport(args)
 
         client_settings = ClientSettings(config)
         safety = SafetyController()

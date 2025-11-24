@@ -46,11 +46,21 @@ Examples:
 
     parser.add_argument(
         "--mode",
-        choices=["tools", "protocol", "both"],
+        choices=["tools", "tool", "protocol", "both"],
         default="both",
         help=(
-            "Fuzzing mode: 'tools' for tool fuzzing, 'protocol' for protocol fuzzing, "
-            "'both' for both (default: both)"
+            "Fuzzing mode: 'tools' for all tool fuzzing, 'tool' for single tool "
+            "fuzzing (requires --tool), 'protocol' for protocol fuzzing, 'both' "
+            "for both (default: both)"
+        ),
+    )
+
+    parser.add_argument(
+        "--tool",
+        type=str,
+        help=(
+            "Specific tool name to fuzz when using --mode tool "
+            "(e.g., 'analyze_repository')"
         ),
     )
 

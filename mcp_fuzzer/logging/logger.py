@@ -8,9 +8,13 @@ import logging
 
 
 def setup_logging(args: argparse.Namespace) -> None:
-    if getattr(args, "log_level", None):
-        level = getattr(logging, args.log_level)
+
+    VALID_LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]    
+    if getattr(args, "log_level", None) and args.log_level.upper() in VALID_LOG_LEVELS:
+        level = getattr(logging, args.log_level.upper())
     else:
+        level = logging.INFO if getattr(args, "verbose", False) else logging.WARNING
+    if not level:
         level = logging.INFO if getattr(args, "verbose", False) else logging.WARNING
 
     logging.basicConfig(
@@ -19,7 +23,6 @@ def setup_logging(args: argparse.Namespace) -> None:
         force=True,
     )
 
-    logging.getLogger().setLevel(level)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("psutil").setLevel(logging.WARNING)

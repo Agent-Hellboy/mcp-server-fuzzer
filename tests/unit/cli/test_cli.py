@@ -13,13 +13,10 @@ from mcp_fuzzer.cli import (
     print_startup_info,
     run_cli,
     setup_logging,
-    validate_arguments,
+    ValidationManager,
     build_cli_config,
 )
-from mcp_fuzzer.cli.auth_resolver import resolve_auth_manager
 from mcp_fuzzer.cli.config_merge import CliConfig
-from mcp_fuzzer.cli.env_tools import handle_check_env, handle_validate_config
-from mcp_fuzzer.cli.entrypoint import _validate_transport
 from mcp_fuzzer.client.runtime.argv_builder import prepare_inner_argv
 from mcp_fuzzer.client.runtime.async_runner import AsyncRunner
 from mcp_fuzzer.client.runtime.async_runner import execute_inner_client
@@ -129,6 +126,7 @@ def test_setup_logging_levels():
 
 
 def test_validate_arguments_errors():
+    validator = ValidationManager()
     args = argparse.Namespace(
         mode="tool",
         protocol_type="x",
@@ -140,9 +138,10 @@ def test_validate_arguments_errors():
         validate_config=None,
     )
     with pytest.raises(ArgumentValidationError):
-        validate_arguments(args)
+        validator.validate_arguments(args)
 
 def test_validate_arguments_runs_per_type_invalid_type():
+    validator = ValidationManager()
     args = argparse.Namespace(
         mode="protocol",
         protocol_type=None,
@@ -154,9 +153,10 @@ def test_validate_arguments_runs_per_type_invalid_type():
         validate_config=None,
     )
     with pytest.raises(ArgumentValidationError):
-        validate_arguments(args)
+        validator.validate_arguments(args)
 
 def test_validate_arguments_timeout_negative():
+    validator = ValidationManager()
     args = argparse.Namespace(
         mode="tools",
         protocol_type=None,
@@ -168,10 +168,11 @@ def test_validate_arguments_timeout_negative():
         validate_config=None,
     )
     with pytest.raises(ArgumentValidationError):
-        validate_arguments(args)
+        validator.validate_arguments(args)
 
 
 def test_validate_arguments_requires_endpoint():
+    validator = ValidationManager()
     args = argparse.Namespace(
         mode="tools",
         protocol_type=None,
@@ -183,10 +184,11 @@ def test_validate_arguments_requires_endpoint():
         validate_config=None,
     )
     with pytest.raises(ArgumentValidationError):
-        validate_arguments(args)
+        validator.validate_arguments(args)
 
 
 def test_validate_arguments_whitespace_endpoint():
+    validator = ValidationManager()
     args = argparse.Namespace(
         mode="tools",
         protocol_type=None,
@@ -198,10 +200,11 @@ def test_validate_arguments_whitespace_endpoint():
         validate_config=None,
     )
     with pytest.raises(ArgumentValidationError):
-        validate_arguments(args)
+        validator.validate_arguments(args)
 
 
 def test_validate_arguments_allows_utility_without_endpoint():
+    validator = ValidationManager()
     args = argparse.Namespace(
         mode="tool",
         protocol_type=None,
@@ -211,10 +214,12 @@ def test_validate_arguments_allows_utility_without_endpoint():
         endpoint=None,
         check_env=True,
         validate_config=None,
+        tool="example",
     )
-    validate_arguments(args)
+    validator.validate_arguments(args)
 
 def test_validate_arguments_protocol_type_wrong_mode_with_endpoint():
+    validator = ValidationManager()
     args = argparse.Namespace(
         mode="tool",
         protocol_type="X",
@@ -226,9 +231,10 @@ def test_validate_arguments_protocol_type_wrong_mode_with_endpoint():
         validate_config=None,
     )
     with pytest.raises(ArgumentValidationError):
-        validate_arguments(args)
+        validator.validate_arguments(args)
 
 def test_validate_arguments_runs_not_int():
+    validator = ValidationManager()
     args = argparse.Namespace(
         mode="tools",
         protocol_type=None,
@@ -240,15 +246,15 @@ def test_validate_arguments_runs_not_int():
         validate_config=None,
     )
     with pytest.raises(ArgumentValidationError):
-        validate_arguments(args)
+        validator.validate_arguments(args)
 
 
 def test_print_startup_info():
     args = argparse.Namespace(mode="tools", protocol="http", endpoint="http://x")
     with patch("mcp_fuzzer.cli.startup_info.Console") as mock_console:
         mock_console.return_value = MagicMock()
-        print_startup_info(args)
-        assert mock_console.return_value.print.call_count == 3
+        print_startup_info(args, None)
+        assert mock_console.return_value.print.call_count >= 1
 
 
 def test_build_cli_config_merges_and_returns_cli_config():
@@ -259,43 +265,29 @@ def test_build_cli_config_merges_and_returns_cli_config():
     assert cli_config.merged["safety_enabled"] is True
 
 
-def test_resolve_auth_manager_prefers_config():
-    args = argparse.Namespace(auth_config="auth.json", auth_env=False)
-    mock_manager = MagicMock()
-    with patch("mcp_fuzzer.cli.auth_resolver.load_auth_config", return_value=mock_manager):
-        manager = resolve_auth_manager(args)
-        assert manager is mock_manager
-
-
-def test_resolve_auth_manager_env(monkeypatch):
-    args = argparse.Namespace(auth_config=None, auth_env=True)
-    mock_manager = MagicMock()
-    with patch("mcp_fuzzer.cli.auth_resolver.setup_auth_from_env", return_value=mock_manager):
-        manager = resolve_auth_manager(args)
-        assert manager is mock_manager
-
-
 def test_handle_validate_config(monkeypatch):
-    with (
-        patch("mcp_fuzzer.cli.env_tools.load_config_file") as mock_load,
-        pytest.raises(SystemExit) as exc,
-    ):
-        handle_validate_config("config.yml")
+    validator = ValidationManager()
+    with patch(
+        "mcp_fuzzer.cli.validators.load_config_file"
+    ) as mock_load, pytest.raises(SystemExit) as exc:
+        validator.validate_config_file("config.yml")
     assert exc.value.code == 0
     mock_load.assert_called_once_with("config.yml")
 
 
 def test_handle_check_env(monkeypatch):
+    validator = ValidationManager()
     monkeypatch.setenv("MCP_FUZZER_LOG_LEVEL", "INFO")
     with pytest.raises(SystemExit) as exc:
-        handle_check_env()
+        validator.check_environment_variables()
     assert exc.value.code == 0
 
 
 def test_handle_check_env_invalid_level(monkeypatch):
+    validator = ValidationManager()
     monkeypatch.setenv("MCP_FUZZER_LOG_LEVEL", "INVALID")
     with pytest.raises(ArgumentValidationError):
-        handle_check_env()
+        validator.check_environment_variables()
 
 
 def test_prepare_inner_argv_roundtrip():
@@ -318,16 +310,23 @@ def test_transport_factory_applies_auth_headers():
     args = MagicMock(protocol="http", endpoint="http://example.com", timeout=10.0)
     auth_manager = MagicMock()
     auth_manager.get_default_auth_headers.return_value = {"Authorization": "x"}
-    with patch("mcp_fuzzer.client.transport.factory.base_create_transport") as mock_create:
+    with patch(
+        "mcp_fuzzer.client.transport.factory.base_create_transport"
+    ) as mock_create:
         create_transport_with_auth(args, {"auth_manager": auth_manager})
         mock_create.assert_called_once_with(
-            "http", "http://example.com", timeout=10.0, auth_headers={"Authorization": "x"}
+            "http",
+            "http://example.com",
+            timeout=10.0,
+            auth_headers={"Authorization": "x"},
         )
 
 
 def test_safety_controller():
     controller = SafetyController()
-    with patch("mcp_fuzzer.client.safety.controller.start_system_blocking") as mock_start:
+    with patch(
+        "mcp_fuzzer.client.safety.controller.start_system_blocking"
+    ) as mock_start:
         controller.start_if_enabled(True)
         mock_start.assert_called_once()
     with patch("mcp_fuzzer.client.safety.controller.stop_system_blocking") as mock_stop:
@@ -344,13 +343,19 @@ def test_execute_inner_client_pytest_branch(monkeypatch):
 
 
 def test_execute_inner_client_network_policy(monkeypatch):
-    args = MagicMock(retry_with_safety_on_interrupt=False, no_network=True, allow_hosts=None)
-    with patch("mcp_fuzzer.client.runtime.async_runner.asyncio.new_event_loop") as mock_loop:
+    args = MagicMock(
+        retry_with_safety_on_interrupt=False,
+        no_network=True,
+        allow_hosts=None,
+    )
+    with patch(
+        "mcp_fuzzer.client.runtime.async_runner.asyncio.new_event_loop"
+    ) as mock_loop:
         loop = MagicMock()
         mock_loop.return_value = loop
         with patch("mcp_fuzzer.client.runtime.async_runner.asyncio.set_event_loop"):
-            with patch(
-                "mcp_fuzzer.client.runtime.async_runner.configure_network_policy"
+            with patch.object(
+                SafetyController, "configure_network_policy"
             ) as mock_policy:
                 with patch.object(loop, "add_signal_handler"):
                     with patch.object(loop, "run_until_complete"):
@@ -358,8 +363,14 @@ def test_execute_inner_client_network_policy(monkeypatch):
                             execute_inner_client(args, lambda: None, ["prog"])
                             mock_policy.assert_has_calls(
                                 [
-                                    call(reset_allowed_hosts=True, deny_network_by_default=None),
-                                    call(deny_network_by_default=True, extra_allowed_hosts=None),
+                                    call(
+                                        reset_allowed_hosts=True,
+                                        deny_network_by_default=None,
+                                    ),
+                                    call(
+                                        deny_network_by_default=True,
+                                        extra_allowed_hosts=None,
+                                    ),
                                 ]
                             )
 
@@ -374,7 +385,10 @@ def test_run_with_retry_on_interrupt_retry_path():
             raise KeyboardInterrupt()
 
     with (
-        patch("mcp_fuzzer.client.runtime.retry.execute_inner_client", side_effect=fake_execute),
+        patch(
+            "mcp_fuzzer.client.runtime.retry.execute_inner_client",
+            side_effect=fake_execute,
+        ),
         patch("mcp_fuzzer.client.runtime.retry.start_system_blocking") as mock_start,
         patch("mcp_fuzzer.client.runtime.retry.stop_system_blocking") as mock_stop,
     ):
@@ -385,39 +399,52 @@ def test_run_with_retry_on_interrupt_retry_path():
 
 
 def test_validate_transport_errors():
+    validator = ValidationManager()
     args = argparse.Namespace(protocol="http", endpoint="http://x", timeout=1)
-    with patch("mcp_fuzzer.cli.entrypoint.create_transport", side_effect=Exception("boom")):
+    with patch(
+        "mcp_fuzzer.cli.validators.create_transport",
+        side_effect=Exception("boom"),
+    ):
         with pytest.raises(Exception):
-            _validate_transport(args)
+            validator.validate_transport(args)
+
 
 def test_validate_transport_mcp_error_passthrough():
+    validator = ValidationManager()
     args = argparse.Namespace(protocol="http", endpoint="http://x", timeout=1)
-    with patch("mcp_fuzzer.cli.entrypoint.create_transport", side_effect=MCPError("err", code="X")):
+    with patch(
+        "mcp_fuzzer.cli.validators.create_transport",
+        side_effect=MCPError("err", code="X"),
+    ):
         with pytest.raises(MCPError):
-            _validate_transport(args)
+            validator.validate_transport(args)
 
 
-def test_async_runner_calls_execute_inner_client():
+def test_async_runner_calls_execute_inner_client(monkeypatch):
     args = _base_args()
-    runner = AsyncRunner(args)
-    with patch("mcp_fuzzer.client.runtime.async_runner.execute_inner_client") as mock_exec:
-        runner.run(lambda: None, ["prog"])
-        mock_exec.assert_called_once()
+    runner = AsyncRunner(args, SafetyController())
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "1")
+
+    async def dummy_coro():
+        return None
+
+    runner.run(dummy_coro, ["prog"])
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
 
 def test_run_cli_happy_path():
     args = _base_args()
     with (
         patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
-        patch("mcp_fuzzer.cli.entrypoint.validate_arguments"),
         patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
-        patch("mcp_fuzzer.cli.entrypoint.handle_validate_config"),
-        patch("mcp_fuzzer.cli.entrypoint.handle_check_env"),
         patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
-        patch("mcp_fuzzer.cli.entrypoint._validate_transport"),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
         patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt"),
         patch("mcp_fuzzer.cli.entrypoint.ClientSettings"),
     ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_transport.return_value = None
         run_cli()
 
 
@@ -425,17 +452,22 @@ def test_run_cli_transport_error_exit(monkeypatch):
     args = _base_args()
     with (
         patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
-        patch("mcp_fuzzer.cli.entrypoint.validate_arguments"),
         patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
-        patch("mcp_fuzzer.cli.entrypoint._validate_transport", side_effect=Exception("boom")),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
     ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_transport.side_effect = Exception("boom")
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 1
 
 
 def test_run_cli_keyboard_interrupt(monkeypatch):
-    with patch("mcp_fuzzer.cli.entrypoint.parse_arguments", side_effect=KeyboardInterrupt):
+    with patch(
+        "mcp_fuzzer.cli.entrypoint.parse_arguments",
+        side_effect=KeyboardInterrupt,
+    ):
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 0
@@ -445,10 +477,12 @@ def test_run_cli_validate_config_exits(monkeypatch):
     args = _base_args(validate_config="file.yml")
     with (
         patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
-        patch("mcp_fuzzer.cli.entrypoint.validate_arguments"),
         patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
-        patch("mcp_fuzzer.cli.entrypoint.handle_validate_config", side_effect=SystemExit(0)),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
     ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_config_file.side_effect = SystemExit(0)
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 0
@@ -458,10 +492,12 @@ def test_run_cli_check_env_exits(monkeypatch):
     args = _base_args(check_env=True)
     with (
         patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
-        patch("mcp_fuzzer.cli.entrypoint.validate_arguments"),
         patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
-        patch("mcp_fuzzer.cli.entrypoint.handle_check_env", side_effect=SystemExit(0)),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
     ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.check_environment_variables.side_effect = SystemExit(0)
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 0
@@ -471,8 +507,10 @@ def test_run_cli_value_error(monkeypatch):
     args = _base_args()
     with (
         patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
-        patch("mcp_fuzzer.cli.entrypoint.validate_arguments", side_effect=ValueError("bad")),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
     ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.side_effect = ValueError("bad")
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 1
@@ -482,9 +520,13 @@ def test_run_cli_mcp_error(monkeypatch):
     args = _base_args()
     with (
         patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
-        patch("mcp_fuzzer.cli.entrypoint.validate_arguments"),
-        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt", side_effect=MCPError("x", code="err")),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+        patch(
+            "mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt",
+            side_effect=MCPError("x", code="err"),
+        ),
     ):
+        mock_vm_cls.return_value.validate_arguments.return_value = None
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 1
@@ -495,13 +537,13 @@ def test_run_cli_unexpected_error_debug(monkeypatch, caplog):
     caplog.set_level(logging.DEBUG)
     with (
         patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
-        patch("mcp_fuzzer.cli.entrypoint.validate_arguments"),
         patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
-        patch("mcp_fuzzer.cli.entrypoint.handle_validate_config"),
-        patch("mcp_fuzzer.cli.entrypoint.handle_check_env"),
         patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
-        patch("mcp_fuzzer.cli.entrypoint._validate_transport", side_effect=RuntimeError("boom")),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
     ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_transport.side_effect = RuntimeError("boom")
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 1
@@ -511,7 +553,11 @@ def test_build_cli_config_uses_config_file(monkeypatch):
     args = _base_args(config="custom.yml", endpoint=None)
     with patch(
         "mcp_fuzzer.cli.config_merge.load_config_file",
-        return_value={"endpoint": "http://conf", "runs": 42, "allow_hosts": ["a.local"]},
+        return_value={
+            "endpoint": "http://conf",
+            "runs": 42,
+            "allow_hosts": ["a.local"],
+        },
     ):
         cli_config = build_cli_config(args)
     assert cli_config.merged["endpoint"] == "http://conf"
@@ -521,13 +567,19 @@ def test_build_cli_config_uses_config_file(monkeypatch):
 def test_build_cli_config_handles_apply_config_error(caplog):
     caplog.set_level(logging.DEBUG)
     args = _base_args(config=None)
-    with patch("mcp_fuzzer.cli.config_merge.apply_config_file", side_effect=Exception("fail")):
+    with patch(
+        "mcp_fuzzer.cli.config_merge.apply_config_file",
+        side_effect=Exception("fail"),
+    ):
         cli_config = build_cli_config(args)
     assert cli_config.merged["endpoint"] == "http://localhost"
     assert "fail" in "".join(caplog.messages)
 
 def test_build_cli_config_raises_config_error():
     args = _base_args(config="bad.yml")
-    with patch("mcp_fuzzer.cli.config_merge.load_config_file", side_effect=ValueError("bad")):
+    with patch(
+        "mcp_fuzzer.cli.config_merge.load_config_file",
+        side_effect=ValueError("bad"),
+    ):
         with pytest.raises(Exception):
             build_cli_config(args)

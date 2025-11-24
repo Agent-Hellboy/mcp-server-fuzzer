@@ -10,7 +10,7 @@ from typing import Any
 from ..config import config as global_config, load_config_file, apply_config_file
 from ..exceptions import ConfigFileError
 from ..client.settings import CliConfig
-from .auth_resolver import resolve_auth_manager
+from ..client.transport.auth_port import resolve_auth_port
 from .parser import create_argument_parser
 
 
@@ -84,7 +84,7 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
             logging.debug(f"Error loading default configuration file: {exc}")
 
     _transfer_config_to_args(args)
-    auth_manager = resolve_auth_manager(args)
+    auth_manager = resolve_auth_port(args)
 
     merged: dict[str, Any] = {
         "mode": args.mode,

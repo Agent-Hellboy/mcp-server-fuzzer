@@ -159,7 +159,9 @@ class WebSocketTransport(TransportProtocol):
                     response = json.loads(response_text)
                     if isinstance(response, dict) and response.get("id") == request_id:
                         logger.debug(
-                            f"Received WebSocket response for {method} (id={request_id})"
+                            "Received WebSocket response for %s (id=%s)",
+                            method,
+                            request_id,
                         )
                         if "error" in response:
                             error_msg = f"Server error: {response['error']}"
@@ -278,11 +280,19 @@ class WebSocketTransport(TransportProtocol):
                             timeout=self.timeout
                         )
                         response = json.loads(response_text)
-                        req_id = payload.get("id") if isinstance(payload, dict) else None
-                        if req_id is None or (isinstance(response, dict) and response.get("id") == req_id):
+                        req_id = (
+                            payload.get("id") if isinstance(payload, dict) else None
+                        )
+                        if req_id is None or (
+                            isinstance(response, dict)
+                            and response.get("id") == req_id
+                        ):
                             yield response
                         else:
-                            logger.debug("Ignoring out-of-band WebSocket message during stream: %s", response)
+                            logger.debug(
+                                "Ignoring extra WebSocket stream message: %s",
+                                response,
+                            )
                     except asyncio.TimeoutError:
                         logger.debug("WebSocket stream timeout")
                         break
@@ -369,5 +379,11 @@ if __name__ == "__main__":
 
     print("WebSocket transport example loaded successfully!")
     print("Usage in MCP Fuzzer:")
-    print("  transport = create_transport('websocket://localhost:8080/mcp')  # custom scheme")
-    print("  transport = create_transport('ws://localhost:8080/mcp')        # direct ws URL")
+    print(
+        "  transport = create_transport('websocket://localhost:8080/mcp')"
+        "  # custom scheme"
+    )
+    print(
+        "  transport = create_transport('ws://localhost:8080/mcp')"
+        "        # direct ws URL"
+    )

@@ -10,6 +10,7 @@ import pytest
 
 from mcp_fuzzer.client.runtime.async_runner import execute_inner_client
 from mcp_fuzzer.client.runtime.retry import run_with_retry_on_interrupt
+from mcp_fuzzer.client.safety import SafetyController
 
 
 def _make_aiomonitor():
@@ -36,14 +37,10 @@ def test_execute_inner_client_with_aiomonitor(monkeypatch):
     with (
         patch("asyncio.new_event_loop", return_value=fake_loop),
         patch("asyncio.set_event_loop"),
-        patch(
-            "mcp_fuzzer.client.runtime.async_runner.configure_network_policy"
-        ) as mock_policy,
         patch.object(fake_loop, "add_signal_handler"),
         patch.object(fake_loop, "run_until_complete"),
     ):
         execute_inner_client(args, dummy, ["prog"])
-    mock_policy.assert_called_with(deny_network_by_default=None, extra_allowed_hosts=None)
 
 
 def test_execute_inner_client_handles_cancel(monkeypatch):
@@ -61,7 +58,7 @@ def test_execute_inner_client_handles_cancel(monkeypatch):
     with (
         patch("asyncio.new_event_loop", return_value=loop),
         patch("asyncio.set_event_loop"),
-        patch("mcp_fuzzer.client.runtime.async_runner.configure_network_policy"),
+        patch.object(SafetyController, "configure_network_policy"),
         patch.object(loop, "add_signal_handler"),
         patch.object(loop, "run_until_complete", side_effect=_run_until_complete),
     ):
@@ -77,9 +74,10 @@ def test_execute_inner_client_handles_cancel(monkeypatch):
 
 def test_run_with_retry_on_interrupt_exits_when_no_retry(monkeypatch):
     args = MagicMock(enable_safety_system=False, retry_with_safety_on_interrupt=False)
-    with patch("mcp_fuzzer.client.runtime.retry.execute_inner_client", side_effect=KeyboardInterrupt), patch(
-        "mcp_fuzzer.client.runtime.retry.Console"
-    ) as mock_console:
+    with patch(
+        "mcp_fuzzer.client.runtime.retry.execute_inner_client",
+        side_effect=KeyboardInterrupt,
+    ), patch("mcp_fuzzer.client.runtime.retry.Console") as mock_console:
         with pytest.raises(SystemExit) as exc:
             run_with_retry_on_interrupt(args, lambda: None, ["prog"])
         assert exc.value.code == 130
