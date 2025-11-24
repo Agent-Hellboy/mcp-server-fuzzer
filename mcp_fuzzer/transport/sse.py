@@ -14,15 +14,26 @@ class SSETransport(TransportProtocol):
         url: str,
         timeout: float = 30.0,
         auth_headers: dict[str, str | None] | None = None,
+        safety_enabled: bool = True,
     ):
         self.url = url
         self.timeout = timeout
+        self.safety_enabled = safety_enabled
         self.headers = {
             "Accept": "text/event-stream",
             "Content-Type": "application/json",
         }
-        if auth_headers:
-            self.headers.update(auth_headers)
+        self.auth_headers = {k: v for k, v in (auth_headers or {}).items() if v is not None}
+
+    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
+        """Prepare headers with optional safety sanitization and auth headers."""
+        if self.safety_enabled:
+            safe_headers = sanitize_headers(headers)
+        else:
+            safe_headers = headers.copy()
+        # Add auth headers after sanitization (they are user-configured and safe)
+        safe_headers.update(self.auth_headers)
+        return safe_headers
 
     async def send_request(
         self, method: str, params: dict[str, Any | None] | None = None
@@ -42,7 +53,7 @@ class SSETransport(TransportProtocol):
                     "Network to non-local host is disallowed by safety policy",
                     context={"url": self.url},
                 )
-            safe_headers = sanitize_headers(self.headers)
+            safe_headers = self._prepare_headers_with_auth(self.headers)
             response = await client.post(self.url, json=payload, headers=safe_headers)
             response.raise_for_status()
             buffer: list[str] = []
@@ -107,7 +118,7 @@ class SSETransport(TransportProtocol):
                     "Network to non-local host is disallowed by safety policy",
                     context={"url": self.url},
                 )
-            safe_headers = sanitize_headers(self.headers)
+            safe_headers = self._prepare_headers_with_auth(self.headers)
             response = await client.post(self.url, json=payload, headers=safe_headers)
             response.raise_for_status()
 
@@ -130,7 +141,7 @@ class SSETransport(TransportProtocol):
                     "Network to non-local host is disallowed by safety policy",
                     context={"url": self.url},
                 )
-            safe_headers = sanitize_headers(self.headers)
+            safe_headers = self._prepare_headers_with_auth(self.headers)
             async with client.stream(
                 "POST",
                 self.url,

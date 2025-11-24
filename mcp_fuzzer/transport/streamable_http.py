@@ -51,17 +51,28 @@ class StreamableHTTPTransport(TransportProtocol):
         url: str,
         timeout: float = DEFAULT_TIMEOUT,
         auth_headers: dict[str, str | None] = None,
+        safety_enabled: bool = True,
     ):
         self.url = url
         self.timeout = timeout
+        self.safety_enabled = safety_enabled
         self.headers: dict[str, str] = {
             "Accept": DEFAULT_HTTP_ACCEPT,
             "Content-Type": JSON_CT,
         }
-        if auth_headers:
-            self.headers.update(auth_headers)
+        self.auth_headers = {k: v for k, v in (auth_headers or {}).items() if v is not None}
 
         self._logger = logging.getLogger(__name__)
+
+    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
+        """Prepare headers with optional safety sanitization and auth headers."""
+        if self.safety_enabled:
+            safe_headers = self._prepare_headers_with_auth(headers)
+        else:
+            safe_headers = headers.copy()
+        # Add auth headers after sanitization (they are user-configured and safe)
+        safe_headers.update(self.auth_headers)
+        return safe_headers
         self.session_id: str | None = None
         self.protocol_version: str | None = None
         self._initialized: bool = False
@@ -211,7 +222,7 @@ class StreamableHTTPTransport(TransportProtocol):
         ) as client:
             self._ensure_host_allowed()
             response = await self._post_with_retries(
-                client, self.url, payload, sanitize_headers(headers)
+                client, self.url, payload, self._prepare_headers_with_auth(headers)
             )
             # Handle redirect by retrying once with provided Location or trailing slash
             redirect_url = self._resolve_redirect(response)
@@ -314,7 +325,7 @@ class StreamableHTTPTransport(TransportProtocol):
             timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
             self._ensure_host_allowed()
-            safe_headers = sanitize_headers(headers)
+            safe_headers = self._prepare_headers_with_auth(headers)
             response = await self._post_with_retries(
                 client, self.url, payload, safe_headers
             )
@@ -422,7 +433,7 @@ class StreamableHTTPTransport(TransportProtocol):
             timeout=self.timeout, follow_redirects=False, trust_env=False
         ) as client:
             self._ensure_host_allowed()
-            safe_headers = sanitize_headers(headers)
+            safe_headers = self._prepare_headers_with_auth(headers)
             response = await client.stream(
                 "POST", self.url, json=payload, headers=safe_headers
             )
