@@ -110,13 +110,11 @@ class AsyncRunner:
         """Configure network safety policies."""
         deny = True if getattr(self.args, "no_network", False) else None
         extra = getattr(self.args, "allow_hosts", None)
-        
-        # Reset and apply network policy
+
+        # Reset allowed hosts before applying the desired policy in one call to
+        # avoid intermediate state changes.
         self.safety.configure_network_policy(
             reset_allowed_hosts=True,
-            deny_network_by_default=None,
-        )
-        self.safety.configure_network_policy(
             deny_network_by_default=deny,
             extra_allowed_hosts=extra,
         )

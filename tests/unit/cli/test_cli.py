@@ -334,8 +334,10 @@ def test_safety_controller():
 
 def test_execute_inner_client_pytest_branch(monkeypatch):
     monkeypatch.setenv("PYTEST_CURRENT_TEST", "1")
+    async def dummy_main():
+        return None
     with patch("mcp_fuzzer.client.runtime.async_runner.asyncio.run") as mock_run:
-        execute_inner_client(argparse.Namespace(), lambda: None, ["prog"])
+        execute_inner_client(argparse.Namespace(), dummy_main, ["prog"])
         mock_run.assert_called_once()
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
@@ -359,17 +361,10 @@ def test_execute_inner_client_network_policy(monkeypatch):
                     with patch.object(loop, "run_until_complete"):
                         with patch("os.environ.get", return_value=None):
                             execute_inner_client(args, lambda: None, ["prog"])
-                            mock_policy.assert_has_calls(
-                                [
-                                    call(
-                                        reset_allowed_hosts=True,
-                                        deny_network_by_default=None,
-                                    ),
-                                    call(
-                                        deny_network_by_default=True,
-                                        extra_allowed_hosts=None,
-                                    ),
-                                ]
+                            mock_policy.assert_called_once_with(
+                                reset_allowed_hosts=True,
+                                deny_network_by_default=True,
+                                extra_allowed_hosts=None,
                             )
 
 

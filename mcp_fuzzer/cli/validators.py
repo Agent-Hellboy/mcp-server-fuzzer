@@ -116,7 +116,16 @@ class ValidationManager:
         if validation_type == ValidationType.CHOICE:
             return value.upper() in [c.upper() for c in params.get("choices", [])]
         elif validation_type == ValidationType.BOOLEAN:
-            return value.lower() in ["true", "false"]
+            return value.lower() in [
+                "true",
+                "false",
+                "1",
+                "0",
+                "yes",
+                "no",
+                "on",
+                "off",
+            ]
         elif validation_type == ValidationType.NUMERIC:
             try:
                 float(value)

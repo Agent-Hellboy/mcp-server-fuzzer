@@ -289,13 +289,13 @@ Examples:
         "--process-max-concurrency",
         type=int,
         default=5,
-        help="Maximum concurrent operations (default: 5)",
+        help="Maximum concurrent process operations (default: 5)",
     )
     parser.add_argument(
         "--max-concurrency",
         type=int,
         default=5,
-        help="Maximum concurrent operations (default: 5)",
+        help="Maximum concurrent client operations (default: 5)",
     )
     parser.add_argument(
         "--process-retry-count",

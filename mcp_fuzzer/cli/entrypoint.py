@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any
 
 from rich.console import Console
 
@@ -60,10 +59,11 @@ def run_cli() -> None:
 
         argv = prepare_inner_argv(args)
 
-        def _main_callable() -> Any:
-            return unified_client_main(client_settings)
-
-        run_with_retry_on_interrupt(args, _main_callable, argv)
+        run_with_retry_on_interrupt(
+            args,
+            lambda: unified_client_main(client_settings),
+            argv,
+        )
     except KeyboardInterrupt:
         console = Console()
         console.print("\n[yellow]Fuzzing interrupted by user[/yellow]")

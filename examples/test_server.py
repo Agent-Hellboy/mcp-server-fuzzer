@@ -517,11 +517,8 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
 
             # Handle request
             response = self.mcp_handler.handle_message(request, headers)
-            if response:
-                logger.debug(f"Sending response: {response}")
-
-            # Only respond to requests (not notifications)
             if response is not None:
+                logger.debug(f"Sending response: {response}")
                 response_text = json.dumps(response)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
@@ -531,6 +528,13 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Length', len(response_text))
                 self.end_headers()
                 self.wfile.write(response_text.encode())
+            else:
+                # Notification or intentionally silent JSON-RPC message: still close HTTP exchange
+                self.send_response(204)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+                self.end_headers()
 
         except Exception as e:
             logger.error(f"Error handling request: {e}")
@@ -555,6 +559,13 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Length', len(error_content))
                 self.end_headers()
                 self.wfile.write(error_content.encode())
+            else:
+                # No JSON-RPC id available (e.g., malformed message): still return HTTP 500
+                self.send_response(500)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+                self.end_headers()
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
