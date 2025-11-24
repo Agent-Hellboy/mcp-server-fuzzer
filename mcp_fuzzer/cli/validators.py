@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from typing import Any
 
 import emoji
@@ -65,18 +64,17 @@ class ValidationManager:
                 raise ArgumentValidationError("--endpoint cannot be empty")
 
     def validate_config_file(self, path: str) -> None:
-        """Validate a config file and exit with success message."""
+        """Validate a config file and print success message."""
         load_config_file(path)
         success_msg = (
             "[green]:heavy_check_mark: Configuration file "
             f"'{path}' is valid[/green]"
         )
         self.console.print(emoji.emojize(success_msg, language="alias"))
-        sys.exit(0)
 
 
-    def check_environment_variables(self) -> None:
-        """Print environment variable status and exit."""
+    def check_environment_variables(self) -> bool:
+        """Print environment variable status and return validation result."""
         self.console.print("[bold]Environment variables check:[/bold]")
 
 
@@ -106,7 +104,7 @@ class ValidationManager:
 
         if all_valid:
             self.console.print("[green]All environment variables are valid[/green]")
-            sys.exit(0)
+            return True
 
         self.console.print("[red]Some environment variables have invalid values[/red]")
         raise ArgumentValidationError("Invalid environment variable values")

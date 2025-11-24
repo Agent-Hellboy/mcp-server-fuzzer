@@ -269,18 +269,16 @@ def test_handle_validate_config(monkeypatch):
     validator = ValidationManager()
     with patch(
         "mcp_fuzzer.cli.validators.load_config_file"
-    ) as mock_load, pytest.raises(SystemExit) as exc:
+    ) as mock_load:
         validator.validate_config_file("config.yml")
-    assert exc.value.code == 0
     mock_load.assert_called_once_with("config.yml")
 
 
 def test_handle_check_env(monkeypatch):
     validator = ValidationManager()
     monkeypatch.setenv("MCP_FUZZER_LOG_LEVEL", "INFO")
-    with pytest.raises(SystemExit) as exc:
-        validator.check_environment_variables()
-    assert exc.value.code == 0
+    result = validator.check_environment_variables()
+    assert result is True
 
 
 def test_handle_check_env_invalid_level(monkeypatch):
@@ -482,7 +480,7 @@ def test_run_cli_validate_config_exits(monkeypatch):
     ):
         mock_validator = mock_vm_cls.return_value
         mock_validator.validate_arguments.return_value = None
-        mock_validator.validate_config_file.side_effect = SystemExit(0)
+        mock_validator.validate_config_file.return_value = None
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 0
@@ -497,7 +495,7 @@ def test_run_cli_check_env_exits(monkeypatch):
     ):
         mock_validator = mock_vm_cls.return_value
         mock_validator.validate_arguments.return_value = None
-        mock_validator.check_environment_variables.side_effect = SystemExit(0)
+        mock_validator.check_environment_variables.return_value = True
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 0

@@ -38,8 +38,10 @@ def run_cli() -> None:
         validator.validate_arguments(args)
         if args.validate_config:
             validator.validate_config_file(args.validate_config)
+            sys.exit(0)
         if args.check_env:
-            validator.check_environment_variables()
+            if validator.check_environment_variables():
+                sys.exit(0)
 
         cli_config = build_cli_config(args)
         config = cli_config.merged

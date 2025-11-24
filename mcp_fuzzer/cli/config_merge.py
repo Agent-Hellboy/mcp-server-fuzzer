@@ -121,6 +121,7 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         "watchdog_extra_buffer": getattr(args, "watchdog_extra_buffer", 5.0),
         "watchdog_max_hang_time": getattr(args, "watchdog_max_hang_time", 60.0),
         "process_max_concurrency": getattr(args, "process_max_concurrency", 5),
+        "max_concurrency": getattr(args, "max_concurrency", 5),
         "process_retry_count": getattr(args, "process_retry_count", 1),
         "process_retry_delay": getattr(args, "process_retry_delay", 1.0),
         "output_format": getattr(args, "output_format", "json"),
