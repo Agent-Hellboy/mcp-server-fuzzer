@@ -50,6 +50,9 @@ class MCPFuzzerClient:
         self.transport = transport
         self.auth_manager = auth_manager or AuthManager()
         self._reporter = reporter or FuzzerReporter(safety_system=safety_system)
+        # Set transport in reporter for runtime statistics collection
+        if self._reporter:
+            self._reporter.set_transport(transport)
         self.tool_timeout = tool_timeout
         self.safety_enabled = safety_enabled
         if not safety_enabled:
@@ -167,16 +170,18 @@ class MCPFuzzerClient:
                 self.safety_system.get_blocked_examples()
         self._reporter.print_comprehensive_safety_report()
 
-    def generate_standardized_reports(self, output_types=None, include_safety=True):
+    async def generate_standardized_reports(
+        self, output_types=None, include_safety=True
+    ):
         """Generate standardized output reports."""
-        return self._reporter.generate_standardized_report(
+        return await self._reporter.generate_standardized_report(
             output_types=output_types,
             include_safety=include_safety
         )
 
-    def generate_final_report(self, include_safety=True):
+    async def generate_final_report(self, include_safety=True):
         """Generate final comprehensive report."""
-        return self._reporter.generate_final_report(include_safety=include_safety)
+        return await self._reporter.generate_final_report(include_safety=include_safety)
 
     # ============================================================================
     # Cleanup Methods

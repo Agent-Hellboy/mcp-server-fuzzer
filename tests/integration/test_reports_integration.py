@@ -109,7 +109,8 @@ class TestReporterIntegration:
         assert safety_data["system_safety"]["active"] is True
         assert safety_data["system_safety"]["total_blocked"] == 2
 
-    def test_end_to_end_reporting_workflow(self, temp_output_dir):
+    @pytest.mark.asyncio
+    async def test_end_to_end_reporting_workflow(self, temp_output_dir):
         """Test complete end-to-end reporting workflow."""
         reporter = FuzzerReporter(output_dir=temp_output_dir)
 
@@ -145,7 +146,7 @@ class TestReporterIntegration:
         reporter.add_safety_data({"blocked_operations": 5, "risk_level": "medium"})
 
         # Generate final report
-        report_file = reporter.generate_final_report(include_safety=False)
+        report_file = await reporter.generate_final_report(include_safety=False)
 
         # Verify report was created
         assert Path(report_file).exists()
@@ -334,7 +335,8 @@ class TestReporterIntegration:
 
             os.unlink(temp_filename)
 
-    def test_reporter_performance_with_large_data(self, temp_output_dir):
+    @pytest.mark.asyncio
+    async def test_reporter_performance_with_large_data(self, temp_output_dir):
         """Test reporter performance with large datasets."""
         reporter = FuzzerReporter(output_dir=temp_output_dir)
 
@@ -360,14 +362,14 @@ class TestReporterIntegration:
         assert sum(len(results) for results in reporter.tool_results.values()) == 100000
 
         # Test summary generation with large data
-        stats = reporter._generate_summary_stats()
+        stats = await reporter._generate_summary_stats()
         assert stats["tools"]["total_tools"] == 100
         assert stats["tools"]["total_runs"] == 100000
         assert stats["tools"]["tools_with_exceptions"] == 10000  # 10% exceptions
         assert stats["tools"]["tools_with_errors"] == 0  # No errors, only exceptions
 
         # Test final report generation with large data
-        report_file = reporter.generate_final_report(include_safety=False)
+        report_file = await reporter.generate_final_report(include_safety=False)
         assert Path(report_file).exists()
 
         # Verify report file is reasonable size (not too large)

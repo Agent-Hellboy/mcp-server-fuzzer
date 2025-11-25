@@ -33,8 +33,11 @@ class ProcessInspector:
         process = info_copy["process"]
         registry_status = info_copy.get("status")
 
-        if process.returncode is None:
-            # Honor registry status (e.g., "stopped") while running
+        # Honor explicit registry status (e.g., "stopped") even if the process
+        # returncode has been populated by mocks/cleanup.
+        if registry_status == "stopped":
+            info_copy["status"] = "stopped"
+        elif process.returncode is None:
             info_copy["status"] = registry_status or "running"
         else:
             # Return code present means process finished

@@ -179,20 +179,87 @@ async def multiple_process_management():
 
 ### Custom Signal Strategies
 
-`SignalDispatcher` now supports registering custom strategies:
+`SignalDispatcher` supports dependency injection of custom signal strategies,
+enabling extension without modifying core code. Strategies can be registered
+at construction time or runtime.
+
+#### Strategy Registration Pattern
+
+**Method 1: Dependency Injection at Construction**
+
+```python
+from mcp_fuzzer.fuzz_engine.runtime.signals import (
+    ProcessSignalStrategy,
+    SignalDispatcher,
+    ProcessRegistry,
+)
+import logging
+
+class CustomTermStrategy(ProcessSignalStrategy):
+    async def send(self, pid: int, process_info=None) -> bool:
+        # Custom termination logic
+        return True
+
+registry = ProcessRegistry()
+logger = logging.getLogger(__name__)
+
+# Create with custom strategies
+custom_strategies = {
+    "timeout": CustomTermStrategy(registry, logger),
+    "custom": MyCustomStrategy(registry, logger),
+}
+dispatcher = SignalDispatcher.from_config(
+    registry, logger,
+    strategies=custom_strategies,
+    register_defaults=True  # Still register defaults, custom overrides them
+)
+
+# Or use only custom strategies
+dispatcher = SignalDispatcher.from_config(
+    registry, logger,
+    strategies=custom_strategies,
+    register_defaults=False  # No default strategies
+)
+```
+
+**Method 2: Runtime Registration**
 
 ```python
 from mcp_fuzzer.fuzz_engine.runtime.signals import ProcessSignalStrategy
 
 class NoopSignal(ProcessSignalStrategy):
     async def send(self, pid: int, process_info=None) -> bool:
-        return True  # override behavior as needed
+        return True  # Custom behavior
 
 manager = ProcessManager.from_config()
 manager.signal_dispatcher.register_strategy("noop", NoopSignal())
+
+# Override existing strategy
+manager.signal_dispatcher.register_strategy("timeout", CustomTermStrategy())
 ```
 
-Registering with an existing key overrides the default handler (e.g., `"timeout"`).
+**Method 3: Strategy Management**
+
+```python
+# List all registered strategies
+strategies = manager.signal_dispatcher.list_strategies()
+# Returns: ["timeout", "force", "interrupt", "noop"]
+
+# Unregister a strategy
+manager.signal_dispatcher.unregister_strategy("noop")
+
+# Check if strategy exists
+if "custom" in manager.signal_dispatcher.list_strategies():
+    # Use custom strategy
+    pass
+```
+
+#### Benefits
+
+- **Extensibility**: Add new signal types without modifying core code
+- **Testability**: Inject mock strategies for testing
+- **Flexibility**: Override default strategies or use custom-only configurations
+- **Maintainability**: Clear separation between strategy interface and implementation
 
 ## ProcessWatchdog
 

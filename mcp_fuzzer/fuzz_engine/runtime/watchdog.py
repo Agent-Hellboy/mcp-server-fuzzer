@@ -464,7 +464,7 @@ class ProcessWatchdog:
     async def get_stats(self) -> dict:
         """Get statistics about monitored processes."""
         stats = await self._store.stats()
-        stats["watchdog_active"] = (
+        stats["watchdog_active"] = bool(
             self._watchdog_task and not self._watchdog_task.done()
         )
         return stats
@@ -504,7 +504,9 @@ class ProcessWatchdog:
                     "finished": total_processes - running_processes,
                 },
                 "watchdog": {
-                    "active": self._watchdog_task and not self._watchdog_task.done(),
+                    "active": bool(
+                        self._watchdog_task and not self._watchdog_task.done()
+                    ),
                     "check_interval": self.config.check_interval,
                     "process_timeout": self.config.process_timeout,
                 },

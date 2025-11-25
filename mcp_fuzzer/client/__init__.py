@@ -205,7 +205,7 @@ async def main(argv: list[str] | None = None) -> int:
         # Generate standardized reports
         try:
             output_types = config.get("output_types")
-            standardized_files = client.generate_standardized_reports(
+            standardized_files = await client.generate_standardized_reports(
                 output_types=output_types,
                 include_safety=config.get("safety_report", False)
             )

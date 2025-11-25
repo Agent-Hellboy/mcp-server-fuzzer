@@ -3,12 +3,13 @@
 Tests for FuzzerReporter class.
 """
 
+import asyncio
 import tempfile
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
@@ -256,14 +257,15 @@ class TestFuzzerReporter:
 
         reporter.safety_reporter.print_blocked_operations_summary.assert_called_once()
 
-    def test_generate_final_report_without_safety(self, reporter):
+    @pytest.mark.asyncio
+    async def test_generate_final_report_without_safety(self, reporter):
         """Test generating final report without safety data."""
         # Set up test data
         reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
         reporter.add_tool_results("test_tool", [{"success": True}])
         reporter.add_protocol_results("test_protocol", [{"success": True}])
 
-        result = reporter.generate_final_report(include_safety=False)
+        result = await reporter.generate_final_report(include_safety=False)
 
         # Verify JSON file was created
         assert result.endswith(".json")
@@ -274,7 +276,8 @@ class TestFuzzerReporter:
         reporter.text_formatter.save_text_report.assert_called_once()
         reporter.safety_reporter.export_safety_data.assert_not_called()
 
-    def test_generate_final_report_with_safety(self, reporter):
+    @pytest.mark.asyncio
+    async def test_generate_final_report_with_safety(self, reporter):
         """Test generating final report with safety data."""
         # Set up test data
         reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
@@ -287,7 +290,7 @@ class TestFuzzerReporter:
         reporter.safety_reporter.has_safety_data.return_value = True
         reporter.safety_reporter.export_safety_data.return_value = "safety_file.json"
 
-        result = reporter.generate_final_report(include_safety=True)
+        result = await reporter.generate_final_report(include_safety=True)
 
         args, _ = reporter.json_formatter.save_report.call_args
         saved_report = args[0]
@@ -297,9 +300,10 @@ class TestFuzzerReporter:
         reporter.text_formatter.save_text_report.assert_called_once()
         reporter.safety_reporter.export_safety_data.assert_called_once()
 
-    def test_generate_summary_stats_empty_results(self, reporter):
+    @pytest.mark.asyncio
+    async def test_generate_summary_stats_empty_results(self, reporter):
         """Test generating summary stats with empty results."""
-        stats = reporter._generate_summary_stats()
+        stats = await reporter._generate_summary_stats()
 
         assert stats["tools"]["total_tools"] == 0
         assert stats["tools"]["total_runs"] == 0
@@ -308,7 +312,8 @@ class TestFuzzerReporter:
         assert stats["protocols"]["total_runs"] == 0
         assert stats["protocols"]["success_rate"] == 0
 
-    def test_generate_summary_stats_with_results(self, reporter):
+    @pytest.mark.asyncio
+    async def test_generate_summary_stats_with_results(self, reporter):
         """Test generating summary stats with results."""
         # Add tool results
         reporter.add_tool_results(
@@ -325,7 +330,7 @@ class TestFuzzerReporter:
             "protocol1", [{"success": True}, {"error": "test_error"}]
         )
 
-        stats = reporter._generate_summary_stats()
+        stats = await reporter._generate_summary_stats()
 
         # Check tool stats
         assert stats["tools"]["total_tools"] == 1
@@ -416,11 +421,12 @@ class TestFuzzerReporter:
         assert re.match(uuid_pattern, reporter1.session_id)
         assert re.match(uuid_pattern, reporter2.session_id)
 
-    def test_metadata_end_time_set(self, reporter):
+    @pytest.mark.asyncio
+    async def test_metadata_end_time_set(self, reporter):
         """Test that end time is set in final report."""
         reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
 
-        reporter.generate_final_report()
+        await reporter.generate_final_report()
 
         saved_report = reporter.json_formatter.save_report.call_args[0][0]
         assert "end_time" in saved_report["metadata"]

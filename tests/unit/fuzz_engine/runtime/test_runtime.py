@@ -72,13 +72,15 @@ class TestProcessManager:
                 status="running",
             )
 
-            # Test stopping the process
+            # Test stopping the process through public API
+            # Mock signal dispatcher to verify it's called
             with patch.object(
-                manager.lifecycle, "_graceful_terminate_process", AsyncMock()
-            ) as mock_terminate:
+                manager.signal_dispatcher, "send", AsyncMock(return_value=True)
+            ) as mock_signal:
                 result = await manager.stop_process(12345)
                 assert result is True
-                assert mock_terminate.called
+                # Verify signal was sent (graceful termination)
+                mock_signal.assert_called_once()
                 assert manager.watchdog.unregister_process.called
         finally:
             await manager.shutdown()
@@ -178,11 +180,14 @@ class TestProcessWatchdog:
 
         try:
             await watchdog.start()
-            assert watchdog._watchdog_task is not None
-            assert not watchdog._stop_event.is_set()
+            # Use public API to verify watchdog is active
+            stats = await watchdog.get_stats()
+            assert stats["watchdog_active"] is True
         finally:
             await watchdog.stop()
-            assert watchdog._watchdog_task is None
+            # Use public API to verify watchdog is stopped
+            stats = await watchdog.get_stats()
+            assert stats["watchdog_active"] is False
 
     @pytest.mark.asyncio
     async def test_register_unregister_process(self):

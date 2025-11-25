@@ -44,10 +44,11 @@ class TestProcessManager:
                     process = await self.manager.start_process(process_config)
 
                     assert process == self.mock_process
-                    assert process.pid in self.manager.registry.processes
-                    proc_info = self.manager.registry.processes[process.pid]
-                    assert proc_info["config"] == process_config
-                    assert proc_info["status"] == "running"
+                    # Use public API to verify process is registered
+                    status = await self.manager.get_process_status(process.pid)
+                    assert status is not None
+                    assert status["config"] == process_config
+                    assert status["status"] == "running"
 
     @pytest.mark.asyncio
     async def test_start_process_failure(self):
@@ -132,8 +133,10 @@ class TestProcessManager:
                         # Verify results
                         assert result is True
                         process.terminate.assert_called_once()
-                        proc_info = self.manager.registry.processes[process.pid]
-                        assert proc_info["status"] == "stopped"
+                        # Use public API to verify status
+                        status = await self.manager.get_process_status(process.pid)
+                        assert status is not None
+                        assert status["status"] == "stopped"
 
     @pytest.mark.asyncio
     async def test_stop_process_force(self):
@@ -168,8 +171,10 @@ class TestProcessManager:
                         # Verify results
                         assert result is True
                         process.kill.assert_called_once()
-                        proc_info = self.manager.registry.processes[process.pid]
-                        assert proc_info["status"] == "stopped"
+                        # Use public API to verify status
+                        status = await self.manager.get_process_status(process.pid)
+                        assert status is not None
+                        assert status["status"] == "stopped"
 
     @pytest.mark.asyncio
     async def test_stop_process_not_found(self):
@@ -193,11 +198,13 @@ class TestProcessManager:
             status="running",
         )
 
+        # Test error handling through public API
+        # Mock the signal dispatcher to raise an error during graceful termination
         with patch.object(
             self.manager.watchdog, "unregister_process", AsyncMock()
         ), patch.object(
-            self.manager.lifecycle,
-            "_graceful_terminate_process",
+            self.manager.signal_dispatcher,
+            "send",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):
             with pytest.raises(ProcessStopError) as exc:
@@ -251,11 +258,13 @@ class TestProcessManager:
                         mock_process1.terminate.assert_called_once()
                         mock_process2.terminate.assert_called_once()
 
-                        # Verify both processes are marked as stopped
-                        proc1_info = self.manager.registry.processes[proc1.pid]
-                        proc2_info = self.manager.registry.processes[proc2.pid]
-                        assert proc1_info["status"] == "stopped"
-                        assert proc2_info["status"] == "stopped"
+                        # Verify both processes are marked as stopped using public API
+                        proc1_status = await self.manager.get_process_status(proc1.pid)
+                        proc2_status = await self.manager.get_process_status(proc2.pid)
+                        assert proc1_status is not None
+                        assert proc2_status is not None
+                        assert proc1_status["status"] == "stopped"
+                        assert proc2_status["status"] == "stopped"
 
     @pytest.mark.asyncio
     async def test_stop_all_processes_failure(self):
@@ -717,11 +726,10 @@ class TestProcessManager:
                 activity_callback,
                 "existing_process",
             )
-            assert self.mock_process.pid in self.manager.registry.processes
-            assert (
-                self.manager.registry.processes[self.mock_process.pid]["config"].name
-                == "existing_process"
-            )
+            # Use public API to verify process is registered
+            status = await self.manager.get_process_status(self.mock_process.pid)
+            assert status is not None
+            assert status["config"].name == "existing_process"
 
 
 if __name__ == "__main__":

