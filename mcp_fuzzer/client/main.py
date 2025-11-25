@@ -181,7 +181,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
         try:  # pragma: no cover
             output_types = config.get("output_types")
-            standardized_files = client.generate_standardized_reports(
+            standardized_files = await client.generate_standardized_reports(
                 output_types=output_types,
                 include_safety=config.get("safety_report", False),
             )
