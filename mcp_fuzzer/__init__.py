@@ -12,7 +12,7 @@ if sys.version_info < (3, 10):
         "Use a supported interpreter (e.g., tox envs or a 3.10+ venv)."
     )
 
-from .cli import create_argument_parser, get_cli_config
+from .cli import create_argument_parser, build_cli_config
 from .client import MCPFuzzerClient, UnifiedMCPFuzzerClient
 from .fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzz_engine.fuzzer.tool_fuzzer import ToolFuzzer
