@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_fuzzer.cli.args import create_argument_parser
+from mcp_fuzzer.cli.parser import create_argument_parser
 from mcp_fuzzer.reports.reporter import FuzzerReporter
 
 pytestmark = [pytest.mark.integration, pytest.mark.cli, pytest.mark.reports]

@@ -26,6 +26,6 @@ __all__ = [
     "ProtocolStrategies",
     "MCPFuzzerClient",
     "UnifiedMCPFuzzerClient",
-    "get_cli_config",
     "create_argument_parser",
+    "build_cli_config",
 ]
