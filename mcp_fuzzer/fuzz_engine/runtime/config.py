@@ -96,6 +96,10 @@ class ProcessConfigBuilder:
         return self
 
     def build(self) -> ProcessConfig:
+        if not self._command:
+            raise ValueError(
+                "ProcessConfigBuilder.build() requires a non-empty command"
+            )
         return ProcessConfig(
             command=self._command,
             cwd=self._cwd,

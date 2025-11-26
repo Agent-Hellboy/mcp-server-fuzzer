@@ -88,6 +88,17 @@ class ProcessInspector:
     async def wait_for_completion(
         self, pid: int, timeout: float | None = None
     ) -> int | None:
+        """Wait for process to complete.
+        
+        Args:
+            pid: Process ID to wait for
+            timeout: Optional timeout in seconds. If None, waits indefinitely.
+        
+        Returns:
+            Exit code (int) if process completed, None if:
+            - Process not found in registry, or
+            - Timeout occurred and process is still running (returncode is None)
+        """
         process_info = await self.registry.get_process(pid)
         if not process_info:
             return None

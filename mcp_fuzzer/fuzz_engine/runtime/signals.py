@@ -143,8 +143,9 @@ class SignalDispatcher:
             registry: Process registry for resolving process information
             logger: Logger instance for signal operations
             strategies: Optional dict of custom strategies to register.
-                If provided, these will be registered before defaults (unless
-                register_defaults=False).
+                If provided, these will override default strategies with matching
+                keys (timeout, force, interrupt). Custom strategies are registered
+                after defaults, allowing them to replace built-in implementations.
             register_defaults: If True (default), register built-in strategies
                 (timeout, force, interrupt). Set to False to use only custom
                 strategies.
@@ -153,18 +154,18 @@ class SignalDispatcher:
         self._logger = logger
         self._signal_map: dict[str, ProcessSignalStrategy] = {}
 
-        # Register custom strategies first (if provided)
-        if strategies:
-            for name, strategy in strategies.items():
-                self.register_strategy(name, strategy)
-
-        # Register default strategies unless disabled
+        # Register default strategies first (unless disabled)
         if register_defaults:
             self.register_strategy("timeout", TermSignalStrategy(registry, logger))
             self.register_strategy("force", KillSignalStrategy(registry, logger))
             self.register_strategy(
                 "interrupt", InterruptSignalStrategy(registry, logger)
             )
+
+        # Register custom strategies (if provided) - these override defaults
+        if strategies:
+            for name, strategy in strategies.items():
+                self.register_strategy(name, strategy)
 
     @classmethod
     def from_config(

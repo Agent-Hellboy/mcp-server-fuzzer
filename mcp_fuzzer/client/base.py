@@ -51,8 +51,7 @@ class MCPFuzzerClient:
         self.auth_manager = auth_manager or AuthManager()
         self._reporter = reporter or FuzzerReporter(safety_system=safety_system)
         # Set transport in reporter for runtime statistics collection
-        if self._reporter:
-            self._reporter.set_transport(transport)
+        self._reporter.set_transport(transport)
         self.tool_timeout = tool_timeout
         self.safety_enabled = safety_enabled
         if not safety_enabled:

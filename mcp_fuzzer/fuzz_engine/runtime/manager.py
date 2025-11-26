@@ -15,7 +15,7 @@ from .config import ProcessConfig, WatchdogConfig
 from .lifecycle import ProcessLifecycle
 from .monitor import ProcessInspector
 from .registry import ProcessRegistry
-from .signals import SignalDispatcher
+from .signals import ProcessSignalStrategy, SignalDispatcher
 from .watchdog import ProcessWatchdog
 
 
@@ -39,6 +39,12 @@ class ProcessManager:
         self.monitor = monitor
         self._logger = logger
         self._observers: list[Callable[[str, dict[str, Any]], None]] = []
+        
+        # Ensure lifecycle and monitor have the correct watchdog reference
+        if self.lifecycle.watchdog is not self.watchdog:
+            self.lifecycle.watchdog = self.watchdog
+        if self.monitor.watchdog is not self.watchdog:
+            self.monitor.watchdog = self.watchdog
 
     @classmethod
     def from_config(
@@ -46,8 +52,23 @@ class ProcessManager:
         config: WatchdogConfig | None = None,
         config_dict: dict[str, Any] | None = None,
         logger: logging.Logger | None = None,
+        *,
+        signal_strategies: dict[str, ProcessSignalStrategy] | None = None,
+        register_default_signal_strategies: bool = True,
     ) -> "ProcessManager":
-        """Factory method for creating a ProcessManager with default components."""
+        """Factory method for creating a ProcessManager with default components.
+        
+        Args:
+            config: Optional WatchdogConfig instance
+            config_dict: Optional dict to create WatchdogConfig from
+            logger: Optional logger instance
+            signal_strategies: Optional custom signal strategies to register.
+                If provided, these will be registered before defaults (unless
+                register_default_signal_strategies=False).
+            register_default_signal_strategies: If True (default), register built-in
+                strategies (timeout, force, interrupt). Set to False to use only
+                custom strategies.
+        """
         cfg = (
             WatchdogConfig.from_config(config_dict)
             if config_dict
@@ -58,7 +79,12 @@ class ProcessManager:
         resolved_logger = logger or logging.getLogger(__name__)
         watchdog = ProcessWatchdog(cfg)
         registry = ProcessRegistry()
-        signal_handler = SignalDispatcher(registry, resolved_logger)
+        signal_handler = SignalDispatcher(
+            registry,
+            resolved_logger,
+            strategies=signal_strategies,
+            register_defaults=register_default_signal_strategies,
+        )
         lifecycle = ProcessLifecycle(
             watchdog, registry, signal_handler, resolved_logger
         )
@@ -77,7 +103,7 @@ class ProcessManager:
             try:
                 cb(event_name, data)
             except Exception:
-                self._logger.debug("ProcessManager observer failed", exc_info=True)
+                self._logger.warning("ProcessManager observer failed", exc_info=True)
         self._logger.debug("[process_manager] %s: %s", event_name, payload)
 
     async def start_process(self, config: ProcessConfig) -> asyncio.subprocess.Process:

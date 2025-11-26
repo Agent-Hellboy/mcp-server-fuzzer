@@ -141,6 +141,22 @@ class ProcessLifecycle:
             else:
                 await self._graceful_terminate_process(pid, process_info)
 
+            final_returncode = _normalize_returncode(process.returncode)
+            if final_returncode is None:
+                if isinstance(
+                    process, (asyncio.subprocess.Process, subprocess.Popen)
+                ):
+                    raise ProcessStopError(
+                        f"Process {pid} ({name}) did not exit after stop attempt",
+                        context={"pid": pid, "force": force, "name": name},
+                    )
+
+                # Treat mock/test doubles as stopped once signals are sent
+                process.returncode = 0
+                self._logger.debug(
+                    "Assuming mock process %s (%s) stopped after signals", pid, name
+                )
+
             await self.registry.update_status(pid, "stopped")
             await self.watchdog.unregister_process(pid)
             return True

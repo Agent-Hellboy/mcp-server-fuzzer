@@ -65,6 +65,7 @@ class ToolClient:
                 self._logger.warning("Server returned an empty list of tools.")
                 return []
             self._logger.info(f"Found {len(tools)} tools to fuzz")
+            self._logger.debug(f"Tools: {tools}")
             return tools
         except Exception as e:
             self._logger.error(f"Failed to get tools from server: {e}")

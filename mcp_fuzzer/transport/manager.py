@@ -21,6 +21,7 @@ class TransportProcessState:
     last_stderr_tail: str | None = None
 
     def record_start(self, pid: int | None) -> None:
+        breakpoint()
         self.pid = pid
         self.started_at = time.time()
         self.exited_at = None
@@ -45,14 +46,15 @@ class TransportProcessState:
 
 
 class TransportManager:
-    """Small helper to unify transport process state, backoff, and logging hooks."""
+    """Small helper to unify transport process state, backoff,
+    and logging hooks."""
 
     def __init__(
         self,
         *,
-        max_read_bytes: int = 256 * 1024,
-        backoff_base: float = 0.2,
-        backoff_cap: float = 2.0,
+        max_read_bytes: int = 256 * 1024, # 256KB
+        backoff_base: float = 0.2, # 0.2 seconds
+        backoff_cap: float = 2.0, # 2 seconds
         logger: logging.Logger | None = None,
     ) -> None:
         self.state = TransportProcessState()
@@ -98,30 +100,25 @@ class TransportManager:
         timeout: float | None = None,
     ) -> bytes | None:
         """Read a newline-delimited message with a size cap."""
-        buf = bytearray()
-        while True:
-            try:
-                chunk = await asyncio.wait_for(reader.read(1024), timeout=timeout)
-            except asyncio.TimeoutError:
-                return None
+        breakpoint()
+        try:
+            line = await asyncio.wait_for(reader.readline(), timeout=timeout)
+        except asyncio.TimeoutError:
+            return None
 
-            if not chunk:
-                return None
+        if not line:
+            return None
 
-            buf.extend(chunk)
-            if b"\n" in chunk:
-                break
+        if len(line) > self._max_read_bytes:
+            self.emit_event(
+                "oversized_output",
+                pid=self.state.pid,
+                size=len(line),
+                limit=self._max_read_bytes,
+            )
+            raise TransportError(
+                "Received oversized message from stdio transport",
+                context={"size": len(line), "limit": self._max_read_bytes},
+            )
 
-            if len(buf) > self._max_read_bytes:
-                self.emit_event(
-                    "oversized_output",
-                    pid=self.state.pid,
-                    size=len(buf),
-                    limit=self._max_read_bytes,
-                )
-                raise TransportError(
-                    "Received oversized message from stdio transport",
-                    context={"size": len(buf), "limit": self._max_read_bytes},
-                )
-
-        return bytes(buf)
+        return line

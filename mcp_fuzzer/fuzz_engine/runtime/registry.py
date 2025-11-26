@@ -38,9 +38,8 @@ class ProcessRegistry:
         return self._lock
 
     @property
-    def processes(self) -> ProcessRegistryTable:
-        """Expose the typed process table for inspection."""
-        return self._processes
+    def processes(self) -> dict[int, ProcessRecord]:
+        return self._processes.snapshot()
 
     async def register(
         self,
