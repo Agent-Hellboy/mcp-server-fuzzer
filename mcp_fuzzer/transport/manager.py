@@ -21,7 +21,6 @@ class TransportProcessState:
     last_stderr_tail: str | None = None
 
     def record_start(self, pid: int | None) -> None:
-        breakpoint()
         self.pid = pid
         self.started_at = time.time()
         self.exited_at = None
@@ -100,7 +99,6 @@ class TransportManager:
         timeout: float | None = None,
     ) -> bytes | None:
         """Read a newline-delimited message with a size cap."""
-        breakpoint()
         try:
             line = await asyncio.wait_for(reader.readline(), timeout=timeout)
         except asyncio.TimeoutError:
