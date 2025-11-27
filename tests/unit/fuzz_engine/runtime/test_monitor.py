@@ -273,10 +273,11 @@ class TestProcessInspector:
             assert result.timed_out is True
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("timeout", [None, 5.0])
     async def test_wait_for_completion_success(
-        self, inspector, registry, mock_process, process_config
+        self, inspector, registry, mock_process, process_config, timeout
     ):
-        """Test waiting for completion successfully."""
+        """Test waiting for completion successfully with various timeout values."""
         mock_process.returncode = None
         await registry.register(mock_process.pid, mock_process, process_config)
 
@@ -288,28 +289,8 @@ class TestProcessInspector:
             "mcp_fuzzer.fuzz_engine.runtime.monitor.wait_for_process_exit",
             side_effect=mock_wait,
         ):
-            result = await inspector.wait_for_completion(mock_process.pid)
-            assert result is not None
-            assert result.exit_code == 0
-            assert result.timed_out is False
-
-    @pytest.mark.asyncio
-    async def test_wait_for_completion_with_finite_timeout(
-        self, inspector, registry, mock_process, process_config
-    ):
-        """Test waiting for completion with finite timeout that succeeds."""
-        mock_process.returncode = None
-        await registry.register(mock_process.pid, mock_process, process_config)
-
-        async def mock_wait(process, timeout=None):
-            mock_process.returncode = 0
-
-        with patch(
-            "mcp_fuzzer.fuzz_engine.runtime.monitor.wait_for_process_exit",
-            side_effect=mock_wait,
-        ):
             result = await inspector.wait_for_completion(
-                mock_process.pid, timeout=5.0
+                mock_process.pid, timeout=timeout
             )
             assert result is not None
             assert result.exit_code == 0
