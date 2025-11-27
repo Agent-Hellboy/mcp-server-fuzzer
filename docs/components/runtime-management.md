@@ -185,7 +185,7 @@ at construction time or runtime.
 
 #### Strategy Registration Pattern
 
-**Method 1: Dependency Injection at Construction**
+##### Method 1: Dependency Injection at Construction
 
 ```python
 from mcp_fuzzer.fuzz_engine.runtime.signals import (
@@ -222,7 +222,7 @@ dispatcher = SignalDispatcher.from_config(
 )
 ```
 
-**Method 2: Runtime Registration**
+##### Method 2: Runtime Registration
 
 ```python
 from mcp_fuzzer.fuzz_engine.runtime.signals import ProcessSignalStrategy
@@ -238,7 +238,7 @@ manager.signal_dispatcher.register_strategy("noop", NoopSignal())
 manager.signal_dispatcher.register_strategy("timeout", CustomTermStrategy())
 ```
 
-**Method 3: Strategy Management**
+##### Method 3: Strategy Management
 
 ```python
 # List all registered strategies

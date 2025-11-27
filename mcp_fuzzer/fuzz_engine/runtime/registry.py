@@ -82,3 +82,16 @@ class ProcessRegistry:
         """Return a shallow copy of the registry under lock."""
         async with self._get_lock():
             return dict(self._processes)
+
+    async def contains(self, pid: int) -> bool:
+        """Return True if the pid is currently registered."""
+        async with self._get_lock():
+            return pid in self._processes
+
+    async def get_process_field(self, pid: int, field: str):
+        """Fetch a single field from a process record, or None if missing."""
+        async with self._get_lock():
+            record = self._processes.get(pid)
+            if record is None:
+                return None
+            return record.get(field)

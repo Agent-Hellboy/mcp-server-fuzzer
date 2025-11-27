@@ -51,7 +51,16 @@ class ProcessInspector:
             *(self.get_status(pid) for pid in pids),
             return_exceptions=True,
         )
-        return [r for r in results if isinstance(r, dict)]
+        filtered: list[dict[str, Any]] = []
+        for pid, result in zip(pids, results):
+            if isinstance(result, Exception):
+                self._logger.warning(
+                    "Failed to get status for PID %s: %s", pid, result, exc_info=True
+                )
+                continue
+            if isinstance(result, dict):
+                filtered.append(result)
+        return filtered
 
     async def get_statistics(self) -> dict[str, Any]:
         process_stats = await self.list_processes()
