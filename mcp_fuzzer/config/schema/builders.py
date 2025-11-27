@@ -30,7 +30,12 @@ def build_timeout_schema() -> dict[str, Any]:
 
 
 def build_basic_schema() -> dict[str, Any]:
-    """Build schema for basic configuration properties."""
+    """Build schema for basic configuration properties.
+    
+    Note: `safety_enabled` is a top-level convenience flag. If both
+    `safety_enabled` and `safety.enabled` are specified, `safety.enabled`
+    takes precedence.
+    """
     return {
         "log_level": {
             "type": "string",
@@ -38,7 +43,11 @@ def build_basic_schema() -> dict[str, Any]:
         },
         "safety_enabled": {
             "type": "boolean",
-            "description": "Whether safety features are enabled",
+            "description": (
+                "Whether safety features are enabled (convenience flag). "
+                "If both safety_enabled and safety.enabled are specified, "
+                "safety.enabled takes precedence."
+            ),
         },
         "fs_root": {
             "type": "string",
@@ -157,12 +166,23 @@ def build_custom_transports_schema() -> dict[str, Any]:
 
 
 def build_safety_schema() -> dict[str, Any]:
-    """Build schema for safety configuration."""
+    """Build schema for safety configuration.
+    
+    Note: `safety.enabled` takes precedence over top-level `safety_enabled`
+    if both are specified.
+    """
     return {
         "safety": {
             "type": "object",
             "properties": {
-                "enabled": {"type": "boolean"},
+                "enabled": {
+                    "type": "boolean",
+                    "description": (
+                        "Whether safety features are enabled. "
+                        "Takes precedence over top-level safety_enabled "
+                        "if both are specified."
+                    ),
+                },
                 "local_hosts": {"type": "array", "items": {"type": "string"}},
                 "no_network": {"type": "boolean"},
                 "header_denylist": {"type": "array", "items": {"type": "string"}},
@@ -172,6 +192,7 @@ def build_safety_schema() -> dict[str, Any]:
                 },
                 "env_allowlist": {"type": "array", "items": {"type": "string"}},
             },
+            "additionalProperties": False,
         },
     }
 
@@ -228,8 +249,10 @@ def build_output_schema() -> dict[str, Any]:
                             ),
                         },
                     },
+                    "additionalProperties": False,
                 },
             },
+            "additionalProperties": False,
         },
     }
 

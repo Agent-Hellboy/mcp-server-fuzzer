@@ -80,10 +80,12 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
                 f"Failed to load configuration file '{args.config}': {exc}"
             )
     else:
-        try:
-            config_mediator.apply_file()
-        except Exception as exc:
-            logging.debug(f"Error loading default configuration file: {exc}")
+        # apply_file() returns False if config loading fails (doesn't raise)
+        if not config_mediator.apply_file():
+            logging.debug(
+                "Default configuration file not found or failed to load "
+                "(this is normal if no config file exists)"
+            )
 
     _transfer_config_to_args(args)
     auth_manager = resolve_auth_port(args)

@@ -34,16 +34,28 @@ def load_config_file(file_path: str) -> dict[str, Any]:
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+            data = yaml.safe_load(f) or {}
+        
+        # Validate that top-level config is a mapping/object
+        if not isinstance(data, dict):
+            raise ConfigFileError(
+                f"Top-level configuration in {file_path} must be a mapping/object, "
+                f"got {type(data).__name__}"
+            )
+        
+        return data
     except yaml.YAMLError as e:
         raise ConfigFileError(
             f"Error parsing YAML configuration file {file_path}: {e}"
-        )
-    except PermissionError:
+        ) from e
+    except PermissionError as e:
         raise ConfigFileError(
             f"Permission denied when reading configuration file: {file_path}"
-        )
+        ) from e
+    except ConfigFileError:
+        # Re-raise ConfigFileError as-is (already has proper context)
+        raise
     except Exception as e:
         raise ConfigFileError(
             f"Unexpected error reading configuration file {file_path}: {e}"
-        )
+        ) from e

@@ -560,13 +560,15 @@ def test_build_cli_config_uses_config_file(monkeypatch):
 def test_build_cli_config_handles_apply_config_error(caplog):
     caplog.set_level(logging.DEBUG)
     args = _base_args(config=None)
+    # apply_file() now returns False instead of raising exceptions
     with patch(
         "mcp_fuzzer.cli.config_merge.config_mediator.apply_file",
-        side_effect=Exception("fail"),
+        return_value=False,
     ):
         cli_config = build_cli_config(args)
     assert cli_config.merged["endpoint"] == "http://localhost"
-    assert "fail" in "".join(caplog.messages)
+    # Check that debug message was logged when config file is not found
+    assert "Default configuration file not found" in "".join(caplog.messages)
 
 def test_build_cli_config_raises_config_error():
     args = _base_args(config="bad.yml")

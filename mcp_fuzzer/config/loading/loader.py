@@ -76,7 +76,9 @@ class ConfigLoader:
 
     def load_from_params(
         self, params: ConfigSearchParams
-    ) -> Tuple[ConfigDict | None, str | None]:
+    ) -> Tuple[
+        ConfigDict | None, str | None
+    ]:
         """Load configuration using ConfigSearchParams.
         
         Args:
