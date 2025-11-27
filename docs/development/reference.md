@@ -241,7 +241,7 @@ class ProcessConfig:
   - Get list of all managed processes with their status
   - Returns comprehensive process information
 
-- `async wait_for_process(pid: int, timeout: Optional[float] = None) -> Optional[int]`
+- `async wait(pid: int, timeout: Optional[float] = None) -> Optional[int]`
   - Wait for a process to complete
   - Returns exit code or None if timeout
   - Non-blocking with configurable timeout
@@ -268,7 +268,7 @@ class ProcessConfig:
   - Signal types: "timeout", "force", "interrupt"
   - Returns True if signal was sent successfully
 
-- `async register_existing_process(pid: int, process: asyncio.subprocess.Process, name: str, activity_callback: Optional[Callable[[], float]] = None) -> None`
+- `async register_existing_process(pid: int, process: asyncio.subprocess.Process, name: Optional[str] = None, activity_callback: Optional[Callable[[], float]] = None, *, config: Optional[ProcessConfig] = None) -> None`
   - Register an already-started subprocess with the manager
   - Useful for integrating with existing process management
 
@@ -278,7 +278,7 @@ class ProcessConfig:
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
 
 async def process_manager_example():
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     # Start a process
     config = ProcessConfig(
@@ -333,65 +333,62 @@ class WatchdogConfig:
 #### Methods
 
 - `async start() -> None`
-  - Start the watchdog monitoring loop
-  - Creates background task for process monitoring
+  - Start the watchdog monitoring loop; creates background task for monitoring
 
 - `async stop() -> None`
-  - Stop the watchdog monitoring loop
-  - Cancels monitoring task and cleans up
+  - Stop the monitoring loop and cancel/await the background task
 
-- `async register_process(pid: int, process: Any, activity_callback: Optional[Callable[[], float]], name: str) -> None`
-  - Register a process for monitoring
-  - Activity callback should return timestamp of last activity
-  - Auto-starts watchdog if not already running
-
-- `async unregister_process(pid: int) -> None`
-  - Unregister a process from monitoring
-  - Removes process from monitoring loop
+- `async scan_once(processes: dict[int, ProcessRecord]) -> dict[str, Any]`
+  - Run one hang-detection pass against a registry snapshot
 
 - `async update_activity(pid: int) -> None`
-  - Update activity timestamp for a process
-  - Used to indicate process is still active
-
-- `async is_process_registered(pid: int) -> bool`
-  - Check if a process is registered for monitoring
-  - Returns True if process is being monitored
+  - Update activity timestamp for a process pulled from the registry
 
 - `async get_stats() -> dict`
-  - Get statistics about monitored processes
-  - Includes total, running, and finished process counts
+  - Get statistics about monitored processes and the watchdog loop state
+
+Note: processes are added to the shared `ProcessRegistry` (or by
+`ProcessLifecycle.start`), and the watchdog reads that registry instead of
+maintaining its own table.
 
 #### Context Manager Support
 
 ```python
-async with ProcessWatchdog(config) as watchdog:
-    # Watchdog automatically starts and stops
-    await watchdog.register_process(pid, process, callback, name)
-    # ... use watchdog
+async with ProcessWatchdog(registry, dispatcher, config) as watchdog:
+    await registry.register(pid, process, ProcessConfig(command=["python"], name=name))
+    await watchdog.update_activity(pid)
+    # ... registry keeps the process table; watchdog reads it
 ```
 
 #### Usage Examples
 
 ```python
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import ProcessWatchdog, WatchdogConfig
+import asyncio
+import logging
+from mcp_fuzzer.fuzz_engine.runtime import (
+    ProcessConfig,
+    ProcessRegistry,
+    ProcessWatchdog,
+    SignalDispatcher,
+    WatchdogConfig,
+)
 
 async def watchdog_example():
-    config = WatchdogConfig(
-        check_interval=1.0,
-        process_timeout=30.0,
-        auto_kill=True
+    registry = ProcessRegistry()
+    dispatcher = SignalDispatcher(registry, logging.getLogger(__name__))
+    watchdog = ProcessWatchdog(
+        registry,
+        dispatcher,
+        WatchdogConfig(check_interval=1.0, process_timeout=30.0, auto_kill=True),
     )
-
-    watchdog = ProcessWatchdog(config)
     await watchdog.start()
 
-    # Register a process
+    # Register a process via the registry
     process = await asyncio.create_subprocess_exec("python", "server.py")
-    await watchdog.register_process(
+    await registry.register(
         process.pid,
         process,
-        None,  # No activity callback
-        "server"
+        ProcessConfig(command=["python", "server.py"], name="server"),
     )
 
     # Update activity periodically
@@ -985,7 +982,7 @@ The runtime layer provides robust, asynchronous subprocess lifecycle management 
   - Fully async API; blocking calls (spawn, wait, kill) run in thread executors.
   - Process-group signaling on POSIX to prevent orphan children.
   - Safe stop flow: TERM (grace window) → KILL on timeout if needed.
-  - Watchdog auto-starts on first registration/start; auto-unregisters on stop.
+  - Watchdog uses the shared registry; call `start()`/`stop()` explicitly (or via context manager) and unregisters completed/hung processes after a scan.
 
 - Typical usage:
 

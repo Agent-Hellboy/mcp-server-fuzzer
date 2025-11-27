@@ -141,6 +141,7 @@ class ReportSnapshot:
     protocol_results: dict[str, list[RunRecord]]
     summary: SummaryStats
     safety_data: dict[str, Any] = field(default_factory=dict)
+    runtime_data: dict[str, Any] = field(default_factory=dict)
 
     def total_tests(self) -> int:
         tool_tests = sum(len(results) for results in self.tool_results.values())
@@ -179,6 +180,7 @@ class ReportSnapshot:
             "protocol_results": protocol_dict,
             "summary": self.summary.to_dict(),
             "safety": self.safety_data,
+            "runtime": self.runtime_data,
         }
 
     def __contains__(self, item: object) -> bool:

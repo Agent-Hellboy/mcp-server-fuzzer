@@ -16,6 +16,8 @@ test.py
 sdks/
 doc_ref/
 # C extensions
+*REDESIGN*.md
+*FLOW.md
 *.so
 notes.md
 /reports/

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Safety Check Script for MCP Fuzzer CI/CD
-# Verifies all safety measures are active before running system tests
+# Verifies all safety measures are active before running e2e tests
 
 # set +e  # Don't exit on error, handle errors manually
 
@@ -133,7 +133,7 @@ echo "❌ Failed: $FAILED"
 
 if [ $FAILED -eq 0 ]; then
     echo ""
-    echo -e "${GREEN}🎉 All safety checks passed! Ready for system testing.${NC}"
+    echo -e "${GREEN}🎉 All safety checks passed! Ready for e2e testing.${NC}"
     echo ""
     echo "🛡️  Safety measures active:"
     echo "   • Safety system: Enabled"
@@ -144,6 +144,6 @@ if [ $FAILED -eq 0 ]; then
     exit 0
 else
     echo ""
-    echo -e "${RED}⚠️  $FAILED safety check(s) failed. Please resolve before running system tests.${NC}"
+    echo -e "${RED}⚠️  $FAILED safety check(s) failed. Please resolve before running e2e tests.${NC}"
     exit 1
 fi

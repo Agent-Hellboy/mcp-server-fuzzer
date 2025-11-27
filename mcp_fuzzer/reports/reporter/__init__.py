@@ -124,6 +124,7 @@ class FuzzerReporter:
         self.safety_reporter: SafetyReporterPort = deps.safety
 
         self._metadata: FuzzingMetadata | None = None
+        self._transport: Any = None
 
         # Use session ID from output manager
         self.session_id = self.output_manager.protocol.session_id
@@ -200,9 +201,11 @@ class FuzzerReporter:
         """Print blocked operations summary to console."""
         self.safety_reporter.print_blocked_operations_summary()
 
-    def generate_final_report(self, include_safety: bool = True) -> str:
+    async def generate_final_report(self, include_safety: bool = True) -> str:
         """Generate comprehensive final report and save to file."""
-        snapshot = self._prepare_snapshot(include_safety=include_safety, finalize=True)
+        snapshot = await self._prepare_snapshot(
+            include_safety=include_safety, finalize=True
+        )
         json_filename = self.output_dir / f"fuzzing_report_{self.session_id}.json"
         self.json_formatter.save_report(snapshot, str(json_filename))
 
@@ -216,14 +219,16 @@ class FuzzerReporter:
         logging.info(f"Final report generated: {json_filename}")
         return str(json_filename)
 
-    def generate_standardized_report(
+    async def generate_standardized_report(
         self,
         output_types: list[str] = None,
         include_safety: bool = True
     ) -> dict[str, str]:
         """Generate standardized reports using the new output protocol."""
         generated_files = {}
-        snapshot = self._prepare_snapshot(include_safety=include_safety, finalize=True)
+        snapshot = await self._prepare_snapshot(
+            include_safety=include_safety, finalize=True
+        )
 
         # Use configured output types if none specified
         if output_types is None:
@@ -306,27 +311,27 @@ class FuzzerReporter:
             for key, value in status["metadata"].items():
                 self.console.print(f"  {key}: {value}")
 
-    def export_csv(self, filename: str):
+    async def export_csv(self, filename: str):
         """Export report data to CSV format."""
-        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
         self.csv_formatter.save_csv_report(snapshot, filename)
 
-    def export_xml(self, filename: str):
+    async def export_xml(self, filename: str):
         """Export report data to XML format."""
-        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
         self.xml_formatter.save_xml_report(snapshot, filename)
 
-    def export_html(self, filename: str, title: str = "Fuzzing Results Report"):
+    async def export_html(self, filename: str, title: str = "Fuzzing Results Report"):
         """Export report data to HTML format."""
-        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
         self.html_formatter.save_html_report(snapshot, filename, title)
 
-    def export_markdown(self, filename: str):
+    async def export_markdown(self, filename: str):
         """Export report data to Markdown format."""
-        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
         self.markdown_formatter.save_markdown_report(snapshot, filename)
 
-    def _prepare_snapshot(
+    async def _prepare_snapshot(
         self, include_safety: bool, finalize: bool
     ) -> ReportSnapshot:
         """Create a snapshot of the current report state."""
@@ -336,9 +341,13 @@ class FuzzerReporter:
         safety_data = self._gather_safety_data(include_safety)
         if include_safety and safety_data:
             self.collector.update_safety_data(safety_data)
+        runtime_data = await self._gather_runtime_data()
+        if runtime_data:
+            self.collector.update_runtime_data(runtime_data)
         return self.collector.snapshot(
             metadata,
             safety_data=None,
+            runtime_data=None,
             include_safety=include_safety,
         )
 
@@ -374,9 +383,28 @@ class FuzzerReporter:
             logging.error("Failed to gather safety data: %s", exc)
             return {}
 
-    def _generate_summary_stats(self) -> dict[str, Any]:
+    def set_transport(self, transport: Any) -> None:
+        """Set the transport for gathering runtime statistics."""
+        self._transport = transport
+
+    async def _gather_runtime_data(self) -> dict[str, Any]:
+        """Gather runtime/process statistics from transport if available."""
+        if not self._transport:
+            return {}
+        
+        try:
+            # Check if transport has get_process_stats method
+            if hasattr(self._transport, "get_process_stats"):
+                stats = await self._transport.get_process_stats()
+                return {"process_stats": stats}
+        except Exception as exc:
+            logging.debug("Failed to gather runtime data: %s", exc)
+        
+        return {}
+
+    async def _generate_summary_stats(self) -> dict[str, Any]:
         """Backward-compatible summary helper used in tests."""
-        snapshot = self._prepare_snapshot(include_safety=False, finalize=False)
+        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
         return snapshot.summary.to_dict()
 
     @property

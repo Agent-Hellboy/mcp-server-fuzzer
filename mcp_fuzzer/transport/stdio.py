@@ -8,9 +8,8 @@ import subprocess
 import signal as _signal
 import sys
 import inspect
-
 import time
-from typing import Any
+from typing import Any, Callable
 
 from .base import TransportProtocol
 from ..exceptions import (
@@ -22,9 +21,15 @@ from ..exceptions import (
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ..safety_system.policy import sanitize_subprocess_env
 from ..config.constants import PROCESS_WAIT_TIMEOUT
+from .manager import TransportManager
 
 class StdioTransport(TransportProtocol):
-    def __init__(self, command: str, timeout: float = 30.0):
+    def __init__(
+        self,
+        command: str,
+        timeout: float = 30.0,
+        process_manager: ProcessManager | None = None,
+    ):
         self.command = command
         self.timeout = timeout
         # Backwards-compat: some tests expect a numeric request counter
@@ -35,6 +40,9 @@ class StdioTransport(TransportProtocol):
         self.stderr = None
         self._lock = None  # Will be created lazily when needed
         self._initialized = False
+        self._last_activity = time.time()
+        self.process_manager = process_manager
+        self.manager = TransportManager(logger=logging.getLogger(__name__))
 
     def _get_lock(self):
         """Get or create the lock lazily."""
@@ -42,9 +50,13 @@ class StdioTransport(TransportProtocol):
             self._lock = asyncio.Lock()
         return self._lock
 
+    def add_observer(self, callback: Callable[[str, dict[str, Any]], None]) -> None:
+        """Register an observer for lifecycle events."""
+        self.manager.add_observer(callback)
+
     def _get_process_manager(self):
         """Get or create the process manager lazily."""
-        if not hasattr(self, 'process_manager'):
+        if self.process_manager is None:
             # Use our new Process Management system
             watchdog_config = WatchdogConfig(
                 check_interval=1.0,
@@ -53,8 +65,7 @@ class StdioTransport(TransportProtocol):
                 max_hang_time=self.timeout + 10.0,
                 auto_kill=True,
             )
-            self.process_manager = ProcessManager(watchdog_config)
-            self._last_activity = time.time()
+            self.process_manager = ProcessManager.from_config(watchdog_config)
         return self.process_manager
 
     async def _update_activity(self):
@@ -74,6 +85,8 @@ class StdioTransport(TransportProtocol):
         async with self._get_lock():
             if self._initialized and self.process and self.process.returncode is None:
                 return
+
+            is_restart = self._initialized
 
             # Kill existing process if any
             if self.process:
@@ -98,6 +111,16 @@ class StdioTransport(TransportProtocol):
                                 self.process.kill()
                 except Exception as e:
                     logging.warning(f"Error stopping existing process: {e}")
+
+            if is_restart:
+                delay = await self.manager.apply_backoff()
+                self.manager.state.record_restart()
+                self.manager.emit_event(
+                    "restarting",
+                    attempt=self.manager.restart_attempts,
+                    backoff=delay,
+                    previous_pid=getattr(self.process, "pid", None),
+                )
 
             # Start new process using asyncio subprocess for proper async communication
             try:
@@ -139,13 +162,17 @@ class StdioTransport(TransportProtocol):
 
                 self._initialized = True
                 await self._update_activity()
+                self.manager.state.record_start(self.process.pid)
+                self.manager.emit_event("started", pid=self.process.pid)
                 logging.info(
                     f"Started stdio transport process with PID: {self.process.pid}"
                 )
+                self.manager.reset_backoff()
 
             except Exception as e:
                 logging.error(f"Failed to start stdio transport process: {e}")
                 self._initialized = False
+                self.manager.state.record_error(str(e))
                 raise ProcessStartError(
                     "Failed to start stdio transport process",
                     context={"command": cmd_parts, "cwd": os.getcwd()},
@@ -168,10 +195,18 @@ class StdioTransport(TransportProtocol):
         except Exception as e:
             logging.error(f"Failed to send message to stdio transport: {e}")
             self._initialized = False
+            self.manager.state.record_error(str(e))
             raise TransportError(
                 "Failed to send message over stdio transport",
                 context={"message": message},
             ) from e
+
+    async def _readline_with_cap(self) -> bytes | None:
+        """Read a single line from stdout, capping size to avoid limit overruns."""
+        if not self.stdout:
+            return None
+
+        return await self.manager.read_with_cap(self.stdout, timeout=self.timeout)
 
     async def _receive_message(self) -> dict[str, Any | None]:
         """Receive a message from the subprocess."""
@@ -179,16 +214,19 @@ class StdioTransport(TransportProtocol):
             await self._ensure_connection()
 
         try:
-            line = await self.stdout.readline()
+            line = await self._readline_with_cap()
             if not line:
                 return None
 
             await self._update_activity()
-            message = json.loads(line.decode().strip())
+            decoded = line.decode().strip()
+            self.manager.state.record_stdout_tail(decoded[-200:])
+            message = json.loads(decoded)
             return message
         except Exception as e:
             logging.error(f"Failed to receive message from stdio transport: {e}")
             self._initialized = False
+            self.manager.state.record_error(str(e))
             raise TransportError(
                 "Failed to receive message from stdio transport",
                 context={"command": self.command},
@@ -354,6 +392,8 @@ class StdioTransport(TransportProtocol):
             self.stdin = None
             self.stdout = None
             self.stderr = None
+            self.manager.state.record_exit()
+            self.manager.emit_event("stopped", pid=None)
 
     async def get_process_stats(self) -> dict[str, Any]:
         """Get statistics about the managed process."""
@@ -367,6 +407,13 @@ class StdioTransport(TransportProtocol):
                 self.process.pid
             )
             if registered:
+                self.manager.state.record_signal(signal_type)
+                self.manager.emit_event(
+                    "signal",
+                    pid=self.process.pid,
+                    signal=signal_type,
+                    via="manager",
+                )
                 return await self._get_process_manager().send_timeout_signal(
                     self.process.pid, signal_type
                 )
@@ -398,9 +445,9 @@ class StdioTransport(TransportProtocol):
                             logging.info(
                                 (
                                     "Sent terminate timeout signal to process "
-                                    f"{self.process.pid}"
+                                        f"{self.process.pid}"
+                                    )
                                 )
-                            )
                     elif signal_type == "force":
                         # Send SIGKILL (force kill)
                         if os.name != "nt":
@@ -452,12 +499,16 @@ class StdioTransport(TransportProtocol):
                                 (
                                     "Sent terminate interrupt signal to process "
                                     f"{self.process.pid}"
+                                    )
                                 )
-                            )
                     else:
                         logging.warning(f"Unknown signal type: {signal_type}")
                         return False
 
+                    self.manager.state.record_signal(signal_type)
+                    self.manager.emit_event(
+                        "signal", pid=self.process.pid, signal=signal_type, via="direct"
+                    )
                     return True
 
                 except Exception as e:

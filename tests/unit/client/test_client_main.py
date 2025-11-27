@@ -31,6 +31,15 @@ def _settings(**overrides):
     return ClientSettings(base)
 
 
+def _make_reporter():
+    reporter = MagicMock()
+    reporter.export_csv = AsyncMock()
+    reporter.export_markdown = AsyncMock()
+    reporter.export_html = AsyncMock()
+    reporter.export_xml = AsyncMock()
+    return reporter
+
+
 def test_unified_client_main_tools_mode():
     settings = _settings()
     mock_transport = MagicMock()
@@ -40,7 +49,7 @@ def test_unified_client_main_tools_mode():
     client_instance.fuzz_all_tools = AsyncMock(
         return_value={"tool1": [{"result": "ok"}]}
     )
-    client_instance.generate_standardized_reports = MagicMock(return_value={})
+    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
 
     with (
@@ -84,7 +93,7 @@ def test_unified_client_main_sets_fs_root_when_provided():
     mock_safety = MagicMock()
     client_instance = MagicMock()
     client_instance.fuzz_all_tools = AsyncMock(return_value={})
-    client_instance.generate_standardized_reports = MagicMock(return_value={})
+    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
 
     with (
@@ -148,9 +157,9 @@ def test_unified_client_main_exports_reports_and_handles_errors():
     )
     client_instance = MagicMock()
     client_instance.fuzz_tool = AsyncMock(return_value={})
-    client_instance.generate_standardized_reports = MagicMock(return_value={"f": "p"})
+    client_instance.generate_standardized_reports = AsyncMock(return_value={"f": "p"})
     client_instance.cleanup = AsyncMock()
-    reporter = MagicMock()
+    reporter = _make_reporter()
     client_instance.reporter = reporter
     with (
         patch(
@@ -174,9 +183,9 @@ def test_unified_client_main_exports_html_xml():
     )
     client_instance = MagicMock()
     client_instance.fuzz_tool = AsyncMock(return_value={})
-    client_instance.generate_standardized_reports = MagicMock(return_value={})
+    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
-    reporter = MagicMock()
+    reporter = _make_reporter()
     client_instance.reporter = reporter
     with (
         patch(
@@ -196,7 +205,7 @@ def test_unified_client_main_safety_disabled():
     settings = _settings(safety_enabled=False)
     client_instance = MagicMock()
     client_instance.fuzz_all_tools = AsyncMock(return_value={})
-    client_instance.generate_standardized_reports = MagicMock(return_value={})
+    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
     with (
         patch(
@@ -217,7 +226,7 @@ def test_unified_client_main_tool_results_summary(monkeypatch):
     client_instance.fuzz_all_tools = AsyncMock(
         return_value={"tool1": [{"exception": None}, {"exception": {"err": 1}}]}
     )
-    client_instance.generate_standardized_reports = MagicMock(return_value={})
+    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
     client_instance.print_tool_summary = MagicMock()
     with (

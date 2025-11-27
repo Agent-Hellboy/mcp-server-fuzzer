@@ -1998,7 +1998,9 @@ class TestUnifiedMCPFuzzerClient:
         await self.client.safety_system.export_safety_data()
 
         # Generate the report with safety data
-        report_path = self.client.reporter.generate_final_report(include_safety=True)
+        report_path = await self.client.reporter.generate_final_report(
+            include_safety=True
+        )
 
         # Verify the safety system was called
         mock_safety_system.export_safety_data.assert_called_once()

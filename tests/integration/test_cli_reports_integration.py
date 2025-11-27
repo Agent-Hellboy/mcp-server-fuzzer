@@ -207,7 +207,8 @@ class TestCLIReportingIntegration:
                 assert reporter.fuzzing_metadata["mode"] == mode
                 assert reporter.fuzzing_metadata["protocol"] == protocol
 
-    def test_cli_integration_error_recovery(self):
+    @pytest.mark.asyncio
+    async def test_cli_integration_error_recovery(self):
         """Test CLI integration error recovery and reporting."""
         with tempfile.TemporaryDirectory() as temp_dir:
             args = [
@@ -245,7 +246,7 @@ class TestCLIReportingIntegration:
             assert len(reporter.tool_results["error_tool"]) == 2
 
             # Test final report generation with errors
-            report_file = reporter.generate_final_report(include_safety=False)
+            report_file = await reporter.generate_final_report(include_safety=False)
             assert Path(report_file).exists()
 
             # Verify error information is in the report

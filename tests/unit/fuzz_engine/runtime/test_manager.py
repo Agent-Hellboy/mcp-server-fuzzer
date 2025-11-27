@@ -14,7 +14,7 @@ from mcp_fuzzer.exceptions import (
     ProcessStopError,
 )
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import WatchdogConfig
+from mcp_fuzzer.fuzz_engine.runtime import WatchdogConfig, ProcessWatchdog
 
 
 class TestProcessManager:
@@ -22,7 +22,10 @@ class TestProcessManager:
     def setup_method(self):
         """Set up test fixtures."""
         self.config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
-        self.manager = ProcessManager(self.config)
+        self.manager = ProcessManager.from_config(self.config)
+        # Backwards-compat shims for mocked watchdog attributes used in older tests
+        self.manager.watchdog.register_process = AsyncMock()
+        self.manager.watchdog.unregister_process = AsyncMock()
         self.mock_process = MagicMock(spec=subprocess.Popen)
         self.mock_process.pid = 12345
         self.mock_process.returncode = None
@@ -38,17 +41,14 @@ class TestProcessManager:
         ) as mock_create_subprocess:
             # Mock watchdog.start() since it's called within start_process
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
-                with patch.object(
-                    self.manager.watchdog, "register_process", AsyncMock()
-                ):
-                    process = await self.manager.start_process(process_config)
+                process = await self.manager.start_process(process_config)
 
-                    assert process == self.mock_process
-                    assert process.pid in self.manager._processes
-                    assert (
-                        self.manager._processes[process.pid]["config"] == process_config
-                    )
-                    assert self.manager._processes[process.pid]["status"] == "running"
+                assert process == self.mock_process
+                # Use public API to verify process is registered
+                status = await self.manager.get_process_status(process.pid)
+                assert status is not None
+                assert status["config"] == process_config
+                assert status["status"] == "running"
 
     @pytest.mark.asyncio
     async def test_start_process_failure(self):
@@ -133,9 +133,9 @@ class TestProcessManager:
                         # Verify results
                         assert result is True
                         process.terminate.assert_called_once()
-                        assert (
-                            self.manager._processes[process.pid]["status"] == "stopped"
-                        )
+                        # Use public API to verify status (unregistered after stop)
+                        status = await self.manager.get_process_status(process.pid)
+                        assert status is None
 
     @pytest.mark.asyncio
     async def test_stop_process_force(self):
@@ -170,9 +170,9 @@ class TestProcessManager:
                         # Verify results
                         assert result is True
                         process.kill.assert_called_once()
-                        assert (
-                            self.manager._processes[process.pid]["status"] == "stopped"
-                        )
+                        # Use public API to verify status (unregistered after stop)
+                        status = await self.manager.get_process_status(process.pid)
+                        assert status is None
 
     @pytest.mark.asyncio
     async def test_stop_process_not_found(self):
@@ -187,19 +187,22 @@ class TestProcessManager:
         mock_process.pid = 12345
         mock_process.returncode = None
 
-        async with self.manager._get_lock():
-            self.manager._processes[mock_process.pid] = {
-                "process": mock_process,
-                "config": ProcessConfig(command=["echo"], name="test_process"),
-                "started_at": time.time(),
-                "status": "running",
-            }
+        # Register a running process in the registry
+        await self.manager.registry.register(
+            mock_process.pid,
+            mock_process,
+            ProcessConfig(command=["echo"], name="test_process"),
+            started_at=time.time(),
+            status="running",
+        )
 
+        # Test error handling through public API
+        # Mock the signal dispatcher to raise an error during graceful termination
         with patch.object(
             self.manager.watchdog, "unregister_process", AsyncMock()
         ), patch.object(
-            self.manager,
-            "_graceful_terminate_process",
+            self.manager.signal_dispatcher,
+            "send",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):
             with pytest.raises(ProcessStopError) as exc:
@@ -253,25 +256,20 @@ class TestProcessManager:
                         mock_process1.terminate.assert_called_once()
                         mock_process2.terminate.assert_called_once()
 
-                        # Verify both processes are marked as stopped
-                        assert self.manager._processes[proc1.pid]["status"] == "stopped"
-                        assert self.manager._processes[proc2.pid]["status"] == "stopped"
+                        # Verify both processes are removed from tracking
+                        proc1_status = await self.manager.get_process_status(proc1.pid)
+                        proc2_status = await self.manager.get_process_status(proc2.pid)
+                        assert proc1_status is None
+                        assert proc2_status is None
 
     @pytest.mark.asyncio
     async def test_stop_all_processes_failure(self):
         """Ensure stop_all_processes raises ProcessStopError when any stop fails."""
         with patch.object(
-            self.manager,
-            "stop_process",
-            new=AsyncMock(
-                side_effect=[
-                    ProcessStopError("fail", context={"pid": 1}),
-                    True,
-                ]
-            ),
+            self.manager.lifecycle,
+            "stop_all",
+            new=AsyncMock(side_effect=ProcessStopError("fail", context={"pid": 1})),
         ):
-            async with self.manager._get_lock():
-                self.manager._processes = {1: {"process": None}, 2: {"process": None}}
             with pytest.raises(ProcessStopError):
                 await self.manager.stop_all_processes()
 
@@ -391,10 +389,12 @@ class TestProcessManager:
                     process = await self.manager.start_process(process_config)
 
                     # Wait for process
-                    returncode = await self.manager.wait_for_process(process.pid)
+                    result = await self.manager.wait(process.pid)
 
-                    # Verify return code
-                    assert returncode == 0
+                    # Verify completion result
+                    assert result is not None
+                    assert result.exit_code == 0
+                    assert result.timed_out is False
                     mock_process.wait.assert_called_once()
 
     @pytest.mark.asyncio
@@ -419,12 +419,14 @@ class TestProcessManager:
                     process = await self.manager.start_process(process_config)
 
                     # Wait for process with timeout
-                    returncode = await self.manager.wait_for_process(
+                    completion = await self.manager.wait(
                         process.pid, timeout=1.0
                     )
 
                     # Verify timeout handling
-                    assert returncode is None
+                    assert completion is not None
+                    assert completion.exit_code is None
+                    assert completion.timed_out is True
                     mock_process.wait.assert_called_once()
 
     @pytest.mark.asyncio
@@ -515,9 +517,10 @@ class TestProcessManager:
                     ):
                         cleaned = await self.manager.cleanup_finished_processes()
 
-                        # Verify cleanup
+                        # Verify cleanup using public API
                         assert cleaned == 1
-                        assert process.pid not in self.manager._processes
+                        status = await self.manager.get_process_status(process.pid)
+                        assert status is None
 
     @pytest.mark.asyncio
     async def test_shutdown(self):
@@ -591,17 +594,17 @@ class TestProcessManager:
         mock_process.pid = 12345
         mock_process.returncode = None
 
-        async with self.manager._get_lock():
-            self.manager._processes[mock_process.pid] = {
-                "process": mock_process,
-                "config": ProcessConfig(command=["echo"], name="test_process"),
-                "started_at": time.time(),
-                "status": "running",
-            }
+        await self.manager.registry.register(
+            mock_process.pid,
+            mock_process,
+            ProcessConfig(command=["echo"], name="test_process"),
+            started_at=time.time(),
+            status="running",
+        )
 
         with patch.object(
-            self.manager,
-            "_send_term_signal",
+            self.manager.signal_dispatcher,
+            "send",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):
             with pytest.raises(ProcessSignalError) as exc:
@@ -667,8 +670,12 @@ class TestProcessManager:
                 ]
             ),
         ):
-            async with self.manager._get_lock():
-                self.manager._processes = {1: {"process": None}, 2: {"process": None}}
+            await self.manager.registry.register(
+                1, MagicMock(), ProcessConfig(command=["echo"])
+            )
+            await self.manager.registry.register(
+                2, MagicMock(), ProcessConfig(command=["echo"])
+            )
             with pytest.raises(ProcessSignalError):
                 await self.manager.send_timeout_signal_to_all()
 
@@ -687,44 +694,232 @@ class TestProcessManager:
             "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
         ):
             with patch.object(self.manager.watchdog, "start", AsyncMock()):
-                with patch.object(
-                    self.manager.watchdog, "register_process", AsyncMock()
-                ):
-                    process = await self.manager.start_process(process_config)
-
-                    # Test is_process_registered
-                    with patch.object(
-                        self.manager.watchdog,
-                        "is_process_registered",
-                        new=AsyncMock(return_value=True),
-                    ):
-                        result = await self.manager.is_process_registered(process.pid)
-                        assert result is True
+                process = await self.manager.start_process(process_config)
+                result = await self.manager.is_process_registered(process.pid)
+                assert result is True
 
     @pytest.mark.asyncio
     async def test_register_existing_process(self):
         """Test registering an existing process with the manager."""
         activity_callback = MagicMock()
+        await self.manager.register_existing_process(
+            self.mock_process.pid,
+            self.mock_process,
+            "existing_process",
+            activity_callback,
+        )
+        # Use public API to verify process is registered
+        status = await self.manager.get_process_status(self.mock_process.pid)
+        assert status is not None
+        assert status["config"].name == "existing_process"
+
+    @pytest.mark.asyncio
+    async def test_observer_callback(self):
+        """Test that observer callbacks are called on events."""
+        events_received = []
+
+        def observer_callback(event_name: str, data: dict):
+            events_received.append((event_name, data))
+
+        self.manager.add_observer(observer_callback)
+
+        process_config = ProcessConfig(command=["echo", "test"], name="test_process")
+        mock_process = AsyncMock()
+        mock_process.pid = 12345
+        mock_process.returncode = None
+
+        with patch(
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
+        ):
+            with patch.object(self.manager.watchdog, "start", AsyncMock()):
+                with patch.object(
+                    self.manager.watchdog, "register_process", AsyncMock()
+                ):
+                    await self.manager.start_process(process_config)
+
+                    # Should have received "started" event
+                    assert len(events_received) > 0
+                    assert events_received[0][0] == "started"
+                    assert events_received[0][1]["process_name"] == "test_process"
+
+    @pytest.mark.asyncio
+    async def test_observer_error_handling(self):
+        """Test that observer errors are handled gracefully."""
+        def failing_observer(event_name: str, data: dict):
+            raise Exception("Observer error")
+
+        def working_observer(event_name: str, data: dict):
+            pass
+
+        self.manager.add_observer(failing_observer)
+        self.manager.add_observer(working_observer)
+
+        process_config = ProcessConfig(command=["echo", "test"], name="test_process")
+        mock_process = AsyncMock()
+        mock_process.pid = 12345
+        mock_process.returncode = None
+
+        with patch(
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)
+        ):
+            with patch.object(self.manager.watchdog, "start", AsyncMock()):
+                with patch.object(
+                    self.manager.watchdog, "register_process", AsyncMock()
+                ):
+                    # Should not raise, even if one observer fails
+                    await self.manager.start_process(process_config)
+
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_process_not_found(self):
+        """Test send_timeout_signal with process not found."""
+        result = await self.manager.send_timeout_signal(99999)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_process_already_exited(self):
+        """Test send_timeout_signal with process that already exited."""
+        mock_process = AsyncMock()
+        mock_process.pid = 12345
+        mock_process.returncode = 0
+
+        await self.manager.registry.register(
+            mock_process.pid,
+            mock_process,
+            ProcessConfig(command=["echo"], name="test_process"),
+            started_at=time.time(),
+            status="finished",
+        )
+
+        result = await self.manager.send_timeout_signal(mock_process.pid)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_to_all_empty(self):
+        """Test send_timeout_signal_to_all with no processes."""
+        results = await self.manager.send_timeout_signal_to_all()
+        assert results == {}
+
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_to_all_with_exceptions(self):
+        """Test send_timeout_signal_to_all handles exceptions properly."""
+        mock_process1 = AsyncMock()
+        mock_process1.pid = 11111
+        mock_process1.returncode = None
+
+        mock_process2 = AsyncMock()
+        mock_process2.pid = 22222
+        mock_process2.returncode = None
+
+        await self.manager.registry.register(
+            mock_process1.pid,
+            mock_process1,
+            ProcessConfig(command=["test1"], name="test1"),
+        )
+        await self.manager.registry.register(
+            mock_process2.pid,
+            mock_process2,
+            ProcessConfig(command=["test2"], name="test2"),
+        )
+
+        # Make one succeed, one fail
+        call_count = 0
+        async def mock_send(pid, signal_type="timeout"):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return True
+            raise RuntimeError("Signal failed")
+
         with patch.object(
-            self.manager.watchdog, "register_process", AsyncMock()
-        ) as mock_register:
-            await self.manager.register_existing_process(
-                self.mock_process.pid,
-                self.mock_process,
-                "existing_process",
-                activity_callback,
-            )
-            mock_register.assert_called_once_with(
-                self.mock_process.pid,
-                self.mock_process,
-                activity_callback,
-                "existing_process",
-            )
-            assert self.mock_process.pid in self.manager._processes
-            assert (
-                self.manager._processes[self.mock_process.pid]["config"].name
-                == "existing_process"
-            )
+            self.manager, "send_timeout_signal", side_effect=mock_send
+        ):
+            with pytest.raises(ProcessSignalError) as exc_info:
+                await self.manager.send_timeout_signal_to_all()
+
+            assert "Failed to send" in str(exc_info.value)
+            assert len(exc_info.value.context["failed_processes"]) == 1
+
+    def test_wiring_logic_in_init(self):
+        """Test that ProcessManager.__init__ correctly wires watchdog references."""
+        from mcp_fuzzer.fuzz_engine.runtime import (
+            ProcessLifecycle,
+            ProcessInspector,
+            ProcessRegistry,
+            SignalDispatcher,
+            WatchdogConfig,
+        )
+        import logging
+
+        logger = logging.getLogger(__name__)
+        registry = ProcessRegistry()
+        signal_handler = SignalDispatcher(registry, logger)
+        watchdog = ProcessWatchdog(registry, signal_handler, WatchdogConfig())
+
+        # Create lifecycle and monitor with different watchdog instances
+        different_watchdog = ProcessWatchdog(
+            registry, signal_handler, WatchdogConfig()
+        )
+        lifecycle = ProcessLifecycle(
+            different_watchdog, registry, signal_handler, logger
+        )
+        monitor = ProcessInspector(registry, different_watchdog, logger)
+
+        # Create manager - should wire them to use the same watchdog
+        manager = ProcessManager.with_dependencies(
+            watchdog, registry, signal_handler, lifecycle, monitor, logger
+        )
+
+        # Verify wiring
+        assert manager.lifecycle.watchdog is manager.watchdog
+        assert manager.monitor.watchdog is manager.watchdog
+
+    def test_watchdog_assignment_keeps_components_in_sync(self):
+        """Reassigning ``watchdog`` keeps lifecycle/monitor references aligned."""
+        from mcp_fuzzer.fuzz_engine.runtime import (
+            ProcessLifecycle,
+            ProcessInspector,
+            ProcessRegistry,
+            SignalDispatcher,
+            WatchdogConfig,
+        )
+        import logging
+
+        logger = logging.getLogger(__name__)
+        registry = ProcessRegistry()
+        signal_handler = SignalDispatcher(registry, logger)
+        watchdog = ProcessWatchdog(registry, signal_handler, WatchdogConfig())
+        lifecycle = ProcessLifecycle(watchdog, registry, signal_handler, logger)
+        monitor = ProcessInspector(registry, watchdog, logger)
+
+        manager = ProcessManager.with_dependencies(
+            watchdog, registry, signal_handler, lifecycle, monitor, logger
+        )
+
+        new_watchdog = ProcessWatchdog(registry, signal_handler, WatchdogConfig())
+        manager.watchdog = new_watchdog
+
+        assert manager.watchdog is new_watchdog
+        assert manager.lifecycle.watchdog is new_watchdog
+        assert manager.monitor.watchdog is new_watchdog
+
+    @pytest.mark.asyncio
+    async def test_shutdown_with_exception(self):
+        """Test shutdown handles exceptions in stop_all_processes."""
+        with patch.object(
+            self.manager, "stop_all_processes", side_effect=Exception("Stop failed")
+        ) as mock_stop:
+            with patch.object(
+                self.manager.watchdog, "stop", AsyncMock()
+            ) as mock_watchdog_stop:
+                with patch.object(
+                    self.manager.registry, "clear", AsyncMock()
+                ) as mock_clear:
+                    with pytest.raises(Exception, match="Stop failed"):
+                        await self.manager.shutdown()
+
+                    # Should still call cleanup in finally block
+                    mock_watchdog_stop.assert_called_once()
+                    mock_clear.assert_called_once()
 
 
 if __name__ == "__main__":

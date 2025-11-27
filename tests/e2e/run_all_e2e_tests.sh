@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Run All System Tests
-# This script runs all available system tests for MCP Fuzzer
+# Run All E2E Tests
+# This script runs all available e2e tests for MCP Fuzzer
 # Used in CI pipelines for comprehensive end-to-end testing
 
 set -e  # Exit on any error
 
-echo "🚀 Starting MCP Fuzzer System Test Suite"
+echo "🚀 Starting MCP Fuzzer E2E Test Suite"
 echo "========================================"
 
 # Colors for output
@@ -56,22 +56,22 @@ run_test() {
     echo ""
 }
 
-# Run individual system tests
+# Run individual e2e tests
 run_test "DesktopCommanderMCP Test" "$SCRIPT_DIR/test_desktop_commander_mcp.sh"
 run_test "MCP Server Chart Test" "$SCRIPT_DIR/test_mcp_server_chart.sh"
 
 # Summary
 echo "========================================"
-echo -e "${BLUE}📊 System Test Results Summary${NC}"
+echo -e "${BLUE}📊 E2E Test Results Summary${NC}"
 echo "========================================"
 echo "Total Tests: $TOTAL_TESTS"
 echo -e "Passed: ${GREEN}$PASSED_TESTS${NC}"
 echo -e "Failed: ${RED}$FAILED_TESTS${NC}"
 
 if [ $FAILED_TESTS -eq 0 ]; then
-    echo -e "\n${GREEN}🎉 All system tests passed!${NC}"
+    echo -e "\n${GREEN}🎉 All e2e tests passed!${NC}"
     exit 0
 else
-    echo -e "\n${RED}❌ $FAILED_TESTS system test(s) failed${NC}"
+    echo -e "\n${RED}❌ $FAILED_TESTS e2e test(s) failed${NC}"
     exit 1
 fi

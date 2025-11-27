@@ -1,12 +1,12 @@
-r #!/bin/bash
+#!/bin/bash
 
-# System Test for MCP Server Chart
+# E2E Test for MCP Server Chart
 # This script clones, builds, and fuzzes the MCP Server Chart
-# Used for CI system testing of mcp-fuzzer changes
+# Used for CI e2e testing of mcp-fuzzer changes
 
 set -e  # Exit on any error
 
-echo "🧪 Starting MCP Server Chart System Test"
+echo "🧪 Starting MCP Server Chart E2E Test"
 echo "========================================"
 
 # Colors for output
@@ -128,7 +128,7 @@ else
     exit 1
 fi
 
-echo -e "\n${GREEN}🎉 MCP Server Chart System Test Completed Successfully!${NC}"
+echo -e "\n${GREEN}🎉 MCP Server Chart E2E Test Completed Successfully!${NC}"
 echo "=========================================="
 echo "Server PID: $SERVER_PID"
 echo "Output Directory: $FUZZ_OUTPUT_DIR"
