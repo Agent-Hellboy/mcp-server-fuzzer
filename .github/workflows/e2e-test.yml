@@ -1,4 +1,4 @@
-name: System Test with Safety
+name: E2E Test with Safety
 
 on:
   push:
@@ -23,7 +23,7 @@ on:
         type: string
 
 jobs:
-  system-test:
+  e2e-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -80,10 +80,10 @@ jobs:
     - name: Run safety check
       run: |
         echo "🔒 Running pre-flight safety check..."
-        chmod +x tests/system/check_safety.sh
-        ./tests/system/check_safety.sh
+        chmod +x tests/e2e/check_safety.sh
+        ./tests/e2e/check_safety.sh
 
-    - name: Run system test with safety system
+    - name: Run e2e test with safety system
       env:
         TEST_MODE: ${{ github.event.inputs.test_mode || 'tools' }}
         RUNS_PER_TOOL: ${{ github.event.inputs.runs_per_tool || '3' }}
@@ -91,7 +91,7 @@ jobs:
         MCP_FUZZER_SAFETY_ENABLED: 'true'
         MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
       run: |
-        echo "🧪 Running system test with safety system enabled"
+        echo "🧪 Running e2e test with safety system enabled"
         echo "Test Mode: $TEST_MODE"
         echo "Runs per tool: $RUNS_PER_TOOL"
         echo "Working Directory: $(pwd)"
@@ -104,15 +104,15 @@ jobs:
         python --version
         node --version
 
-        # Run the system test
-        chmod +x tests/system/test_desktop_commander_mcp.sh
-        ./tests/system/test_desktop_commander_mcp.sh
+        # Run the e2e test
+        chmod +x tests/e2e/test_desktop_commander_mcp.sh
+        ./tests/e2e/test_desktop_commander_mcp.sh
 
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: system-test-results-${{ github.run_id }}
+        name: e2e-test-results-${{ github.run_id }}
         path: |
           reports/
           test-results/
@@ -121,7 +121,7 @@ jobs:
     - name: Generate test summary
       if: always()
       run: |
-        echo "## 🧪 System Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "## 🧪 E2E Test Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
 
         if [ -d "reports" ]; then

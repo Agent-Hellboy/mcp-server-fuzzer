@@ -1,10 +1,10 @@
-# System Tests
+# E2E Tests
 
-This directory contains end-to-end system tests for the MCP Fuzzer. These tests are designed to validate that changes to the fuzzer don't break existing functionality by testing against real MCP servers.
+This directory contains end-to-end (e2e) tests for the MCP Fuzzer. These tests are designed to validate that changes to the fuzzer don't break existing functionality by testing against real MCP servers.
 
 ## Overview
 
-The system tests automatically:
+The e2e tests automatically:
 1. Clone tested MCP server repositories
 2. Build and start the servers
 3. Run fuzzing tests against them
@@ -33,17 +33,17 @@ The system tests automatically:
 
 ```bash
 # Test DesktopCommanderMCP
-./tests/system/test_desktop_commander_mcp.sh
+./tests/e2e/test_desktop_commander_mcp.sh
 
 # Test MCP Server Chart
-./tests/system/test_mcp_server_chart.sh
+./tests/e2e/test_mcp_server_chart.sh
 ```
 
-### Run All System Tests
+### Run All E2E Tests
 
 ```bash
 # From project root
-./tests/system/run_all_system_tests.sh
+./tests/e2e/run_all_e2e_tests.sh
 ```
 
 ## CI Integration
@@ -71,9 +71,9 @@ Each test generates:
 - Success/failure indicators
 - Performance metrics
 
-## Adding New System Tests
+## Adding New E2E Tests
 
-To add a new MCP server to the system tests:
+To add a new MCP server to the e2e tests:
 
 1. Create a new shell script: `test_[server_name].sh`
 2. Follow the existing pattern:
@@ -85,7 +85,7 @@ To add a new MCP server to the system tests:
    - Validate results
    - Clean up
 3. Update this README
-4. Add to `run_all_system_tests.sh`
+4. Add to `run_all_e2e_tests.sh`
 
 ## Requirements
 
@@ -108,12 +108,12 @@ To add a new MCP server to the system tests:
 
 Run with verbose output:
 ```bash
-bash -x ./tests/system/test_desktop_commander_mcp.sh
+bash -x ./tests/e2e/test_desktop_commander_mcp.sh
 ```
 
 ## Contributing
 
-When modifying system tests:
+When modifying e2e tests:
 - Keep tests isolated and independent
 - Include proper error handling
 - Update documentation

@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# System Test for DesktopCommanderMCP Server
+# E2E Test for DesktopCommanderMCP Server
 # This script uses the existing DesktopCommanderMCP server in testing-servers
 # and fuzzes it with the MCP fuzzer with safety system enabled
-# Used for CI system testing of mcp-fuzzer changes
+# Used for CI e2e testing of mcp-fuzzer changes
 
 set -e  # Exit on any error
 
-echo "🧪 Starting DesktopCommanderMCP System Test"
+echo "🧪 Starting DesktopCommanderMCP E2E Test"
 echo "=========================================="
 
 # Colors for output
@@ -164,7 +164,7 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}🎉 DesktopCommanderMCP System Test Completed Successfully!${NC}"
+echo -e "${GREEN}🎉 DesktopCommanderMCP E2E Test Completed Successfully!${NC}"
 echo "=========================================="
 echo "Server Directory: $SERVER_DIR"
 echo "Output Directory: $FUZZ_OUTPUT_DIR"
