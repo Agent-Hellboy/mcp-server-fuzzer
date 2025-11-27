@@ -10,7 +10,8 @@ import httpx
 from .base import TransportProtocol
 from .mixins import NetworkTransportMixin, ResponseParsingMixin
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
-from ..config import (
+# Import constants directly from config (constants are values, not behavior)
+from ..config.core.constants import (
     JSON_CONTENT_TYPE,
     DEFAULT_HTTP_ACCEPT,
 )

@@ -26,8 +26,8 @@ def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> 
         try:
             # Load and display the config file content
             import json
-            from ..config import load_config_file
-            raw_config = load_config_file(args.config)
+            from ..client.adapters import config_mediator
+            raw_config = config_mediator.load_file(args.config)
             config_json = json.dumps(raw_config, indent=2, sort_keys=True)
             console.print(f"[dim]{config_json}[/dim]")
             console.print()

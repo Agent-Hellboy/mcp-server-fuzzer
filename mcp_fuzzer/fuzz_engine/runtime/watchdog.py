@@ -19,7 +19,12 @@ import sys
 import time
 from typing import Any, Awaitable, Callable, Protocol
 
-from ...config.constants import PROCESS_FORCE_KILL_TIMEOUT, PROCESS_TERMINATION_TIMEOUT
+# Import constants directly from config (constants are values, not behavior)
+# Behavior (functions/classes) should go through client mediator
+from ...config.core.constants import (
+    PROCESS_FORCE_KILL_TIMEOUT,
+    PROCESS_TERMINATION_TIMEOUT,
+)
 from ...exceptions import MCPError, ProcessStopError, WatchdogStartError
 from .config import WatchdogConfig
 from .registry import ProcessRecord, ProcessRegistry

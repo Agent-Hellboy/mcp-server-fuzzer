@@ -70,9 +70,11 @@ class FuzzerReporter:
         """
         # Dependency injection: use provided config or fall back to global
         if config_provider is None:
-            from ...config import config as default_config
+            from ...client.adapters import config_mediator
 
-            config_provider = default_config
+            # Use config_mediator as the provider
+            # (it implements dict-like interface via get())
+            config_provider = config_mediator
 
         resolved_config = config or ReporterConfig.from_provider(
             provider=config_provider,

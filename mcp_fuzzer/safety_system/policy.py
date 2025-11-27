@@ -12,7 +12,9 @@ from urllib.parse import urljoin, urlparse
 import os
 from collections.abc import Iterable
 
-from ..config import (
+# Import constants directly from config (constants are values, not behavior)
+# Behavior (functions/classes) should go through client mediator
+from ..config.core.constants import (
     SAFETY_LOCAL_HOSTS,
     SAFETY_NO_NETWORK_DEFAULT,
     SAFETY_PROXY_ENV_DENYLIST,

@@ -20,7 +20,8 @@ from ..exceptions import (
 )
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ..safety_system.policy import sanitize_subprocess_env
-from ..config.constants import PROCESS_WAIT_TIMEOUT
+# Import constants directly from config (constants are values, not behavior)
+from ..config.core.constants import PROCESS_WAIT_TIMEOUT
 from .manager import TransportManager
 
 class StdioTransport(TransportProtocol):
