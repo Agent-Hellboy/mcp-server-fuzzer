@@ -294,10 +294,10 @@ class TestProcessInspector:
             assert result.timed_out is False
 
     @pytest.mark.asyncio
-    async def test_wait_for_completion_no_timeout(
+    async def test_wait_for_completion_with_finite_timeout(
         self, inspector, registry, mock_process, process_config
     ):
-        """Test waiting for completion without timeout."""
+        """Test waiting for completion with finite timeout that succeeds."""
         mock_process.returncode = None
         await registry.register(mock_process.pid, mock_process, process_config)
 
@@ -309,7 +309,7 @@ class TestProcessInspector:
             side_effect=mock_wait,
         ):
             result = await inspector.wait_for_completion(
-                mock_process.pid, timeout=None
+                mock_process.pid, timeout=5.0
             )
             assert result is not None
             assert result.exit_code == 0

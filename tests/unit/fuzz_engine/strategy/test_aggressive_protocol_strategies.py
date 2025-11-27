@@ -107,7 +107,8 @@ class TestAggressiveProtocolStrategies:
     def testgenerate_malicious_value(self):
         """Test malicious value generation."""
         # Test multiple calls to ensure variety
-        values = [generate_malicious_value() for _ in range(100)]
+        # Use larger sample size to ensure probabilistic coverage
+        values = [generate_malicious_value() for _ in range(1000)]
 
         # Should have some variety in types
         types = {type(v) for v in values}

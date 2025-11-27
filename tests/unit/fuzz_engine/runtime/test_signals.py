@@ -313,11 +313,11 @@ class TestSignalStrategies:
         strategy = TermSignalStrategy(registry, logger)
 
         with patch("os.name", "posix"):
-                with patch("os.getpgid", return_value=12345):
-                    with patch("os.killpg") as mock_killpg:
-                        # Pass process_info directly
-                        result = await strategy.send(
-                            mock_process.pid, process_info=process_info
-                        )
+            with patch("os.getpgid", return_value=12345):
+                with patch("os.killpg") as mock_killpg:
+                    # Pass process_info directly
+                    result = await strategy.send(
+                        mock_process.pid, process_info=process_info
+                    )
                     assert result is True
                     mock_killpg.assert_called_once()
