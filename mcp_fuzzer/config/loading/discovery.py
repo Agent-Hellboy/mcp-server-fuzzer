@@ -6,6 +6,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .search_params import ConfigSearchParams
+
 
 def find_config_file(
     config_path: str | None = None,
@@ -22,15 +24,46 @@ def find_config_file(
     Returns:
         Path to the found config file or None if not found
     """
-    if config_path and os.path.isfile(config_path):
-        return config_path
+    params = ConfigSearchParams(
+        config_path=config_path,
+        search_paths=search_paths,
+        file_names=file_names,
+    )
+    return _find_config_file_impl(params)
 
+
+def find_config_file_from_params(params: ConfigSearchParams) -> str | None:
+    """Find a configuration file using ConfigSearchParams.
+
+    Args:
+        params: Configuration search parameters
+
+    Returns:
+        Path to the found config file or None if not found
+    """
+    return _find_config_file_impl(params)
+
+
+def _find_config_file_impl(params: ConfigSearchParams) -> str | None:
+    """Internal implementation of config file discovery.
+
+    Args:
+        params: Configuration search parameters
+
+    Returns:
+        Path to the found config file or None if not found
+    """
+    if params.config_path and os.path.isfile(params.config_path):
+        return params.config_path
+
+    search_paths = params.search_paths
     if search_paths is None:
         search_paths = [
             os.getcwd(),
             str(Path.home() / ".config" / "mcp-fuzzer"),
         ]
 
+    file_names = params.file_names
     if file_names is None:
         file_names = ["mcp-fuzzer.yml", "mcp-fuzzer.yaml"]
 

@@ -13,11 +13,13 @@ from unittest.mock import Mock, patch
 
 from mcp_fuzzer.config import (
     ConfigLoader,
+    ConfigSearchParams,
     apply_config_file,
     find_config_file,
     get_config_schema,
     load_config_file,
 )
+from mcp_fuzzer.config.core.manager import Configuration
 from mcp_fuzzer.exceptions import ConfigFileError
 
 
@@ -101,8 +103,8 @@ def test_load_config_file_invalid_yaml(tmp_path):
         load_config_file(str(invalid))
 
 
-@patch("mcp_fuzzer.config.loader.load_custom_transports")
-@patch("mcp_fuzzer.config.loader.config")
+@patch("mcp_fuzzer.config.loading.loader.load_custom_transports")
+@patch("mcp_fuzzer.config.loading.loader.config")
 def test_apply_config_file_updates_global_state(
     mock_config, mock_transports, config_files
 ):
@@ -114,8 +116,8 @@ def test_apply_config_file_updates_global_state(
     assert mock_config.update.call_count == 1
 
 
-@patch("mcp_fuzzer.config.loader.load_custom_transports")
-@patch("mcp_fuzzer.config.loader.config")
+@patch("mcp_fuzzer.config.loading.loader.load_custom_transports")
+@patch("mcp_fuzzer.config.loading.loader.config")
 def test_apply_config_file_returns_false_when_missing(mock_config, mock_transports):
     result = apply_config_file(config_path="/nope.yaml")
     assert result is False
@@ -155,36 +157,104 @@ def test_config_loader_load_returns_none_when_not_found():
 
 def test_config_loader_apply_merges_data():
     parser = Mock(return_value={"log_level": "INFO"})
+    mock_config = Mock(spec=Configuration)
     loader = ConfigLoader(
         discoverer=lambda *_: "config.yaml",
         parser=parser,
         transport_loader=Mock(),
+        config_instance=mock_config,
     )
-    with patch("mcp_fuzzer.config.loader.config") as mock_config:
-        assert loader.apply() is True
-        mock_config.update.assert_called_once_with({"log_level": "INFO"})
+    assert loader.apply() is True
+    mock_config.update.assert_called_once_with({"log_level": "INFO"})
 
 
 def test_config_loader_apply_handles_parser_errors():
     parser = Mock(side_effect=ConfigFileError("boom"))
+    mock_config = Mock(spec=Configuration)
     loader = ConfigLoader(
         discoverer=lambda *_: "config.yaml",
         parser=parser,
         transport_loader=Mock(),
+        config_instance=mock_config,
     )
-    with patch("mcp_fuzzer.config.loader.config") as mock_config:
-        assert loader.apply() is False
-        mock_config.update.assert_not_called()
+    assert loader.apply() is False
+    mock_config.update.assert_not_called()
 
 
 def test_config_loader_apply_handles_transport_errors():
     parser = Mock(return_value={"timeout": 5})
     transport_loader = Mock(side_effect=ConfigFileError("bad transport"))
+    mock_config = Mock(spec=Configuration)
     loader = ConfigLoader(
         discoverer=lambda *_: "config.yaml",
         parser=parser,
         transport_loader=transport_loader,
+        config_instance=mock_config,
     )
-    with patch("mcp_fuzzer.config.loader.config") as mock_config:
-        assert loader.apply() is False
-        mock_config.update.assert_not_called()
+    assert loader.apply() is False
+    mock_config.update.assert_not_called()
+
+
+def test_config_loader_load_logs_at_debug_level(config_files):
+    """Test that loading configuration logs at DEBUG level."""
+    import logging
+
+    with patch("mcp_fuzzer.config.loading.loader.logger") as mock_logger:
+        loader = ConfigLoader()
+        loader.load(config_path=config_files["yaml_path"])
+        # Should log at DEBUG level, not INFO
+        mock_logger.debug.assert_called()
+        mock_logger.info.assert_not_called()
+
+
+def test_config_loader_apply_logs_failures():
+    """Test that apply() logs failures at DEBUG level."""
+    parser = Mock(side_effect=ConfigFileError("test error"))
+    mock_config = Mock(spec=Configuration)
+    loader = ConfigLoader(
+        discoverer=lambda *_: "config.yaml",
+        parser=parser,
+        transport_loader=Mock(),
+        config_instance=mock_config,
+    )
+    with patch("mcp_fuzzer.config.loading.loader.logger") as mock_logger:
+        result = loader.apply()
+        assert result is False
+        # Should log the failure at DEBUG level
+        mock_logger.debug.assert_called()
+        # Check that the log message contains the expected text
+        call_args_str = str(mock_logger.debug.call_args)
+        assert (
+            "Failed to apply configuration" in call_args_str
+            or "test error" in call_args_str
+        )
+
+
+def test_config_loader_load_from_params():
+    """Test ConfigLoader.load_from_params() method."""
+    parser = Mock(return_value={"timeout": 30})
+    params = ConfigSearchParams(config_path="test.yaml")
+    loader = ConfigLoader(
+        discoverer=lambda *args, **kwargs: "test.yaml",
+        parser=parser,
+        transport_loader=Mock(),
+    )
+    data, path = loader.load_from_params(params)
+    assert data == {"timeout": 30}
+    assert path == "test.yaml"
+
+
+def test_config_loader_apply_from_params():
+    """Test ConfigLoader.apply_from_params() method."""
+    parser = Mock(return_value={"log_level": "DEBUG"})
+    mock_config = Mock(spec=Configuration)
+    params = ConfigSearchParams(config_path="test.yaml")
+    loader = ConfigLoader(
+        discoverer=lambda *args, **kwargs: "test.yaml",
+        parser=parser,
+        transport_loader=Mock(),
+        config_instance=mock_config,
+    )
+    result = loader.apply_from_params(params)
+    assert result is True
+    mock_config.update.assert_called_once_with({"log_level": "DEBUG"})

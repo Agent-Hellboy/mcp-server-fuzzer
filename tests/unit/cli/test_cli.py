@@ -268,7 +268,7 @@ def test_build_cli_config_merges_and_returns_cli_config():
 def test_handle_validate_config(monkeypatch):
     validator = ValidationManager()
     with patch(
-        "mcp_fuzzer.cli.validators.load_config_file"
+        "mcp_fuzzer.cli.validators.config_mediator.load_file"
     ) as mock_load:
         validator.validate_config_file("config.yml")
     mock_load.assert_called_once_with("config.yml")
@@ -545,7 +545,7 @@ def test_run_cli_unexpected_error_debug(monkeypatch, caplog):
 def test_build_cli_config_uses_config_file(monkeypatch):
     args = _base_args(config="custom.yml", endpoint=None)
     with patch(
-        "mcp_fuzzer.cli.config_merge.load_config_file",
+        "mcp_fuzzer.cli.config_merge.config_mediator.load_file",
         return_value={
             "endpoint": "http://conf",
             "runs": 42,
@@ -561,7 +561,7 @@ def test_build_cli_config_handles_apply_config_error(caplog):
     caplog.set_level(logging.DEBUG)
     args = _base_args(config=None)
     with patch(
-        "mcp_fuzzer.cli.config_merge.apply_config_file",
+        "mcp_fuzzer.cli.config_merge.config_mediator.apply_file",
         side_effect=Exception("fail"),
     ):
         cli_config = build_cli_config(args)
@@ -571,7 +571,7 @@ def test_build_cli_config_handles_apply_config_error(caplog):
 def test_build_cli_config_raises_config_error():
     args = _base_args(config="bad.yml")
     with patch(
-        "mcp_fuzzer.cli.config_merge.load_config_file",
+        "mcp_fuzzer.cli.config_merge.config_mediator.load_file",
         side_effect=ValueError("bad"),
     ):
         with pytest.raises(Exception):

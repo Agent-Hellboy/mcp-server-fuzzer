@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Configuration module for MCP Fuzzer."""
+"""Core configuration management."""
 
-# Import all constants and core functionality
-from .core import (
+from .constants import (
     CONTENT_TYPE_HEADER,
     DEFAULT_FORCE_KILL_TIMEOUT,
     DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT,
@@ -30,23 +29,8 @@ from .core import (
     WATCHDOG_DEFAULT_CHECK_INTERVAL,
     WATCHDOG_EXTRA_BUFFER,
     WATCHDOG_MAX_HANG_ADDITIONAL,
-    config,
 )
-
-# Import loader functions
-from .loading import (
-    ConfigLoader,
-    ConfigSearchParams,
-    apply_config_file,
-    find_config_file,
-    load_config_file,
-)
-
-# Import schema
-from .schema import get_config_schema
-
-# Import extensions
-from .extensions import load_custom_transports
+from .manager import Configuration, config
 
 __all__ = [
     # Constants
@@ -78,14 +62,7 @@ __all__ = [
     "PROCESS_CLEANUP_TIMEOUT",
     "PROCESS_WAIT_TIMEOUT",
     # Manager
+    "Configuration",
     "config",
-    # Loader helpers
-    "ConfigLoader",
-    "find_config_file",
-    "load_config_file",
-    "apply_config_file",
-    "get_config_schema",
-    "load_custom_transports",
-    # Search parameters
-    "ConfigSearchParams",
 ]
+

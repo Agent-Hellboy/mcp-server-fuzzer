@@ -7,8 +7,8 @@ import argparse
 import logging
 from typing import Any
 
-from ..config import config as global_config, load_config_file, apply_config_file
 from ..exceptions import ConfigFileError
+from ..client.adapters import config_mediator
 from ..client.settings import CliConfig
 from ..client.transport.auth_port import resolve_auth_port
 from .parser import create_argument_parser
@@ -60,7 +60,7 @@ def _transfer_config_to_args(args: argparse.Namespace) -> None:
     ]
 
     for config_key, args_key in mapping:
-        config_value = global_config.get(config_key)
+        config_value = config_mediator.get(config_key)
         default_value = defaults_parser.get_default(args_key)
         if default_value is argparse.SUPPRESS:  # pragma: no cover
             default_value = None
@@ -73,15 +73,15 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
     """Merge CLI args, config files, and resolved auth."""
     if args.config:
         try:
-            loaded = load_config_file(args.config)
-            global_config.update(loaded)
+            loaded = config_mediator.load_file(args.config)
+            config_mediator.update(loaded)
         except Exception as exc:
             raise ConfigFileError(
                 f"Failed to load configuration file '{args.config}': {exc}"
             )
     else:
         try:
-            apply_config_file()
+            config_mediator.apply_file()
         except Exception as exc:
             logging.debug(f"Error loading default configuration file: {exc}")
 
@@ -135,7 +135,7 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         "auth_manager": auth_manager,
     }
 
-    global_config.update(merged)
+    config_mediator.update(merged)
     return CliConfig(args=args, merged=merged)
 
 

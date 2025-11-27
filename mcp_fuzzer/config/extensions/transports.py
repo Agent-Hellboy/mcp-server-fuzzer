@@ -7,9 +7,9 @@ import importlib
 import logging
 from typing import Any
 
-from ..exceptions import ConfigFileError, MCPError
-from ..transport.custom import register_custom_transport
-from ..transport.base import TransportProtocol
+from ...exceptions import ConfigFileError, MCPError
+from ...transport.custom import register_custom_transport
+from ...transport.base import TransportProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,13 @@ def load_custom_transports(config_data: dict[str, Any]) -> None:
 
             module = importlib.import_module(module_path)
             transport_class = getattr(module, class_name)
-            if not isinstance(transport_class, type):
+            try:
+                if not issubclass(transport_class, TransportProtocol):
+                    raise ConfigFileError(
+                        f"{module_path}.{class_name} must subclass TransportProtocol"
+                    )
+            except TypeError:
                 raise ConfigFileError(f"{module_path}.{class_name} is not a class")
-            if not issubclass(transport_class, TransportProtocol):
-                raise ConfigFileError(
-                    f"{module_path}.{class_name} must subclass TransportProtocol"
-                )
 
             description = transport_config.get("description", "")
             config_schema = transport_config.get("config_schema")
@@ -61,14 +62,18 @@ def load_custom_transports(config_data: dict[str, Any]) -> None:
             )
 
             logger.info(
-                f"Loaded custom transport '{transport_name}' from "
-                f"{module_path}.{class_name}"
+                "Loaded custom transport '%s' from %s.%s",
+                transport_name,
+                module_path,
+                class_name,
             )
 
         except MCPError:
             raise
         except Exception as e:
-            logger.error(f"Failed to load custom transport '{transport_name}': {e}")
+            logger.error(
+                "Failed to load custom transport '%s': %s", transport_name, e
+            )
             raise ConfigFileError(
                 f"Failed to load custom transport '{transport_name}': {e}"
             ) from e

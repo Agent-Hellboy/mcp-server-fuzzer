@@ -11,7 +11,7 @@ import emoji
 from rich.console import Console
 
 from ..exceptions import ArgumentValidationError
-from ..config import load_config_file
+from ..client.adapters import config_mediator
 from ..transport.factory import create_transport
 from ..exceptions import MCPError, TransportError
 from ..env import ENVIRONMENT_VARIABLES, ValidationType
@@ -65,7 +65,7 @@ class ValidationManager:
 
     def validate_config_file(self, path: str) -> None:
         """Validate a config file and print success message."""
-        load_config_file(path)
+        config_mediator.load_file(path)
         success_msg = (
             "[green]:heavy_check_mark: Configuration file "
             f"'{path}' is valid[/green]"

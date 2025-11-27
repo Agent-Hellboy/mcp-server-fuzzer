@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from ..exceptions import ConfigFileError
+from ...exceptions import ConfigFileError
 
 
 def load_config_file(file_path: str) -> dict[str, Any]:
@@ -37,7 +37,7 @@ def load_config_file(file_path: str) -> dict[str, Any]:
             return yaml.safe_load(f) or {}
     except yaml.YAMLError as e:
         raise ConfigFileError(
-            f"Error parsing YAML configuration file {file_path}: {str(e)}"
+            f"Error parsing YAML configuration file {file_path}: {e}"
         )
     except PermissionError:
         raise ConfigFileError(
@@ -45,5 +45,5 @@ def load_config_file(file_path: str) -> dict[str, Any]:
         )
     except Exception as e:
         raise ConfigFileError(
-            f"Unexpected error reading configuration file {file_path}: {str(e)}"
+            f"Unexpected error reading configuration file {file_path}: {e}"
         )
