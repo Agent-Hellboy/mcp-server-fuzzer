@@ -36,10 +36,11 @@ flowchart TB
   end
 
   subgraph Fuzz_Engine
-    D1[ToolFuzzer]
-    D2[ProtocolFuzzer]
-    D3[Strategy Manager]
+    D1[ToolExecutor]
+    D2[ProtocolExecutor]
+    D3[Mutators]
     D4[AsyncFuzzExecutor]
+    D5[FuzzerReporter]
   end
 
   subgraph Runtime[Async Runtime]
@@ -100,11 +101,11 @@ graph TD
     D --> E[Discover Tools]
     E --> F{Mode}
 
-    F -->|Tools| G[ToolFuzzer]
-    F -->|Protocol| H[ProtocolFuzzer]
+    F -->|Tools| G[ToolExecutor]
+    F -->|Protocol| H[ProtocolExecutor]
 
-    G --> I[Generate Test Data]
-    H --> J[Generate Protocol Messages]
+    G --> I[ToolMutator]
+    H --> J[ProtocolMutator]
 
     I --> K1[AsyncFuzzExecutor]
     J --> K1
@@ -167,28 +168,45 @@ mcp_fuzzer/
 │   └── manager.py           # Runtime config manager
 ├── fuzz_engine/             # Core fuzzing engine
 │   ├── __init__.py
-│   ├── executor.py          # Async execution framework
-│   ├── invariants.py        # Property-based testing invariants
-│   ├── fuzzer/              # Core fuzzing logic
+│   ├── mutators/            # Data generation and mutation
 │   │   ├── __init__.py
-│   │   ├── protocol_fuzzer.py # Protocol-level fuzzing
-│   │   └── tool_fuzzer.py   # Tool-level fuzzing
-│   ├── runtime/             # Process management and runtime
+│   │   ├── base.py          # Base mutator interface
+│   │   ├── tool_mutator.py  # Tool argument mutation
+│   │   ├── protocol_mutator.py # Protocol message mutation
+│   │   ├── batch_mutator.py # Batch request generation
+│   │   └── strategies/      # Fuzzing strategies
+│   │       ├── __init__.py
+│   │       ├── schema_parser.py # JSON Schema parsing
+│   │       ├── strategy_manager.py # Strategy orchestration
+│   │       ├── aggressive/  # Aggressive attack vectors
+│   │       │   ├── __init__.py
+│   │       │   ├── protocol_type_strategy.py
+│   │       │   └── tool_strategy.py
+│   │       └── realistic/   # Realistic data generation
+│   │           ├── __init__.py
+│   │           ├── protocol_type_strategy.py
+│   │           └── tool_strategy.py
+│   ├── executor/            # Execution orchestration
 │   │   ├── __init__.py
-│   │   ├── manager.py       # Async process manager
-│   │   └── watchdog.py      # Process monitoring
-│   └── strategy/            # Fuzzing strategies
+│   │   ├── async_executor.py # Async execution framework
+│   │   ├── tool_executor.py # Tool fuzzing orchestration
+│   │   ├── protocol_executor.py # Protocol fuzzing orchestration
+│   │   ├── batch_executor.py # Batch fuzzing orchestration
+│   │   └── invariants.py    # Property-based testing invariants
+│   ├── fuzzerreporter/      # Result collection and reporting
+│   │   ├── __init__.py
+│   │   ├── result_builder.py # Standardized result creation
+│   │   ├── collector.py     # Result aggregation
+│   │   └── metrics.py       # Metrics calculation
+│   └── runtime/             # Process management and runtime
 │       ├── __init__.py
-│       ├── schema_parser.py # JSON Schema parsing
-│       ├── strategy_manager.py # Strategy orchestration
-│       ├── aggressive/      # Aggressive attack vectors
-│       │   ├── __init__.py
-│       │   ├── protocol_type_strategy.py
-│       │   └── tool_strategy.py
-│       └── realistic/       # Realistic data generation
-│           ├── __init__.py
-│           ├── protocol_type_strategy.py
-│           └── tool_strategy.py
+│       ├── manager.py       # Async process manager
+│       ├── watchdog.py      # Process monitoring
+│       ├── lifecycle.py     # Process lifecycle
+│       ├── monitor.py       # Runtime monitoring
+│       ├── config.py        # Runtime configuration
+│       ├── registry.py      # Process registry
+│       └── signals.py       # Signal handling
 ├── reports/                 # Reporting and output system
 │   ├── __init__.py
 │   ├── formatters/         # Output formatters
@@ -278,23 +296,40 @@ class TransportProtocol(ABC):
 
 ### 3. Fuzzing Engine
 
-The fuzzing engine orchestrates the testing process and manages test execution.
+The fuzzing engine orchestrates the testing process through three specialized modules: Mutators, Executor, and FuzzerReporter.
 
 **Key Components:**
 
-- `tool_fuzzer.py`: Tests individual tools with various argument combinations
-- `protocol_fuzzer.py`: Tests MCP protocol types with various message structures
-- `invariants.py`: Implements property-based invariants and checks for fuzz testing
-- `executor.py`: Provides asynchronous execution framework with concurrency control and retry mechanisms
+- `mutators/`: Data generation and mutation module
+  - `ToolMutator`: Generates fuzzed tool arguments
+  - `ProtocolMutator`: Generates fuzzed protocol messages
+  - `BatchMutator`: Generates batch requests
+  - `strategies/`: Comprehensive strategy system with realistic and aggressive modes
+- `executor/`: Execution orchestration module
+  - `ToolExecutor`: Orchestrates tool fuzzing with safety integration
+  - `ProtocolExecutor`: Orchestrates protocol fuzzing with invariant validation
+  - `BatchExecutor`: Orchestrates batch fuzzing
+  - `AsyncFuzzExecutor`: Async execution framework with concurrency control
+  - `invariants.py`: Property-based testing invariants
+- `fuzzerreporter/`: Result collection and reporting module
+  - `ResultBuilder`: Creates standardized result dictionaries
+  - `ResultCollector`: Aggregates results from multiple runs
+  - `MetricsCalculator`: Calculates comprehensive metrics
+- `runtime/`: Process management and monitoring
 
 **Fuzzing Process:**
 
 1. **Discovery**: Automatically discover available tools from the server
 2. **Strategy Selection**: Choose appropriate fuzzing strategy (realistic vs aggressive)
-3. **Data Generation**: Generate test data using Hypothesis and custom strategies
-4. **Execution**: Execute tests with controlled concurrency via AsyncFuzzExecutor
-5. **Invariant Verification**: Verify responses against property-based invariants
-6. **Analysis**: Analyze results and generate reports
+3. **Data Generation**: Mutators generate test data using strategies and JSON Schema
+4. **Execution**: Executors manage concurrent execution via AsyncFuzzExecutor
+5. **Safety Checks**: Safety system validates and sanitizes operations
+6. **Invariant Verification**: Verify responses against property-based invariants
+7. **Result Collection**: FuzzerReporter collects and aggregates results
+8. **Metrics Calculation**: Calculate success rates, violations, and statistics
+9. **Reporting**: Generate comprehensive reports in multiple formats
+
+**See [Fuzz Engine Architecture](./fuzz-engine.md) for detailed documentation.**
 
 ### 4. Runtime Management System
 

@@ -12,7 +12,8 @@ from typing import Any
 
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
 
-from ..fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
+from ..fuzz_engine.mutators import ProtocolMutator
+from ..fuzz_engine.executor import ProtocolExecutor
 from ..safety_system.safety import SafetyProvider
 
 class ProtocolClient:
@@ -35,7 +36,11 @@ class ProtocolClient:
         self.transport = transport
         self.safety_system = safety_system
         # Important: let ProtocolClient own sending (safety checks happen here)
-        self.protocol_fuzzer = ProtocolFuzzer(None, max_concurrency=max_concurrency)
+        self.protocol_mutator = ProtocolMutator()
+        # Use ProtocolExecutor to get PROTOCOL_TYPES
+        self._protocol_executor = ProtocolExecutor(
+            None, max_concurrency=max_concurrency
+        )
         self._logger = logging.getLogger(__name__)
 
     async def _check_safety_for_protocol_message(
@@ -116,24 +121,10 @@ class ProtocolClient:
             Dictionary with fuzzing results
         """
         try:
-            # Use the transport from this client for the fuzzer to send the request
-            # Configure the protocol fuzzer to use our transport
-            original_transport = self.protocol_fuzzer.transport
-            self.protocol_fuzzer.transport = self.transport
-            try:
-                # Generate only (no send); client handles safety + send
-                fuzz_results = await self.protocol_fuzzer.fuzz_protocol_type(
-                    protocol_type, 1, generate_only=True
-                )
-            finally:
-                # Restore the original transport configuration
-                self.protocol_fuzzer.transport = original_transport
-
-            if not fuzz_results:
-                raise ValueError(f"No results returned for {protocol_type}")
-
-            fuzz_result = fuzz_results[0]
-            fuzz_data = fuzz_result.get("fuzz_data")
+            # Generate fuzz data using mutator (no send); client handles safety + send
+            fuzz_data = await self.protocol_mutator.mutate(
+                protocol_type, phase="aggressive"
+            )
 
             if fuzz_data is None:
                 raise ValueError(f"No fuzz_data returned for {protocol_type}")
@@ -227,8 +218,8 @@ class ProtocolClient:
             List of protocol type strings
         """
         try:
-            # The protocol fuzzer knows which protocol types to fuzz
-            return list(getattr(self.protocol_fuzzer, "PROTOCOL_TYPES", ()))
+            # The protocol executor knows which protocol types to fuzz
+            return list(getattr(self._protocol_executor, "PROTOCOL_TYPES", ()))
         except Exception as e:
             self._logger.error(f"Failed to get protocol types: {e}")
             return []
@@ -394,5 +385,5 @@ class ProtocolClient:
         return await self.transport.send_request(method, params)
 
     async def shutdown(self) -> None:
-        """Shutdown the protocol fuzzer."""
-        await self.protocol_fuzzer.shutdown()
+        """Shutdown the protocol client."""
+        await self._protocol_executor.shutdown()

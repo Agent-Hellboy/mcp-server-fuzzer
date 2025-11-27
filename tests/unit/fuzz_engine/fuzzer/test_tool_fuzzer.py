@@ -6,7 +6,8 @@ Updated tests for ToolFuzzer that align with the new safety architecture.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from mcp_fuzzer.fuzz_engine.fuzzer.tool_fuzzer import ToolFuzzer
+from mcp_fuzzer.fuzz_engine.executor import ToolExecutor
+from mcp_fuzzer.fuzz_engine.mutators import ToolMutator
 
 pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.fuzzer]
 
@@ -22,23 +23,23 @@ def safety_mock():
 
 @pytest.fixture()
 def fuzzer(safety_mock):
-    tool_fuzzer = ToolFuzzer(safety_system=safety_mock)
-    # Replace strategies with a deterministic mock
-    tool_fuzzer.strategies = MagicMock()
-    tool_fuzzer.strategies.fuzz_tool_arguments = AsyncMock(
-        return_value={"name": "example", "count": 1}
+    # Create a mock mutator
+    mock_mutator = MagicMock(spec=ToolMutator)
+    mock_mutator.mutate = AsyncMock(return_value={"name": "example", "count": 1})
+    tool_executor = ToolExecutor(
+        mutator=mock_mutator, safety_system=safety_mock, enable_safety=True
     )
-    return tool_fuzzer
+    return tool_executor
 
 
 @pytest.mark.asyncio
 async def test_fuzz_tool_runs_requested_times(fuzzer, safety_mock):
     tool = {"name": "sample", "inputSchema": {"properties": {}}}
 
-    results = await fuzzer.fuzz_tool(tool, runs=3)
+    results = await fuzzer.execute(tool, runs=3)
 
     assert len(results) == 3
-    assert fuzzer.strategies.fuzz_tool_arguments.await_count == 3
+    assert fuzzer.mutator.mutate.await_count == 3
     safety_mock.sanitize_tool_arguments.assert_called()
     assert all(result["success"] for result in results)
 
@@ -48,7 +49,7 @@ async def test_fuzz_tool_blocks_when_safety_requests(fuzzer, safety_mock):
     safety_mock.should_skip_tool_call.return_value = True
     tool = {"name": "blocked_tool", "inputSchema": {"properties": {}}}
 
-    results = await fuzzer.fuzz_tool(tool, runs=1)
+    results = await fuzzer.execute(tool, runs=1)
 
     assert len(results) == 1
     assert results[0]["safety_blocked"] is True
@@ -57,10 +58,10 @@ async def test_fuzz_tool_blocks_when_safety_requests(fuzzer, safety_mock):
 
 @pytest.mark.asyncio
 async def test_fuzz_tool_handles_strategy_exception(fuzzer):
-    fuzzer.strategies.fuzz_tool_arguments.side_effect = Exception("boom")
+    fuzzer.mutator.mutate.side_effect = Exception("boom")
     tool = {"name": "unstable", "inputSchema": {"properties": {}}}
 
-    results = await fuzzer.fuzz_tool(tool, runs=2)
+    results = await fuzzer.execute(tool, runs=2)
 
     assert len(results) == 2
     assert all(result["success"] is False for result in results)
@@ -69,11 +70,11 @@ async def test_fuzz_tool_handles_strategy_exception(fuzzer):
 
 @pytest.mark.asyncio
 async def test_fuzz_tools_invokes_each_tool(fuzzer):
-    with patch.object(fuzzer, "fuzz_tool", new_callable=AsyncMock) as mock_fuzz:
+    with patch.object(fuzzer, "execute", new_callable=AsyncMock) as mock_fuzz:
         mock_fuzz.return_value = [{"tool_name": "sample", "success": True}]
         tools = [{"name": "tool1"}, {"name": "tool2"}]
 
-        results = await fuzzer.fuzz_tools(tools, runs_per_tool=1)
+        results = await fuzzer.execute_multiple(tools, runs_per_tool=1)
 
         assert set(results.keys()) == {"tool1", "tool2"}
         assert mock_fuzz.await_count == 2
@@ -81,11 +82,11 @@ async def test_fuzz_tools_invokes_each_tool(fuzzer):
 
 @pytest.mark.asyncio
 async def test_fuzz_tool_both_phases(fuzzer):
-    with patch.object(fuzzer, "fuzz_tool", new_callable=AsyncMock) as mock_fuzz:
+    with patch.object(fuzzer, "execute", new_callable=AsyncMock) as mock_fuzz:
         mock_fuzz.return_value = [{"success": True}]
         tool = {"name": "complex"}
 
-        results = await fuzzer.fuzz_tool_both_phases(tool, runs_per_phase=1)
+        results = await fuzzer.execute_both_phases(tool, runs_per_phase=1)
 
         assert set(results.keys()) == {"realistic", "aggressive"}
         assert mock_fuzz.await_count == 2
@@ -103,7 +104,7 @@ async def test_fuzz_tool_respects_sanitized_changes(fuzzer, safety_mock):
     safety_mock.sanitize_tool_arguments.side_effect = sanitizer
     tool = {"name": "sanitized", "inputSchema": {"properties": {}}}
 
-    results = await fuzzer.fuzz_tool(tool, runs=1)
+    results = await fuzzer.execute(tool, runs=1)
 
     assert results[0]["args"]["count"] == 99
     assert results[0]["safety_sanitized"] is True
@@ -114,10 +115,10 @@ async def test_fuzz_tool_handles_transport_errors(fuzzer):
     async def generate_args(*_, **__):
         raise Exception("transport failure")
 
-    fuzzer.strategies.fuzz_tool_arguments = AsyncMock(side_effect=generate_args)
+    fuzzer.mutator.mutate = AsyncMock(side_effect=generate_args)
     tool = {"name": "transport", "inputSchema": {"properties": {}}}
 
-    results = await fuzzer.fuzz_tool(tool, runs=1)
+    results = await fuzzer.execute(tool, runs=1)
 
     assert results[0]["success"] is False
     assert results[0]["exception"] == "transport failure"

@@ -1,12 +1,13 @@
 """
 Unit tests for aggressive protocol type strategies.
-Tests the aggressive strategies from mcp_fuzzer.fuzz_engine.strategy.aggressive.
+Tests the aggressive strategies from
+mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive.
 protocol_type_strategy
 """
 
 import pytest
 
-from mcp_fuzzer.fuzz_engine.strategy.aggressive.protocol_type_strategy import (
+from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive.protocol_type_strategy import (  # noqa: E501
     fuzz_list_resource_templates_request,
     fuzz_elicit_request,
     fuzz_ping_request,
@@ -223,7 +224,7 @@ class TestAggressiveProtocolStrategies:
 
     def test_capabilities_experimental_fuzzing(self):
         """Test that capabilities.experimental fuzzing generates varied content."""
-        from mcp_fuzzer.fuzz_engine.strategy.aggressive.protocol_type_strategy import (
+        from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive import (
             fuzz_initialize_request_aggressive,
         )
 
@@ -263,14 +264,14 @@ class TestAggressiveProtocolStrategies:
 
     def test_protocol_types_sync_with_fuzzer_map(self):
         """Test that PROTOCOL_TYPES tuple stays in sync with fuzzer method map."""
-        from mcp_fuzzer.fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
-        from mcp_fuzzer.fuzz_engine.strategy.aggressive.protocol_type_strategy import (
+        from mcp_fuzzer.fuzz_engine.executor import ProtocolExecutor
+        from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive import (
             get_protocol_fuzzer_method,
         )
 
         # Get all protocol types from the fuzzer method map
         fuzzer_map_types = set()
-        for protocol_type in ProtocolFuzzer.PROTOCOL_TYPES:
+        for protocol_type in ProtocolExecutor.PROTOCOL_TYPES:
             if get_protocol_fuzzer_method(protocol_type) is not None:
                 fuzzer_map_types.add(protocol_type)
 
@@ -335,8 +336,8 @@ class TestAggressiveProtocolStrategies:
                 all_supported_types.add(protocol_type)
 
         # PROTOCOL_TYPES should match the fuzzer method map
-        assert set(ProtocolFuzzer.PROTOCOL_TYPES) == all_supported_types, (
-            f"PROTOCOL_TYPES mismatch: {set(ProtocolFuzzer.PROTOCOL_TYPES)} != "
+        assert set(ProtocolExecutor.PROTOCOL_TYPES) == all_supported_types, (
+            f"PROTOCOL_TYPES mismatch: {set(ProtocolExecutor.PROTOCOL_TYPES)} != "
             f"{all_supported_types}"
         )
 
