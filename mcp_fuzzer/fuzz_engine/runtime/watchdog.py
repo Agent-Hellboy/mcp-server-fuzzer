@@ -66,6 +66,27 @@ class SignalTerminationStrategy:
         self._force_timeout = force_timeout
         self._wait_fn = wait_fn
 
+    async def _await_exit(
+        self,
+        process: Any,
+        pid: int,
+        name: str,
+        timeout: float,
+        stage: str,
+    ) -> bool:
+        try:
+            await self._wait_fn(process, timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            self._logger.warning(
+                "Process %s (%s) did not exit after %s within %.1fs",
+                pid,
+                name,
+                stage,
+                timeout,
+            )
+            return False
+
     async def terminate(
         self, pid: int, process_info: ProcessRecord, hang_duration: float
     ) -> bool:
@@ -74,8 +95,9 @@ class SignalTerminationStrategy:
 
         try:
             await self._dispatcher.send("timeout", pid, process_info)
-            try:
-                await self._wait_fn(process, timeout=self._graceful_timeout)
+            if await self._await_exit(
+                process, pid, name, self._graceful_timeout, "graceful termination"
+            ):
                 self._logger.info(
                     "Gracefully terminated hung process %s (%s) after %.1fs",
                     pid,
@@ -83,18 +105,20 @@ class SignalTerminationStrategy:
                     hang_duration,
                 )
                 return True
-            except asyncio.TimeoutError:
+
+            self._logger.info(
+                "Escalating to force kill for process %s (%s)", pid, name
+            )
+            await self._dispatcher.send("force", pid, process_info)
+
+            if await self._await_exit(
+                process, pid, name, self._force_timeout, "force kill"
+            ):
                 self._logger.info(
-                    "Escalating to force kill for process %s (%s)", pid, name
+                    "Forcefully terminated hung process %s (%s)", pid, name
                 )
-                await self._dispatcher.send("force", pid, process_info)
-                try:
-                    await self._wait_fn(process, timeout=self._force_timeout)
-                except asyncio.TimeoutError:
-                    self._logger.warning(
-                        "Process %s (%s) did not exit after force kill", pid, name
-                    )
                 return True
+            return False
         except Exception as exc:  # pragma: no cover - safety net
             self._logger.error(
                 "Termination strategy failed for process %s (%s): %s",
@@ -116,6 +140,27 @@ class BestEffortTerminationStrategy:
         self._logger = logger
         self._wait_fn = wait_fn
 
+    async def _await_exit(
+        self,
+        process: Any,
+        pid: int,
+        name: str,
+        timeout: float,
+        stage: str,
+    ) -> bool:
+        try:
+            await self._wait_fn(process, timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            self._logger.warning(
+                "Process %s (%s) did not exit after %s within %.1fs",
+                pid,
+                name,
+                stage,
+                timeout,
+            )
+            return False
+
     async def terminate(
         self, pid: int, process_info: ProcessRecord, hang_duration: float
     ) -> bool:
@@ -125,29 +170,92 @@ class BestEffortTerminationStrategy:
         try:
             if sys.platform == "win32":
                 process.terminate()
-                try:
-                    await self._wait_fn(process, timeout=PROCESS_TERMINATION_TIMEOUT)
+                if await self._await_exit(
+                    process,
+                    pid,
+                    name,
+                    PROCESS_TERMINATION_TIMEOUT,
+                    "termination",
+                ):
+                    self._logger.info(
+                        "Gracefully terminated hanging process %s (%s)",
+                        pid,
+                        name,
+                    )
                     return True
-                except asyncio.TimeoutError:
-                    process.kill()
+                process.kill()
+                if await self._await_exit(
+                    process,
+                    pid,
+                    name,
+                    PROCESS_FORCE_KILL_TIMEOUT,
+                    "force kill",
+                ):
+                    self._logger.info(
+                        "Forcefully terminated hanging process %s (%s)",
+                        pid,
+                        name,
+                    )
                     return True
 
             try:
                 pgid = os.getpgid(pid)
                 os.killpg(pgid, _signal.SIGTERM)
-                try:
-                    await self._wait_fn(process, timeout=PROCESS_TERMINATION_TIMEOUT)
+                if await self._await_exit(
+                    process,
+                    pid,
+                    name,
+                    PROCESS_TERMINATION_TIMEOUT,
+                    "termination",
+                ):
+                    self._logger.info(
+                        "Gracefully terminated hanging process %s (%s)",
+                        pid,
+                        name,
+                    )
                     return True
-                except asyncio.TimeoutError:
-                    os.killpg(pgid, _signal.SIGKILL)
+                os.killpg(pgid, _signal.SIGKILL)
+                if await self._await_exit(
+                    process,
+                    pid,
+                    name,
+                    PROCESS_FORCE_KILL_TIMEOUT,
+                    "force kill",
+                ):
+                    self._logger.info(
+                        "Forcefully terminated hanging process %s (%s)",
+                        pid,
+                        name,
+                    )
                     return True
             except OSError:
                 process.terminate()
-                try:
-                    await self._wait_fn(process, timeout=PROCESS_TERMINATION_TIMEOUT)
+                if await self._await_exit(
+                    process,
+                    pid,
+                    name,
+                    PROCESS_TERMINATION_TIMEOUT,
+                    "termination",
+                ):
+                    self._logger.info(
+                        "Gracefully terminated hanging process %s (%s)",
+                        pid,
+                        name,
+                    )
                     return True
-                except asyncio.TimeoutError:
-                    process.kill()
+                process.kill()
+                if await self._await_exit(
+                    process,
+                    pid,
+                    name,
+                    PROCESS_FORCE_KILL_TIMEOUT,
+                    "force kill",
+                ):
+                    self._logger.info(
+                        "Forcefully terminated hanging process %s (%s)",
+                        pid,
+                        name,
+                    )
                     return True
         except Exception as exc:
             self._logger.error(

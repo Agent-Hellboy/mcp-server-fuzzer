@@ -40,6 +40,7 @@ class StdioTransport(TransportProtocol):
         self.stderr = None
         self._lock = None  # Will be created lazily when needed
         self._initialized = False
+        self._last_activity = time.time()
         self.process_manager = process_manager
         self.manager = TransportManager(logger=logging.getLogger(__name__))
 
@@ -65,7 +66,6 @@ class StdioTransport(TransportProtocol):
                 auto_kill=True,
             )
             self.process_manager = ProcessManager.from_config(watchdog_config)
-            self._last_activity = time.time()
         return self.process_manager
 
     async def _update_activity(self):

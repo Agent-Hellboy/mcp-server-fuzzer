@@ -63,6 +63,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         self._last_activity = time.time()
 
         # Initialize process manager for any subprocesses (like proxy servers)
+        self._owns_process_manager = process_manager is None
         if process_manager is None:
             watchdog_config = WatchdogConfig(
                 check_interval=1.0,
@@ -292,7 +293,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
     async def close(self):
         """Close the transport and cleanup resources."""
         try:
-            if hasattr(self, "process_manager"):
+            if hasattr(self, "process_manager") and self._owns_process_manager:
                 await self.process_manager.shutdown()
         except Exception as e:
             logging.warning(f"Error shutting down HTTP transport process manager: {e}")

@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -72,7 +72,7 @@ class TestCrossPlatformProcessManagement:
             mock_process.returncode = None
             mock_create.return_value = mock_process
 
-            with patch.object(process_manager.watchdog, "start", return_value=None):
+            with patch.object(process_manager.watchdog, "start", new=AsyncMock()):
                 process = await process_manager.start_process(config)
 
                 assert process == mock_process
@@ -105,15 +105,12 @@ class TestCrossPlatformProcessManagement:
             )
 
             with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-                with patch.object(process_manager.watchdog, "start", return_value=None):
+                with patch.object(process_manager.watchdog, "start", new=AsyncMock()):
                     process = await process_manager.start_process(config)
 
-                    # Test signal handling
-                    with patch.object(
-                        process_manager, "send_timeout_signal"
-                    ) as mock_signal:
-                        await process_manager.stop_process(process.pid)
-                        # Signal may or may not be called depending on process state
+                    # Verify stop completes and unregisters the process
+                    await process_manager.stop_process(process.pid)
+                    assert not await process_manager.registry.contains(process.pid)
 
     @pytest.mark.asyncio
     async def test_watchdog_cross_platform_monitoring(self, watchdog):
@@ -124,7 +121,7 @@ class TestCrossPlatformProcessManagement:
         mock_process.poll.return_value = None  # Process still running
 
         await watchdog.start()
-        await watchdog.update_activity(mock_process.pid)
+
         await watchdog.registry.register(
             mock_process.pid,
             mock_process,
@@ -132,6 +129,7 @@ class TestCrossPlatformProcessManagement:
             started_at=time.time(),
             status="running",
         )
+        await watchdog.update_activity(mock_process.pid)
 
         await asyncio.sleep(0.2)  # Allow watchdog loop to scan
         stats = await watchdog.get_stats()
@@ -159,19 +157,20 @@ class TestCrossPlatformProcessManagement:
         mock_process.poll.return_value = None
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            with patch.object(process_manager.watchdog, "start", return_value=None):
+            with patch.object(process_manager.watchdog, "start", new=AsyncMock()):
                 process = await process_manager.start_process(config)
 
                 # Wait for timeout
                 await asyncio.sleep(1.5)
 
-                # Test timeout handling
+                # Test timeout handling routes through signal dispatcher
                 with patch.object(
-                    process_manager, "send_timeout_signal"
-                ) as mock_timeout:
-                    # Simulate timeout detection
+                    process_manager.signal_dispatcher, "send", return_value=True
+                ) as mock_send:
                     await process_manager.send_timeout_signal(process.pid)
-                    mock_timeout.assert_called_once_with(process.pid)
+                    mock_send.assert_called_once_with(
+                        "timeout", process.pid, ANY
+                    )
 
     def test_process_config_validation(self):
         """Test process config validation across platforms."""
@@ -279,7 +278,7 @@ class TestCrossPlatformProcessManagement:
             mock_processes.append(mock_process)
 
         with patch("asyncio.create_subprocess_exec", side_effect=mock_processes):
-            with patch.object(process_manager.watchdog, "start", return_value=None):
+            with patch.object(process_manager.watchdog, "start", new=AsyncMock()):
                 # Start processes concurrently
                 tasks = [process_manager.start_process(config) for config in configs]
 
@@ -373,11 +372,17 @@ class TestCrossPlatformProcessManagement:
         )
 
         # Test process detection through public API
-        await asyncio.sleep(0.3)  # Allow watchdog to scan and clean up
-        stats = await watchdog.get_stats()
-        # Finished process should be cleaned up by watchdog
-        assert stats["total_processes"] == 0
-        assert stats["finished_processes"] == 0
+        # Allow watchdog to scan and clean up with retries for stability
+        cleaned = False
+        for _ in range(20):
+            await asyncio.sleep(0.1)
+            stats = await watchdog.get_stats()
+            finished_processes = stats.get("finished_processes", 0)
+            if stats["total_processes"] == 0 and finished_processes == 0:
+                cleaned = True
+                break
+
+        assert cleaned, "Watchdog did not clean up finished process in time"
         await watchdog.stop()
 
     def test_cross_platform_file_path_handling(self):

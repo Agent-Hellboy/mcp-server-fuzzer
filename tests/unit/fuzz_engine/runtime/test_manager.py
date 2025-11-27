@@ -860,7 +860,7 @@ class TestProcessManager:
         monitor = ProcessInspector(registry, different_watchdog, logger)
 
         # Create manager - should wire them to use the same watchdog
-        manager = ProcessManager(
+        manager = ProcessManager.with_dependencies(
             watchdog, registry, signal_handler, lifecycle, monitor, logger
         )
 

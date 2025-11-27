@@ -348,10 +348,10 @@ class TestProcessLifecycle:
             mock_signal_handler.send.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_stop_process_not_exited_raises(
+    async def test_stop_process_not_exited_mock_process(
         self, lifecycle, mock_registry, mock_signal_handler, mock_watchdog
     ):
-        """Test that stop raises error if process doesn't exit."""
+        """Mock process path should return True even when stop is forced."""
         mock_process = MagicMock()
         mock_process.returncode = None
 
@@ -366,14 +366,35 @@ class TestProcessLifecycle:
             "mcp_fuzzer.fuzz_engine.runtime.lifecycle.wait_for_process_exit",
             new_callable=AsyncMock,
         ):
-            # If it's a real subprocess.Process, should raise
-            if isinstance(mock_process, MagicMock):
-                # For mock, it will set returncode to 0
-                result = await lifecycle.stop(12345, force=True)
-                assert result is True
-            else:
-                with pytest.raises(ProcessStopError):
-                    await lifecycle.stop(12345, force=True)
+            result = await lifecycle.stop(12345, force=True)
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_stop_process_not_exited_real_process_raises(
+        self, lifecycle, mock_registry, mock_signal_handler, mock_watchdog
+    ):
+        """Real subprocess-like object should raise if it never exits."""
+        class FakeProcess:
+            def __init__(self) -> None:
+                self.pid = 12345
+                self.returncode = None
+
+        fake_process = FakeProcess()
+        process_info = {
+            "process": fake_process,
+            "config": ProcessConfig(command=["test"], name="test_process"),
+        }
+        mock_registry.get_process.return_value = process_info
+
+        with patch(
+            "mcp_fuzzer.fuzz_engine.runtime.lifecycle.wait_for_process_exit",
+            new_callable=AsyncMock,
+        ), patch(
+            "mcp_fuzzer.fuzz_engine.runtime.lifecycle.asyncio.subprocess.Process",
+            FakeProcess,
+        ):
+            with pytest.raises(ProcessStopError):
+                await lifecycle.stop(12345, force=True)
 
     @pytest.mark.asyncio
     async def test_stop_all_success(
@@ -431,8 +452,8 @@ class TestProcessLifecycle:
             with pytest.raises(ProcessStopError) as exc_info:
                 await lifecycle.stop_all(force=False)
 
-            assert "Failed to stop all managed processes" in str(exc_info.value)
-            assert len(exc_info.value.context["failed_processes"]) == 1
+        assert "Failed to stop all managed processes" in str(exc_info.value)
+        assert len(exc_info.value.context["failed_processes"]) == 1
 
     @pytest.mark.asyncio
     async def test_stop_all_with_exceptions(
@@ -456,4 +477,4 @@ class TestProcessLifecycle:
         with pytest.raises(ProcessStopError) as exc_info:
             await lifecycle.stop_all(force=False)
 
-            assert "Failed to stop all managed processes" in str(exc_info.value)
+        assert "Failed to stop all managed processes" in str(exc_info.value)

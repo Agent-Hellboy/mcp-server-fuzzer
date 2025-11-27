@@ -77,6 +77,12 @@ class ProcessLifecycle:
                 error_output = (
                     _format_output(stderr) or _format_output(stdout) or "No output"
                 )
+                safe_env: dict[str, Any] | str | None = None
+                if isinstance(env, dict):
+                    safe_env = {"keys": sorted(env.keys())}
+                elif env is not None:
+                    safe_env = str(env)
+
                 raise ProcessStartError(
                     (
                         f"Process {config.name} exited with code "
@@ -85,7 +91,7 @@ class ProcessLifecycle:
                     context={
                         "command": config.command,
                         "cwd": cwd,
-                        "env": env,
+                        "env": safe_env,
                         "returncode": returncode,
                         "stderr": _format_output(stderr),
                         "stdout": _format_output(stdout),

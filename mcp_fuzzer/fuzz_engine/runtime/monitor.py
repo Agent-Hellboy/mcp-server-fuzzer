@@ -79,11 +79,8 @@ class ProcessInspector:
 
     async def cleanup_finished_processes(self) -> int:
         cleaned = 0
-        pids = await self.registry.list_pids()
-        for pid in pids:
-            process_info = await self.registry.get_process(pid)
-            if not process_info:
-                continue
+        snapshot = await self.registry.snapshot()
+        for pid, process_info in snapshot.items():
             process = process_info["process"]
             if process.returncode is not None:
                 await self.registry.unregister(pid)

@@ -268,7 +268,7 @@ class ProcessConfig:
   - Signal types: "timeout", "force", "interrupt"
   - Returns True if signal was sent successfully
 
-- `async register_existing_process(pid: int, process: asyncio.subprocess.Process, name: str, activity_callback: Optional[Callable[[], float]] = None) -> None`
+- `async register_existing_process(pid: int, process: asyncio.subprocess.Process, name: Optional[str] = None, activity_callback: Optional[Callable[[], float]] = None, *, config: Optional[ProcessConfig] = None) -> None`
   - Register an already-started subprocess with the manager
   - Useful for integrating with existing process management
 

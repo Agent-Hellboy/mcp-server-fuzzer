@@ -188,17 +188,29 @@ at construction time or runtime.
 ##### Method 1: Dependency Injection at Construction
 
 ```python
+import logging
 from mcp_fuzzer.fuzz_engine.runtime.signals import (
+    ProcessRegistry,
     ProcessSignalStrategy,
     SignalDispatcher,
-    ProcessRegistry,
 )
-import logging
+
 
 class CustomTermStrategy(ProcessSignalStrategy):
+    def __init__(self, registry: ProcessRegistry, logger: logging.Logger) -> None:
+        self._registry = registry
+        self._logger = logger
+
     async def send(self, pid: int, process_info=None) -> bool:
-        # Custom termination logic
+        # Custom termination logic using injected dependencies
         return True
+
+
+class MyCustomStrategy(ProcessSignalStrategy):
+    async def send(self, pid: int, process_info=None) -> bool:
+        # Add your own behavior here
+        return True
+
 
 registry = ProcessRegistry()
 logger = logging.getLogger(__name__)
@@ -206,19 +218,21 @@ logger = logging.getLogger(__name__)
 # Create with custom strategies
 custom_strategies = {
     "timeout": CustomTermStrategy(registry, logger),
-    "custom": MyCustomStrategy(registry, logger),
+    "custom": MyCustomStrategy(),
 }
 dispatcher = SignalDispatcher.from_config(
-    registry, logger,
+    registry,
+    logger,
     strategies=custom_strategies,
-    register_defaults=True  # Still register defaults, custom overrides them
+    register_defaults=True,  # Still register defaults, custom overrides them
 )
 
 # Or use only custom strategies
 dispatcher = SignalDispatcher.from_config(
-    registry, logger,
+    registry,
+    logger,
     strategies=custom_strategies,
-    register_defaults=False  # No default strategies
+    register_defaults=False,  # No default strategies
 )
 ```
 
@@ -226,6 +240,7 @@ dispatcher = SignalDispatcher.from_config(
 
 ```python
 from mcp_fuzzer.fuzz_engine.runtime.signals import ProcessSignalStrategy
+from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager
 
 class NoopSignal(ProcessSignalStrategy):
     async def send(self, pid: int, process_info=None) -> bool:
@@ -582,6 +597,7 @@ async def hypothesis_example():
 
 ```python
 import asyncio
+import time
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
 from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
 from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor

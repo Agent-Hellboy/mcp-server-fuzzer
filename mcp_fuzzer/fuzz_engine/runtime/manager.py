@@ -39,11 +39,27 @@ class ProcessManager:
         self.monitor = monitor
         self._logger = logger
         self._observers: list[Callable[[str, dict[str, Any]], None]] = []
-        
-        # Ensure lifecycle and monitor have the correct watchdog reference
-        if self.lifecycle.watchdog is not self.watchdog:
+
+    @classmethod
+    def with_dependencies(
+        cls,
+        watchdog: ProcessWatchdog,
+        registry: ProcessRegistry,
+        signal_handler: SignalDispatcher,
+        lifecycle: ProcessLifecycle,
+        monitor: ProcessInspector,
+        logger: logging.Logger,
+    ) -> "ProcessManager":
+        """Factory to align collaborators before constructing a manager."""
+        manager = cls(watchdog, registry, signal_handler, lifecycle, monitor, logger)
+        manager._align_dependencies()
+        return manager
+
+    def _align_dependencies(self) -> None:
+        """Ensure lifecycle and monitor share the manager's watchdog."""
+        if getattr(self.lifecycle, "watchdog", None) is not self.watchdog:
             self.lifecycle.watchdog = self.watchdog
-        if self.monitor.watchdog is not self.watchdog:
+        if getattr(self.monitor, "watchdog", None) is not self.watchdog:
             self.monitor.watchdog = self.watchdog
 
     @classmethod
@@ -91,7 +107,7 @@ class ProcessManager:
             watchdog, registry, signal_handler, resolved_logger
         )
         monitor = ProcessInspector(registry, watchdog, resolved_logger)
-        return cls(
+        return cls.with_dependencies(
             watchdog, registry, signal_handler, lifecycle, monitor, resolved_logger
         )
 
@@ -105,7 +121,12 @@ class ProcessManager:
             try:
                 cb(event_name, data)
             except Exception:
-                self._logger.warning("ProcessManager observer failed", exc_info=True)
+                self._logger.warning(
+                    "ProcessManager observer %r failed for event %s",
+                    cb,
+                    event_name,
+                    exc_info=True,
+                )
         self._logger.debug("[process_manager] %s: %s", event_name, payload)
 
     async def start_process(self, config: ProcessConfig) -> asyncio.subprocess.Process:
@@ -232,16 +253,27 @@ class ProcessManager:
         self,
         pid: int,
         process: asyncio.subprocess.Process,
-        name: str,
+        name: str | None = None,
         activity_callback: Callable[[], float] | None = None,
+        *,
+        config: ProcessConfig | None = None,
     ) -> None:
+        """Register a process that was created outside the manager."""
+        process_config = config or ProcessConfig(
+            command=[name or str(pid)],
+            name=name or "unknown",
+            activity_callback=activity_callback,
+        )
+        if activity_callback and process_config.activity_callback is None:
+            process_config.activity_callback = activity_callback
+        if name and process_config.name in ("unknown", None):
+            process_config.name = name
+        if not getattr(process_config, "command", None):
+            process_config.command = [name or str(pid)]
+
         await self.registry.register(
             pid,
             process,
-            ProcessConfig(
-                command=[name],
-                name=name,
-                activity_callback=activity_callback,
-            ),
+            process_config,
         )
         await self.watchdog.update_activity(pid)

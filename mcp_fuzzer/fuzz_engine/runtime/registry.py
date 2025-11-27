@@ -63,7 +63,8 @@ class ProcessRegistry:
 
     async def get_process(self, pid: int) -> ProcessRecord | None:
         async with self._get_lock():
-            return self._processes.get(pid)
+            record = self._processes.get(pid)
+            return dict(record) if record else None  # type: ignore[return-value]
 
     async def list_pids(self) -> list[int]:
         async with self._get_lock():
