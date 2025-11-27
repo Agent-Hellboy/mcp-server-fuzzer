@@ -255,7 +255,9 @@ class TestSchemaParserAdvanced(unittest.TestCase):
         result = make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
         # In aggressive mode, can return any type - just check it returns something
         # (could be the const value, or an edge case type)
-        self.assertTrue(result is not None or result == 0 or result == [] or result == "")
+        self.assertTrue(
+            result is not None or result == 0 or result == [] or result == ""
+        )
 
     def test_oneOf_selection(self):
         """Test oneOf schema combination."""
@@ -268,7 +270,9 @@ class TestSchemaParserAdvanced(unittest.TestCase):
         }
         result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
         self.assertTrue(
-            isinstance(result, str) or isinstance(result, int) or isinstance(result, bool)
+            isinstance(result, str)
+            or isinstance(result, int)
+            or isinstance(result, bool)
         )
 
     def test_anyOf_selection(self):
@@ -379,13 +383,10 @@ class TestSchemaParserAdvanced(unittest.TestCase):
     def test_handle_string_type_aggressive_boundaries(self):
         """Test _handle_string_type in aggressive mode."""
         schema = {"type": "string", "minLength": 5, "maxLength": 10}
-        results = [
-            _handle_string_type(schema, phase="aggressive") for _ in range(20)
-        ]
+        results = [_handle_string_type(schema, phase="aggressive") for _ in range(20)]
         # Should have variety
         self.assertGreater(len(results), 0)
 
 
 if __name__ == "__main__":
     unittest.main()
-
