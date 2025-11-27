@@ -218,6 +218,14 @@ The system is built with a modular architecture:
 - **Authentication**: Multiple auth provider support
 - **Reporting**: FuzzerReporter, Console/JSON/Text formatters, SafetyReporter
 
+### Runtime Watchdog Basics
+
+- Registry-backed: the watchdog reads `ProcessRegistry` snapshots; ProcessLifecycle/Manager handle registration and cleanup.
+- Explicit lifecycle: call `start()`/`stop()` (or use the context manager) instead of auto-starting on registration.
+- Activity callbacks: sync/async callbacks return a timestamp or bool (True = recent activity); helpers normalize invalid values.
+- Termination: hang handling delegates to `SignalDispatcher` strategies by default, with a best-effort fallback when signals are unavailable.
+- Cleanup: hung/finished processes are unregistered from the registry to keep monitoring state lean.
+
 ### Understanding the Design Patterns
 
 For developers (beginners to intermediate) who want to understand the design patterns used throughout the codebase, please refer to our comprehensive [Design Pattern Review](docs/design-pattern-review.md). This document provides:

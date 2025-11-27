@@ -92,10 +92,8 @@ class ProcessLifecycle:
                     },
                 )
 
-            await self.watchdog.register_process(
-                process.pid, process, config.activity_callback, config.name
-            )
             await self.registry.register(process.pid, process, config)
+            await self.watchdog.update_activity(process.pid)
             self._logger.info(
                 f"Started process {process.pid} ({config.name}): "
                 f"{' '.join(config.command)}"
@@ -133,7 +131,7 @@ class ProcessLifecycle:
                     returncode,
                 )
                 await self.registry.update_status(pid, "stopped")
-                await self.watchdog.unregister_process(pid)
+                await self.registry.unregister(pid)
                 return True
 
             if force:
@@ -158,7 +156,7 @@ class ProcessLifecycle:
                 )
 
             await self.registry.update_status(pid, "stopped")
-            await self.watchdog.unregister_process(pid)
+            await self.registry.unregister(pid)
             return True
 
         except MCPError:

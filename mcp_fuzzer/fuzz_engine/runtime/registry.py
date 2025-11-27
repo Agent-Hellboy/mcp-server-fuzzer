@@ -77,3 +77,8 @@ class ProcessRegistry:
     async def clear(self) -> None:
         async with self._get_lock():
             self._processes.clear()
+
+    async def snapshot(self) -> dict[int, ProcessRecord]:
+        """Return a shallow copy of the registry under lock."""
+        async with self._get_lock():
+            return dict(self._processes)

@@ -72,8 +72,7 @@ class TestProcessLifecycle:
         """Create a mock watchdog."""
         watchdog = AsyncMock()
         watchdog.start = AsyncMock()
-        watchdog.register_process = AsyncMock()
-        watchdog.unregister_process = AsyncMock()
+        watchdog.update_activity = AsyncMock()
         return watchdog
 
     @pytest.fixture
@@ -123,7 +122,7 @@ class TestProcessLifecycle:
 
             assert process == mock_process
             mock_watchdog.start.assert_called_once()
-            mock_watchdog.register_process.assert_called_once()
+            mock_watchdog.update_activity.assert_called_once_with(mock_process.pid)
             mock_registry.register.assert_called_once()
 
     @pytest.mark.asyncio
@@ -234,7 +233,6 @@ class TestProcessLifecycle:
         result = await lifecycle.stop(12345)
         assert result is True
         mock_registry.update_status.assert_called_once_with(12345, "stopped")
-        mock_watchdog.unregister_process.assert_called_once_with(12345)
 
     @pytest.mark.asyncio
     async def test_stop_process_graceful(

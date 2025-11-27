@@ -4,6 +4,7 @@ Test suite for async runtime components
 """
 
 import asyncio
+import logging
 import os
 import signal
 import subprocess
@@ -17,6 +18,8 @@ from mcp_fuzzer.fuzz_engine.runtime import (
     ProcessConfig,
     WatchdogConfig,
     ProcessWatchdog,
+    ProcessRegistry,
+    SignalDispatcher,
 )
 
 
@@ -52,11 +55,6 @@ class TestProcessManager:
         config = WatchdogConfig(process_timeout=1.0, check_interval=0.1)
         manager = ProcessManager.from_config(config)
 
-        # Set up a mock for the watchdog
-        manager.watchdog = AsyncMock()
-        manager.watchdog.unregister_process = AsyncMock()
-        manager.lifecycle.watchdog = manager.watchdog
-
         # Mock the process
         mock_process = AsyncMock()
         mock_process.pid = 12345
@@ -81,7 +79,6 @@ class TestProcessManager:
                 assert result is True
                 # Verify signal was sent (graceful termination)
                 mock_signal.assert_called_once()
-                assert manager.watchdog.unregister_process.called
         finally:
             await manager.shutdown()
 
@@ -176,7 +173,9 @@ class TestProcessWatchdog:
             max_hang_time=2.0,
             auto_kill=True,
         )
-        watchdog = ProcessWatchdog(config)
+        registry = ProcessRegistry()
+        signal_handler = SignalDispatcher(registry, logging.getLogger(__name__))
+        watchdog = ProcessWatchdog(registry, signal_handler, config)
 
         try:
             await watchdog.start()
@@ -190,8 +189,8 @@ class TestProcessWatchdog:
             assert stats["watchdog_active"] is False
 
     @pytest.mark.asyncio
-    async def test_register_unregister_process(self):
-        """Test registering and unregistering a process."""
+    async def test_scan_once_with_registry_snapshot(self):
+        """Test scanning over registry snapshots."""
         config = WatchdogConfig(
             check_interval=0.1,
             process_timeout=1.0,
@@ -199,64 +198,76 @@ class TestProcessWatchdog:
             max_hang_time=2.0,
             auto_kill=True,
         )
-        watchdog = ProcessWatchdog(config)
+        registry = ProcessRegistry()
+        signal_handler = SignalDispatcher(registry, logging.getLogger(__name__))
+        watchdog = ProcessWatchdog(registry, signal_handler, config)
 
-        # Mock the process
         mock_process = AsyncMock()
         mock_process.pid = 12345
         mock_process.returncode = None
 
         try:
-            # Register a process
-            await watchdog.register_process(12345, mock_process, None, "test_process")
+            await registry.register(
+                12345,
+                mock_process,
+                ProcessConfig(command=["echo", "test"], name="test_process"),
+            )
+            await watchdog.update_activity(12345)
+            result = await watchdog.scan_once(await registry.snapshot())
+            assert result["hung"] == []
 
-            # Check if process is registered
-            proc_info = await watchdog.get_process_snapshot(12345)
-            assert proc_info is not None
-            assert proc_info["name"] == "test_process"
-
-            # Unregister the process
-            await watchdog.unregister_process(12345)
-            registered = await watchdog.list_registered_pids()
-            assert 12345 not in registered
+            mock_process.returncode = 0
+            result = await watchdog.scan_once(await registry.snapshot())
+            assert 12345 in result["removed"]
         finally:
             await watchdog.stop()
 
     @pytest.mark.asyncio
     async def test_update_activity(self):
-        """Test updating activity timestamp."""
+        """Test activity updates prevent hangs until timeout."""
         config = WatchdogConfig(
-            check_interval=0.1,
-            process_timeout=1.0,
-            extra_buffer=0.5,
-            max_hang_time=2.0,
+            check_interval=0.05,
+            process_timeout=0.01,
+            extra_buffer=0.0,
+            max_hang_time=0.05,
             auto_kill=True,
         )
-        watchdog = ProcessWatchdog(config)
 
-        # Mock the process
+        class FakeTermination:
+            def __init__(self):
+                self.calls: list[int] = []
+
+            async def terminate(
+                self, pid: int, process_info, hang_duration: float
+            ) -> bool:
+                self.calls.append(pid)
+                return True
+
+        registry = ProcessRegistry()
+        fake_terminator = FakeTermination()
+        watchdog = ProcessWatchdog(
+            registry,
+            signal_dispatcher=None,
+            config=config,
+            termination_strategy=fake_terminator,
+        )
+
         mock_process = AsyncMock()
         mock_process.pid = 12345
         mock_process.returncode = None
 
         try:
-            # Register a process
-            await watchdog.register_process(12345, mock_process, None, "test_process")
-
-            # Store original timestamp
-            proc_info = await watchdog.get_process_snapshot(12345)
-            assert proc_info is not None
-            original_timestamp = proc_info["last_activity"]
-
-            # Wait a small amount of time to ensure timestamp would be different
-            await asyncio.sleep(0.01)
-
-            # Update activity
+            await registry.register(
+                12345,
+                mock_process,
+                ProcessConfig(command=["sleep", "1"], name="test_process"),
+            )
             await watchdog.update_activity(12345)
+            await watchdog.scan_once(await registry.snapshot())
 
-            # Check that timestamp was updated
-            updated_info = await watchdog.get_process_snapshot(12345)
-            assert updated_info is not None
-            assert updated_info["last_activity"] > original_timestamp
+            # Advance time to trigger hang detection
+            await asyncio.sleep(0.05)
+            await watchdog.scan_once(await registry.snapshot())
+            assert fake_terminator.calls == [12345]
         finally:
             await watchdog.stop()

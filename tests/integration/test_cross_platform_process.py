@@ -17,7 +17,12 @@ import pytest
 
 from mcp_fuzzer.exceptions import ProcessStartError
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
-from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
+from mcp_fuzzer.fuzz_engine.runtime import (
+    ProcessWatchdog,
+    WatchdogConfig,
+    ProcessRegistry,
+    SignalDispatcher,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.runtime, pytest.mark.process]
 
@@ -32,10 +37,9 @@ class TestCrossPlatformProcessManagement:
         return ProcessManager.from_config(config)
 
     @pytest.fixture
-    def watchdog(self):
-        """Create a ProcessWatchdog instance for testing."""
-        config = WatchdogConfig(process_timeout=2.0, check_interval=0.1)
-        return ProcessWatchdog(config)
+    def watchdog(self, process_manager):
+        """Use the manager-owned watchdog."""
+        return process_manager.watchdog
 
     def test_platform_detection(self):
         """Test that the system can detect the current platform."""
@@ -69,16 +73,13 @@ class TestCrossPlatformProcessManagement:
             mock_create.return_value = mock_process
 
             with patch.object(process_manager.watchdog, "start", return_value=None):
-                    with patch.object(
-                        process_manager.watchdog, "register_process", return_value=None
-                    ):
-                        process = await process_manager.start_process(config)
+                process = await process_manager.start_process(config)
 
-                        assert process == mock_process
-                        # Use public API to verify process status
-                        status = await process_manager.get_process_status(process.pid)
-                        assert status is not None
-                        assert status["status"] == "running"
+                assert process == mock_process
+                # Use public API to verify process status
+                status = await process_manager.get_process_status(process.pid)
+                assert status is not None
+                assert status["status"] == "running"
 
     @pytest.mark.asyncio
     async def test_process_manager_signal_handling(self, process_manager):
@@ -105,53 +106,39 @@ class TestCrossPlatformProcessManagement:
 
             with patch("asyncio.create_subprocess_exec", return_value=mock_process):
                 with patch.object(process_manager.watchdog, "start", return_value=None):
-                    with patch.object(
-                        process_manager.watchdog, "register_process", return_value=None
-                    ):
-                        process = await process_manager.start_process(config)
+                    process = await process_manager.start_process(config)
 
-                        # Test signal handling
-                        with patch.object(
-                            process_manager, "send_timeout_signal"
-                        ) as mock_signal:
-                            await process_manager.stop_process(process.pid)
-                            # Signal may or may not be called depending on process state
+                    # Test signal handling
+                    with patch.object(
+                        process_manager, "send_timeout_signal"
+                    ) as mock_signal:
+                        await process_manager.stop_process(process.pid)
+                        # Signal may or may not be called depending on process state
 
     @pytest.mark.asyncio
     async def test_watchdog_cross_platform_monitoring(self, watchdog):
         """Test watchdog monitoring across platforms."""
-        # Mock process
         mock_process = MagicMock()
         mock_process.pid = 12345
         mock_process.returncode = None
         mock_process.poll.return_value = None  # Process still running
 
-        # Test watchdog start
         await watchdog.start()
-        # Use public API to verify watchdog is active
+        await watchdog.update_activity(mock_process.pid)
+        await watchdog.registry.register(
+            mock_process.pid,
+            mock_process,
+            ProcessConfig(command=["echo", "test"], name="test_process"),
+            started_at=time.time(),
+            status="running",
+        )
+
+        await asyncio.sleep(0.2)  # Allow watchdog loop to scan
         stats = await watchdog.get_stats()
         assert stats["watchdog_active"] is True
+        assert stats["total_processes"] == 1
 
-        # Test process registration
-        await watchdog.register_process(
-            mock_process.pid, mock_process, None, "test_process"
-        )
-        # Use public API to verify process is registered
-        assert await watchdog.is_process_registered(mock_process.pid)
-
-        # Test process monitoring through public API
-        # The watchdog automatically scans processes, we verify it's working
-        # by checking stats after a brief delay
-        await asyncio.sleep(0.2)  # Allow watchdog to scan
-        stats = await watchdog.get_stats()
-        assert stats is not None
-        # Verify process is still registered (or was cleaned up if finished)
-        is_registered = await watchdog.is_process_registered(mock_process.pid)
-        assert is_registered  # Process should still be registered
-
-        # Test watchdog stop
         await watchdog.stop()
-        # Use public API to verify watchdog is stopped
         stats = await watchdog.get_stats()
         assert stats["watchdog_active"] is False
 
@@ -173,21 +160,18 @@ class TestCrossPlatformProcessManagement:
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             with patch.object(process_manager.watchdog, "start", return_value=None):
+                process = await process_manager.start_process(config)
+
+                # Wait for timeout
+                await asyncio.sleep(1.5)
+
+                # Test timeout handling
                 with patch.object(
-                    process_manager.watchdog, "register_process", return_value=None
-                ):
-                    process = await process_manager.start_process(config)
-
-                    # Wait for timeout
-                    await asyncio.sleep(1.5)
-
-                    # Test timeout handling
-                    with patch.object(
-                        process_manager, "send_timeout_signal"
-                    ) as mock_timeout:
-                        # Simulate timeout detection
-                        await process_manager.send_timeout_signal(process.pid)
-                        mock_timeout.assert_called_once_with(process.pid)
+                    process_manager, "send_timeout_signal"
+                ) as mock_timeout:
+                    # Simulate timeout detection
+                    await process_manager.send_timeout_signal(process.pid)
+                    mock_timeout.assert_called_once_with(process.pid)
 
     def test_process_config_validation(self):
         """Test process config validation across platforms."""
@@ -296,27 +280,22 @@ class TestCrossPlatformProcessManagement:
 
         with patch("asyncio.create_subprocess_exec", side_effect=mock_processes):
             with patch.object(process_manager.watchdog, "start", return_value=None):
-                with patch.object(
-                    process_manager.watchdog, "register_process", return_value=None
-                ):
-                    # Start processes concurrently
-                    tasks = [
-                        process_manager.start_process(config) for config in configs
-                    ]
+                # Start processes concurrently
+                tasks = [process_manager.start_process(config) for config in configs]
 
-                    processes = await asyncio.gather(*tasks)
+                processes = await asyncio.gather(*tasks)
 
-                    # Verify all processes were started
-                    assert len(processes) == 3
-                    # Use public API to verify all processes are tracked
-                    all_processes = await process_manager.list_processes()
-                    assert len(all_processes) == 3
+                # Verify all processes were started
+                assert len(processes) == 3
+                # Use public API to verify all processes are tracked
+                all_processes = await process_manager.list_processes()
+                assert len(all_processes) == 3
 
-                    # Verify all processes are tracked and have correct status
-                    for process in processes:
-                        status = await process_manager.get_process_status(process.pid)
-                        assert status is not None
-                        assert status["status"] == "running"
+                # Verify all processes are tracked and have correct status
+                for process in processes:
+                    status = await process_manager.get_process_status(process.pid)
+                    assert status is not None
+                    assert status["status"] == "running"
 
     @pytest.mark.asyncio
     async def test_process_manager_resource_cleanup(self, process_manager):
@@ -385,23 +364,20 @@ class TestCrossPlatformProcessManagement:
         mock_process.poll.return_value = 0
 
         await watchdog.start()
-        await watchdog.register_process(
-            mock_process.pid, mock_process, None, "test_process"
+        await watchdog.registry.register(
+            mock_process.pid,
+            mock_process,
+            ProcessConfig(command=["echo", "done"], name="test_process"),
+            started_at=time.time(),
+            status="finished",
         )
 
         # Test process detection through public API
-        # The watchdog automatically scans processes, we verify cleanup by waiting
-        # and checking if the finished process is removed
         await asyncio.sleep(0.3)  # Allow watchdog to scan and clean up
-        
-        # Verify the process was removed from monitoring (or will be soon)
-        # Since the process has returncode set, it should be cleaned up
-        is_registered = await watchdog.is_process_registered(mock_process.pid)
-        # Process may or may not be cleaned up immediately, but should be eventually
-        # We verify the watchdog is working by checking stats
         stats = await watchdog.get_stats()
-        assert stats is not None
-
+        # Finished process should be cleaned up by watchdog
+        assert stats["total_processes"] == 0
+        assert stats["finished_processes"] == 0
         await watchdog.stop()
 
     def test_cross_platform_file_path_handling(self):

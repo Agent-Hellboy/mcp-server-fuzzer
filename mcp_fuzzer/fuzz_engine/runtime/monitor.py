@@ -78,7 +78,6 @@ class ProcessInspector:
             process = process_info["process"]
             if process.returncode is not None:
                 await self.registry.unregister(pid)
-                await self.watchdog.unregister_process(pid)
                 cleaned += 1
 
         if cleaned > 0:

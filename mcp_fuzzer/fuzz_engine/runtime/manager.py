@@ -77,13 +77,15 @@ class ProcessManager:
             else WatchdogConfig()
         )
         resolved_logger = logger or logging.getLogger(__name__)
-        watchdog = ProcessWatchdog(cfg)
         registry = ProcessRegistry()
         signal_handler = SignalDispatcher(
             registry,
             resolved_logger,
             strategies=signal_strategies,
             register_defaults=register_default_signal_strategies,
+        )
+        watchdog = ProcessWatchdog(
+            registry, signal_handler, cfg, logger=resolved_logger
         )
         lifecycle = ProcessLifecycle(
             watchdog, registry, signal_handler, resolved_logger
@@ -223,7 +225,8 @@ class ProcessManager:
         return results
 
     async def is_process_registered(self, pid: int) -> bool:
-        return await self.watchdog.is_process_registered(pid)
+        process = await self.registry.get_process(pid)
+        return process is not None
 
     async def register_existing_process(
         self,
@@ -232,7 +235,6 @@ class ProcessManager:
         name: str,
         activity_callback: Callable[[], float] | None = None,
     ) -> None:
-        await self.watchdog.register_process(pid, process, activity_callback, name)
         await self.registry.register(
             pid,
             process,
@@ -242,3 +244,4 @@ class ProcessManager:
                 activity_callback=activity_callback,
             ),
         )
+        await self.watchdog.update_activity(pid)

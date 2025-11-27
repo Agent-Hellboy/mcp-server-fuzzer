@@ -218,23 +218,19 @@ async def managed_process_example():
 
 ```python
 async def standalone_watchdog_example():
-    watchdog = ProcessWatchdog(WatchdogConfig())
+    registry = ProcessRegistry()
+    signals = SignalDispatcher(registry, logging.getLogger(__name__))
+    watchdog = ProcessWatchdog(registry, signals, WatchdogConfig())
 
-    # Start monitoring
     await watchdog.start()
-
-    # Register existing process
     process = await asyncio.create_subprocess_exec("python", "server.py")
-    await watchdog.register_process(
+    await registry.register(
         process.pid,
         process,
-        None,  # No activity callback
-        "server"
+        ProcessConfig(command=["python", "server.py"], name="server"),
     )
-
-    # Monitor for a while
+    await watchdog.update_activity(process.pid)
     await asyncio.sleep(30)
-
     await watchdog.stop()
 ```
 

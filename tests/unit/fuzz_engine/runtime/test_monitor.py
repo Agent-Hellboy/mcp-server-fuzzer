@@ -216,7 +216,6 @@ class TestProcessInspector:
         cleaned = await inspector.cleanup_finished_processes()
 
         assert cleaned == 1
-        mock_watchdog.unregister_process.assert_called_once_with(22222)
 
         # Running process should still be registered
         process_info = await registry.get_process(11111)
