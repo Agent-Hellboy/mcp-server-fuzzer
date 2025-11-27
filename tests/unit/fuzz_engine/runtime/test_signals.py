@@ -5,7 +5,7 @@ Unit tests for SignalDispatcher and signal strategies.
 
 import asyncio
 import logging
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -165,23 +165,155 @@ class TestSignalStrategies:
         """Create a logger instance."""
         return logging.getLogger(__name__)
 
+    @pytest.fixture
+    def mock_process(self):
+        """Create a mock process."""
+        process = MagicMock()
+        process.pid = 12345
+        process.returncode = None
+        return process
+
+    @pytest.fixture
+    def process_config(self):
+        """Create a ProcessConfig instance."""
+        from mcp_fuzzer.fuzz_engine.runtime.config import ProcessConfig
+
+        return ProcessConfig(command=["test"], name="test_process")
+
     @pytest.mark.asyncio
-    async def test_term_signal_strategy(self, registry, logger):
-        """Test TermSignalStrategy."""
+    async def test_term_signal_strategy_process_not_found(self, registry, logger):
+        """Test TermSignalStrategy with process not found."""
         strategy = TermSignalStrategy(registry, logger)
-        # Strategy requires a registered process to work
-        # This is a basic smoke test
-        assert strategy is not None
+        result = await strategy.send(99999)
+        assert result is False
 
     @pytest.mark.asyncio
-    async def test_kill_signal_strategy(self, registry, logger):
-        """Test KillSignalStrategy."""
+    async def test_term_signal_strategy_with_process(
+        self, registry, logger, mock_process, process_config
+    ):
+        """Test TermSignalStrategy with registered process."""
+        await registry.register(mock_process.pid, mock_process, process_config)
+
+        strategy = TermSignalStrategy(registry, logger)
+
+        with patch("os.name", "posix"):
+            with patch("os.getpgid", return_value=12345):
+                with patch("os.killpg") as mock_killpg:
+                    result = await strategy.send(mock_process.pid)
+                    assert result is True
+                    mock_killpg.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_term_signal_strategy_fallback_to_terminate(
+        self, registry, logger, mock_process, process_config
+    ):
+        """Test TermSignalStrategy falls back to terminate on OSError."""
+        await registry.register(mock_process.pid, mock_process, process_config)
+
+        strategy = TermSignalStrategy(registry, logger)
+
+        with patch("os.name", "posix"):
+            with patch("os.getpgid", side_effect=OSError()):
+                result = await strategy.send(mock_process.pid)
+                assert result is True
+                mock_process.terminate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_kill_signal_strategy_process_not_found(self, registry, logger):
+        """Test KillSignalStrategy with process not found."""
         strategy = KillSignalStrategy(registry, logger)
-        assert strategy is not None
+        result = await strategy.send(99999)
+        assert result is False
 
     @pytest.mark.asyncio
-    async def test_interrupt_signal_strategy(self, registry, logger):
-        """Test InterruptSignalStrategy."""
-        strategy = InterruptSignalStrategy(registry, logger)
-        assert strategy is not None
+    async def test_kill_signal_strategy_with_process(
+        self, registry, logger, mock_process, process_config
+    ):
+        """Test KillSignalStrategy with registered process."""
+        await registry.register(mock_process.pid, mock_process, process_config)
 
+        strategy = KillSignalStrategy(registry, logger)
+
+        with patch("os.name", "posix"):
+            with patch("os.getpgid", return_value=12345):
+                with patch("os.killpg") as mock_killpg:
+                    result = await strategy.send(mock_process.pid)
+                    assert result is True
+                    mock_killpg.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_kill_signal_strategy_fallback_to_kill(
+        self, registry, logger, mock_process, process_config
+    ):
+        """Test KillSignalStrategy falls back to kill on OSError."""
+        await registry.register(mock_process.pid, mock_process, process_config)
+
+        strategy = KillSignalStrategy(registry, logger)
+
+        with patch("os.name", "posix"):
+            with patch("os.getpgid", side_effect=OSError()):
+                result = await strategy.send(mock_process.pid)
+                assert result is True
+                mock_process.kill.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_interrupt_signal_strategy_process_not_found(self, registry, logger):
+        """Test InterruptSignalStrategy with process not found."""
+        strategy = InterruptSignalStrategy(registry, logger)
+        result = await strategy.send(99999)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_interrupt_signal_strategy_with_process(
+        self, registry, logger, mock_process, process_config
+    ):
+        """Test InterruptSignalStrategy with registered process."""
+        await registry.register(mock_process.pid, mock_process, process_config)
+
+        strategy = InterruptSignalStrategy(registry, logger)
+
+        with patch("os.name", "posix"):
+            with patch("os.getpgid", return_value=12345):
+                with patch("os.killpg") as mock_killpg:
+                    result = await strategy.send(mock_process.pid)
+                    assert result is True
+                    mock_killpg.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_interrupt_signal_strategy_fallback_to_kill(
+        self, registry, logger, mock_process, process_config
+    ):
+        """Test InterruptSignalStrategy falls back to kill on OSError."""
+        await registry.register(mock_process.pid, mock_process, process_config)
+
+        strategy = InterruptSignalStrategy(registry, logger)
+
+        with patch("os.name", "posix"):
+            with patch("os.getpgid", side_effect=OSError()):
+                with patch("os.kill") as mock_kill:
+                    result = await strategy.send(mock_process.pid)
+                    assert result is True
+                    mock_kill.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_signal_strategy_with_process_info(
+        self, registry, logger, mock_process, process_config
+    ):
+        """Test signal strategy with provided process_info."""
+        process_info = await registry.register(
+            mock_process.pid, mock_process, process_config
+        )
+        # Get the process info
+        process_info = await registry.get_process(mock_process.pid)
+
+        strategy = TermSignalStrategy(registry, logger)
+
+        with patch("os.name", "posix"):
+                with patch("os.getpgid", return_value=12345):
+                    with patch("os.killpg") as mock_killpg:
+                        # Pass process_info directly
+                        result = await strategy.send(
+                            mock_process.pid, process_info=process_info
+                        )
+                    assert result is True
+                    mock_killpg.assert_called_once()

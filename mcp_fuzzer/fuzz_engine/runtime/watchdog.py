@@ -253,22 +253,11 @@ class ProcessWatchdog:
         """Compat: return the shared stop event."""
         return self._store.get_stop_event()
 
-    async def _wait_for_process_exit(
-        self, process: Any, timeout: float | None = None
-    ) -> Any:
-        """Await process.wait() while tolerating synchronous/mocked implementations."""
-        wait_result = process.wait()
-        if inspect.isawaitable(wait_result):
-            if timeout is None:
-                return await wait_result
-            return await asyncio.wait_for(wait_result, timeout=timeout)
-        return wait_result
-
     async def wait_for_process_exit(
         self, process: Any, timeout: float | None = None
     ) -> Any:
         """Public wrapper for awaiting process exit."""
-        return await self._wait_for_process_exit(process, timeout)
+        return await wait_for_process_exit(process, timeout)
 
     async def start(self) -> None:
         """Start the watchdog monitoring."""
@@ -408,7 +397,7 @@ class ProcessWatchdog:
 
     async def _kill_process(self, pid: int, process: Any, name: str) -> None:
         """Kill a hanging process."""
-        await self._terminator.kill(pid, process, name, self._wait_for_process_exit)
+        await self._terminator.kill(pid, process, name, wait_for_process_exit)
 
     async def register_process(
         self,

@@ -68,20 +68,19 @@ class TestProcessWatchdog:
     @pytest.mark.asyncio
     async def test_stop_watchdog_active(self):
         """Test stopping an active watchdog."""
-        # Create a mock task
-        mock_task = MagicMock()
-        mock_task.done.return_value = False
-
-        # Set it directly to simulate an active task
-        self.watchdog._watchdog_task = mock_task
+        # Start the watchdog to create an active task
+        await self.watchdog.start()
+        
+        # Verify watchdog is active using public API
+        stats = await self.watchdog.get_stats()
+        assert stats["watchdog_active"] is True
 
         # Stop the watchdog
         await self.watchdog.stop()
 
-        # Verify the stop was handled correctly
-        assert self.watchdog._stop_event.is_set()
-        mock_task.cancel.assert_called_once()
-        assert self.watchdog._watchdog_task is None
+        # Verify the stop was handled correctly using public API
+        stats = await self.watchdog.get_stats()
+        assert stats["watchdog_active"] is False
 
     @pytest.mark.asyncio
     async def test_stop_watchdog_inactive(self):
@@ -131,8 +130,9 @@ class TestProcessWatchdog:
             # Unregister process
             await self.watchdog.unregister_process(12345)
 
-            # Assert process was unregistered
-            assert 12345 not in self.watchdog.processes
+            # Assert process was unregistered using public API
+            registered = await self.watchdog.list_registered_pids()
+            assert 12345 not in registered
 
     @pytest.mark.asyncio
     async def test_unregister_process_failure(self):
@@ -154,8 +154,10 @@ class TestProcessWatchdog:
         with patch.object(self.watchdog, "start", AsyncMock()):
             await self.watchdog.register_process(12345, mock_process, None, "test")
 
-            # Get initial activity time
-            initial_time = self.watchdog.processes[12345]["last_activity"]
+            # Get initial activity time using public API
+            initial_proc_info = await self.watchdog.get_process_snapshot(12345)
+            assert initial_proc_info is not None
+            initial_time = initial_proc_info["last_activity"]
 
             # Wait a bit
             await asyncio.sleep(0.1)

@@ -42,7 +42,7 @@ class TermSignalStrategy(_BaseSignalStrategy):
         self, pid: int, process_info: ProcessRecord | None = None
     ) -> bool:
         process, name = await self._resolve_process(pid, process_info)
-        if not process:
+        if process is None:
             return False
         if os.name != "nt":
             try:
@@ -63,7 +63,7 @@ class KillSignalStrategy(_BaseSignalStrategy):
         self, pid: int, process_info: ProcessRecord | None = None
     ) -> bool:
         process, name = await self._resolve_process(pid, process_info)
-        if not process:
+        if process is None:
             return False
         if os.name != "nt":
             try:
@@ -84,7 +84,7 @@ class InterruptSignalStrategy(_BaseSignalStrategy):
         self, pid: int, process_info: ProcessRecord | None = None
     ) -> bool:
         process, name = await self._resolve_process(pid, process_info)
-        if not process:
+        if process is None:
             return False
         if os.name != "nt":
             try:
