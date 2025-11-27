@@ -889,7 +889,7 @@ mcp_fuzzer/
 
 ## Schema Parser
 
-The schema parser module (`mcp_fuzzer.fuzz_engine.strategy.schema_parser`) provides comprehensive support for parsing JSON Schema definitions and generating appropriate test data based on schema specifications.
+The schema parser module (`mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser`) provides comprehensive support for parsing JSON Schema definitions and generating appropriate test data based on schema specifications.
 
 ### Features
 
@@ -905,7 +905,9 @@ The schema parser module (`mcp_fuzzer.fuzz_engine.strategy.schema_parser`) provi
 ### Example Usage
 
 ```python
-from mcp_fuzzer.fuzz_engine.strategy.schema_parser import make_fuzz_strategy_from_jsonschema
+from mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser import (
+    make_fuzz_strategy_from_jsonschema
+)
 
 # Define a JSON schema
 schema = {
@@ -927,7 +929,7 @@ aggressive_data = make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
 
 ## Invariants System
 
-The invariants module (`mcp_fuzzer.fuzz_engine.invariants`) provides property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
+The invariants module (`mcp_fuzzer.fuzz_engine.executor.invariants`) provides property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
 
 ### Features
 
@@ -940,7 +942,10 @@ The invariants module (`mcp_fuzzer.fuzz_engine.invariants`) provides property-ba
 ### Example Usage
 
 ```python
-from mcp_fuzzer.fuzz_engine.invariants import verify_response_invariants, InvariantViolation
+from mcp_fuzzer.fuzz_engine.executor.invariants import (
+    verify_response_invariants,
+    InvariantViolation
+)
 
 # Verify a response against invariants
 try:
@@ -964,9 +969,12 @@ except InvariantViolation as e:
 ### Fuzz Engine lifecycle (high level)
 
 - Client builds a `TransportProtocol` via the factory.
-- For tools: `ToolFuzzer` selects a strategy (phase), generates args, invokes `tools/call`.
-- For protocol: `ProtocolFuzzer` selects a message type, generates the JSON-RPC envelope, sends raw via the transport.
+- For tools: `ToolExecutor` orchestrates `ToolMutator` to generate args, integrates with safety system, and executes via transport.
+- For protocol: `ProtocolExecutor` orchestrates `ProtocolMutator` to generate JSON-RPC envelopes, validates invariants, and sends raw via transport.
+- All executors use `AsyncFuzzExecutor` for concurrent execution with bounded concurrency.
 - Runtime ensures external processes (when used) are supervised and terminated safely.
+
+See [Fuzz Engine Architecture](../architecture/fuzz-engine.md) for detailed information about the modular design.
 
 ## Runtime
 

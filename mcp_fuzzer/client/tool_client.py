@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 from ..auth import AuthManager
-from ..fuzz_engine.fuzzer import ToolFuzzer
+from ..fuzz_engine.mutators import ToolMutator
 from ..safety_system.safety import SafetyFilter, SafetyProvider
 from ..config import (
     DEFAULT_TOOL_RUNS,
@@ -46,11 +46,7 @@ class ToolClient:
             self.safety_system = None
         else:
             self.safety_system = safety_system or SafetyFilter()
-        self.tool_fuzzer = ToolFuzzer(
-            max_concurrency=max_concurrency,
-            safety_system=self.safety_system,
-            enable_safety=self.enable_safety,
-        )
+        self.tool_mutator = ToolMutator()
         self._logger = logging.getLogger(__name__)
 
     async def _get_tools_from_server(self) -> list[dict[str, Any]]:
@@ -133,13 +129,8 @@ class ToolClient:
 
         for i in range(runs):
             try:
-                # Generate fuzz arguments using the fuzzer
-                fuzz_list = await self.tool_fuzzer.fuzz_tool(tool, 1)
-                if not fuzz_list:
-                    self._logger.warning("Fuzzer returned no args for %s", tool_name)
-                    continue
-                fuzz_result = fuzz_list[0]  # Get single result
-                args = fuzz_result["args"]
+                # Generate fuzz arguments using the mutator
+                args = await self.tool_mutator.mutate(tool, phase="aggressive")
 
                 # Check safety before proceeding
                 if self.safety_system and self.safety_system.should_skip_tool_call(
@@ -390,18 +381,20 @@ class ToolClient:
         try:
             # Phase 1: Realistic fuzzing
             self._logger.info(f"Phase 1 (Realistic): {tool_name}")
-            realistic_results = await self.tool_fuzzer.fuzz_tool(
-                tool, runs_per_phase, phase="realistic"
-            )
+            realistic_results = []
+            for i in range(runs_per_phase):
+                args = await self.tool_mutator.mutate(tool, phase="realistic")
+                realistic_results.append({"args": args})
             realistic_processed = await self._process_fuzz_results(
                 tool_name, realistic_results
             )
 
             # Phase 2: Aggressive fuzzing
             self._logger.info(f"Phase 2 (Aggressive): {tool_name}")
-            aggressive_results = await self.tool_fuzzer.fuzz_tool(
-                tool, runs_per_phase, phase="aggressive"
-            )
+            aggressive_results = []
+            for i in range(runs_per_phase):
+                args = await self.tool_mutator.mutate(tool, phase="aggressive")
+                aggressive_results.append({"args": args})
             aggressive_processed = await self._process_fuzz_results(
                 tool_name, aggressive_results
             )
@@ -446,5 +439,6 @@ class ToolClient:
             return {}
 
     async def shutdown(self):
-        """Shutdown the tool fuzzer."""
-        await self.tool_fuzzer.shutdown()
+        """Shutdown the tool client."""
+        # No cleanup needed for mutator
+        pass

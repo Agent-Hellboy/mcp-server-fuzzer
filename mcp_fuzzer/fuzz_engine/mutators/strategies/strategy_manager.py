@@ -142,6 +142,10 @@ class ProtocolStrategies:
                 "CreateMessageRequest",
             ]
 
+        # Return empty batch if no protocol types provided
+        if not protocol_types:
+            return []
+
         if min_batch_size > max_batch_size:
             min_batch_size, max_batch_size = max_batch_size, min_batch_size
         batch_size = random.randint(min_batch_size, max_batch_size)

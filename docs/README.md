@@ -12,6 +12,7 @@ docs/
 │   └── examples.md          # Usage examples
 ├── architecture/            # System architecture documentation
 │   ├── architecture.md      # Overall architecture
+│   ├── fuzz-engine.md       # Fuzz engine design (Mutators, Executor, Reporter)
 │   ├── client-architecture.md
 │   └── async-executor.md
 ├── components/              # Core component documentation
@@ -39,6 +40,7 @@ docs/
 ## Quick Navigation
 
 - **New to the project?** Start with `getting-started/index.md`
+- **Understanding the fuzz engine?** See `architecture/fuzz-engine.md`
 - **Want to contribute?** Check `development/contributing.md`
 - **Need configuration help?** See `configuration/configuration.md`
 - **Looking for test results?** Check `testing/fuzz-results.md`

@@ -10,7 +10,7 @@ import random
 from typing import Any
 
 from hypothesis import strategies as st
-from ....config import DEFAULT_PROTOCOL_VERSION
+from .....config import DEFAULT_PROTOCOL_VERSION
 
 # Helper to keep URIs local-only
 SAFE_FILE_URIS = [

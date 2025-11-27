@@ -93,7 +93,10 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 
 - **Transport Layer** - Protocol-agnostic communication
 
-- **Fuzzing Engine** - Tool and protocol fuzzing logic
+- **Fuzzing Engine** - Modular design with Mutators, Executor, and FuzzerReporter
+  - **Mutators** - Data generation and mutation (Tool, Protocol, Batch)
+  - **Executor** - Orchestration and concurrency control
+  - **FuzzerReporter** - Result collection and metrics
 
 - **Strategy System** - Realistic and aggressive data generation
 
@@ -101,23 +104,39 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 
 - **Reporting System** - Centralized output management and comprehensive reporting
 
+- **Runtime Management** - Async process management and monitoring
+
 - **CLI Interface** - User-friendly command-line interface
 
-See [Architecture](architecture/architecture.md) for detailed diagrams and flow charts.
+See [Architecture Overview](architecture/architecture.md) and [Fuzz Engine Architecture](architecture/fuzz-engine.md) for detailed diagrams and documentation.
 
 ## Documentation
 
+### Getting Started
 - **[Getting Started](getting-started/getting-started.md)** - Installation and basic usage
-- **[Configuration](configuration/configuration.md)** - Configuration options and file formats (YAML/TOML)
-- **[Architecture](architecture/architecture.md)** - System design and components
-- **[Runtime Management](components/runtime-management.md)** - Process management, watchdog system, and async executor
-- **[Process Management Guide](components/process-management-guide.md)** - Process management best practices and troubleshooting
-- **[Client Architecture](architecture/client-architecture.md)** - Client package structure
 - **[Examples](getting-started/examples.md)** - Working examples and configurations
-- **[Reference](development/reference.md)** - Complete API reference
+
+### Architecture
+- **[Architecture Overview](architecture/architecture.md)** - System design and components
+- **[Fuzz Engine](architecture/fuzz-engine.md)** - Detailed fuzz engine design (Mutators, Executor, FuzzerReporter)
+- **[Client Architecture](architecture/client-architecture.md)** - Client package structure
+- **[Async Executor](architecture/async-executor.md)** - Async execution framework
+
+### Configuration
+- **[Configuration](configuration/configuration.md)** - Configuration options and file formats (YAML/TOML)
+- **[Network Policy](configuration/network-policy.md)** - Network access control
+
+### Components
+- **[Runtime Management](components/runtime-management.md)** - Process management, watchdog system
+- **[Process Management Guide](components/process-management-guide.md)** - Process management best practices
 - **[Safety Guide](components/safety.md)** - Safety system configuration
+
+### Development
+- **[Reference](development/reference.md)** - Complete API reference
 - **[Exceptions](development/exceptions.md)** - Error handling and exception hierarchy
 - **[Contributing](development/contributing.md)** - Development and contribution guide
+
+### Testing
 - **[Fuzz Results](testing/fuzz-results.md)** - Latest fuzzing test results
 
 ## Contributing

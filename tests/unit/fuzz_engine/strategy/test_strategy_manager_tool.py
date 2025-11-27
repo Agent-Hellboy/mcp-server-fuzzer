@@ -7,7 +7,7 @@ import unittest
 import pytest
 from unittest.mock import MagicMock
 
-from mcp_fuzzer.fuzz_engine.strategy import ToolStrategies
+from mcp_fuzzer.fuzz_engine.mutators.strategies import ToolStrategies
 
 
 class TestToolStrategies(unittest.TestCase):
