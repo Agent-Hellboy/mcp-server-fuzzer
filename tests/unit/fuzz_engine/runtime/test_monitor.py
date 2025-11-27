@@ -251,7 +251,9 @@ class TestProcessInspector:
         await registry.register(mock_process.pid, mock_process, process_config)
 
         result = await inspector.wait_for_completion(mock_process.pid)
-        assert result == 0
+        assert result is not None
+        assert result.exit_code == 0
+        assert result.timed_out is False
 
     @pytest.mark.asyncio
     async def test_wait_for_completion_timeout(
@@ -266,8 +268,9 @@ class TestProcessInspector:
             side_effect=asyncio.TimeoutError(),
         ):
             result = await inspector.wait_for_completion(mock_process.pid, timeout=1.0)
-            # Should return the returncode (None in this case)
-            assert result is None
+            assert result is not None
+            assert result.exit_code is None
+            assert result.timed_out is True
 
     @pytest.mark.asyncio
     async def test_wait_for_completion_success(
@@ -286,7 +289,9 @@ class TestProcessInspector:
             side_effect=mock_wait,
         ):
             result = await inspector.wait_for_completion(mock_process.pid)
-            assert result == 0
+            assert result is not None
+            assert result.exit_code == 0
+            assert result.timed_out is False
 
     @pytest.mark.asyncio
     async def test_wait_for_completion_no_timeout(
@@ -303,5 +308,9 @@ class TestProcessInspector:
             "mcp_fuzzer.fuzz_engine.runtime.monitor.wait_for_process_exit",
             side_effect=mock_wait,
         ):
-            result = await inspector.wait_for_completion(mock_process.pid, timeout=None)
-            assert result == 0
+            result = await inspector.wait_for_completion(
+                mock_process.pid, timeout=None
+            )
+            assert result is not None
+            assert result.exit_code == 0
+            assert result.timed_out is False

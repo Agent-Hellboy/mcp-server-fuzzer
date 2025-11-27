@@ -217,6 +217,21 @@ async def managed_process_example():
 #### Standalone Watchdog
 
 ```python
+import asyncio
+import logging
+
+from mcp_fuzzer.fuzz_engine.runtime import (
+    ProcessConfig,
+    ProcessRegistry,
+    ProcessWatchdog,
+    SignalDispatcher,
+    WatchdogConfig,
+)
+
+logger = logging.getLogger(__name__)
+```
+
+```python
 async def standalone_watchdog_example():
     registry = ProcessRegistry()
     signals = SignalDispatcher(registry, logging.getLogger(__name__))

@@ -11,16 +11,32 @@ import logging
 from typing import Any, Callable
 
 from ...exceptions import MCPError, ProcessSignalError
+from ...events import ProcessEventObserver
 from .config import ProcessConfig, WatchdogConfig
 from .lifecycle import ProcessLifecycle
-from .monitor import ProcessInspector
+from .monitor import ProcessCompletionResult, ProcessInspector
 from .registry import ProcessRegistry
 from .signals import ProcessSignalStrategy, SignalDispatcher
 from .watchdog import ProcessWatchdog
 
 
 class ProcessManager:
-    """Fully asynchronous process manager."""
+    """Fully asynchronous process manager.
+
+    Events:
+
+    * ``started`` – emitted by ``start_process`` with payload keys ``pid``,
+      ``process_name``, and ``command``.
+    * ``stopped`` – emitted by ``stop_process`` with payload keys ``pid``, ``force``,
+      and ``result``.
+    * ``stopped_all`` – emitted after ``stop_all_processes`` completes with
+      ``force`` in the payload.
+    * ``shutdown`` / ``shutdown_failed`` – emitted during shutdown; ``shutdown_failed``
+      includes ``{"error": str(exception)}``.
+    * ``signal`` / ``signal_all`` – emitted when signals are dispatched; payload
+      keys include the target PID, signal name, and results (``signal_all`` adds
+      ``"results"`` and ``"failures"``).
+    """
 
     def __init__(
         self,
@@ -32,13 +48,14 @@ class ProcessManager:
         logger: logging.Logger,
     ):
         """Initialize with fully constructed dependencies."""
-        self.watchdog = watchdog
+        self._watchdog = watchdog
         self.registry = registry
         self.signal_dispatcher = signal_handler
         self.lifecycle = lifecycle
         self.monitor = monitor
         self._logger = logger
-        self._observers: list[Callable[[str, dict[str, Any]], None]] = []
+        self._observers: list[ProcessEventObserver] = []
+        self._align_dependencies()
 
     @classmethod
     def with_dependencies(
@@ -57,10 +74,20 @@ class ProcessManager:
 
     def _align_dependencies(self) -> None:
         """Ensure lifecycle and monitor share the manager's watchdog."""
-        if getattr(self.lifecycle, "watchdog", None) is not self.watchdog:
-            self.lifecycle.watchdog = self.watchdog
-        if getattr(self.monitor, "watchdog", None) is not self.watchdog:
-            self.monitor.watchdog = self.watchdog
+        if getattr(self.lifecycle, "watchdog", None) is not self._watchdog:
+            self.lifecycle.watchdog = self._watchdog
+        if getattr(self.monitor, "watchdog", None) is not self._watchdog:
+            self.monitor.watchdog = self._watchdog
+
+    @property
+    def watchdog(self) -> ProcessWatchdog:
+        """The currently active process watchdog."""
+        return self._watchdog
+
+    @watchdog.setter
+    def watchdog(self, value: ProcessWatchdog) -> None:
+        self._watchdog = value
+        self._align_dependencies()
 
     @classmethod
     def from_config(
@@ -75,15 +102,17 @@ class ProcessManager:
         """Factory method for creating a ProcessManager with default components.
         
         Args:
-            config: Optional WatchdogConfig instance
-            config_dict: Optional dict to create WatchdogConfig from
-            logger: Optional logger instance
-            signal_strategies: Optional custom signal strategies to register.
-                If provided, these will be registered before defaults (unless
-                register_default_signal_strategies=False).
-            register_default_signal_strategies: If True (default), register built-in
-                strategies (timeout, force, interrupt). Set to False to use only
-                custom strategies.
+            config: Optional WatchdogConfig instance.
+            config_dict: Optional mapping used to create a WatchdogConfig; when both
+                ``config`` and ``config_dict`` are provided, ``config_dict`` takes
+                precedence.
+            logger: Optional logger instance.
+            signal_strategies: Optional custom signal strategies to register. If
+                provided, these are registered before defaults (unless
+                ``register_default_signal_strategies`` is ``False``).
+            register_default_signal_strategies: If ``True`` (default), register
+                built-in strategies (``timeout``, ``force``, ``interrupt``). Set
+                to ``False`` to use only custom strategies.
         """
         cfg = (
             WatchdogConfig.from_config(config_dict)
@@ -111,7 +140,7 @@ class ProcessManager:
             watchdog, registry, signal_handler, lifecycle, monitor, resolved_logger
         )
 
-    def add_observer(self, callback: Callable[[str, dict[str, Any]], None]) -> None:
+    def add_observer(self, callback: ProcessEventObserver) -> None:
         """Register an observer for process lifecycle events."""
         self._observers.append(callback)
 
@@ -130,6 +159,7 @@ class ProcessManager:
         self._logger.debug("[process_manager] %s: %s", event_name, payload)
 
     async def start_process(self, config: ProcessConfig) -> asyncio.subprocess.Process:
+        """Start a process and emit ``'started'`` event on success."""
         process = await self.lifecycle.start(config)
         self._emit_event(
             "started",
@@ -140,38 +170,53 @@ class ProcessManager:
         return process
 
     async def stop_process(self, pid: int, force: bool = False) -> bool:
+        """Request a graceful or forced stop and emit ``'stopped'``."""
         result = await self.lifecycle.stop(pid, force=force)
         self._emit_event("stopped", pid=pid, force=force, result=result)
         return result
 
     async def stop_all_processes(self, force: bool = False) -> None:
-        await self.lifecycle.stop_all(force=force) 
+        """Stop every managed process and emit ``'stopped_all'``."""
+        await self.lifecycle.stop_all(force=force)
         self._emit_event("stopped_all", force=force)
 
     async def get_process_status(self, pid: int) -> dict[str, Any] | None:
+        """Return runtime status for the specified process."""
         return await self.monitor.get_status(pid)
 
     async def list_processes(self) -> list[dict[str, Any]]:
+        """Return the current snapshot of managed processes."""
         return await self.monitor.list_processes()
 
-    async def wait(self, pid: int, timeout: float | None = None) -> int | None:
+    async def wait(
+        self,
+        pid: int,
+        timeout: float | None = None,
+    ) -> ProcessCompletionResult | None:
+        """Wait for a process to finish (or timeout) and return a completion record."""
         return await self.monitor.wait_for_completion(pid, timeout=timeout)
 
     async def update_activity(self, pid: int) -> None:
+        """Update the watchdog activity timestamp for a running process."""
         await self.watchdog.update_activity(pid)
 
     async def get_stats(self) -> dict[str, Any]:
+        """Return aggregated statistics from the monitor/watchdog."""
         return await self.monitor.get_statistics()
 
     async def cleanup_finished_processes(self) -> int:
+        """Clean up finished processes from the registry/watchdog."""
         return await self.monitor.cleanup_finished_processes()
 
     async def shutdown(self) -> None:
+        """Gracefully stop all processes, stop the watchdog,
+        and emit shutdown events."""
         self._logger.info("Shutting down process manager")
         try:
             await self.stop_all_processes()
-        except Exception:
+        except Exception as exc:
             self._logger.error("Failed to stop all processes", exc_info=True)
+            self._emit_event("shutdown_failed", error=str(exc))
             raise
         finally:
             await self.watchdog.stop()
@@ -180,6 +225,7 @@ class ProcessManager:
         self._emit_event("shutdown")
 
     async def send_timeout_signal(self, pid: int, signal_type: str = "timeout") -> bool:
+        """Send a signal to an individual process and emit ``'signal'``."""
         process_info = await self.registry.get_process(pid)
         if not process_info:
             return False
@@ -215,6 +261,11 @@ class ProcessManager:
     async def send_timeout_signal_to_all(
         self, signal_type: str = "timeout"
     ) -> dict[int, bool]:
+        """Send the provided signal to every registered process and emit events.
+
+        Raises:
+            ProcessSignalError: if any of the signal dispatches failed.
+        """
         results: dict[int, bool] = {}
         pids = await self.registry.list_pids()
         tasks = [self.send_timeout_signal(pid, signal_type) for pid in pids]
@@ -246,6 +297,7 @@ class ProcessManager:
         return results
 
     async def is_process_registered(self, pid: int) -> bool:
+        """Return ``True`` when the registry still tracks the PID."""
         process = await self.registry.get_process(pid)
         return process is not None
 
@@ -258,7 +310,11 @@ class ProcessManager:
         *,
         config: ProcessConfig | None = None,
     ) -> None:
-        """Register a process that was created outside the manager."""
+        """Register a process that was created outside the manager.
+
+        The watchdog is notified and a best-effort :class:`ProcessConfig` is
+        computed when none is provided.
+        """
         process_config = config or ProcessConfig(
             command=[name or str(pid)],
             name=name or "unknown",

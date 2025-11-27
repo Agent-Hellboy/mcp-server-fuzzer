@@ -23,7 +23,12 @@ class ProcessConfig:
 
     @classmethod
     def from_config(cls, config: dict[str, Any], **overrides) -> "ProcessConfig":
-        """Create ProcessConfig with values from configuration dictionary."""
+        """Create a ProcessConfig using the provided config.
+
+        Only ``process_timeout`` and ``auto_kill`` are read from ``config``;
+        every other argument (especially the required ``command``) must be
+        supplied via ``overrides`` to avoid ``TypeError``.
+        """
         return cls(
             timeout=config.get("process_timeout", 30.0),
             auto_kill=config.get("auto_kill", True),
@@ -114,7 +119,12 @@ class ProcessConfigBuilder:
 def merge_env(
     base: dict[str, str] | None, overrides: dict[str, str] | None
 ) -> dict[str, str]:
-    """Merge environment dictionaries, defaulting to OS env."""
+    """Merge environment dictionaries, defaulting to OS env.
+
+    When both ``base`` and ``overrides`` are ``None``, the host ``os.environ``
+    is copied wholesale into the result, so callers should sanitize the payload
+    if they wish to avoid leaking system variables into subprocesses.
+    """
     merged = base.copy() if base is not None else os.environ.copy()
     if overrides:
         merged.update(overrides)

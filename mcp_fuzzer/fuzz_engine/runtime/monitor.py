@@ -3,12 +3,24 @@
 Process monitoring utilities for MCP Fuzzer runtime.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from .registry import ProcessRegistry
 from .watchdog import ProcessWatchdog, wait_for_process_exit
+
+
+@dataclass
+class ProcessCompletionResult:
+    """Return value for ``wait_for_completion`` carrying exit verdicts."""
+
+    pid: int
+    exit_code: int | None
+    timed_out: bool
 
 
 class ProcessInspector:
@@ -92,17 +104,18 @@ class ProcessInspector:
 
     async def wait_for_completion(
         self, pid: int, timeout: float | None = None
-    ) -> int | None:
-        """Wait for process to complete.
-        
+    ) -> ProcessCompletionResult | None:
+        """Wait for a process to finish, optionally timing out.
+
         Args:
-            pid: Process ID to wait for
-            timeout: Optional timeout in seconds. If None, waits indefinitely.
-        
+            pid: Process ID to wait for.
+            timeout: Optional timeout in seconds. ``None`` waits indefinitely.
+
         Returns:
-            Exit code (int) if process completed, None if:
-            - Process not found in registry, or
-            - Timeout occurred and process is still running (returncode is None)
+            ``ProcessCompletionResult`` when the process exists, otherwise ``None``.
+            The ``timed_out`` flag differentiates timeouts from normal completion
+            and the caller can inspect ``exit_code`` (which may be ``None`` for a
+            timed-out but still-running process).
         """
         process_info = await self.registry.get_process(pid)
         if not process_info:
@@ -114,6 +127,10 @@ class ProcessInspector:
                 await wait_for_process_exit(process)
             else:
                 await wait_for_process_exit(process, timeout=timeout)
-            return process.returncode
+            return ProcessCompletionResult(
+                pid=pid, exit_code=process.returncode, timed_out=False
+            )
         except asyncio.TimeoutError:
-            return process.returncode
+            return ProcessCompletionResult(
+                pid=pid, exit_code=process.returncode, timed_out=True
+            )

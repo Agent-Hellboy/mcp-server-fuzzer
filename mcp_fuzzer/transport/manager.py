@@ -4,12 +4,20 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from ..events import ProcessEventObserver
 from ..exceptions import TransportError
 
 
 @dataclass
 class TransportProcessState:
-    """Lightweight state container for a transport-managed process."""
+    """Lightweight state container for a transport-managed process.
+
+    ``restart_count`` tracks the lifetime number of restarts (used for reporting),
+    while :class:`TransportManager._restart_attempts` counts consecutive restart
+    trials within the current backoff window.
+    """
+
+    restart_count: int = 0
 
     pid: int | None = None
     started_at: float | None = None
@@ -29,6 +37,7 @@ class TransportProcessState:
         self.exited_at = time.time()
 
     def record_restart(self) -> None:
+        """Increment the total number of restarts for diagnostics."""
         self.restart_count += 1
 
     def record_signal(self, signal_type: str) -> None:
@@ -45,8 +54,13 @@ class TransportProcessState:
 
 
 class TransportManager:
-    """Small helper to unify transport process state, backoff,
-    and logging hooks."""
+    """Helper that tracks transport process state, backoff, and observer events.
+
+    ``_restart_attempts`` counts the consecutive restart trials used for the
+    exponential backoff (while ``state.restart_count`` records the lifetime
+    restart total). Observers are notified of ``oversized_output`` events so
+    telemetry layers can react to abnormal stdio results.
+    """
 
     def __init__(
         self,
@@ -57,7 +71,7 @@ class TransportManager:
         logger: logging.Logger | None = None,
     ) -> None:
         self.state = TransportProcessState()
-        self._observers: list[Callable[[str, dict[str, Any]], None]] = []
+        self._observers: list[ProcessEventObserver] = []
         self._max_read_bytes = max_read_bytes
         self._backoff_base = backoff_base
         self._backoff_cap = backoff_cap
@@ -77,11 +91,16 @@ class TransportManager:
             try:
                 cb(name, data)
             except Exception:
-                self._logger.debug("Observer callback failed", exc_info=True)
+                self._logger.warning(
+                    "Transport observer %r failed for event %s",
+                    cb,
+                    name,
+                    exc_info=True,
+                )
         self._logger.debug("[transport] %s: %s", name, payload)
 
     async def apply_backoff(self) -> float:
-        """Apply exponential backoff between restarts."""
+        """Apply exponential backoff between restart attempts."""
         self._restart_attempts += 1
         delay = min(
             self._backoff_base * (2 ** (self._restart_attempts - 1)), self._backoff_cap
@@ -91,6 +110,7 @@ class TransportManager:
         return delay
 
     def reset_backoff(self) -> None:
+        """Reset the consecutive restart counter used for backoff delays."""
         self._restart_attempts = 0
 
     async def read_with_cap(

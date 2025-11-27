@@ -109,7 +109,7 @@ class TestSignalDispatcher:
         assert len(strategies) == 3  # No change
 
     @pytest.mark.asyncio
-    async def test_send_with_registered_strategy(self, dispatcher, registry):
+    async def test_send_with_registered_strategy(self, dispatcher, registry, logger):
         """Test sending a signal with a registered strategy."""
         # Register a mock process
         mock_process = MagicMock()
@@ -122,11 +122,15 @@ class TestSignalDispatcher:
             mock_process.pid, mock_process, ProcessConfig(command=["test"], name="test")
         )
 
-        # Mock the strategy's send method
-        original_strategy = dispatcher._signal_map["timeout"]
         mock_strategy = MagicMock(spec=ProcessSignalStrategy)
         mock_strategy.send = AsyncMock(return_value=True)
-        dispatcher._signal_map["timeout"] = mock_strategy
+
+        dispatcher = SignalDispatcher(
+            registry,
+            logger,
+            strategies={"timeout": mock_strategy},
+            register_defaults=False,
+        )
 
         result = await dispatcher.send("timeout", mock_process.pid)
         assert result is True

@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 

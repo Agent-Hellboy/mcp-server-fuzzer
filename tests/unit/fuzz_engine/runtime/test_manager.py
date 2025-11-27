@@ -389,10 +389,12 @@ class TestProcessManager:
                     process = await self.manager.start_process(process_config)
 
                     # Wait for process
-                    returncode = await self.manager.wait(process.pid)
+                    result = await self.manager.wait(process.pid)
 
-                    # Verify return code
-                    assert returncode == 0
+                    # Verify completion result
+                    assert result is not None
+                    assert result.exit_code == 0
+                    assert result.timed_out is False
                     mock_process.wait.assert_called_once()
 
     @pytest.mark.asyncio
@@ -417,12 +419,14 @@ class TestProcessManager:
                     process = await self.manager.start_process(process_config)
 
                     # Wait for process with timeout
-                    returncode = await self.manager.wait(
+                    completion = await self.manager.wait(
                         process.pid, timeout=1.0
                     )
 
                     # Verify timeout handling
-                    assert returncode is None
+                    assert completion is not None
+                    assert completion.exit_code is None
+                    assert completion.timed_out is True
                     mock_process.wait.assert_called_once()
 
     @pytest.mark.asyncio
@@ -842,6 +846,7 @@ class TestProcessManager:
             ProcessInspector,
             ProcessRegistry,
             SignalDispatcher,
+            WatchdogConfig,
         )
         import logging
 
@@ -867,6 +872,35 @@ class TestProcessManager:
         # Verify wiring
         assert manager.lifecycle.watchdog is manager.watchdog
         assert manager.monitor.watchdog is manager.watchdog
+
+    def test_watchdog_assignment_keeps_components_in_sync(self):
+        """Reassigning ``watchdog`` keeps lifecycle/monitor references aligned."""
+        from mcp_fuzzer.fuzz_engine.runtime import (
+            ProcessLifecycle,
+            ProcessInspector,
+            ProcessRegistry,
+            SignalDispatcher,
+            WatchdogConfig,
+        )
+        import logging
+
+        logger = logging.getLogger(__name__)
+        registry = ProcessRegistry()
+        signal_handler = SignalDispatcher(registry, logger)
+        watchdog = ProcessWatchdog(registry, signal_handler, WatchdogConfig())
+        lifecycle = ProcessLifecycle(watchdog, registry, signal_handler, logger)
+        monitor = ProcessInspector(registry, watchdog, logger)
+
+        manager = ProcessManager.with_dependencies(
+            watchdog, registry, signal_handler, lifecycle, monitor, logger
+        )
+
+        new_watchdog = ProcessWatchdog(registry, signal_handler, WatchdogConfig())
+        manager.watchdog = new_watchdog
+
+        assert manager.watchdog is new_watchdog
+        assert manager.lifecycle.watchdog is new_watchdog
+        assert manager.monitor.watchdog is new_watchdog
 
     @pytest.mark.asyncio
     async def test_shutdown_with_exception(self):
