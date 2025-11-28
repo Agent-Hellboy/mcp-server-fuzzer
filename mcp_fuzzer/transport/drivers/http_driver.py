@@ -7,38 +7,48 @@ from typing import Any, AsyncIterator
 
 import httpx
 
-from .base import TransportProtocol
-from .mixins import NetworkTransportMixin, ResponseParsingMixin
-from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
-from ..config import (
+from ..interfaces.driver import TransportDriver
+from ..interfaces.behaviors import (
+    HttpClientBehavior,
+    ResponseParserBehavior,
+    LifecycleBehavior,
+)
+from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+from ...config import (
     JSON_CONTENT_TYPE,
     DEFAULT_HTTP_ACCEPT,
 )
-from ..safety_system.policy import (
+from ...safety_system.policy import (
     resolve_redirect_safely,
 )
 
-class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMixin):
+
+class HttpDriver(
+    TransportDriver,
+    HttpClientBehavior,
+    ResponseParserBehavior,
+    LifecycleBehavior,
+):
     """
     HTTP transport implementation with reduced code duplication.
 
     This implementation uses mixins to provide shared functionality,
     addressing the code duplication issues identified in GitHub issue #41.
 
-    Mixin Composition:
-    - TransportProtocol (ABC): Defines the core interface (send_request, send_raw, etc.)
-    - NetworkTransportMixin: Provides shared network functionality including:
+    Behavior Composition:
+    - TransportDriver (ABC): Defines the core interface (send_request, send_raw, etc.)
+    - HttpClientBehavior: Provides shared network functionality including:
       - Connection management and HTTP client creation
       - Header preparation and validation
       - Timeout handling and activity tracking
       - Network request validation and error handling
-    - ResponseParsingMixin: Handles HTTP-specific response processing:
+    - ResponseParserBehavior: Handles HTTP-specific response processing:
       - JSON-RPC payload creation and validation
       - HTTP response error handling (status codes, timeouts)
       - Redirect resolution with safety policies
       - Response parsing and serialization checks
 
-    This composition allows HTTPTransport to focus on HTTP-specific logic while
+    This composition allows HttpDriver to focus on HTTP-specific logic while
     reusing common network and response handling code. Future HTTP transports
     (e.g., WebSocket over HTTP) can inherit from the same mixins to stay consistent.
     """

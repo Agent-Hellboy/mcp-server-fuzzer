@@ -7,7 +7,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from mcp_fuzzer.client.protocol_client import ProtocolClient
-from mcp_fuzzer.transport.streamable_http import StreamableHTTPTransport
+from mcp_fuzzer.transport.drivers.stream_http_driver import StreamHttpDriver
 
 pytestmark = [pytest.mark.integration, pytest.mark.client, pytest.mark.transport]
 
@@ -16,7 +16,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.client, pytest.mark.transport
 def client_setup():
     """Fixture for client and transport setup."""
     base_url = "http://localhost:8000"
-    transport = StreamableHTTPTransport(base_url)
+    transport = StreamHttpDriver(base_url)
     # Skip initialize handshake in tests to avoid mocking extra POSTs
     try:
         transport._initialized = True
@@ -31,6 +31,6 @@ async def test_client_transport_integration(client_setup):
     """Test client and transport integration."""
     # This is a basic test to verify the client and transport can be instantiated
     assert isinstance(client_setup["client"], ProtocolClient)
-    assert isinstance(client_setup["transport"], StreamableHTTPTransport)
+    assert isinstance(client_setup["transport"], StreamHttpDriver)
     # Verify the transport was created with the correct URL
     assert client_setup["transport"].url == "http://localhost:8000"
