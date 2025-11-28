@@ -13,11 +13,12 @@ import yaml
 
 from .manager import config
 from ..exceptions import ConfigFileError, MCPError
-from ..transport.custom import register_custom_transport
-from ..transport.base import TransportProtocol
+from ..transport.catalog.custom_catalog import register_custom_driver
+from ..transport.interfaces import TransportDriver
 import importlib
 
 logger = logging.getLogger(__name__)
+
 
 def find_config_file(
     config_path: str | None = None,
@@ -61,6 +62,7 @@ def find_config_file(
 
     return None
 
+
 def load_config_file(file_path: str) -> dict[str, Any]:
     """Load configuration from a YAML file.
 
@@ -99,6 +101,7 @@ def load_config_file(file_path: str) -> dict[str, Any]:
             f"Unexpected error reading configuration file {file_path}: {str(e)}"
         )
 
+
 def apply_config_file(
     config_path: str | None = None,
     search_paths: list[str] | None = None,
@@ -129,6 +132,7 @@ def apply_config_file(
         return False
     config.update(config_data)
     return True
+
 
 def get_config_schema() -> dict[str, Any]:
     """Get the configuration schema.
@@ -240,7 +244,7 @@ def get_config_schema() -> dict[str, Any]:
                             "factory": {
                                 "type": "string",
                                 "description": "Dotted path to factory function "
-                                "(e.g., pkg.mod.create_transport)",
+                                "(e.g., pkg.mod.build_driver)",
                             },
                             "config_schema": {
                                 "type": "object",
@@ -322,6 +326,7 @@ def get_config_schema() -> dict[str, Any]:
         },
     }
 
+
 def load_custom_transports(config_data: dict[str, Any]) -> None:
     """Load and register custom transports from configuration.
 
@@ -340,9 +345,9 @@ def load_custom_transports(config_data: dict[str, Any]) -> None:
             transport_class = getattr(module, class_name)
             if not isinstance(transport_class, type):
                 raise ConfigFileError(f"{module_path}.{class_name} is not a class")
-            if not issubclass(transport_class, TransportProtocol):
+            if not issubclass(transport_class, TransportDriver):
                 raise ConfigFileError(
-                    f"{module_path}.{class_name} must subclass TransportProtocol"
+                    f"{module_path}.{class_name} must subclass TransportDriver"
                 )
 
             # Register the transport
@@ -362,7 +367,7 @@ def load_custom_transports(config_data: dict[str, Any]) -> None:
                 if not callable(factory_fn):
                     raise ConfigFileError(f"Factory '{factory_path}' is not callable")
 
-            register_custom_transport(
+            register_custom_driver(
                 name=transport_name,
                 transport_class=transport_class,
                 description=description,

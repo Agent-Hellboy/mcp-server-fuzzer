@@ -3,8 +3,8 @@ import types
 from typing import Any, Dict, List, Optional, Union
 
 import pytest
-from mcp_fuzzer.transport.streamable_http import (
-    StreamableHTTPTransport,
+from mcp_fuzzer.transport.drivers.stream_http_driver import (
+    StreamHttpDriver,
     CONTENT_TYPE,
 )
 from mcp_fuzzer.config import DEFAULT_PROTOCOL_VERSION
@@ -109,7 +109,7 @@ async def test_streamable_http_json_initialize(monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
 
-    t = StreamableHTTPTransport("http://test/mcp", timeout=1)
+    t = StreamHttpDriver("http://test/mcp", timeout=1)
 
     # Act: initialize
     result = await t.send_request("initialize", {"params": {}})
@@ -146,7 +146,7 @@ async def test_streamable_http_sse_response(monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
 
-    t = StreamableHTTPTransport("http://test/mcp", timeout=1)
+    t = StreamHttpDriver("http://test/mcp", timeout=1)
 
     # Act
     result = await t.send_request("initialize", {})
@@ -165,7 +165,7 @@ async def test_streamable_http_wraps_http_status_error(monkeypatch):
     fake = _FakeAsyncClient([bad_response])
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
 
-    transport = StreamableHTTPTransport("http://test/mcp", timeout=1)
+    transport = StreamHttpDriver("http://test/mcp", timeout=1)
     transport._initialized = True
 
     with pytest.raises(TransportError) as excinfo:
@@ -186,7 +186,7 @@ async def test_streamable_http_wraps_connect_errors(monkeypatch):
     fake = _FakeAsyncClient([connect_exc])
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
 
-    transport = StreamableHTTPTransport("http://test/mcp", timeout=1)
+    transport = StreamHttpDriver("http://test/mcp", timeout=1)
     transport._initialized = True
 
     with pytest.raises(TransportError) as excinfo:

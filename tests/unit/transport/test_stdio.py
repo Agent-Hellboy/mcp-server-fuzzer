@@ -7,22 +7,22 @@ import signal as _signal
 import pytest
 
 # Import the class to test
-from mcp_fuzzer.transport.stdio import StdioTransport
+from mcp_fuzzer.transport.drivers.stdio_driver import StdioDriver
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from mcp_fuzzer.exceptions import MCPError, ServerError, TransportError
 
 
-class TestStdioTransport:
+class TestStdioDriver:
     def setup_method(self):
         """Set up test fixtures."""
         self.command = "test_command"
         self.timeout = 10.0
-        self.transport = StdioTransport(self.command, self.timeout)
+        self.transport = StdioDriver(self.command, self.timeout)
         self.transport.process_manager = AsyncMock(spec=ProcessManager)
         self.transport._lock = AsyncMock(spec=asyncio.Lock)
 
     def test_init(self):
-        """Test initialization of StdioTransport."""
+        """Test initialization of StdioDriver."""
         assert self.transport.command == self.command
         assert self.transport.timeout == self.timeout
         assert self.transport.process is None
@@ -35,8 +35,8 @@ class TestStdioTransport:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
-    @patch("mcp_fuzzer.transport.stdio.shlex.split")
+    @patch("mcp_fuzzer.transport.drivers.stdio_driver.asyncio.create_subprocess_exec")
+    @patch("mcp_fuzzer.transport.drivers.stdio_driver.shlex.split")
     async def test_ensure_connection_new_process(
         self, mock_shlex_split, mock_create_subprocess
     ):
@@ -68,7 +68,7 @@ class TestStdioTransport:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
+    @patch("mcp_fuzzer.transport.drivers.stdio_driver.asyncio.create_subprocess_exec")
     async def test_ensure_connection_existing_process_alive(
         self, mock_create_subprocess
     ):
@@ -85,7 +85,7 @@ class TestStdioTransport:
         assert self.transport._initialized is True
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.transport.stdio.asyncio.create_subprocess_exec")
+    @patch("mcp_fuzzer.transport.drivers.stdio_driver.asyncio.create_subprocess_exec")
     async def test_ensure_connection_existing_process_dead(
         self, mock_create_subprocess
     ):
@@ -210,7 +210,7 @@ class TestStdioTransport:
         with patch.object(
             self.transport, "_send_message", new=AsyncMock()
         ) as mock_send:
-            with patch("mcp_fuzzer.transport.stdio.uuid") as mock_uuid:
+            with patch("mcp_fuzzer.transport.drivers.stdio_driver.uuid") as mock_uuid:
                 # Force the request_id to a known value
                 mock_uuid.uuid4.return_value = "test_id"
 
@@ -237,7 +237,7 @@ class TestStdioTransport:
         with patch.object(
             self.transport, "_send_message", new=AsyncMock()
         ) as mock_send:
-            with patch("mcp_fuzzer.transport.stdio.uuid") as mock_uuid:
+            with patch("mcp_fuzzer.transport.drivers.stdio_driver.uuid") as mock_uuid:
                 # Force the request_id to a known value
                 mock_uuid.uuid4.return_value = "test_id"
 
@@ -257,13 +257,16 @@ class TestStdioTransport:
 
                     mock_send.assert_awaited_once()
                     mock_receive.assert_awaited_once()
+
     @pytest.mark.asyncio
     async def test_send_request_no_response(self):
         """send_request should raise TransportError when no response arrives."""
-        with patch.object(
-            self.transport, "_send_message", new=AsyncMock()
-        ), patch("mcp_fuzzer.transport.stdio.uuid") as mock_uuid, patch.object(
-            self.transport, "_receive_message", new=AsyncMock(return_value=None)
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()),
+            patch("mcp_fuzzer.transport.drivers.stdio_driver.uuid") as mock_uuid,
+            patch.object(
+                self.transport, "_receive_message", new=AsyncMock(return_value=None)
+            ),
         ):
             mock_uuid.uuid4.return_value = "test_id"
             with pytest.raises(TransportError):
@@ -389,8 +392,10 @@ class TestStdioTransport:
         self.transport.process = mock_process
         self.transport.process_manager.is_process_registered.return_value = False
 
-        with patch("mcp_fuzzer.transport.stdio.logging.info") as mock_log:
-            with patch("mcp_fuzzer.transport.stdio.os") as mock_os:
+        with patch(
+            "mcp_fuzzer.transport.drivers.stdio_driver.logging.info"
+        ) as mock_log:
+            with patch("mcp_fuzzer.transport.drivers.stdio_driver.os") as mock_os:
                 # Mock getpgid to avoid OS errors
                 mock_os.name = "posix"
                 mock_os.getpgid.return_value = 123
@@ -410,8 +415,10 @@ class TestStdioTransport:
         self.transport.process = mock_process
         self.transport.process_manager.is_process_registered.return_value = False
 
-        with patch("mcp_fuzzer.transport.stdio.logging.info") as mock_log:
-            with patch("mcp_fuzzer.transport.stdio.os") as mock_os:
+        with patch(
+            "mcp_fuzzer.transport.drivers.stdio_driver.logging.info"
+        ) as mock_log:
+            with patch("mcp_fuzzer.transport.drivers.stdio_driver.os") as mock_os:
                 # Mock kill to avoid OS errors
                 mock_os.name = "posix"
 
@@ -430,8 +437,10 @@ class TestStdioTransport:
         self.transport.process = mock_process
         self.transport.process_manager.is_process_registered.return_value = False
 
-        with patch("mcp_fuzzer.transport.stdio.logging.info") as mock_log:
-            with patch("mcp_fuzzer.transport.stdio.os") as mock_os:
+        with patch(
+            "mcp_fuzzer.transport.drivers.stdio_driver.logging.info"
+        ) as mock_log:
+            with patch("mcp_fuzzer.transport.drivers.stdio_driver.os") as mock_os:
                 # Mock kill to avoid OS errors
                 mock_os.name = "posix"
 
@@ -458,13 +467,15 @@ class TestStdioTransport:
         self.transport.process = None
         result = await self.transport.send_timeout_signal("timeout")
         assert result is False
+
     @pytest.mark.asyncio
     async def test_send_raw_no_response(self):
         """send_raw should raise TransportError when no message arrives."""
-        with patch.object(
-            self.transport, "_send_message", new=AsyncMock()
-        ), patch.object(
-            self.transport, "_receive_message", new=AsyncMock(return_value=None)
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()),
+            patch.object(
+                self.transport, "_receive_message", new=AsyncMock(return_value=None)
+            ),
         ):
             with pytest.raises(TransportError):
                 await self.transport.send_raw({"raw": "data"})

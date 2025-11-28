@@ -7,6 +7,7 @@ classes, addressing the code duplication issues identified in GitHub issue #41.
 
 import json
 import logging
+import time
 from abc import ABC
 from typing import (
     Any,
@@ -22,7 +23,9 @@ try:
 except ImportError:  # pragma: no cover
     from typing_extensions import NotRequired
 
-from ..safety_system.policy import is_host_allowed, sanitize_headers
+from ...safety_system.policy import is_host_allowed, sanitize_headers
+from .states import DriverState
+
 
 class JSONRPCRequest(TypedDict):
     """Type definition for JSON-RPC request structure."""
@@ -32,12 +35,14 @@ class JSONRPCRequest(TypedDict):
     params: NotRequired[list[Any] | dict[str, Any]]
     id: str | int | None
 
+
 class JSONRPCNotification(TypedDict):
     """Type definition for JSON-RPC notification structure."""
 
     jsonrpc: Literal["2.0"]
     method: str
     params: NotRequired[list[Any] | dict[str, Any]]
+
 
 class JSONRPCErrorObject(TypedDict):
     """Type definition for JSON-RPC error object."""
@@ -46,12 +51,14 @@ class JSONRPCErrorObject(TypedDict):
     message: str
     data: NotRequired[Any]
 
+
 class JSONRPCSuccessResponse(TypedDict):
     """Type definition for JSON-RPC success response."""
 
     jsonrpc: Literal["2.0"]
     result: Any
     id: str | int | None
+
 
 class JSONRPCErrorResponse(TypedDict):
     """Type definition for JSON-RPC error response."""
@@ -60,22 +67,27 @@ class JSONRPCErrorResponse(TypedDict):
     error: JSONRPCErrorObject
     id: str | int | None
 
+
 JSONRPCResponse = JSONRPCSuccessResponse | JSONRPCErrorResponse
 
+
 class TransportError(Exception):
-    """Base exception for transport-related errors."""
+    """Base exception for transport driver errors."""
 
     pass
+
 
 class NetworkError(TransportError):
     """Exception raised for network-related errors."""
 
     pass
 
+
 class PayloadValidationError(TransportError):
     """Exception raised for invalid payload validation."""
 
     pass
+
 
 class ResponseParser(Protocol):
     """Protocol for response parsing functionality."""
@@ -88,8 +100,9 @@ class ResponseParser(Protocol):
         """Parse SSE response and extract JSON data."""
         ...
 
-class BaseTransportMixin(ABC):
-    """Base mixin providing common transport functionality."""
+
+class DriverBaseBehavior(ABC):
+    """Base behavior providing common transport functionality."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -179,27 +192,36 @@ class BaseTransportMixin(ABC):
                 raise PayloadValidationError("'method' must be a non-empty string")
             if "params" in payload and not isinstance(payload["params"], (list, dict)):
                 raise PayloadValidationError("'params' must be array or object")
-            if "id" in payload and not isinstance(payload["id"], (str, int)) \
-                and payload["id"] is not None:
+            if (
+                "id" in payload
+                and not isinstance(payload["id"], (str, int))
+                and payload["id"] is not None
+            ):
                 raise PayloadValidationError("'id' must be string, number, or null")
             if strict and "id" not in payload:
                 # In strict mode treat request-like payloads without id as invalid
                 raise PayloadValidationError("Missing required field: id")
         else:
             if has_result == has_error:
-                raise PayloadValidationError("Response must have exactly one of \
-result or error")
+                raise PayloadValidationError(
+                    "Response must have exactly one of \
+result or error"
+                )
             if "id" not in payload:
                 raise PayloadValidationError("Response must include 'id'")
             if not isinstance(payload["id"], (str, int)) and payload["id"] is not None:
                 raise PayloadValidationError("'id' must be string, number, or null")
             if has_error:
                 err = payload["error"]
-                if not isinstance(err, dict) or "code" not in err \
-                    or "message" not in err:
+                if (
+                    not isinstance(err, dict)
+                    or "code" not in err
+                    or "message" not in err
+                ):
                     raise PayloadValidationError("Invalid error object")
-                if not isinstance(err["code"], int) \
-                    or not isinstance(err["message"], str):
+                if not isinstance(err["code"], int) or not isinstance(
+                    err["message"], str
+                ):
                     raise PayloadValidationError("Invalid error fields")
 
     def _validate_payload_serializable(self, payload: dict[str, Any]) -> None:
@@ -260,8 +282,9 @@ result or error")
 
         return data
 
-class NetworkTransportMixin(BaseTransportMixin):
-    """Mixin for network-based transports (HTTP, SSE, WebSocket)."""
+
+class HttpClientBehavior(DriverBaseBehavior):
+    """Behavior mix-in for network-based transports (HTTP, SSE, WebSocket)."""
 
     def _validate_network_request(self, url: str) -> None:
         """Validate network request against safety policies.
@@ -364,8 +387,9 @@ class NetworkTransportMixin(BaseTransportMixin):
 
             raise TransportError("No valid JSON data found in response")
 
-class ResponseParsingMixin(BaseTransportMixin):
-    """Mixin providing shared response parsing functionality."""
+
+class ResponseParserBehavior(DriverBaseBehavior):
+    """Behavior providing shared response parsing functionality."""
 
     def parse_sse_event(self, event_text: str) -> dict[str, Any | None]:
         """Parse a single SSE event text into a JSON object.
@@ -453,3 +477,135 @@ class ResponseParsingMixin(BaseTransportMixin):
                 logging.getLogger(self.__class__.__name__).error(
                     "Failed to parse SSE event payload as JSON"
                 )
+
+
+class LifecycleBehavior(DriverBaseBehavior):
+    """Behavior providing connection lifecycle management and activity tracking.
+
+    This mixin adds connection state management, activity tracking for timeouts,
+    and resource cleanup patterns that can be used by all transport types.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize connection lifecycle management."""
+        super().__init__(*args, **kwargs)
+        self._connection_state = DriverState.INIT
+        self._last_activity = time.time()
+        self._connection_start_time: float | None = None
+        self._connection_end_time: float | None = None
+        self._activity_callbacks: list = []
+
+    @property
+    def connection_state(self) -> DriverState:
+        """Get current connection state."""
+        return self._connection_state
+
+    @property
+    def last_activity(self) -> float:
+        """Get timestamp of last activity."""
+        return self._last_activity
+
+    @property
+    def connection_duration(self) -> float | None:
+        """Get duration of connection in seconds, or None if not connected."""
+        if self._connection_start_time is None:
+            return None
+        end_time = self._connection_end_time or time.time()
+        return end_time - self._connection_start_time
+
+    def is_connected(self) -> bool:
+        """Check if transport is in connected state."""
+        return self._connection_state == DriverState.CONNECTED
+
+    def is_closed(self) -> bool:
+        """Check if transport is in closed state."""
+        return self._connection_state == DriverState.CLOSED
+
+    def is_error(self) -> bool:
+        """Check if transport is in error state."""
+        return self._connection_state == DriverState.ERROR
+
+    def _update_activity(self) -> None:
+        """Update the last activity timestamp."""
+        self._last_activity = time.time()
+
+        # Notify activity callbacks
+        for callback in self._activity_callbacks:
+            try:
+                callback(self._last_activity)
+            except Exception as e:
+                self._logger.warning(f"Activity callback failed: {e}")
+
+    def _set_connection_state(self, state: DriverState) -> None:
+        """Set the connection state.
+
+        Args:
+            state: New connection state
+        """
+        old_state = self._connection_state
+        self._connection_state = state
+
+        # Track connection timing
+        if state == DriverState.CONNECTED and old_state != DriverState.CONNECTED:
+            self._connection_start_time = time.time()
+            self._connection_end_time = None
+        elif (
+            state in (DriverState.CLOSED, DriverState.ERROR)
+            and old_state == DriverState.CONNECTED
+        ):
+            self._connection_end_time = time.time()
+
+        self._logger.debug(
+            f"Connection state changed: {old_state.value} -> {state.value}"
+        )
+
+    def register_activity_callback(self, callback) -> None:
+        """Register a callback to be notified on activity updates.
+
+        Args:
+            callback: Callable that takes timestamp as argument
+        """
+        self._activity_callbacks.append(callback)
+
+    def time_since_last_activity(self) -> float:
+        """Get time in seconds since last activity."""
+        return time.time() - self._last_activity
+
+    async def _lifecycle_connect(self) -> None:
+        """Mark connection as starting and update state."""
+        self._set_connection_state(DriverState.CONNECTING)
+        self._update_activity()
+
+    async def _lifecycle_connected(self) -> None:
+        """Mark connection as established and update state."""
+        self._set_connection_state(DriverState.CONNECTED)
+        self._update_activity()
+
+    async def _lifecycle_disconnect(self) -> None:
+        """Mark connection as disconnecting and update state."""
+        if self._connection_state == DriverState.CONNECTED:
+            self._set_connection_state(DriverState.DISCONNECTING)
+        self._update_activity()
+
+    async def _lifecycle_closed(self) -> None:
+        """Mark connection as closed and update state."""
+        self._set_connection_state(DriverState.CLOSED)
+        self._update_activity()
+
+    async def _lifecycle_error(self, error: Exception | None = None) -> None:
+        """Mark connection as in error state.
+
+        Args:
+            error: Optional exception that caused the error
+        """
+        self._set_connection_state(DriverState.ERROR)
+        if error:
+            self._logger.error(f"Connection error: {error}")
+        self._update_activity()
+
+    async def _cleanup_resources(self) -> None:
+        """Cleanup any resources held by the transport.
+
+        Subclasses should override this to implement specific cleanup logic.
+        """
+        pass

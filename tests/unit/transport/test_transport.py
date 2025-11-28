@@ -13,16 +13,16 @@ import httpx
 import pytest
 
 from mcp_fuzzer.transport import (
-    HTTPTransport,
-    SSETransport,
-    StdioTransport,
-    TransportProtocol,
-    create_transport,
+    HttpDriver,
+    SseDriver,
+    StdioDriver,
+    TransportDriver,
+    build_driver,
 )
-from mcp_fuzzer.transport.mixins import (
-    BaseTransportMixin,
-    NetworkTransportMixin,
-    ResponseParsingMixin,
+from mcp_fuzzer.transport.interfaces.behaviors import (
+    DriverBaseBehavior,
+    HttpClientBehavior,
+    ResponseParserBehavior,
     JSONRPCRequest,
     JSONRPCNotification,
     TransportError,
@@ -34,21 +34,21 @@ from mcp_fuzzer.exceptions import TransportRegistrationError
 pytestmark = [pytest.mark.unit, pytest.mark.transport]
 
 
-# Test cases for TransportProtocol class
+# Test cases for TransportDriver class
 @pytest.mark.asyncio
 async def test_transport_protocol_abstract():
-    """Test that TransportProtocol is properly abstract."""
-    # Should not be able to instantiate TransportProtocol directly
+    """Test that TransportDriver is properly abstract."""
+    # Should not be able to instantiate TransportDriver directly
     with pytest.raises(TypeError):
-        TransportProtocol()
+        TransportDriver()
 
 
 @pytest.mark.asyncio
 async def test_transport_protocol_connection_methods():
-    """Test TransportProtocol connection management methods."""
+    """Test TransportDriver connection management methods."""
 
     # Create a concrete implementation
-    class TestTransport(TransportProtocol):
+    class TestTransport(TransportDriver):
         async def send_request(self, method, params=None):
             return {"test": "response"}
 
@@ -75,10 +75,10 @@ async def test_transport_protocol_connection_methods():
 
 @pytest.mark.asyncio
 async def test_transport_protocol_send_request():
-    """Test TransportProtocol send_request method."""
+    """Test TransportDriver send_request method."""
 
     # Create a concrete implementation with mocked _send_request
-    class TestTransport(TransportProtocol):
+    class TestTransport(TransportDriver):
         async def send_request(self, method, params=None):
             payload = {"method": method}
             if params:
@@ -112,10 +112,10 @@ async def test_transport_protocol_send_request():
 
 @pytest.mark.asyncio
 async def test_transport_protocol_stream_request():
-    """Test TransportProtocol stream_request method."""
+    """Test TransportDriver stream_request method."""
 
     # Create a concrete implementation with mocked _stream_request
-    class TestTransport(TransportProtocol):
+    class TestTransport(TransportDriver):
         async def send_request(self, method, params=None):
             payload = {"method": method}
             if params:
@@ -154,16 +154,16 @@ async def test_transport_protocol_stream_request():
     assert transport.last_payload == test_payload
 
 
-# Test cases for HTTPTransport class
+# Test cases for HttpDriver class
 @pytest.fixture
 def http_transport():
-    """Fixture for HTTPTransport test cases."""
-    return HTTPTransport("https://example.com/api")
+    """Fixture for HttpDriver test cases."""
+    return HttpDriver("https://example.com/api")
 
 
 @pytest.mark.asyncio
 async def test_http_transport_init(http_transport):
-    """Test HTTPTransport initialization."""
+    """Test HttpDriver initialization."""
     assert http_transport.url == "https://example.com/api"
     assert http_transport.timeout == 30.0
     assert "Accept" in http_transport.headers
@@ -172,7 +172,7 @@ async def test_http_transport_init(http_transport):
 
 @pytest.mark.asyncio
 async def test_http_transport_send_request(http_transport):
-    """Test HTTPTransport send_request method."""
+    """Test HttpDriver send_request method."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
     test_response = {"result": "success"}
 
@@ -196,7 +196,7 @@ async def test_http_transport_send_request(http_transport):
 
 @pytest.mark.asyncio
 async def test_http_transport_send_request_error(http_transport):
-    """Test HTTPTransport send_request with error response."""
+    """Test HttpDriver send_request with error response."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
 
     with patch.object(httpx.AsyncClient, "post") as mock_post:
@@ -209,7 +209,7 @@ async def test_http_transport_send_request_error(http_transport):
 
 @pytest.mark.asyncio
 async def test_http_transport_stream_request(http_transport):
-    """Test HTTPTransport stream_request method."""
+    """Test HttpDriver stream_request method."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
     test_responses = [
         {"id": 1, "result": "streaming"},
@@ -271,7 +271,7 @@ async def test_http_transport_stream_request(http_transport):
 
 @pytest.mark.asyncio
 async def test_http_transport_stream_request_error(http_transport):
-    """Test HTTPTransport stream_request with error."""
+    """Test HttpDriver stream_request with error."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
 
     with patch.object(httpx.AsyncClient, "post") as mock_post:
@@ -285,22 +285,22 @@ async def test_http_transport_stream_request_error(http_transport):
 
 @pytest.mark.asyncio
 async def test_http_transport_connect_disconnect(http_transport):
-    """Test HTTPTransport connect and disconnect methods."""
+    """Test HttpDriver connect and disconnect methods."""
     # These should not raise any exceptions
     await http_transport.connect()
     await http_transport.disconnect()
 
 
-# Test cases for SSETransport class
+# Test cases for SseDriver class
 @pytest.fixture
 def sse_transport():
-    """Fixture for SSETransport test cases."""
-    return SSETransport("https://example.com/events")
+    """Fixture for SseDriver test cases."""
+    return SseDriver("https://example.com/events")
 
 
 @pytest.mark.asyncio
 async def test_sse_transport_init(sse_transport):
-    """Test SSETransport initialization."""
+    """Test SseDriver initialization."""
     assert sse_transport.url == "https://example.com/events"
     assert sse_transport.timeout == 30.0
     assert "Accept" in sse_transport.headers
@@ -309,14 +309,14 @@ async def test_sse_transport_init(sse_transport):
 
 @pytest.mark.asyncio
 async def test_sse_transport_send_request_not_implemented(sse_transport):
-    """Test SSETransport send_request is not implemented."""
+    """Test SseDriver send_request is not implemented."""
     with pytest.raises(NotImplementedError):
         await sse_transport.send_request("test")
 
 
 @pytest.mark.asyncio
 async def test_sse_transport_stream_request(sse_transport):
-    """Test SSETransport stream_request method."""
+    """Test SseDriver stream_request method."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
 
     # Create mock SSE events - each event needs to end with a blank line
@@ -353,7 +353,7 @@ async def test_sse_transport_stream_request(sse_transport):
 
 @pytest.mark.asyncio
 async def test_sse_transport_stream_request_error(sse_transport):
-    """Test SSETransport stream_request with error."""
+    """Test SseDriver stream_request with error."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
 
     with patch.object(httpx.AsyncClient, "stream") as mock_stream:
@@ -367,50 +367,52 @@ async def test_sse_transport_stream_request_error(sse_transport):
 
 @pytest.mark.asyncio
 async def test_sse_transport_parse_sse_event():
-    """Test SSETransport _parse_sse_event method."""
+    """Test SseDriver parse_sse_event method."""
+    driver = SseDriver("http://test", timeout=1)
+
     # Standard SSE event
     sse_event = 'event: message\ndata: {"id": 1, "result": "success"}'
-    result = SSETransport._parse_sse_event(sse_event)
+    result = driver.parse_sse_event(sse_event)
     assert result == {"id": 1, "result": "success"}
 
     # Multiline data
     sse_event = 'event: message\ndata: {"id": 1,\ndata: "result": "multiline"}'
-    result = SSETransport._parse_sse_event(sse_event)
+    result = driver.parse_sse_event(sse_event)
     assert result == {"id": 1, "result": "multiline"}
 
     # With retry field (should ignore)
     sse_event = 'retry: 3000\nevent: message\ndata: {"id": 1}'
-    result = SSETransport._parse_sse_event(sse_event)
+    result = driver.parse_sse_event(sse_event)
     assert result == {"id": 1}
 
     # Empty event
-    assert SSETransport._parse_sse_event("") is None
+    assert driver.parse_sse_event("") is None
 
     # Invalid JSON
     sse_event = "event: message\ndata: not_json"
     with pytest.raises(json.JSONDecodeError):
-        SSETransport._parse_sse_event(sse_event)
+        driver.parse_sse_event(sse_event)
 
 
-# Test cases for StdioTransport class
+# Test cases for StdioDriver class
 @pytest.fixture
 def stdio_transport():
-    """Fixture for StdioTransport test cases."""
-    with patch("mcp_fuzzer.transport.stdio.sys") as mock_sys:
-        transport = StdioTransport("test_command")
+    """Fixture for StdioDriver test cases."""
+    with patch("mcp_fuzzer.transport.drivers.stdio_driver.sys") as mock_sys:
+        transport = StdioDriver("test_command")
         transport._sys = mock_sys  # Attach the mock to the transport
         yield transport
 
 
 @pytest.mark.asyncio
 async def test_stdio_transport_init(stdio_transport):
-    """Test StdioTransport initialization."""
+    """Test StdioDriver initialization."""
     assert stdio_transport.request_id == 1
 
 
 @pytest.mark.asyncio
 async def test_stdio_transport_send_request(stdio_transport):
-    """Test StdioTransport send_request method."""
+    """Test StdioDriver send_request method."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
     test_response = {"id": 1, "result": "success"}
 
@@ -432,7 +434,7 @@ async def test_stdio_transport_send_request(stdio_transport):
 
 @pytest.mark.asyncio
 async def test_stdio_transport_send_request_error(stdio_transport):
-    """Test StdioTransport send_request with error response."""
+    """Test StdioDriver send_request with error response."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
     test_error = {"id": 1, "error": {"code": -32600, "message": "Invalid Request"}}
 
@@ -448,7 +450,7 @@ async def test_stdio_transport_send_request_error(stdio_transport):
 
 @pytest.mark.asyncio
 async def test_stdio_transport_send_request_invalid_json(stdio_transport):
-    """Test StdioTransport send_request with invalid JSON response."""
+    """Test StdioDriver send_request with invalid JSON response."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
 
     # Set up the mocks
@@ -461,7 +463,7 @@ async def test_stdio_transport_send_request_invalid_json(stdio_transport):
 
 @pytest.mark.asyncio
 async def test_stdio_transport_stream_request(stdio_transport):
-    """Test StdioTransport stream_request method."""
+    """Test StdioDriver stream_request method."""
     test_payload = {"method": "test.method", "params": {"key": "value"}}
     test_responses = [
         {"id": 1, "result": "streaming"},
@@ -486,42 +488,42 @@ async def test_stdio_transport_stream_request(stdio_transport):
     assert stdio_transport._sys.stdout.write.call_count == 1
 
 
-# Test cases for create_transport function
-def test_create_transport_http():
-    """Test create_transport with HTTP URL."""
-    transport = create_transport("http://example.com/api")
-    assert isinstance(transport, HTTPTransport)
+# Test cases for build_driver function
+def test_build_driver_http():
+    """Test build_driver with HTTP URL."""
+    transport = build_driver("http://example.com/api")
+    assert isinstance(transport, HttpDriver)
     assert transport.url == "http://example.com/api"
 
 
-def test_create_transport_https():
-    """Test create_transport with HTTPS URL."""
-    transport = create_transport("https://example.com/api")
-    assert isinstance(transport, HTTPTransport)
+def test_build_driver_https():
+    """Test build_driver with HTTPS URL."""
+    transport = build_driver("https://example.com/api")
+    assert isinstance(transport, HttpDriver)
     assert transport.url == "https://example.com/api"
 
 
-def test_create_transport_sse():
-    """Test create_transport with SSE URL."""
-    transport = create_transport("sse://example.com/events")
-    assert isinstance(transport, SSETransport)
+def test_build_driver_sse():
+    """Test build_driver with SSE URL."""
+    transport = build_driver("sse://example.com/events")
+    assert isinstance(transport, SseDriver)
     assert transport.url == "http://example.com/events"
 
 
-def test_create_transport_stdio():
-    """Test create_transport with stdio URL."""
-    transport = create_transport("stdio:")
-    assert isinstance(transport, StdioTransport)
+def test_build_driver_stdio():
+    """Test build_driver with stdio URL."""
+    transport = build_driver("stdio:")
+    assert isinstance(transport, StdioDriver)
 
 
-def test_create_transport_protocol_and_endpoint_builtin():
+def test_build_driver_protocol_and_endpoint_builtin():
     """Ensure built-in transports work with protocol+endpoint usage."""
-    transport = create_transport("stdio", "node server.js")
-    assert isinstance(transport, StdioTransport)
+    transport = build_driver("stdio", "node server.js")
+    assert isinstance(transport, StdioDriver)
     assert transport.command == "node server.js"
 
 
-def test_create_transport_invalid_scheme():
-    """Test create_transport with invalid URL scheme."""
+def test_build_driver_invalid_scheme():
+    """Test build_driver with invalid URL scheme."""
     with pytest.raises(TransportRegistrationError):
-        create_transport("invalid://example.com")
+        build_driver("invalid://example.com")

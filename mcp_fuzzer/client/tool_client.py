@@ -18,6 +18,8 @@ from ..config import (
     DEFAULT_MAX_TOTAL_FUZZING_TIME,
     DEFAULT_FORCE_KILL_TIMEOUT,
 )
+from ..transport.interfaces import JsonRpcAdapter
+
 
 class ToolClient:
     """Client for fuzzing MCP tools."""
@@ -40,6 +42,7 @@ class ToolClient:
             max_concurrency: Maximum number of concurrent operations
         """
         self.transport = transport
+        self._rpc = JsonRpcAdapter(transport)
         self.auth_manager = auth_manager or AuthManager()
         self.enable_safety = enable_safety
         if not enable_safety:
@@ -60,7 +63,7 @@ class ToolClient:
             List of tool definitions or empty list if failed.
         """
         try:
-            tools = await self.transport.get_tools()
+            tools = await self._rpc.get_tools()
             if not tools:
                 self._logger.warning("Server returned an empty list of tools.")
                 return []
@@ -93,7 +96,7 @@ class ToolClient:
         try:
             tool_task = asyncio.create_task(
                 self.fuzz_tool(tool, runs_per_tool, tool_timeout=tool_timeout),
-                name=f"fuzz_tool_{tool_name}"
+                name=f"fuzz_tool_{tool_name}",
             )
 
             try:
@@ -180,9 +183,7 @@ class ToolClient:
 
                 # Call the tool with the generated arguments
                 try:
-                    result = await self.transport.call_tool(
-                        tool_name, args_for_call
-                    )
+                    result = await self._rpc.call_tool(tool_name, args_for_call)
                     results.append(
                         {
                             "args": sanitized_args,
@@ -311,11 +312,11 @@ class ToolClient:
         fuzz_results: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Process fuzz results with safety checks and tool calls.
-        
+
         Args:
             tool_name: Name of the tool being fuzzed
             fuzz_results: List of fuzz results from the fuzzer
-            
+
         Returns:
             List of processed results with tool call outcomes
         """

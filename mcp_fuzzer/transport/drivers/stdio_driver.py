@@ -11,19 +11,20 @@ import inspect
 import time
 from typing import Any, Callable
 
-from .base import TransportProtocol
-from ..exceptions import (
+from ..interfaces.driver import TransportDriver
+from ...exceptions import (
     ProcessSignalError,
     ProcessStartError,
     ServerError,
     TransportError,
 )
-from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
-from ..safety_system.policy import sanitize_subprocess_env
-from ..config.constants import PROCESS_WAIT_TIMEOUT
-from .manager import TransportManager
+from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+from ...safety_system.policy import sanitize_subprocess_env
+from ...config.constants import PROCESS_WAIT_TIMEOUT
+from ..controller.process_supervisor import ProcessSupervisor
 
-class StdioTransport(TransportProtocol):
+
+class StdioDriver(TransportDriver):
     def __init__(
         self,
         command: str,
@@ -42,7 +43,7 @@ class StdioTransport(TransportProtocol):
         self._initialized = False
         self._last_activity = time.time()
         self.process_manager = process_manager
-        self.manager = TransportManager(logger=logging.getLogger(__name__))
+        self.manager = ProcessSupervisor(logger=logging.getLogger(__name__))
 
     def _get_lock(self):
         """Get or create the lock lazily."""
@@ -445,9 +446,9 @@ class StdioTransport(TransportProtocol):
                             logging.info(
                                 (
                                     "Sent terminate timeout signal to process "
-                                        f"{self.process.pid}"
-                                    )
+                                    f"{self.process.pid}"
                                 )
+                            )
                     elif signal_type == "force":
                         # Send SIGKILL (force kill)
                         if os.name != "nt":
@@ -499,8 +500,8 @@ class StdioTransport(TransportProtocol):
                                 (
                                     "Sent terminate interrupt signal to process "
                                     f"{self.process.pid}"
-                                    )
                                 )
+                            )
                     else:
                         logging.warning(f"Unknown signal type: {signal_type}")
                         return False

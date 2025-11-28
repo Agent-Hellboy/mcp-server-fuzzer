@@ -1,10 +1,25 @@
+"""Stream HTTP driver with SSE support and session headers.
+
+This transport implementation uses mixins to reduce code duplication significantly
+(~150 lines), sharing network validation, header handling, and response parsing
+with other HTTP-based transports.
+"""
+
+from __future__ import annotations
+
 import asyncio
 import json
-import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
-from ..config import (
+
+from ..interfaces.driver import TransportDriver
+from ..interfaces.behaviors import (
+    HttpClientBehavior,
+    ResponseParserBehavior,
+    NetworkError as DriverNetworkError,
+)
+from ...config import (
     DEFAULT_PROTOCOL_VERSION,
     CONTENT_TYPE_HEADER,
     JSON_CONTENT_TYPE,
@@ -13,7 +28,7 @@ from ..config import (
     MCP_PROTOCOL_VERSION_HEADER,
     DEFAULT_HTTP_ACCEPT,
 )
-from ..types import (
+from ...types import (
     HTTP_ACCEPTED,
     HTTP_REDIRECT_TEMPORARY,
     HTTP_REDIRECT_PERMANENT,
@@ -21,14 +36,7 @@ from ..types import (
     DEFAULT_TIMEOUT,
     RETRY_DELAY,
 )
-
-from .base import TransportProtocol
-from ..exceptions import NetworkPolicyViolation, ServerError, TransportError
-from ..safety_system.policy import (
-    is_host_allowed,
-    resolve_redirect_safely,
-    sanitize_headers,
-)
+from ...exceptions import TransportError
 
 # Back-compat local aliases (referenced by tests)
 MCP_SESSION_ID = MCP_SESSION_ID_HEADER
@@ -37,13 +45,19 @@ CONTENT_TYPE = CONTENT_TYPE_HEADER
 JSON_CT = JSON_CONTENT_TYPE
 SSE_CT = SSE_CONTENT_TYPE
 
-class StreamableHTTPTransport(TransportProtocol):
-    """Streamable HTTP transport with basic SSE support and session headers.
 
-    This mirrors the MCP SDK's StreamableHTTP semantics enough for fuzzing:
+class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
+    """Streamable HTTP transport with MCP session management.
+
+    This mirrors the MCP SDK's StreamableHTTP semantics for fuzzing:
     - Sends Accept: application/json, text/event-stream
     - Parses JSON or SSE responses
     - Tracks and propagates mcp-session-id and mcp-protocol-version headers
+
+    Mixin Composition:
+    - TransportDriver: Core interface
+    - HttpClientBehavior: Network validation, header sanitization, HTTP client
+    - ResponseParserBehavior: Response parsing (JSON and SSE)
     """
 
     def __init__(
@@ -52,6 +66,14 @@ class StreamableHTTPTransport(TransportProtocol):
         timeout: float = DEFAULT_TIMEOUT,
         auth_headers: dict[str, str | None] = None,
     ):
+        """Initialize streamable HTTP transport.
+
+        Args:
+            url: Server URL
+            timeout: Request timeout in seconds
+            auth_headers: Optional authentication headers
+        """
+        super().__init__()
         self.url = url
         self.timeout = timeout
         self.headers: dict[str, str] = {
@@ -61,7 +83,6 @@ class StreamableHTTPTransport(TransportProtocol):
         if auth_headers:
             self.headers.update(auth_headers)
 
-        self._logger = logging.getLogger(__name__)
         self.session_id: str | None = None
         self.protocol_version: str | None = None
         self._initialized: bool = False
@@ -69,6 +90,11 @@ class StreamableHTTPTransport(TransportProtocol):
         self._initializing: bool = False
 
     def _prepare_headers(self) -> dict[str, str]:
+        """Prepare headers with session information.
+
+        Returns:
+            Headers dict with session information
+        """
         headers = dict(self.headers)
         if self.session_id:
             headers[MCP_SESSION_ID] = self.session_id
@@ -76,35 +102,28 @@ class StreamableHTTPTransport(TransportProtocol):
             headers[MCP_PROTOCOL_VERSION] = self.protocol_version
         return headers
 
-    def _ensure_host_allowed(self) -> None:
-        """Raise if the destination host violates safety policy."""
-        if not is_host_allowed(self.url):
-            raise NetworkPolicyViolation(
-                "Network to non-local host is disallowed by safety policy",
-                context={"url": self.url},
-            )
-
-    def _raise_http_status_error(
-        self, error: httpx.HTTPStatusError, *, method: str | None = None
-    ) -> None:
-        """Convert httpx HTTP status errors into TransportError instances."""
-        request_url = str(error.request.url) if error.request else self.url
-        status = error.response.status_code if error.response else None
-        context: dict[str, Any] = {"url": request_url, "status": status}
-        if method:
-            context["method"] = method
-        raise TransportError(
-            f"HTTP error while communicating with {request_url}", context=context
-        ) from error
-
     def _maybe_extract_session_headers(self, response: httpx.Response) -> None:
+        """Extract session ID from response headers.
+
+        Args:
+            response: HTTP response to extract from
+        """
         sid = response.headers.get(MCP_SESSION_ID)
         if sid:
-            # Update session id if server sends one
             self.session_id = sid
             self._logger.debug("Received session id: %s", sid)
 
+        protocol_header = response.headers.get(MCP_PROTOCOL_VERSION)
+        if protocol_header:
+            self.protocol_version = protocol_header
+            self._logger.debug("Received protocol version header: %s", protocol_header)
+
     def _maybe_extract_protocol_version_from_result(self, result: Any) -> None:
+        """Extract protocol version from result.
+
+        Args:
+            result: Result dict that may contain protocolVersion
+        """
         try:
             if isinstance(result, dict) and "protocolVersion" in result:
                 pv = result.get("protocolVersion")
@@ -114,8 +133,55 @@ class StreamableHTTPTransport(TransportProtocol):
         except Exception:
             pass
 
-    async def _parse_sse_response(self, response: httpx.Response) -> Any:
-        """Parse SSE stream and return on first JSON-RPC response/error."""
+    def _resolve_redirect(self, response: httpx.Response) -> str | None:
+        """Resolve redirect target with safety checks.
+
+        Args:
+            response: HTTP response to check for redirects
+
+        Returns:
+            Resolved redirect URL or None
+        """
+        redirect_codes = (HTTP_REDIRECT_TEMPORARY, HTTP_REDIRECT_PERMANENT)
+        if response.status_code not in redirect_codes:
+            return None
+
+        location = response.headers.get("location")
+        if not location and not self.url.endswith("/"):
+            location = self.url + "/"
+        if not location:
+            return None
+
+        # Use the base mixin's redirect resolution (imported from safety policy)
+        from ...safety_system.policy import resolve_redirect_safely
+
+        resolved = resolve_redirect_safely(self.url, location)
+        if not resolved:
+            self._logger.warning(
+                "Refusing redirect that violates policy from %s", self.url
+            )
+        return resolved
+
+    def _extract_content_type(self, response: httpx.Response) -> str:
+        """Extract content type from response.
+
+        Args:
+            response: HTTP response
+
+        Returns:
+            Content type string (lowercase)
+        """
+        return response.headers.get(CONTENT_TYPE, "").lower()
+
+    async def _parse_sse_response_for_result(self, response: httpx.Response) -> Any:
+        """Parse SSE stream and return first JSON-RPC response/error.
+
+        Args:
+            response: HTTP response with SSE content
+
+        Returns:
+            First parsed result from SSE stream
+        """
         # Basic SSE parser: accumulate fields until blank line
         event: dict[str, Any] = {"event": "message", "data": []}
         async for line in response.aiter_lines():
@@ -159,213 +225,29 @@ class StreamableHTTPTransport(TransportProtocol):
         # If we exit loop without a response, return None
         return None
 
-    def _resolve_redirect(self, response: httpx.Response) -> str | None:
-        redirect_codes = (HTTP_REDIRECT_TEMPORARY, HTTP_REDIRECT_PERMANENT)
-        if response.status_code not in redirect_codes:
-            return None
-        location = response.headers.get("location")
-        if not location and not self.url.endswith("/"):
-            location = self.url + "/"
-        if not location:
-            return None
-        resolved = resolve_redirect_safely(self.url, location)
-        if not resolved:
-            self._logger.warning(
-                "Refusing redirect that violates policy from %s", self.url
-            )
-        return resolved
-
-    def _extract_content_type(self, response: httpx.Response) -> str:
-        return response.headers.get(CONTENT_TYPE, "").lower()
-
-    async def send_request(
-        self, method: str, params: dict[str, Any] | None = None
-    ) -> Any:
-        request_id = str(asyncio.get_running_loop().time())
-        payload = {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": method,
-            "params": params or {},
-        }
-        return await self.send_raw(payload)
-
-    async def send_raw(self, payload: dict[str, Any]) -> Any:
-        # Ensure MCP initialization handshake once per session
-        try:
-            method = payload.get("method")
-        except AttributeError:
-            method = None
-        if not self._initialized and method != "initialize":
-            async with self._init_lock:
-                if not self._initialized and not self._initializing:
-                    self._initializing = True
-                    try:
-                        await self._do_initialize()
-                    finally:
-                        self._initializing = False
-
-        headers = self._prepare_headers()
-        async with httpx.AsyncClient(
-            timeout=self.timeout, follow_redirects=False, trust_env=False
-        ) as client:
-            self._ensure_host_allowed()
-            response = await self._post_with_retries(
-                client, self.url, payload, sanitize_headers(headers)
-            )
-            # Handle redirect by retrying once with provided Location or trailing slash
-            redirect_url = self._resolve_redirect(response)
-            if redirect_url:
-                self._logger.debug("Following redirect to %s", redirect_url)
-                response = await self._post_with_retries(
-                    client, redirect_url, payload, headers
-                )
-            # Update session headers if available
-            self._maybe_extract_session_headers(response)
-
-            # Handle status codes similar to SDK
-            if response.status_code == HTTP_ACCEPTED:
-                return {}
-            if response.status_code == HTTP_NOT_FOUND:
-                raise TransportError(
-                    "Session terminated or endpoint not found",
-                    context={"url": self.url, "status": response.status_code},
-                )
-
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                self._raise_http_status_error(exc, method=method)
-            ct = self._extract_content_type(response)
-
-            if ct.startswith(JSON_CT):
-                # Try to get the JSON response
-                try:
-                    data = response.json()
-                except json.JSONDecodeError:
-                    # Fallback: parse first JSON object from raw stream
-                    data = {}
-                    if hasattr(response, "aread"):
-                        try:
-                            content = await response.aread()
-                            content_str = content.decode("utf-8").strip()
-                            decoder = json.JSONDecoder()
-                            pos = 0
-                            # Limit attempts to prevent infinite loops
-                            max_attempts = 1000
-                            attempts = 0
-                            while pos < len(content_str) and attempts < max_attempts:
-                                attempts += 1
-                                try:
-                                    parsed, new_pos = decoder.raw_decode(
-                                        content_str, pos
-                                    )
-                                    data = parsed
-                                    break
-                                except json.JSONDecodeError:
-                                    pos += 1
-                                    # Skip whitespace
-                                    while (
-                                        pos < len(content_str)
-                                        and content_str[pos].isspace()
-                                    ):
-                                        pos += 1
-                        except Exception:
-                            pass
-
-                if isinstance(data, dict):
-                    if "error" in data:
-                        raise ServerError(
-                            "Server returned error",
-                            context={"url": self.url, "error": data["error"]},
-                        )
-                    if "result" in data:
-                        # Extract protocol version if present (initialize)
-                        self._maybe_extract_protocol_version_from_result(data["result"])
-                        # Mark initialized if this was an explicit initialize call
-                        if method == "initialize":
-                            self._initialized = True
-                        result = data["result"]
-                        return (
-                            result if isinstance(result, dict) else {"result": result}
-                        )
-                # Normalize non-dict payloads
-                return data if isinstance(data, dict) else {"result": data}
-
-            if ct.startswith(SSE_CT):
-                parsed = await self._parse_sse_response(response)
-                if method == "initialize":
-                    self._initialized = True
-                if parsed is None:
-                    return {}
-                return parsed if isinstance(parsed, dict) else {"result": parsed}
-
-            raise TransportError(
-                f"Unexpected content type: {ct}",
-                context={"url": self.url, "content_type": ct},
-            )
-
-    async def send_notification(
-        self, method: str, params: dict[str, Any] | None = None
-    ) -> None:
-        payload = {"jsonrpc": "2.0", "method": method, "params": params or {}}
-        headers = self._prepare_headers()
-        async with httpx.AsyncClient(
-            timeout=self.timeout, follow_redirects=False, trust_env=False
-        ) as client:
-            self._ensure_host_allowed()
-            safe_headers = sanitize_headers(headers)
-            response = await self._post_with_retries(
-                client, self.url, payload, safe_headers
-            )
-            redirect_url = self._resolve_redirect(response)
-            if redirect_url:
-                response = await self._post_with_retries(
-                    client, redirect_url, payload, safe_headers
-                )
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                self._raise_http_status_error(exc, method=method)
-
-    async def _do_initialize(self) -> None:
-        """Perform a minimal MCP initialize + initialized notification."""
-        init_payload = {
-            "jsonrpc": "2.0",
-            "id": str(asyncio.get_running_loop().time()),
-            "method": "initialize",
-            "params": {
-                "protocolVersion": self.protocol_version or DEFAULT_PROTOCOL_VERSION,
-                "capabilities": {
-                    "elicitation": {},
-                    "experimental": {},
-                    "roots": {"listChanged": True},
-                    "sampling": {},
-                },
-                "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},
-            },
-        }
-        try:
-            await self.send_raw(init_payload)
-            self._initialized = True
-            # Send initialized notification (best-effort)
-            try:
-                await self.send_notification("notifications/initialized", {})
-            except Exception:
-                pass
-        except Exception:
-            # Surface the failure; leave _initialized False
-            raise
-
     async def _post_with_retries(
         self,
         client: httpx.AsyncClient,
         url: str,
         json: dict[str, Any],
         headers: dict[str, str],
-        retries: int = 2,  # Default max retries
+        retries: int = 2,
     ) -> httpx.Response:
-        """POST with simple exponential backoff for transient network errors."""
+        """POST with exponential backoff for transient network errors.
+
+        Args:
+            client: HTTP client
+            url: URL to post to
+            json: JSON payload
+            headers: Request headers
+            retries: Maximum retry attempts
+
+        Returns:
+            HTTP response
+
+        Raises:
+            TransportError: If all retries fail
+        """
         delay = RETRY_DELAY
         attempt = 0
         while True:
@@ -406,23 +288,189 @@ class StreamableHTTPTransport(TransportProtocol):
                 delay *= 2
                 attempt += 1
 
-    async def _stream_request(self, payload: dict[str, Any]):
-        """Stream a request and yield parsed JSON or SSE data lines.
+    async def send_request(
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> Any:
+        """Send a JSON-RPC request and return the response.
 
-        This mirrors the logic used in HTTPTransport._stream_request but adapted
-        for the streamable transport and its header/session handling.
+        Args:
+            method: Method name
+            params: Optional parameters
+
+        Returns:
+            Response from server
         """
-        headers = self._prepare_headers()
-        method = None
+        request_id = str(asyncio.get_running_loop().time())
+        payload = self._create_jsonrpc_request(method, params, request_id)
+        return await self.send_raw(payload)
+
+    async def send_raw(self, payload: dict[str, Any]) -> Any:
+        """Send raw payload and return the response.
+
+        Args:
+            payload: Raw JSON-RPC payload
+
+        Returns:
+            Response from server
+
+        Raises:
+            TransportError: If request fails
+        """
+        # Ensure MCP initialization handshake once per session
         try:
             method = payload.get("method")
         except AttributeError:
             method = None
-        async with httpx.AsyncClient(
-            timeout=self.timeout, follow_redirects=False, trust_env=False
-        ) as client:
-            self._ensure_host_allowed()
-            safe_headers = sanitize_headers(headers)
+
+        if not self._initialized and method != "initialize":
+            async with self._init_lock:
+                if not self._initialized and not self._initializing:
+                    self._initializing = True
+                    try:
+                        await self._do_initialize()
+                    finally:
+                        self._initializing = False
+
+        headers = self._prepare_headers()
+
+        # Use shared network functionality
+        self._validate_network_request(self.url)
+        safe_headers = self._prepare_safe_headers(headers)
+
+        async with self._create_http_client(self.timeout) as client:
+            response = await self._post_with_retries(
+                client, self.url, payload, safe_headers
+            )
+
+            # Handle redirect
+            redirect_url = self._resolve_redirect(response)
+            if redirect_url:
+                self._logger.debug("Following redirect to %s", redirect_url)
+                response = await self._post_with_retries(
+                    client, redirect_url, payload, safe_headers
+                )
+
+            # Update session headers if available
+            self._maybe_extract_session_headers(response)
+
+            # Handle special status codes
+            if response.status_code == HTTP_ACCEPTED:
+                return {}
+            if response.status_code == HTTP_NOT_FOUND:
+                raise TransportError(
+                    "Session terminated or endpoint not found",
+                    context={"url": self.url, "status": response.status_code},
+                )
+
+            # Use shared error handling
+            try:
+                self._handle_http_response_error(response)
+            except DriverNetworkError as exc:
+                context = {
+                    "url": self.url,
+                    "status": response.status_code,
+                }
+                raise TransportError(str(exc), context=context) from exc
+
+            ct = self._extract_content_type(response)
+
+            if ct.startswith(JSON_CT):
+                # Use shared JSON parsing (returns JSON-RPC result payload)
+                data = self._parse_http_response_json(response, fallback_to_sse=False)
+
+                self._maybe_extract_protocol_version_from_result(data)
+                if method == "initialize":
+                    self._initialized = True
+
+                return data if isinstance(data, dict) else {"result": data}
+
+            if ct.startswith(SSE_CT):
+                parsed = await self._parse_sse_response_for_result(response)
+                if method == "initialize":
+                    self._initialized = True
+                if parsed is None:
+                    return {}
+                return parsed if isinstance(parsed, dict) else {"result": parsed}
+
+            raise TransportError(
+                f"Unexpected content type: {ct}",
+                context={"url": self.url, "content_type": ct},
+            )
+
+    async def send_notification(
+        self, method: str, params: dict[str, Any] | None = None
+    ) -> None:
+        """Send a JSON-RPC notification.
+
+        Args:
+            method: Method name
+            params: Optional parameters
+        """
+        payload = self._create_jsonrpc_notification(method, params)
+        headers = self._prepare_headers()
+
+        # Use shared network functionality
+        self._validate_network_request(self.url)
+        safe_headers = self._prepare_safe_headers(headers)
+
+        async with self._create_http_client(self.timeout) as client:
+            response = await self._post_with_retries(
+                client, self.url, payload, safe_headers
+            )
+            redirect_url = self._resolve_redirect(response)
+            if redirect_url:
+                response = await self._post_with_retries(
+                    client, redirect_url, payload, safe_headers
+                )
+            self._handle_http_response_error(response)
+
+    async def _do_initialize(self) -> None:
+        """Perform MCP initialize + initialized notification."""
+        init_payload = {
+            "jsonrpc": "2.0",
+            "id": str(asyncio.get_running_loop().time()),
+            "method": "initialize",
+            "params": {
+                "protocolVersion": self.protocol_version or DEFAULT_PROTOCOL_VERSION,
+                "capabilities": {
+                    "elicitation": {},
+                    "experimental": {},
+                    "roots": {"listChanged": True},
+                    "sampling": {},
+                },
+                "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},
+            },
+        }
+        try:
+            await self.send_raw(init_payload)
+            self._initialized = True
+            # Send initialized notification (best-effort)
+            try:
+                await self.send_notification("notifications/initialized", {})
+            except Exception:
+                pass
+        except Exception:
+            # Surface the failure; leave _initialized False
+            raise
+
+    async def _stream_request(
+        self, payload: dict[str, Any]
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream a request and yield parsed data lines.
+
+        Args:
+            payload: Request payload
+
+        Yields:
+            Parsed JSON objects from stream
+        """
+        headers = self._prepare_headers()
+
+        # Use shared network functionality
+        self._validate_network_request(self.url)
+        safe_headers = self._prepare_safe_headers(headers)
+
+        async with self._create_http_client(self.timeout) as client:
             response = await client.stream(
                 "POST", self.url, json=payload, headers=safe_headers
             )
@@ -435,9 +483,10 @@ class StreamableHTTPTransport(TransportProtocol):
                 )
 
             try:
-                response.raise_for_status()
+                self._handle_http_response_error(response)
                 # Update session headers from streaming response
                 self._maybe_extract_session_headers(response)
+
                 async for line in response.aiter_lines():
                     if not line.strip():
                         continue
@@ -452,7 +501,5 @@ class StreamableHTTPTransport(TransportProtocol):
                             except json.JSONDecodeError:
                                 self._logger.error("Failed to parse SSE data as JSON")
                                 continue
-            except httpx.HTTPStatusError as exc:
-                self._raise_http_status_error(exc, method=method)
             finally:
                 await response.aclose()
