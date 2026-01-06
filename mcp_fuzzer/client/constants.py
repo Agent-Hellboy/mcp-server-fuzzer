@@ -5,13 +5,14 @@ This module re-exports all configuration constants so other modules
 can access them through the client mediator instead of directly
 from the config module.
 
-Uses lazy imports to avoid circular dependencies.
+Uses deferred imports to avoid circular dependencies.
 """
 
-# Lazy import to avoid circular dependencies
-# Import happens at module level but after client module is initialized
+
+# Deferred import to avoid circular dependencies
+# Import is wrapped in a function to delay resolution until after module init
 def _get_constants():
-    """Lazy import of constants to break circular dependencies."""
+    """Import constants from config module to break circular dependencies."""
     from mcp_fuzzer.config.core.constants import (
         CONTENT_TYPE_HEADER,
         DEFAULT_FORCE_KILL_TIMEOUT,
@@ -41,6 +42,7 @@ def _get_constants():
         WATCHDOG_EXTRA_BUFFER,
         WATCHDOG_MAX_HANG_ADDITIONAL,
     )
+
     return {
         "CONTENT_TYPE_HEADER": CONTENT_TYPE_HEADER,
         "DEFAULT_FORCE_KILL_TIMEOUT": DEFAULT_FORCE_KILL_TIMEOUT,
@@ -71,7 +73,8 @@ def _get_constants():
         "WATCHDOG_MAX_HANG_ADDITIONAL": WATCHDOG_MAX_HANG_ADDITIONAL,
     }
 
-# Import constants lazily
+
+# Import constants after module initialization
 _constants = _get_constants()
 
 # Export all constants
@@ -132,4 +135,3 @@ __all__ = [
     "PROCESS_CLEANUP_TIMEOUT",
     "PROCESS_WAIT_TIMEOUT",
 ]
-

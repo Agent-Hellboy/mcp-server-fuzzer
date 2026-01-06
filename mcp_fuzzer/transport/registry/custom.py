@@ -38,7 +38,38 @@ class CustomTransportRegistry:
             try:
                 self._registry.unregister(name)
             except TransportRegistrationError:
-                pass
+                logger.debug(
+                    "Could not unregister transport '%s' during clear",
+                    name,
+                    exc_info=True,
+                )
+
+    def _validate_custom_transport(self, name: str, action: str) -> str:
+        """Validate that a transport is registered and custom.
+
+        Args:
+            name: Transport name to validate
+            action: Action being performed (for error messages)
+
+        Returns:
+            Normalized transport key
+
+        Raises:
+            TransportRegistrationError: If not registered or not custom
+        """
+        key = name.strip().lower()
+        if not self._registry.is_custom_transport(key):
+            if self._registry.is_registered(key):
+                if action == "unregister":
+                    raise TransportRegistrationError(
+                        f"Transport '{name}' is a built-in transport and "
+                        "cannot be unregistered"
+                    )
+                raise TransportRegistrationError(
+                    f"Transport '{name}' is a built-in transport, not custom"
+                )
+            raise TransportRegistrationError(f"Transport '{name}' is not registered")
+        return key
 
     def register(
         self,
@@ -80,21 +111,8 @@ class CustomTransportRegistry:
         Raises:
             TransportRegistrationError: If transport is not registered or not custom
         """
-        key = name.strip().lower()
-
-        # Verify it's a custom transport before unregistering
-        if not self._registry.is_custom_transport(key):
-            if self._registry.is_registered(key):
-                raise TransportRegistrationError(
-                    f"Transport '{name}' is a built-in transport and "
-                    "cannot be unregistered"
-                )
-            else:
-                raise TransportRegistrationError(
-                    f"Transport '{name}' is not registered"
-                )
-
-        self._registry.unregister(name)
+        key = self._validate_custom_transport(name, "unregister")
+        self._registry.unregister(key)
 
     def get_transport_class(self, name: str) -> Type[TransportProtocol]:
         """Get the transport class for a registered custom transport.
@@ -108,19 +126,8 @@ class CustomTransportRegistry:
         Raises:
             TransportRegistrationError: If transport is not registered or not custom
         """
-        key = name.strip().lower()
-
-        if not self._registry.is_custom_transport(key):
-            if self._registry.is_registered(key):
-                raise TransportRegistrationError(
-                    f"Transport '{name}' is a built-in transport, not custom"
-                )
-            else:
-                raise TransportRegistrationError(
-                    f"Transport '{name}' is not registered"
-                )
-
-        return self._registry.get_transport_class(name)
+        key = self._validate_custom_transport(name, "get_transport_class")
+        return self._registry.get_transport_class(key)
 
     def get_transport_info(self, name: str) -> dict[str, Any]:
         """Get information about a registered custom transport.
@@ -134,19 +141,8 @@ class CustomTransportRegistry:
         Raises:
             TransportRegistrationError: If transport is not registered or not custom
         """
-        key = name.strip().lower()
-
-        if not self._registry.is_custom_transport(key):
-            if self._registry.is_registered(key):
-                raise TransportRegistrationError(
-                    f"Transport '{name}' is a built-in transport, not custom"
-                )
-            else:
-                raise TransportRegistrationError(
-                    f"Transport '{name}' is not registered"
-                )
-
-        return self._registry.get_transport_info(name)
+        key = self._validate_custom_transport(name, "get_transport_info")
+        return self._registry.get_transport_info(key)
 
     def list_transports(self) -> dict[str, dict[str, Any]]:
         """List all registered custom transports.
@@ -170,19 +166,8 @@ class CustomTransportRegistry:
         Raises:
             TransportRegistrationError: If transport is not registered or not custom
         """
-        key = name.strip().lower()
-
-        if not self._registry.is_custom_transport(key):
-            if self._registry.is_registered(key):
-                raise TransportRegistrationError(
-                    f"Transport '{name}' is a built-in transport, not custom"
-                )
-            else:
-                raise TransportRegistrationError(
-                    f"Transport '{name}' is not registered"
-                )
-
-        return self._registry.create_transport(name, *args, **kwargs)
+        key = self._validate_custom_transport(name, "create_transport")
+        return self._registry.create_transport(key, *args, **kwargs)
 
 
 # Global registry instance

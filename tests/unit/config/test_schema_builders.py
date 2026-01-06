@@ -29,7 +29,7 @@ def test_build_timeout_schema():
     assert all(field["type"] == "number" for field in schema.values())
 
 
-def testbuild_basic_schema():
+def test_build_basic_schema():
     """Test that basic schema includes log level, safety, and fs_root."""
     schema = build_basic_schema()
     assert "log_level" in schema
@@ -39,7 +39,7 @@ def testbuild_basic_schema():
     assert schema["safety_enabled"]["type"] == "boolean"
 
 
-def testbuild_fuzzing_schema():
+def test_build_fuzzing_schema():
     """Test that fuzzing schema includes mode, phase, protocol, etc."""
     schema = build_fuzzing_schema()
     assert "mode" in schema
@@ -51,7 +51,7 @@ def testbuild_fuzzing_schema():
     assert "max_concurrency" in schema
 
 
-def testbuild_network_schema():
+def test_build_network_schema():
     """Test that network schema includes network-related fields."""
     schema = build_network_schema()
     assert "no_network" in schema
@@ -60,7 +60,7 @@ def testbuild_network_schema():
     assert schema["allow_hosts"]["type"] == "array"
 
 
-def testbuild_auth_schema():
+def test_build_auth_schema():
     """Test that auth schema includes auth configuration."""
     schema = build_auth_schema()
     assert "auth" in schema
@@ -70,7 +70,7 @@ def testbuild_auth_schema():
     assert "mappings" in auth_schema["properties"]
 
 
-def testbuild_custom_transports_schema():
+def test_build_custom_transports_schema():
     """Test that custom transports schema is properly structured."""
     schema = build_custom_transports_schema()
     assert "custom_transports" in schema
@@ -81,7 +81,7 @@ def testbuild_custom_transports_schema():
     assert transport_schema["additionalProperties"] is False
 
 
-def testbuild_safety_schema():
+def test_build_safety_schema():
     """Test that safety schema includes all safety-related fields."""
     schema = build_safety_schema()
     assert "safety" in schema
@@ -94,7 +94,7 @@ def testbuild_safety_schema():
     assert "header_denylist" in props
 
 
-def testbuild_output_schema():
+def test_build_output_schema():
     """Test that output schema includes output configuration."""
     schema = build_output_schema()
     assert "output" in schema
@@ -146,4 +146,3 @@ def test_schema_builders_are_independent():
     assert not set(timeout.keys()) & set(basic.keys())
     assert not set(timeout.keys()) & set(fuzzing.keys())
     assert not set(basic.keys()) & set(fuzzing.keys())
-

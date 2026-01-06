@@ -9,21 +9,29 @@ from typing import Any
 def build_timeout_schema() -> dict[str, Any]:
     """Build schema for timeout-related configuration."""
     return {
-        "timeout": {"type": "number", "description": "Default timeout in seconds"},
+        "timeout": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Default timeout in seconds",
+        },
         "tool_timeout": {
             "type": "number",
+            "minimum": 0,
             "description": "Tool-specific timeout in seconds",
         },
         "http_timeout": {
             "type": "number",
+            "minimum": 0,
             "description": "HTTP transport timeout in seconds",
         },
         "sse_timeout": {
             "type": "number",
+            "minimum": 0,
             "description": "SSE transport timeout in seconds",
         },
         "stdio_timeout": {
             "type": "number",
+            "minimum": 0,
             "description": "STDIO transport timeout in seconds",
         },
     }
@@ -31,7 +39,7 @@ def build_timeout_schema() -> dict[str, Any]:
 
 def build_basic_schema() -> dict[str, Any]:
     """Build schema for basic configuration properties.
-    
+
     Note: `safety_enabled` is a top-level convenience flag. If both
     `safety_enabled` and `safety.enabled` are specified, `safety.enabled`
     takes precedence.
@@ -66,9 +74,14 @@ def build_fuzzing_schema() -> dict[str, Any]:
             "enum": ["http", "https", "sse", "stdio", "streamablehttp"],
         },
         "endpoint": {"type": "string", "description": "Server endpoint URL"},
-        "runs": {"type": "integer", "description": "Number of fuzzing runs"},
+        "runs": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of fuzzing runs",
+        },
         "runs_per_type": {
             "type": "integer",
+            "minimum": 1,
             "description": "Number of runs per protocol type",
         },
         "protocol_type": {
@@ -77,6 +90,7 @@ def build_fuzzing_schema() -> dict[str, Any]:
         },
         "max_concurrency": {
             "type": "integer",
+            "minimum": 1,
             "description": "Maximum concurrent operations",
         },
     }
@@ -113,6 +127,7 @@ def build_auth_schema() -> dict[str, Any]:
                             "config": {"type": "object"},
                         },
                         "required": ["type", "id"],
+                        "additionalProperties": False,
                     },
                 },
                 "mappings": {
@@ -120,6 +135,7 @@ def build_auth_schema() -> dict[str, Any]:
                     "additionalProperties": {"type": "string"},
                 },
             },
+            "additionalProperties": False,
         },
     }
 
@@ -167,7 +183,7 @@ def build_custom_transports_schema() -> dict[str, Any]:
 
 def build_safety_schema() -> dict[str, Any]:
     """Build schema for safety configuration.
-    
+
     Note: `safety.enabled` takes precedence over top-level `safety_enabled`
     if both are specified.
     """
@@ -239,10 +255,12 @@ def build_output_schema() -> dict[str, Any]:
                     "properties": {
                         "days": {
                             "type": "integer",
+                            "minimum": 0,
                             "description": "Number of days to retain output files",
                         },
                         "max_size": {
                             "type": "string",
+                            "pattern": r"^\d+(\.\d+)?\s*(B|KB|MB|GB|TB)$",
                             "description": (
                                 "Maximum size of output directory "
                                 "(e.g., '1GB', '500MB')"
@@ -255,4 +273,3 @@ def build_output_schema() -> dict[str, Any]:
             "additionalProperties": False,
         },
     }
-

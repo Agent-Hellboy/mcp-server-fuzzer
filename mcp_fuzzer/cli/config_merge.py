@@ -78,7 +78,7 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         except Exception as exc:
             raise ConfigFileError(
                 f"Failed to load configuration file '{args.config}': {exc}"
-            )
+            ) from exc
     else:
         # apply_file() returns False if config loading fails (doesn't raise)
         if not config_mediator.apply_file():

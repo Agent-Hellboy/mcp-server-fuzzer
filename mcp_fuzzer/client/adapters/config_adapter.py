@@ -9,25 +9,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...config import (
-    apply_config_file,
-    get_config_schema,
-    load_config_file,
-)
+from ...config import ConfigLoader, get_config_schema, load_config_file
 from ...config.core.manager import config as global_config
 from ..ports.config_port import ConfigPort
 
 
 class ConfigAdapter(ConfigPort):
     """Adapter that implements ConfigPort by delegating to the config module.
-    
+
     This adapter acts as a mediator between other modules and the config module,
     implementing the Port and Adapter (Hexagonal Architecture) pattern.
     """
 
     def __init__(self, config_instance: Any = None):
         """Initialize the config adapter.
-        
+
         Args:
             config_instance: Optional configuration instance to use.
                 If None, uses the global config instance.
@@ -36,11 +32,11 @@ class ConfigAdapter(ConfigPort):
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key.
-        
+
         Args:
             key: Configuration key
             default: Default value if key not found
-            
+
         Returns:
             Configuration value or default
         """
@@ -48,7 +44,7 @@ class ConfigAdapter(ConfigPort):
 
     def set(self, key: str, value: Any) -> None:
         """Set a configuration value.
-        
+
         Args:
             key: Configuration key
             value: Configuration value
@@ -57,7 +53,7 @@ class ConfigAdapter(ConfigPort):
 
     def update(self, config_dict: dict[str, Any]) -> None:
         """Update configuration with values from a dictionary.
-        
+
         Args:
             config_dict: Dictionary of configuration values to update
         """
@@ -65,13 +61,13 @@ class ConfigAdapter(ConfigPort):
 
     def load_file(self, file_path: str) -> dict[str, Any]:
         """Load configuration from a file.
-        
+
         Args:
             file_path: Path to configuration file
-            
+
         Returns:
             Dictionary containing loaded configuration
-            
+
         Raises:
             ConfigFileError: If file cannot be loaded
         """
@@ -84,16 +80,17 @@ class ConfigAdapter(ConfigPort):
         file_names: list[str] | None = None,
     ) -> bool:
         """Load and apply configuration from a file.
-        
+
         Args:
             config_path: Explicit path to config file
             search_paths: List of directories to search
             file_names: List of file names to search for
-            
+
         Returns:
             True if configuration was loaded and applied, False otherwise
         """
-        return apply_config_file(
+        loader = ConfigLoader(config_instance=self._config)
+        return loader.apply(
             config_path=config_path,
             search_paths=search_paths,
             file_names=file_names,
@@ -101,7 +98,7 @@ class ConfigAdapter(ConfigPort):
 
     def get_schema(self) -> dict[str, Any]:
         """Get the JSON schema for configuration validation.
-        
+
         Returns:
             JSON schema dictionary
         """
@@ -110,4 +107,3 @@ class ConfigAdapter(ConfigPort):
 
 # Global instance for convenience (acts as the mediator)
 config_mediator: ConfigPort = ConfigAdapter()
-

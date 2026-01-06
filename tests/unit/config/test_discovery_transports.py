@@ -52,9 +52,23 @@ def test_find_config_file_prefers_explicit_path(tmp_path):
     path = tmp_path / "mcp-fuzzer.yaml"
     path.write_text("timeout: 5")
     result = find_config_file(
-        config_path=str(path), search_paths=[str(tmp_path)]
+        config_path=str(path),
+        search_paths=[str(tmp_path)],
     )
     assert result == str(path)
+
+
+def test_find_config_file_missing_explicit_path_does_not_fallback(tmp_path):
+    """Missing explicit config_path should not fall back to other locations."""
+    missing_path = tmp_path / "missing.yml"
+    fallback_path = tmp_path / "mcp-fuzzer.yml"
+    fallback_path.write_text("timeout: 10\n")
+    result = find_config_file(
+        config_path=str(missing_path),
+        search_paths=[str(tmp_path)],
+        file_names=["mcp-fuzzer.yml"],
+    )
+    assert result is None
 
 
 def test_find_config_file_search_paths(tmp_path):
@@ -62,7 +76,8 @@ def test_find_config_file_search_paths(tmp_path):
     path = tmp_path / "mcp-fuzzer.yml"
     path.write_text("timeout: 10\n")
     result = find_config_file(
-        search_paths=[str(tmp_path)], file_names=["mcp-fuzzer.yml"]
+        search_paths=[str(tmp_path)],
+        file_names=["mcp-fuzzer.yml"],
     )
     assert result == str(path)
 

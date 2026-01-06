@@ -6,6 +6,8 @@ and URL parser to create transport instances.
 
 from __future__ import annotations
 
+import warnings
+
 from ..core.base import TransportProtocol
 from .registry import registry as global_registry
 from .url_parser import URLParser
@@ -86,6 +88,11 @@ class TransportRegistry:
     """
 
     def __init__(self):
+        warnings.warn(
+            "TransportRegistry is deprecated. Use UnifiedTransportRegistry directly.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._registry = global_registry
 
     def register(self, name: str, cls: type[TransportProtocol]) -> None:

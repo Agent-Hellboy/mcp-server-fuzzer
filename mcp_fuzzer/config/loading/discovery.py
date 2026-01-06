@@ -17,7 +17,7 @@ def find_config_file(
     """Find a configuration file in the given paths.
 
     Args:
-        config_path: Explicit path to config file, takes precedence if provided
+        config_path: Explicit path to config file, authoritative if provided
         search_paths: List of directories to search for config files
         file_names: List of file names to search for
 
@@ -51,10 +51,12 @@ def _find_config_file_impl(params: ConfigSearchParams) -> str | None:
         params: Configuration search parameters
 
     Returns:
-        Path to the found config file or None if not found
+        Path to the found config file or None if not found. If an explicit
+        config_path is provided, it is authoritative and no fallback search
+        occurs when it is missing.
     """
-    if params.config_path and os.path.isfile(params.config_path):
-        return params.config_path
+    if params.config_path is not None:
+        return params.config_path if os.path.isfile(params.config_path) else None
 
     search_paths = params.search_paths
     if search_paths is None:
