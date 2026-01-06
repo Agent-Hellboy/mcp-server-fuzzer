@@ -123,10 +123,10 @@ class TestStandardizedOutputIntegration:
 
     def test_configuration_driven_output(self):
         """Test that output generation respects configuration settings."""
-        from mcp_fuzzer.config import config
+        from mcp_fuzzer.client.adapters import config_mediator
 
         # Set output configuration
-        config.update({
+        config_mediator.update({
             "output": {
                 "format": "json",
                 "directory": self.temp_dir,
