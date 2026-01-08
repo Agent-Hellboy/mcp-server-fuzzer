@@ -2,6 +2,8 @@
 
 This guide provides comprehensive information on configuring MCP Server Fuzzer using configuration files, environment variables, and command-line arguments.
 
+> **Note**: For detailed authentication configuration (Bearer tokens, API keys, OAuth, etc.), see the [Authentication Guide](authentication.md).
+
 ## Configuration Methods
 
 MCP Server Fuzzer supports multiple configuration methods in order of precedence:

@@ -104,6 +104,8 @@ nav:
   - Getting Started:
       - Examples: getting-started/examples.md
   - Configuration:
+      - Configuration Guide: configuration/configuration.md
+      - Authentication: configuration/authentication.md
       - Configuration Loader: configuration/configuration-loader.md
   - Components:
       - Safety: components/safety.md
