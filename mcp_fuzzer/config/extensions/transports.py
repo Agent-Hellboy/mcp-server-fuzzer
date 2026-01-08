@@ -8,8 +8,8 @@ import logging
 from typing import Any
 
 from ...exceptions import ConfigFileError, MCPError
-from ...transport.custom import register_custom_transport
-from ...transport.base import TransportProtocol
+from ...transport.catalog import register_custom_driver
+from ...transport.interfaces.driver import TransportDriver
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +30,9 @@ def load_custom_transports(config_data: dict[str, Any]) -> None:
             module = importlib.import_module(module_path)
             transport_class = getattr(module, class_name)
             try:
-                if not issubclass(transport_class, TransportProtocol):
+                if not issubclass(transport_class, TransportDriver):
                     raise ConfigFileError(
-                        f"{module_path}.{class_name} must subclass TransportProtocol"
+                        f"{module_path}.{class_name} must subclass TransportDriver"
                     )
             except TypeError:
                 raise ConfigFileError(f"{module_path}.{class_name} is not a class")
@@ -53,7 +53,7 @@ def load_custom_transports(config_data: dict[str, Any]) -> None:
                 if not callable(factory_fn):
                     raise ConfigFileError(f"Factory '{factory_path}' is not callable")
 
-            register_custom_transport(
+            register_custom_driver(
                 name=transport_name,
                 transport_class=transport_class,
                 description=description,
