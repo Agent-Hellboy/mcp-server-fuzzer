@@ -14,6 +14,7 @@ from ..safety_system.safety import SafetyProvider, SafetyFilter
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
 
+
 class MCPFuzzerClient:
     """
     Main client for fuzzing MCP servers.
@@ -174,8 +175,7 @@ class MCPFuzzerClient:
     ):
         """Generate standardized output reports."""
         return await self._reporter.generate_standardized_report(
-            output_types=output_types,
-            include_safety=include_safety
+            output_types=output_types, include_safety=include_safety
         )
 
     async def generate_final_report(self, include_safety=True):

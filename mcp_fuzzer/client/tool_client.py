@@ -12,7 +12,9 @@ from typing import Any
 from ..auth import AuthManager
 from ..fuzz_engine.fuzzer import ToolFuzzer
 from ..safety_system.safety import SafetyFilter, SafetyProvider
-from ..config import (
+
+# Import constants directly from config (constants are values, not behavior)
+from ..config.core.constants import (
     DEFAULT_TOOL_RUNS,
     DEFAULT_MAX_TOOL_TIME,
     DEFAULT_MAX_TOTAL_FUZZING_TIME,

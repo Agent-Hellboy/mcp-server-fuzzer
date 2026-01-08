@@ -204,8 +204,7 @@ class DriverBaseBehavior(ABC):
         else:
             if has_result == has_error:
                 raise PayloadValidationError(
-                    "Response must have exactly one of \
-result or error"
+                    "Response must have exactly one of result or error"
                 )
             if "id" not in payload:
                 raise PayloadValidationError("Response must include 'id'")

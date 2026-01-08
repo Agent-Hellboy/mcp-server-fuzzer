@@ -170,6 +170,7 @@ class TestProcessRegistry:
     @pytest.mark.asyncio
     async def test_concurrent_register(self, registry, process_config):
         """Test concurrent registration of processes."""
+
         async def register_process(pid: int):
             process = MagicMock()
             process.pid = pid

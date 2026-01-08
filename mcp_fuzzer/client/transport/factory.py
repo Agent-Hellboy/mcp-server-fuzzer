@@ -37,7 +37,10 @@ def build_driver_with_auth(args: Any, client_args: dict[str, Any]):
                 )  # pragma: no cover
 
         factory_kwargs = {"timeout": args.timeout}
+        safety_enabled = client_args.get("safety_enabled", True)
 
+        if args.protocol in ("http", "https", "streamablehttp", "sse"):
+            factory_kwargs["safety_enabled"] = safety_enabled
         if args.protocol in ("http", "https", "streamablehttp", "sse") and auth_headers:
             factory_kwargs["auth_headers"] = auth_headers
             logger.debug("Adding auth headers to %s transport", args.protocol.upper())

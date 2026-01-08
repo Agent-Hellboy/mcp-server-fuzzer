@@ -20,7 +20,7 @@ from ...exceptions import (
 )
 from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ...safety_system.policy import sanitize_subprocess_env
-from ...config.constants import PROCESS_WAIT_TIMEOUT
+from ...config import PROCESS_WAIT_TIMEOUT
 from ..controller.process_supervisor import ProcessSupervisor
 
 

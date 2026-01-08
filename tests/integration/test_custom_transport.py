@@ -5,7 +5,8 @@ import tempfile
 import os
 from pathlib import Path
 
-from mcp_fuzzer.config import apply_config_file, load_custom_transports
+from mcp_fuzzer.client.adapters import config_mediator
+from mcp_fuzzer.config.extensions.transports import load_custom_transports
 from mcp_fuzzer.exceptions import ConfigFileError, TransportRegistrationError
 from mcp_fuzzer.transport import build_driver, register_custom_driver
 from mcp_fuzzer.transport.interfaces import TransportDriver, JsonRpcAdapter
@@ -96,7 +97,7 @@ custom_transports:
 
         try:
             # Load config and custom transports from the file we wrote
-            assert apply_config_file(config_path=config_path) is True
+            assert config_mediator.apply_file(config_path=config_path) is True
 
             # Test that transport was loaded
             from mcp_fuzzer.transport import list_custom_drivers

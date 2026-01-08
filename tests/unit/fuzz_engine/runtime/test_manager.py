@@ -198,12 +198,13 @@ class TestProcessManager:
 
         # Test error handling through public API
         # Mock the signal dispatcher to raise an error during graceful termination
-        with patch.object(
-            self.manager.watchdog, "unregister_process", AsyncMock()
-        ), patch.object(
-            self.manager.signal_dispatcher,
-            "send",
-            AsyncMock(side_effect=RuntimeError("boom")),
+        with (
+            patch.object(self.manager.watchdog, "unregister_process", AsyncMock()),
+            patch.object(
+                self.manager.signal_dispatcher,
+                "send",
+                AsyncMock(side_effect=RuntimeError("boom")),
+            ),
         ):
             with pytest.raises(ProcessStopError) as exc:
                 await self.manager.stop_process(mock_process.pid, force=False)
@@ -419,9 +420,7 @@ class TestProcessManager:
                     process = await self.manager.start_process(process_config)
 
                     # Wait for process with timeout
-                    completion = await self.manager.wait(
-                        process.pid, timeout=1.0
-                    )
+                    completion = await self.manager.wait(process.pid, timeout=1.0)
 
                     # Verify timeout handling
                     assert completion is not None
@@ -745,6 +744,7 @@ class TestProcessManager:
     @pytest.mark.asyncio
     async def test_observer_error_handling(self):
         """Test that observer errors are handled gracefully."""
+
         def failing_observer(event_name: str, data: dict):
             raise Exception("Observer error")
 
@@ -823,6 +823,7 @@ class TestProcessManager:
 
         # Make one succeed, one fail
         call_count = 0
+
         async def mock_send(pid, signal_type="timeout"):
             nonlocal call_count
             call_count += 1
@@ -830,9 +831,7 @@ class TestProcessManager:
                 return True
             raise RuntimeError("Signal failed")
 
-        with patch.object(
-            self.manager, "send_timeout_signal", side_effect=mock_send
-        ):
+        with patch.object(self.manager, "send_timeout_signal", side_effect=mock_send):
             with pytest.raises(ProcessSignalError) as exc_info:
                 await self.manager.send_timeout_signal_to_all()
 
@@ -856,9 +855,7 @@ class TestProcessManager:
         watchdog = ProcessWatchdog(registry, signal_handler, WatchdogConfig())
 
         # Create lifecycle and monitor with different watchdog instances
-        different_watchdog = ProcessWatchdog(
-            registry, signal_handler, WatchdogConfig()
-        )
+        different_watchdog = ProcessWatchdog(registry, signal_handler, WatchdogConfig())
         lifecycle = ProcessLifecycle(
             different_watchdog, registry, signal_handler, logger
         )

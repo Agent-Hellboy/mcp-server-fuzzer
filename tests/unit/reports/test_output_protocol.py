@@ -51,7 +51,7 @@ class TestOutputProtocol:
         """Test creating fuzzing results output."""
         tool_results = {
             "tool1": [{"success": True}, {"success": False}],
-            "tool2": [{"success": True}]
+            "tool2": [{"success": True}],
         }
         protocol_results = {
             "InitializeRequest": [{"success": True}],
@@ -66,7 +66,7 @@ class TestOutputProtocol:
             execution_time="PT30S",
             total_tests=3,
             success_rate=66.67,
-            safety_enabled=True
+            safety_enabled=True,
         )
 
         assert output["output_type"] == "fuzzing_results"
@@ -82,17 +82,11 @@ class TestOutputProtocol:
 
     def test_create_error_report_output(self):
         """Test creating error report output."""
-        errors = [
-            {"type": "tool_error", "message": "Test error", "severity": "high"}
-        ]
-        warnings = [
-            {"type": "config_warning", "message": "Test warning"}
-        ]
+        errors = [{"type": "tool_error", "message": "Test error", "severity": "high"}]
+        warnings = [{"type": "config_warning", "message": "Test warning"}]
 
         output = self.protocol.create_error_report_output(
-            errors=errors,
-            warnings=warnings,
-            execution_context={"mode": "tools"}
+            errors=errors, warnings=warnings, execution_context={"mode": "tools"}
         )
 
         assert output["output_type"] == "error_report"
@@ -105,10 +99,7 @@ class TestOutputProtocol:
 
     def test_create_safety_summary_output(self):
         """Test creating safety summary output."""
-        safety_data = {
-            "active": True,
-            "statistics": {"total_blocked": 5}
-        }
+        safety_data = {"active": True, "statistics": {"total_blocked": 5}}
         blocked_operations = [
             {"tool_name": "dangerous_tool", "reason": "unsafe operation"}
         ]
@@ -116,7 +107,7 @@ class TestOutputProtocol:
         output = self.protocol.create_safety_summary_output(
             safety_data=safety_data,
             blocked_operations=blocked_operations,
-            risk_assessment="high"
+            risk_assessment="high",
         )
 
         assert output["output_type"] == "safety_summary"
@@ -186,6 +177,7 @@ class TestOutputManager:
     def teardown_method(self):
         """Clean up test fixtures."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_save_fuzzing_results(self):
@@ -202,14 +194,15 @@ class TestOutputManager:
             execution_time="PT30S",
             total_tests=2,
             success_rate=100.0,
-            safety_enabled=False
+            safety_enabled=False,
         )
 
         assert Path(filepath).exists()
 
         # Verify session directory structure
-        session_dir = (Path(self.temp_dir) / "sessions" /
-                      self.manager.protocol.session_id)
+        session_dir = (
+            Path(self.temp_dir) / "sessions" / self.manager.protocol.session_id
+        )
         assert session_dir.exists()
 
     def test_save_error_report(self):
@@ -231,8 +224,9 @@ class TestOutputManager:
     def test_get_session_directory(self):
         """Test getting session directory."""
         session_dir = self.manager.get_session_directory()
-        expected_dir = (Path(self.temp_dir) / "sessions" /
-                       self.manager.protocol.session_id)
+        expected_dir = (
+            Path(self.temp_dir) / "sessions" / self.manager.protocol.session_id
+        )
 
         assert session_dir == expected_dir
 
@@ -274,13 +268,11 @@ class TestOutputProtocolIntegration:
                     {
                         "success": False,
                         "exception": "ValueError",
-                        "args": {"param": "malformed"}
-                    }
+                        "args": {"param": "malformed"},
+                    },
                 ]
             }
-            protocol_results = {
-                "InitializeRequest": [{"success": True}]
-            }
+            protocol_results = {"InitializeRequest": [{"success": True}]}
 
             fuzzing_filepath = manager.save_fuzzing_results(
                 mode="tools",
@@ -291,7 +283,7 @@ class TestOutputProtocolIntegration:
                 execution_time="PT45S",
                 total_tests=3,
                 success_rate=66.67,
-                safety_enabled=True
+                safety_enabled=True,
             )
 
             # Generate error report
@@ -300,7 +292,7 @@ class TestOutputProtocolIntegration:
                     "type": "tool_error",
                     "tool_name": "example_tool",
                     "severity": "medium",
-                    "message": "Invalid argument format"
+                    "message": "Invalid argument format",
                 }
             ]
 

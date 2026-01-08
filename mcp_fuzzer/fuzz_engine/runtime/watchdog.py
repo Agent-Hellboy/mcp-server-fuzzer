@@ -19,7 +19,12 @@ import sys
 import time
 from typing import Any, Awaitable, Callable, Protocol
 
-from ...config.constants import PROCESS_FORCE_KILL_TIMEOUT, PROCESS_TERMINATION_TIMEOUT
+# Import constants directly from config (constants are values, not behavior)
+# Behavior (functions/classes) should go through client mediator
+from ...config.core.constants import (
+    PROCESS_FORCE_KILL_TIMEOUT,
+    PROCESS_TERMINATION_TIMEOUT,
+)
 from ...exceptions import MCPError, ProcessStopError, WatchdogStartError
 from .config import WatchdogConfig
 from .registry import ProcessRecord, ProcessRegistry
@@ -106,9 +111,7 @@ class SignalTerminationStrategy:
                 )
                 return True
 
-            self._logger.info(
-                "Escalating to force kill for process %s (%s)", pid, name
-            )
+            self._logger.info("Escalating to force kill for process %s (%s)", pid, name)
             await self._dispatcher.send("force", pid, process_info)
 
             if await self._await_exit(
@@ -378,9 +381,7 @@ class ProcessWatchdog:
         """Record recent activity for a process."""
         self._last_activity[pid] = self._clock()
 
-    async def scan_once(
-        self, processes: dict[int, ProcessRecord]
-    ) -> dict[str, Any]:
+    async def scan_once(self, processes: dict[int, ProcessRecord]) -> dict[str, Any]:
         """Run a single hang detection pass using provided registry snapshot."""
         now = self._clock()
         self._last_scan_at = now
@@ -466,7 +467,8 @@ class ProcessWatchdog:
         snapshot = await self.registry.snapshot()
         total = len(snapshot)
         running = sum(
-            1 for record in snapshot.values()
+            1
+            for record in snapshot.values()
             if getattr(record["process"], "returncode", None) is None
         )
         stats = {

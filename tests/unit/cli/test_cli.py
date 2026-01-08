@@ -23,7 +23,7 @@ from mcp_fuzzer.client.runtime.async_runner import execute_inner_client
 from mcp_fuzzer.client.runtime.retry import run_with_retry_on_interrupt
 from mcp_fuzzer.client.safety import SafetyController
 from mcp_fuzzer.client.transport.factory import build_driver_with_auth
-from mcp_fuzzer.exceptions import ArgumentValidationError, MCPError
+from mcp_fuzzer.exceptions import ArgumentValidationError, ConfigFileError, MCPError
 
 
 pytestmark = [pytest.mark.unit, pytest.mark.cli]
@@ -271,7 +271,7 @@ def test_build_cli_config_merges_and_returns_cli_config():
 
 def test_handle_validate_config(monkeypatch):
     validator = ValidationManager()
-    with patch("mcp_fuzzer.cli.validators.load_config_file") as mock_load:
+    with patch("mcp_fuzzer.cli.validators.config_mediator.load_file") as mock_load:
         validator.validate_config_file("config.yml")
     mock_load.assert_called_once_with("config.yml")
 
@@ -316,6 +316,7 @@ def test_transport_factory_applies_auth_headers():
             "http",
             "http://example.com",
             timeout=10.0,
+            safety_enabled=True,
             auth_headers={"Authorization": "x"},
         )
 
@@ -547,7 +548,7 @@ def test_run_cli_unexpected_error_debug(monkeypatch, caplog):
 def test_build_cli_config_uses_config_file(monkeypatch):
     args = _base_args(config="custom.yml", endpoint=None)
     with patch(
-        "mcp_fuzzer.cli.config_merge.load_config_file",
+        "mcp_fuzzer.cli.config_merge.config_mediator.load_file",
         return_value={
             "endpoint": "http://conf",
             "runs": 42,
@@ -563,20 +564,22 @@ def test_build_cli_config_uses_config_file(monkeypatch):
 def test_build_cli_config_handles_apply_config_error(caplog):
     caplog.set_level(logging.DEBUG)
     args = _base_args(config=None)
+    # apply_file() now returns False instead of raising exceptions
     with patch(
-        "mcp_fuzzer.cli.config_merge.apply_config_file",
-        side_effect=Exception("fail"),
+        "mcp_fuzzer.cli.config_merge.config_mediator.apply_file",
+        return_value=False,
     ):
         cli_config = build_cli_config(args)
     assert cli_config.merged["endpoint"] == "http://localhost"
-    assert "fail" in "".join(caplog.messages)
+    # Check that debug message was logged when config file is not found
+    assert "Default configuration file not found" in "".join(caplog.messages)
 
 
 def test_build_cli_config_raises_config_error():
     args = _base_args(config="bad.yml")
     with patch(
-        "mcp_fuzzer.cli.config_merge.load_config_file",
+        "mcp_fuzzer.cli.config_merge.config_mediator.load_file",
         side_effect=ValueError("bad"),
     ):
-        with pytest.raises(Exception):
+        with pytest.raises(ConfigFileError):
             build_cli_config(args)

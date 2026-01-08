@@ -65,6 +65,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         url: str,
         timeout: float = DEFAULT_TIMEOUT,
         auth_headers: dict[str, str | None] = None,
+        safety_enabled: bool = True,
     ):
         """Initialize streamable HTTP transport.
 
@@ -76,18 +77,30 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         super().__init__()
         self.url = url
         self.timeout = timeout
+        self.safety_enabled = safety_enabled
         self.headers: dict[str, str] = {
             "Accept": DEFAULT_HTTP_ACCEPT,
             "Content-Type": JSON_CT,
         }
-        if auth_headers:
-            self.headers.update(auth_headers)
+        self.auth_headers = {
+            k: v for k, v in (auth_headers or {}).items() if v is not None
+        }
 
         self.session_id: str | None = None
         self.protocol_version: str | None = None
         self._initialized: bool = False
         self._init_lock: asyncio.Lock = asyncio.Lock()
         self._initializing: bool = False
+
+    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
+        """Prepare headers with optional safety sanitization and auth headers."""
+        if self.safety_enabled:
+            safe_headers = self._prepare_safe_headers(headers)
+        else:
+            safe_headers = headers.copy()
+        # Add auth headers after sanitization (they are user-configured and safe)
+        safe_headers.update(self.auth_headers)
+        return safe_headers
 
     def _prepare_headers(self) -> dict[str, str]:
         """Prepare headers with session information.
@@ -321,7 +334,6 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             method = payload.get("method")
         except AttributeError:
             method = None
-
         if not self._initialized and method != "initialize":
             async with self._init_lock:
                 if not self._initialized and not self._initializing:
@@ -335,7 +347,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         # Use shared network functionality
         self._validate_network_request(self.url)
-        safe_headers = self._prepare_safe_headers(headers)
+        safe_headers = self._prepare_headers_with_auth(headers)
 
         async with self._create_http_client(self.timeout) as client:
             response = await self._post_with_retries(
@@ -345,6 +357,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             # Handle redirect
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
+                # Follow at most one redirect to avoid unbounded chains.
                 self._logger.debug("Following redirect to %s", redirect_url)
                 response = await self._post_with_retries(
                     client, redirect_url, payload, safe_headers
@@ -411,7 +424,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         # Use shared network functionality
         self._validate_network_request(self.url)
-        safe_headers = self._prepare_safe_headers(headers)
+        safe_headers = self._prepare_headers_with_auth(headers)
 
         async with self._create_http_client(self.timeout) as client:
             response = await self._post_with_retries(
@@ -419,6 +432,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             )
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
+                # Follow at most one redirect to avoid unbounded chains.
                 response = await self._post_with_retries(
                     client, redirect_url, payload, safe_headers
                 )
@@ -468,38 +482,44 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         # Use shared network functionality
         self._validate_network_request(self.url)
-        safe_headers = self._prepare_safe_headers(headers)
+        safe_headers = self._prepare_headers_with_auth(headers)
 
         async with self._create_http_client(self.timeout) as client:
-            response = await client.stream(
+            async with client.stream(
                 "POST", self.url, json=payload, headers=safe_headers
-            )
+            ) as response:
+                redirect_url = self._resolve_redirect(response)
+                if redirect_url:
+                    # Follow at most one redirect to avoid unbounded chains.
+                    await response.aclose()
+                    async with client.stream(
+                        "POST", redirect_url, json=payload, headers=safe_headers
+                    ) as redirected:
+                        async for item in self._yield_streamed_lines(redirected):
+                            yield item
+                    return
 
-            redirect_url = self._resolve_redirect(response)
-            if redirect_url:
-                await response.aclose()
-                response = await client.stream(
-                    "POST", redirect_url, json=payload, headers=safe_headers
-                )
+                async for item in self._yield_streamed_lines(response):
+                    yield item
 
+    async def _yield_streamed_lines(
+        self, response: httpx.Response
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Parse streaming response lines into JSON objects."""
+        self._handle_http_response_error(response)
+        # Update session headers from streaming response
+        self._maybe_extract_session_headers(response)
+
+        async for line in response.aiter_lines():
+            if not line.strip():
+                continue
             try:
-                self._handle_http_response_error(response)
-                # Update session headers from streaming response
-                self._maybe_extract_session_headers(response)
-
-                async for line in response.aiter_lines():
-                    if not line.strip():
-                        continue
+                data = json.loads(line)
+                yield data
+            except json.JSONDecodeError:
+                if line.startswith("data:"):
                     try:
-                        data = json.loads(line)
+                        data = json.loads(line[len("data:") :].strip())
                         yield data
                     except json.JSONDecodeError:
-                        if line.startswith("data:"):
-                            try:
-                                data = json.loads(line[len("data:") :].strip())
-                                yield data
-                            except json.JSONDecodeError:
-                                self._logger.error("Failed to parse SSE data as JSON")
-                                continue
-            finally:
-                await response.aclose()
+                        self._logger.error("Failed to parse SSE data as JSON")
