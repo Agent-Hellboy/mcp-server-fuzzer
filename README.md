@@ -218,6 +218,10 @@ The system is built with a modular architecture:
 - **Authentication**: Multiple auth provider support
 - **Reporting**: FuzzerReporter, Console/JSON/Text formatters, SafetyReporter
 
+### Runtime Watchdog Overview
+
+The watchdog supervises processes registered through `ProcessManager`, combining hang detection, signal dispatch, and registry-driven cleanup. For a deeper dive into lifecycle events, custom signal strategies, and registry wiring, see the [runtime management guide](docs/components/runtime-management.md).
+
 ### Understanding the Design Patterns
 
 For developers (beginners to intermediate) who want to understand the design patterns used throughout the codebase, please refer to our comprehensive [Design Pattern Review](docs/design-pattern-review.md). This document provides:

@@ -4,7 +4,7 @@
 
 ### ✅ SAFE FOR CI/CD EXECUTION
 
-The system test script can be safely run in GitHub Actions with the following security measures:
+The e2e test script can be safely run in GitHub Actions with the following security measures:
 
 ## 🔒 Security Safeguards
 
@@ -44,7 +44,7 @@ google-chrome, safari, edge, opera, brave
 ### Recommended GitHub Actions Workflow
 
 ```yaml
-name: System Test with Safety
+name: E2E Test with Safety
 on:
   push:
     branches: [ main, develop ]
@@ -52,7 +52,7 @@ on:
     branches: [ main ]
 
 jobs:
-  system-test:
+  e2e-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -70,13 +70,13 @@ jobs:
         cd testing-servers/DesktopCommanderMCP
         npm ci && npm run build
 
-    - name: Run system test
+    - name: Run e2e test
       env:
         MCP_FUZZER_SAFETY_ENABLED: 'true'
         MCP_FUZZER_TIMEOUT: '30'
       run: |
-        chmod +x tests/system/test_desktop_commander_mcp.sh
-        ./tests/system/test_desktop_commander_mcp.sh
+        chmod +x tests/e2e/test_desktop_commander_mcp.sh
+        ./tests/e2e/test_desktop_commander_mcp.sh
 
     - name: Upload results
       uses: actions/upload-artifact@v4
@@ -142,7 +142,7 @@ MCP_FUZZER_FS_ROOT=/tmp/mcp_fuzzer_sandbox
 
 ## 🎯 Conclusion
 
-**The system test script is SAFE for GitHub Actions execution** with:
+**The e2e test script is SAFE for GitHub Actions execution** with:
 
 - ✅ **Comprehensive safety system** preventing dangerous operations
 - ✅ **CI environment isolation** providing additional security layer
@@ -150,4 +150,4 @@ MCP_FUZZER_FS_ROOT=/tmp/mcp_fuzzer_sandbox
 - ✅ **Artifact isolation** controlling data exposure
 - ✅ **Automatic cleanup** preventing persistent state
 
-The combination of the MCP fuzzer's built-in safety system and GitHub Actions' security model provides multiple layers of protection, making this system test suitable for automated CI/CD pipelines.
+The combination of the MCP fuzzer's built-in safety system and GitHub Actions' security model provides multiple layers of protection, making this e2e test suitable for automated CI/CD pipelines.

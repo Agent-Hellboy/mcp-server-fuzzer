@@ -4,7 +4,8 @@ import logging
 from typing import Any
 
 import httpx
-from ..config import (
+# Import constants directly from config (constants are values, not behavior)
+from ..config.core.constants import (
     DEFAULT_PROTOCOL_VERSION,
     CONTENT_TYPE_HEADER,
     JSON_CONTENT_TYPE,

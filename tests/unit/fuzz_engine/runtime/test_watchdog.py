@@ -1,189 +1,152 @@
+#!/usr/bin/env python3
+"""
+ProcessWatchdog tests (registry-backed).
+"""
+
 import asyncio
-import os
-import signal as _signal
-import signal
-import time
+import logging
 
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock
 
-# Import error classes
-from mcp_fuzzer.exceptions import ProcessRegistrationError, WatchdogStartError
-# Import the classes to test
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import (
+from mcp_fuzzer.fuzz_engine.runtime import (
+    ProcessConfig,
+    ProcessRegistry,
     ProcessWatchdog,
+    SignalDispatcher,
     WatchdogConfig,
 )
 
 
-class TestProcessWatchdog:
-    @pytest.fixture(autouse=True)
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.config = WatchdogConfig(
-            check_interval=0.1,
-            process_timeout=1.0,
-            extra_buffer=0.5,
-            max_hang_time=2.0,
-            auto_kill=True,
-        )
-        self.watchdog = ProcessWatchdog(self.config)
-        self.mock_process = MagicMock()
-        self.mock_process.pid = 12345
-        self.mock_process.returncode = None
+class ClockStub:
+    def __init__(self, start: float = 0.0) -> None:
+        self.now = start
 
-    def test_init(self):
-        """Test initialization of the watchdog."""
-        watchdog = ProcessWatchdog()
-        assert watchdog.config is not None
-        assert watchdog._processes == {}
-        assert watchdog._watchdog_task is None
+    def __call__(self) -> float:
+        return self.now
 
-        # Test with custom config
-        config = WatchdogConfig(check_interval=2.0)
-        watchdog = ProcessWatchdog(config)
-        assert watchdog.config.check_interval == 2.0
+    def advance(self, delta: float) -> None:
+        self.now += delta
 
-    @pytest.mark.asyncio
-    async def test_start_watchdog(self):
-        """Test starting the watchdog."""
-        with patch("asyncio.create_task") as mock_create_task:
-            await self.watchdog.start()
-            assert mock_create_task.called
-            mock_create_task.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_start_watchdog_no_loop(self):
-        """Test starting the watchdog without a running loop."""
-        # Since the start method is now async, we need to simulate a failure inside it
-        with patch("asyncio.create_task", side_effect=RuntimeError("Test exception")):
-            with pytest.raises(WatchdogStartError) as exc:
-                await self.watchdog.start()
-            assert exc.value.code == "95006"
-            # The task should not be created due to the exception
-            assert self.watchdog._watchdog_task is None
+class FakeTermination:
+    def __init__(self) -> None:
+        self.calls: list[int] = []
 
-    @pytest.mark.asyncio
-    async def test_stop_watchdog_active(self):
-        """Test stopping an active watchdog."""
-        # Create a mock task
-        mock_task = MagicMock()
-        mock_task.done.return_value = False
+    async def terminate(self, pid: int, process_info, hang_duration: float) -> bool:
+        self.calls.append(pid)
+        return True
 
-        # Set it directly to simulate an active task
-        self.watchdog._watchdog_task = mock_task
 
-        # Stop the watchdog
-        await self.watchdog.stop()
+@pytest.fixture
+def logger():
+    return logging.getLogger(__name__)
 
-        # Verify the stop was handled correctly
-        assert self.watchdog._stop_event.is_set()
-        mock_task.cancel.assert_called_once()
-        assert self.watchdog._watchdog_task is None
 
-    @pytest.mark.asyncio
-    async def test_stop_watchdog_inactive(self):
-        """Test stopping an inactive watchdog."""
-        await self.watchdog.stop()
-        # No assertion needed, just ensure no crash
+@pytest.fixture
+def registry():
+    return ProcessRegistry()
 
-    @pytest.mark.asyncio
-    async def test_register_process(self):
-        """Test registering a process."""
-        mock_process = MagicMock()
-        mock_process.pid = 12345
 
-        # Mock start method to avoid creating an actual task
-        with patch.object(self.watchdog, "start", AsyncMock()):
-            await self.watchdog.register_process(12345, mock_process, None, "test")
+@pytest.fixture
+def signal_dispatcher(registry, logger):
+    return SignalDispatcher(registry, logger)
 
-            # Assert process was registered
-            assert 12345 in self.watchdog._processes
-            assert self.watchdog._processes[12345]["name"] == "test"
-            assert self.watchdog._processes[12345]["process"] == mock_process
 
-    @pytest.mark.asyncio
-    async def test_register_process_failure(self):
-        """Test register_process surfaces ProcessRegistrationError."""
-        mock_process = MagicMock()
-        mock_process.pid = 12345
+@pytest.mark.asyncio
+async def test_start_stop(registry, signal_dispatcher, logger):
+    watchdog = ProcessWatchdog(registry, signal_dispatcher, logger=logger)
+    await watchdog.start()
+    stats = await watchdog.get_stats()
+    assert stats["watchdog_active"] is True
+    await watchdog.stop()
+    stats = await watchdog.get_stats()
+    assert stats["watchdog_active"] is False
 
-        with patch.object(
-            self.watchdog, "_get_lock", side_effect=RuntimeError("boom")
-        ):
-            with pytest.raises(ProcessRegistrationError) as exc:
-                await self.watchdog.register_process(12345, mock_process, None, "test")
-            assert exc.value.code == "95005"
 
-    @pytest.mark.asyncio
-    async def test_unregister_process(self):
-        """Test unregistering a process."""
-        mock_process = MagicMock()
-        mock_process.pid = 12345
+@pytest.mark.asyncio
+async def test_scan_once_respects_registry(registry, signal_dispatcher, logger):
+    config = WatchdogConfig(process_timeout=1.0, extra_buffer=0.0)
+    watchdog = ProcessWatchdog(registry, signal_dispatcher, config, logger=logger)
 
-        # Register process
-        with patch.object(self.watchdog, "start", AsyncMock()):
-            await self.watchdog.register_process(12345, mock_process, None, "test")
+    mock_process = AsyncMock()
+    mock_process.pid = 42
+    mock_process.returncode = None
+    await registry.register(
+        42, mock_process, ProcessConfig(command=["echo"], name="echo")
+    )
+    result = await watchdog.scan_once(await registry.snapshot())
+    assert result["hung"] == []
+    stats = await watchdog.get_stats()
+    assert stats["total_processes"] == 1
 
-            # Unregister process
-            await self.watchdog.unregister_process(12345)
+    # Mark finished and ensure removal occurs
+    mock_process.returncode = 0
+    result = await watchdog.scan_once(await registry.snapshot())
+    assert 42 in result["removed"]
 
-            # Assert process was unregistered
-            assert 12345 not in self.watchdog._processes
 
-    @pytest.mark.asyncio
-    async def test_unregister_process_failure(self):
-        """Test unregister_process surfaces ProcessRegistrationError."""
-        with patch.object(
-            self.watchdog, "_get_lock", side_effect=RuntimeError("boom")
-        ):
-            with pytest.raises(ProcessRegistrationError) as exc:
-                await self.watchdog.unregister_process(12345)
-            assert exc.value.code == "95005"
+@pytest.mark.asyncio
+async def test_hang_detection_uses_clock(registry, logger):
+    clock = ClockStub()
+    fake_terminator = FakeTermination()
+    config = WatchdogConfig(
+        check_interval=0.1, process_timeout=1.0, extra_buffer=0.0, auto_kill=True
+    )
+    watchdog = ProcessWatchdog(
+        registry,
+        signal_dispatcher=None,
+        config=config,
+        termination_strategy=fake_terminator,
+        clock=clock,
+        logger=logger,
+    )
 
-    @pytest.mark.asyncio
-    async def test_update_activity(self):
-        """Test updating activity for a process."""
-        mock_process = MagicMock()
-        mock_process.pid = 12345
+    mock_process = AsyncMock()
+    mock_process.pid = 99
+    mock_process.returncode = None
+    await registry.register(
+        99,
+        mock_process,
+        ProcessConfig(command=["sleep", "10"], name="slow"),
+        started_at=clock.now,
+    )
 
-        # Register process
-        with patch.object(self.watchdog, "start", AsyncMock()):
-            await self.watchdog.register_process(12345, mock_process, None, "test")
+    await watchdog.update_activity(99)
+    await watchdog.scan_once(await registry.snapshot())
+    assert fake_terminator.calls == []
 
-            # Get initial activity time
-            initial_time = self.watchdog._processes[12345]["last_activity"]
+    clock.advance(2.0)
+    await watchdog.scan_once(await registry.snapshot())
+    assert fake_terminator.calls == [99]
 
-            # Wait a bit
-            await asyncio.sleep(0.1)
 
-            # Update activity
-            await self.watchdog.update_activity(12345)
+@pytest.mark.asyncio
+async def test_activity_callback_boolean(registry, logger):
+    clock = ClockStub()
+    fake_terminator = FakeTermination()
+    watchdog = ProcessWatchdog(
+        registry,
+        signal_dispatcher=None,
+        config=WatchdogConfig(process_timeout=0.5, extra_buffer=0.0, auto_kill=True),
+        termination_strategy=fake_terminator,
+        clock=clock,
+        logger=logger,
+    )
 
-            # Assert activity time was updated
-            assert self.watchdog._processes[12345]["last_activity"] > initial_time
+    mock_process = AsyncMock()
+    mock_process.pid = 7
+    mock_process.returncode = None
+    cfg = ProcessConfig(command=["echo"], name="echo", activity_callback=lambda: True)
+    await registry.register(7, mock_process, cfg, started_at=clock.now)
 
-    @pytest.mark.asyncio
-    async def test_get_stats(self):
-        """Test getting statistics."""
-        # Register two processes
-        mock_process1 = MagicMock()
-        mock_process1.pid = 1111
-        mock_process1.returncode = None
-        mock_process2 = MagicMock()
-        mock_process2.pid = 2222
-        mock_process2.returncode = 0  # Finished
+    # Callback returns True -> treated as recent activity; no hang
+    clock.advance(1.0)
+    await watchdog.scan_once(await registry.snapshot())
+    assert fake_terminator.calls == []
 
-        # Register processes
-        with patch.object(self.watchdog, "start", AsyncMock()):
-            await self.watchdog.register_process(1111, mock_process1, None, "running")
-            await self.watchdog.register_process(2222, mock_process2, None, "finished")
-
-            # Get stats
-            stats = await self.watchdog.get_stats()
-
-            # Assert stats are correct - check for the keys that actually exist
-            assert stats["total_processes"] == 2
-            assert stats["running_processes"] == 1
-            assert stats["finished_processes"] == 1
-            assert "watchdog_active" in stats
+    # Callback returns False -> stick with stale activity and kill on next scan
+    cfg.activity_callback = lambda: False
+    clock.advance(1.0)
+    await watchdog.scan_once(await registry.snapshot())
+    assert fake_terminator.calls == [7]

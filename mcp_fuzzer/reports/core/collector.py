@@ -22,6 +22,7 @@ class ReportCollector:
         self.tool_results: dict[str, list[RunRecord]] = {}
         self.protocol_results: dict[str, list[RunRecord]] = {}
         self.safety_data: dict[str, Any] = {}
+        self.runtime_data: dict[str, Any] = {}
 
     def add_tool_results(self, tool_name: str, results: list[dict[str, Any]]):
         bucket = self.tool_results.setdefault(tool_name, [])
@@ -35,6 +36,9 @@ class ReportCollector:
 
     def update_safety_data(self, safety_data: dict[str, Any]):
         self.safety_data.update(deepcopy(safety_data))
+
+    def update_runtime_data(self, runtime_data: dict[str, Any]):
+        self.runtime_data.update(deepcopy(runtime_data))
 
     def build_summary(self) -> SummaryStats:
         tool_summary = ToolSummary(total_tools=len(self.tool_results))
@@ -69,6 +73,7 @@ class ReportCollector:
         self,
         metadata: FuzzingMetadata,
         safety_data: dict[str, Any] | None = None,
+        runtime_data: dict[str, Any] | None = None,
         include_safety: bool = True,
     ) -> ReportSnapshot:
         if include_safety:
@@ -78,12 +83,17 @@ class ReportCollector:
         else:
             safety = {}
 
+        runtime = deepcopy(self.runtime_data)
+        if runtime_data:
+            runtime.update(deepcopy(runtime_data))
+
         return ReportSnapshot(
             metadata=metadata,
             tool_results=deepcopy(self.tool_results),
             protocol_results=deepcopy(self.protocol_results),
             summary=self.build_summary(),
             safety_data=safety,
+            runtime_data=runtime,
         )
 
     def collect_errors(self) -> list[dict[str, Any]]:

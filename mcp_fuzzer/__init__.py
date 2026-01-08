@@ -4,7 +4,15 @@ MCP Fuzzer - Comprehensive fuzzing for MCP servers
 This package provides tools for fuzzing MCP servers using multiple transport protocols.
 """
 
-from .cli import create_argument_parser, get_cli_config
+import sys
+
+if sys.version_info < (3, 10):
+    raise RuntimeError(
+        f"MCP Fuzzer requires Python 3.10+ (found {sys.version.split()[0]}). "
+        "Use a supported interpreter (e.g., tox envs or a 3.10+ venv)."
+    )
+
+from .cli import create_argument_parser, build_cli_config
 from .client import MCPFuzzerClient, UnifiedMCPFuzzerClient
 from .fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
 from .fuzz_engine.fuzzer.tool_fuzzer import ToolFuzzer
@@ -18,6 +26,6 @@ __all__ = [
     "ProtocolStrategies",
     "MCPFuzzerClient",
     "UnifiedMCPFuzzerClient",
-    "get_cli_config",
     "create_argument_parser",
+    "build_cli_config",
 ]

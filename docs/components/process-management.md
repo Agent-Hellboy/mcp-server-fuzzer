@@ -84,39 +84,46 @@ asyncio.run(main())
 
 ### ProcessWatchdog
 
-The core watchdog system that monitors processes for hanging behavior.
+The core watchdog system that monitors processes for hanging behavior. It reads
+from a shared `ProcessRegistry` instead of keeping its own process table.
 
 ```python
-from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
 import asyncio
-import asyncio.subprocess as asp
+import logging
+from mcp_fuzzer.fuzz_engine.runtime import (
+    ProcessConfig,
+    ProcessRegistry,
+    ProcessWatchdog,
+    SignalDispatcher,
+    WatchdogConfig,
+)
+
 
 async def main():
-    # Custom configuration
-    config = WatchdogConfig(
-        check_interval=1.0,      # Check every second
-        process_timeout=30.0,    # Process timeout after 30 seconds
-        extra_buffer=5.0,        # Extra 5 seconds before killing
-        max_hang_time=60.0,      # Force kill after 60 seconds
-        auto_kill=True,          # Automatically kill hanging processes
+    registry = ProcessRegistry()
+    signals = SignalDispatcher(registry, logging.getLogger(__name__))
+    watchdog = ProcessWatchdog(
+        registry,
+        signals,
+        WatchdogConfig(check_interval=1.0, process_timeout=30.0, auto_kill=True),
     )
-
-    watchdog = ProcessWatchdog(config)
     await watchdog.start()
 
-    # Launch a subprocess to register
-    process = await asp.create_subprocess_exec("python", "-c", "import time; time.sleep(60)")
-
-    # Register a process for monitoring
-    await watchdog.register_process(
+    process = await asyncio.create_subprocess_exec(
+        "python", "-c", "import time; time.sleep(60)"
+    )
+    await registry.register(
         pid=process.pid,
         process=process,
-        activity_callback=None,
-        name="my_process",
+        config=ProcessConfig(
+            command=["python", "-c", "import time; time.sleep(60)"],
+            name="my_process",
+        ),
     )
-
-    # Some time later...
+    await watchdog.update_activity(process.pid)
+    await watchdog.scan_once(await registry.snapshot())
     await watchdog.stop()
+
 
 asyncio.run(main())
 ```
@@ -130,7 +137,8 @@ from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 import asyncio
 
 async def main():
-    manager = ProcessManager()
+    # Default wiring via factory (watchdog, registry, signals, lifecycle, monitor)
+    manager = ProcessManager.from_config()
 
     # Start a process
     config = ProcessConfig(
@@ -145,7 +153,7 @@ async def main():
     print(f"Process started with PID: {process.pid}")
 
     # Wait for completion
-    exit_code = await manager.wait_for_process(process.pid, timeout=120.0)
+    exit_code = await manager.wait(process.pid, timeout=120.0)
 
     # Get statistics
     stats = await manager.get_stats()
@@ -234,7 +242,7 @@ from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def main():
     # Create manager
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     try:
         # Start a long-running process
@@ -268,7 +276,7 @@ import asyncio
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def run_multiple_processes():
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     try:
         # Start multiple processes concurrently
@@ -284,7 +292,7 @@ async def run_multiple_processes():
         processes = await asyncio.gather(*tasks)
 
         # Wait for all to complete
-        wait_tasks = [manager.wait_for_process(process.pid) for process in processes]
+        wait_tasks = [manager.wait(process.pid) for process in processes]
         results = await asyncio.gather(*wait_tasks)
         print(f"All processes completed with exit codes: {results}")
 
@@ -317,7 +325,7 @@ class CustomProcess:
 
 async def main():
     # Create process manager
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     # Create custom process
     custom_proc = CustomProcess()
@@ -353,7 +361,7 @@ import asyncio
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, ProcessConfig
 
 async def main():
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     try:
         # Start a long-running process
@@ -429,6 +437,6 @@ The Process Management system integrates seamlessly with the MCP Fuzzer architec
 
 For complete API documentation, see the individual module docstrings:
 
-- `mcp_fuzzer.fuzz_engine.runtime.watchdog`
+- `mcp_fuzzer.fuzz_engine.runtime`
 - `mcp_fuzzer.fuzz_engine.runtime.manager`
 - `mcp_fuzzer.fuzz_engine.executor`
