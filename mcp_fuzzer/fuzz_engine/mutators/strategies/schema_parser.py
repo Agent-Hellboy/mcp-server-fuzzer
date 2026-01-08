@@ -196,8 +196,12 @@ def make_fuzz_strategy_from_jsonschema(
         if phase == "realistic" or random.random() < 0.7:
             return const_val
         # Aggressive: sometimes violate const intentionally
-        alt = _generate_default_value("aggressive")
-        return alt if alt != const_val else _generate_default_value("aggressive")
+        alt = None
+        for _ in range(5):
+            alt = _generate_default_value("aggressive")
+            if alt is not None and alt != const_val:
+                return alt
+        return 0 if const_val != 0 else ""
 
     # Handle different types
     if schema_type == "object" or "properties" in schema:
