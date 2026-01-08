@@ -115,4 +115,3 @@ def test_global_config_instance():
     assert isinstance(config, Configuration)
     # Should have default values
     assert config.get("timeout") is not None
-

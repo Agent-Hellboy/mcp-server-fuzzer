@@ -10,8 +10,7 @@ import random
 from typing import Any
 
 from hypothesis import strategies as st
-# Import constants directly from config (constants are values, not behavior)
-from ....config.core.constants import DEFAULT_PROTOCOL_VERSION
+from .....config import DEFAULT_PROTOCOL_VERSION
 
 # Helper to keep URIs local-only
 SAFE_FILE_URIS = [
@@ -22,6 +21,7 @@ SAFE_FILE_URIS = [
     "file:///tmp/mcp-fuzzer/session-data.json",
     "file:///tmp/mcp-fuzzer/docs/",
 ]
+
 
 def pick_safe_uri(prefix_only: bool = False) -> str:
     """Pick a safe local URI for fuzzing.
@@ -36,6 +36,7 @@ def pick_safe_uri(prefix_only: bool = False) -> str:
         u for u in SAFE_FILE_URIS if (u.endswith("/") if prefix_only else True)
     ]
     return random.choice(candidates)
+
 
 def protocol_version_strings() -> st.SearchStrategy[str]:
     """
@@ -62,6 +63,7 @@ def protocol_version_strings() -> st.SearchStrategy[str]:
 
     return st.one_of(date_versions, semantic_versions)
 
+
 def json_rpc_id_values() -> st.SearchStrategy:
     """
     Generate valid JSON-RPC ID values.
@@ -76,6 +78,7 @@ def json_rpc_id_values() -> st.SearchStrategy:
         st.text(min_size=1, max_size=50),
         st.integers(),
     )
+
 
 def method_names() -> st.SearchStrategy[str]:
     """
@@ -115,6 +118,7 @@ def method_names() -> st.SearchStrategy[str]:
     ).filter(lambda x: x and x[0].isalpha())
 
     return st.one_of(prefixes, simple_names)
+
 
 # TODO: expand this to cover all the InitializeRequest fields
 def fuzz_initialize_request_realistic() -> dict[str, Any]:
@@ -158,6 +162,7 @@ def fuzz_initialize_request_realistic() -> dict[str, Any]:
         },
     }
 
+
 def fuzz_list_resources_request_realistic() -> dict[str, Any]:
     """Generate realistic ListResourcesRequest for testing valid behavior."""
     cursor_options = [
@@ -176,6 +181,7 @@ def fuzz_list_resources_request_realistic() -> dict[str, Any]:
         ),
     }
 
+
 def fuzz_read_resource_request_realistic() -> dict[str, Any]:
     """Generate realistic ReadResourceRequest for testing valid behavior."""
     return {
@@ -186,6 +192,7 @@ def fuzz_read_resource_request_realistic() -> dict[str, Any]:
             "uri": pick_safe_uri(),
         },
     }
+
 
 def fuzz_subscribe_request_realistic() -> dict[str, Any]:
     """Generate realistic SubscribeRequest for testing valid behavior."""
@@ -198,6 +205,7 @@ def fuzz_subscribe_request_realistic() -> dict[str, Any]:
         },
     }
 
+
 def fuzz_unsubscribe_request_realistic() -> dict[str, Any]:
     """Generate realistic UnsubscribeRequest for testing valid behavior."""
     return {
@@ -208,6 +216,7 @@ def fuzz_unsubscribe_request_realistic() -> dict[str, Any]:
             "uri": pick_safe_uri(prefix_only=True),
         },
     }
+
 
 def fuzz_list_prompts_request_realistic() -> dict[str, Any]:
     """Generate realistic ListPromptsRequest for testing valid behavior."""
@@ -225,6 +234,7 @@ def fuzz_list_prompts_request_realistic() -> dict[str, Any]:
             {"cursor": random.choice(cursor_options)} if random.random() < 0.3 else {}
         ),
     }
+
 
 def fuzz_get_prompt_request_realistic() -> dict[str, Any]:
     """Generate realistic GetPromptRequest for testing valid behavior."""
@@ -256,6 +266,7 @@ def fuzz_get_prompt_request_realistic() -> dict[str, Any]:
         "params": params,
     }
 
+
 def fuzz_list_roots_request_realistic() -> dict[str, Any]:
     """Generate realistic ListRootsRequest for testing valid behavior."""
     return {
@@ -264,6 +275,7 @@ def fuzz_list_roots_request_realistic() -> dict[str, Any]:
         "method": "roots/list",
         "params": {},
     }
+
 
 def fuzz_set_level_request_realistic() -> dict[str, Any]:
     """Generate realistic SetLevelRequest for testing valid behavior."""
@@ -286,6 +298,7 @@ def fuzz_set_level_request_realistic() -> dict[str, Any]:
             "level": random.choice(level_options),
         },
     }
+
 
 def fuzz_complete_request_realistic() -> dict[str, Any]:
     """Generate realistic CompleteRequest for testing valid behavior."""

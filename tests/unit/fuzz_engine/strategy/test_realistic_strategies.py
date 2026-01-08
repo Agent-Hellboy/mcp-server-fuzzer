@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Unit tests for realistic Hypothesis strategies.
-Tests the realistic strategies from mcp_fuzzer.fuzz_engine.strategy.realistic.*
+Tests the realistic strategies from
+mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.*
 """
 
 import base64
@@ -12,14 +13,14 @@ from datetime import datetime
 import pytest
 from hypothesis import given
 
-from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.tool_strategy import (
     base64_strings,
     timestamp_strings,
     uuid_strings,
     generate_realistic_text,
     fuzz_tool_arguments_realistic,
 )
-from mcp_fuzzer.fuzz_engine.strategy.realistic.protocol_type_strategy import (
+from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.protocol_type_strategy import (  # noqa: E501
     json_rpc_id_values,
     method_names,
     protocol_version_strings,
@@ -177,6 +178,7 @@ async def test_fuzz_tool_arguments_realistic():
     """Test realistic tool argument generation with various schema types."""
     # Set seed for deterministic behavior
     import random
+
     random.seed(42)
 
     # Test with string type properties
@@ -208,9 +210,10 @@ async def test_fuzz_tool_arguments_realistic():
         assert isinstance(result["uuid_field"], str)
         # Should be a valid UUID format
         import re
+
         assert re.match(
-            r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-            result["uuid_field"]
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            result["uuid_field"],
         )
     if "datetime_field" in result:
         assert isinstance(result["datetime_field"], str)
@@ -328,7 +331,7 @@ async def test_generate_realistic_text_different_sizes():
 
 def test_base64_strings_strategy():
     """Test base64 string generation strategy."""
-    from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+    from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.tool_strategy import (
         base64_strings,
     )
 
@@ -350,7 +353,7 @@ def test_base64_strings_strategy():
 
 def test_uuid_strings_strategy():
     """Test UUID string generation strategy."""
-    from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+    from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.tool_strategy import (
         uuid_strings,
     )
 
@@ -385,7 +388,7 @@ def test_uuid_strings_strategy():
 
 def test_timestamp_strings_strategy():
     """Test timestamp string generation strategy."""
-    from mcp_fuzzer.fuzz_engine.strategy.realistic.tool_strategy import (
+    from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.tool_strategy import (
         timestamp_strings,
     )
 
@@ -569,6 +572,8 @@ async def test_fuzz_tool_arguments_numeric_constraints():
     result = await fuzz_tool_arguments_realistic(tool)
 
     assert 0.1 <= result["small_float"] <= 0.9
+
+
 @pytest.mark.asyncio
 async def test_generate_realistic_text_bounds_swapping():
     """Test that generate_realistic_text handles min_size > max_size correctly."""
@@ -594,7 +599,7 @@ async def test_generate_realistic_text_fallback():
     import random
     from unittest.mock import patch
 
-    with patch.object(random, 'choice', return_value='invalid_strategy'):
+    with patch.object(random, "choice", return_value="invalid_strategy"):
         text = await generate_realistic_text()
         # Should trigger line 151: else: return "realistic_value"
         assert text == "realistic_value"
@@ -607,13 +612,13 @@ async def test_fuzz_tool_arguments_exception_handling():
 
     # Mock the schema parser to raise an exception
     with patch(
-        'mcp_fuzzer.fuzz_engine.strategy.schema_parser.make_fuzz_strategy_from_jsonschema',
-        side_effect=Exception("Test exception")
+        "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
+        side_effect=Exception("Test exception"),
     ):
         tool = {
             "inputSchema": {
                 "properties": {"test": {"type": "string"}},
-                "required": ["test"]
+                "required": ["test"],
             }
         }
 

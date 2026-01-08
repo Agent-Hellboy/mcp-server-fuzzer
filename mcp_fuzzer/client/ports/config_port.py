@@ -14,7 +14,7 @@ from typing import Any
 
 class ConfigPort(ABC):
     """Port interface for configuration access.
-    
+
     This defines the contract that all configuration adapters must implement.
     Modules should depend on this interface, not concrete implementations.
     """
@@ -22,11 +22,11 @@ class ConfigPort(ABC):
     @abstractmethod
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key.
-        
+
         Args:
             key: Configuration key
             default: Default value if key not found
-            
+
         Returns:
             Configuration value or default
         """
@@ -35,7 +35,7 @@ class ConfigPort(ABC):
     @abstractmethod
     def set(self, key: str, value: Any) -> None:
         """Set a configuration value.
-        
+
         Args:
             key: Configuration key
             value: Configuration value
@@ -45,7 +45,7 @@ class ConfigPort(ABC):
     @abstractmethod
     def update(self, config_dict: dict[str, Any]) -> None:
         """Update configuration with values from a dictionary.
-        
+
         Args:
             config_dict: Dictionary of configuration values to update
         """
@@ -54,13 +54,13 @@ class ConfigPort(ABC):
     @abstractmethod
     def load_file(self, file_path: str) -> dict[str, Any]:
         """Load configuration from a file.
-        
+
         Args:
             file_path: Path to configuration file
-            
+
         Returns:
             Dictionary containing loaded configuration
-            
+
         Raises:
             ConfigFileError: If file cannot be loaded
         """
@@ -74,12 +74,12 @@ class ConfigPort(ABC):
         file_names: list[str] | None = None,
     ) -> bool:
         """Load and apply configuration from a file.
-        
+
         Args:
             config_path: Explicit path to config file
             search_paths: List of directories to search
             file_names: List of file names to search for
-            
+
         Returns:
             True if configuration was loaded and applied, False otherwise
         """
@@ -88,9 +88,8 @@ class ConfigPort(ABC):
     @abstractmethod
     def get_schema(self) -> dict[str, Any]:
         """Get the JSON schema for configuration validation.
-        
+
         Returns:
             JSON schema dictionary
         """
         pass
-

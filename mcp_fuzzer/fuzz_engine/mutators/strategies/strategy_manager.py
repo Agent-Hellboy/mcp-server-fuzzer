@@ -28,6 +28,7 @@ from .aggressive import (
     get_protocol_fuzzer_method as get_aggressive_fuzzer_method,
 )
 
+
 class ProtocolStrategies:
     """Unified protocol strategies with two-phase approach."""
 
@@ -142,6 +143,10 @@ class ProtocolStrategies:
                 "CreateMessageRequest",
             ]
 
+        # Return empty batch if no protocol types provided
+        if not protocol_types:
+            return []
+
         if min_batch_size > max_batch_size:
             min_batch_size, max_batch_size = max_batch_size, min_batch_size
         batch_size = random.randint(min_batch_size, max_batch_size)
@@ -234,6 +239,7 @@ class ProtocolStrategies:
                 request["id"] = ids[i % len(ids)]
 
         return batch
+
 
 class ToolStrategies:
     """Unified tool strategies with two-phase approach."""

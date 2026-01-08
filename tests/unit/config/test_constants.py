@@ -91,14 +91,17 @@ def test_default_timeout_values():
     assert DEFAULT_MAX_TOTAL_FUZZING_TIME > 0
     assert DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT > 0
     assert DEFAULT_FORCE_KILL_TIMEOUT > 0
-    assert all(isinstance(v, float) for v in [
-        DEFAULT_TIMEOUT,
-        DEFAULT_TOOL_TIMEOUT,
-        DEFAULT_MAX_TOOL_TIME,
-        DEFAULT_MAX_TOTAL_FUZZING_TIME,
-        DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT,
-        DEFAULT_FORCE_KILL_TIMEOUT,
-    ])
+    assert all(
+        isinstance(v, float)
+        for v in [
+            DEFAULT_TIMEOUT,
+            DEFAULT_TOOL_TIMEOUT,
+            DEFAULT_MAX_TOOL_TIME,
+            DEFAULT_MAX_TOTAL_FUZZING_TIME,
+            DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT,
+            DEFAULT_FORCE_KILL_TIMEOUT,
+        ]
+    )
 
 
 def test_default_run_counts():
@@ -113,4 +116,3 @@ def test_default_protocol_version():
     """Test that default protocol version is a string."""
     assert isinstance(DEFAULT_PROTOCOL_VERSION, str)
     assert len(DEFAULT_PROTOCOL_VERSION) > 0
-

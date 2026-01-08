@@ -35,14 +35,14 @@ def load_config_file(file_path: str) -> dict[str, Any]:
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-        
+
         # Validate that top-level config is a mapping/object
         if not isinstance(data, dict):
             raise ConfigFileError(
                 f"Top-level configuration in {file_path} must be a mapping/object, "
                 f"got {type(data).__name__}"
             )
-        
+
         return data
     except yaml.YAMLError as e:
         raise ConfigFileError(

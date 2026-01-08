@@ -117,9 +117,7 @@ class DangerDetector:
         """Return True if value contains the requested danger type."""
         if not value:
             return False
-        return any(
-            pattern.search(value) for pattern in self._registry.get(danger_type)
-        )
+        return any(pattern.search(value) for pattern in self._registry.get(danger_type))
 
     def first_match(
         self,

@@ -28,9 +28,7 @@ class ReportCollector:
         bucket = self.tool_results.setdefault(tool_name, [])
         bucket.extend(self._coerce_result(r) for r in results)
 
-    def add_protocol_results(
-        self, protocol_type: str, results: list[dict[str, Any]]
-    ):
+    def add_protocol_results(self, protocol_type: str, results: list[dict[str, Any]]):
         bucket = self.protocol_results.setdefault(protocol_type, [])
         bucket.extend(self._coerce_result(r) for r in results)
 
@@ -63,8 +61,8 @@ class ReportCollector:
                     protocol_summary.protocol_types_with_errors += 1
 
         tool_summary.success_rate = self._calculate_tool_success_rate(tool_summary)
-        protocol_summary.success_rate = (
-            self._calculate_protocol_success_rate(protocol_summary)
+        protocol_summary.success_rate = self._calculate_protocol_success_rate(
+            protocol_summary
         )
 
         return SummaryStats(tools=tool_summary, protocols=protocol_summary)
@@ -143,14 +141,11 @@ class ReportCollector:
         successes = max(summary.total_runs - failures, 0)
         return (successes / summary.total_runs) * 100
 
-    def _calculate_protocol_success_rate(
-        self, summary: ProtocolSummary
-    ) -> float:
+    def _calculate_protocol_success_rate(self, summary: ProtocolSummary) -> float:
         if summary.total_runs <= 0:
             return 0.0
         failures = (
-            summary.protocol_types_with_errors
-            + summary.protocol_types_with_exceptions
+            summary.protocol_types_with_errors + summary.protocol_types_with_exceptions
         )
         successes = max(summary.total_runs - failures, 0)
         return (successes / summary.total_runs) * 100

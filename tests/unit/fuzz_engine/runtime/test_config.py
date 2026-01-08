@@ -32,8 +32,10 @@ class TestProcessConfig:
 
     def test_custom_values(self):
         """Test ProcessConfig with custom values."""
+
         def callback():
             return 1.0
+
         config = ProcessConfig(
             command=["echo", "test"],
             cwd="/tmp",
@@ -167,8 +169,10 @@ class TestProcessConfigBuilder:
 
     def test_with_activity_callback(self):
         """Test with_activity_callback."""
+
         def callback():
             return 1.0
+
         config = (
             ProcessConfigBuilder()
             .with_command(["test"])

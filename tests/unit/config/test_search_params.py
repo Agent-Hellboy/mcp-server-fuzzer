@@ -60,4 +60,3 @@ def test_config_search_params_repr():
     repr_str = repr(params)
     assert "ConfigSearchParams" in repr_str
     assert "/test.yaml" in repr_str
-

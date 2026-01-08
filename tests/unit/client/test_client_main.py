@@ -174,6 +174,7 @@ def test_unified_client_main_exports_reports_and_handles_errors():
     reporter.export_csv.assert_called_once()
     reporter.export_markdown.assert_called_once()
 
+
 def test_unified_client_main_exports_html_xml():
     settings = _settings(
         mode="tool",

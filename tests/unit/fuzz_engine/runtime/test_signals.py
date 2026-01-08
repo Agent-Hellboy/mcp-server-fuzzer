@@ -304,9 +304,7 @@ class TestSignalStrategies:
         self, registry, logger, mock_process, process_config
     ):
         """Test signal strategy with provided process_info."""
-        await registry.register(
-            mock_process.pid, mock_process, process_config
-        )
+        await registry.register(mock_process.pid, mock_process, process_config)
         # Get the process info
         process_info = await registry.get_process(mock_process.pid)
 

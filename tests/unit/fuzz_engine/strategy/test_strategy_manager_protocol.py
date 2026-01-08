@@ -6,7 +6,7 @@ BEHAVIOR not content
 
 import unittest
 
-from mcp_fuzzer.fuzz_engine.strategy import ProtocolStrategies
+from mcp_fuzzer.fuzz_engine.mutators.strategies import ProtocolStrategies
 
 # Constants for testing
 JSONRPC_VERSION = "2.0"
@@ -162,9 +162,7 @@ class TestProtocolStrategies(unittest.TestCase):
         """Test BEHAVIOR: generate_batch_request with custom parameters."""
         protocol_types = ["InitializeRequest", "ListResourcesRequest"]
         batch = ProtocolStrategies.generate_batch_request(
-            protocol_types=protocol_types,
-            min_batch_size=2,
-            max_batch_size=3
+            protocol_types=protocol_types, min_batch_size=2, max_batch_size=3
         )
 
         # Test BEHAVIOR: should respect size constraints

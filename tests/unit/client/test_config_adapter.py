@@ -128,4 +128,3 @@ def test_config_mediator_as_mapping():
     # Should work with .get() method (Mapping interface)
     assert config_mediator.get("test_key") == "test_value"
     assert config_mediator.get("nonexistent", "default") == "default"
-

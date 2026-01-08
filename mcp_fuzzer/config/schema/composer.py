@@ -19,10 +19,10 @@ from .builders import (
 
 def get_config_schema() -> dict[str, Any]:
     """Return the JSON schema describing the configuration structure.
-    
+
     The schema is built by composing smaller schema builders for logical
     groupings of configuration properties.
-    
+
     Returns:
         Complete JSON schema dictionary for configuration validation
     """
@@ -40,4 +40,3 @@ def get_config_schema() -> dict[str, Any]:
         "type": "object",
         "properties": properties,
     }
-
