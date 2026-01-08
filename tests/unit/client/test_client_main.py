@@ -54,7 +54,7 @@ def test_unified_client_main_tools_mode():
 
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=mock_transport,
         ) as mock_transport_factory,
         patch("mcp_fuzzer.client.main.SafetyFilter", return_value=mock_safety),
@@ -76,7 +76,7 @@ def test_unified_client_main_unknown_mode_logs_error_and_returns_nonzero():
     client_instance.cleanup = AsyncMock()
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=MagicMock(),
         ),
         patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
@@ -98,7 +98,7 @@ def test_unified_client_main_sets_fs_root_when_provided():
 
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=MagicMock(),
         ),
         patch("mcp_fuzzer.client.main.SafetyFilter", return_value=mock_safety),
@@ -118,7 +118,7 @@ def test_unified_client_main_protocol_and_both_modes():
     client_instance.cleanup = AsyncMock()
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=MagicMock(),
         ),
         patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
@@ -136,7 +136,7 @@ def test_unified_client_main_protocol_and_both_modes():
     client_instance2.cleanup = AsyncMock()
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=MagicMock(),
         ),
         patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
@@ -163,7 +163,7 @@ def test_unified_client_main_exports_reports_and_handles_errors():
     client_instance.reporter = reporter
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=MagicMock(),
         ),
         patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
@@ -190,7 +190,7 @@ def test_unified_client_main_exports_html_xml():
     client_instance.reporter = reporter
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=MagicMock(),
         ),
         patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
@@ -210,7 +210,7 @@ def test_unified_client_main_safety_disabled():
     client_instance.cleanup = AsyncMock()
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=MagicMock(),
         ),
         patch("mcp_fuzzer.client.main.SafetyFilter") as mock_safety,
@@ -232,7 +232,7 @@ def test_unified_client_main_tool_results_summary(monkeypatch):
     client_instance.print_tool_summary = MagicMock()
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=MagicMock(),
         ),
         patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
@@ -251,7 +251,7 @@ def test_unified_client_main_returns_one_on_exception():
     client_instance.cleanup = AsyncMock()
     with (
         patch(
-            "mcp_fuzzer.client.main.create_transport_with_auth",
+            "mcp_fuzzer.client.main.build_driver_with_auth",
             return_value=MagicMock(),
         ),
         patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),

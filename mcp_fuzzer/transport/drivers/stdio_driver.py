@@ -11,22 +11,20 @@ import inspect
 import time
 from typing import Any, Callable
 
-from .base import TransportProtocol
-from ..exceptions import (
+from ..interfaces.driver import TransportDriver
+from ...exceptions import (
     ProcessSignalError,
     ProcessStartError,
     ServerError,
     TransportError,
 )
-from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
-from ..safety_system.policy import sanitize_subprocess_env
-
-# Import constants directly from config (constants are values, not behavior)
-from ..config.core.constants import PROCESS_WAIT_TIMEOUT
-from .manager import TransportManager
+from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+from ...safety_system.policy import sanitize_subprocess_env
+from ...config import PROCESS_WAIT_TIMEOUT
+from ..controller.process_supervisor import ProcessSupervisor
 
 
-class StdioTransport(TransportProtocol):
+class StdioDriver(TransportDriver):
     def __init__(
         self,
         command: str,
@@ -45,7 +43,7 @@ class StdioTransport(TransportProtocol):
         self._initialized = False
         self._last_activity = time.time()
         self.process_manager = process_manager
-        self.manager = TransportManager(logger=logging.getLogger(__name__))
+        self.manager = ProcessSupervisor(logger=logging.getLogger(__name__))
 
     def _get_lock(self):
         """Get or create the lock lazily."""

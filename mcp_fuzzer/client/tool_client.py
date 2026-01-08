@@ -20,6 +20,8 @@ from ..config.core.constants import (
     DEFAULT_MAX_TOTAL_FUZZING_TIME,
     DEFAULT_FORCE_KILL_TIMEOUT,
 )
+from ..transport.interfaces import JsonRpcAdapter
+
 
 
 class ToolClient:
@@ -43,6 +45,7 @@ class ToolClient:
             max_concurrency: Maximum number of concurrent operations
         """
         self.transport = transport
+        self._rpc = JsonRpcAdapter(transport)
         self.auth_manager = auth_manager or AuthManager()
         self.enable_safety = enable_safety
         if not enable_safety:
@@ -59,7 +62,7 @@ class ToolClient:
             List of tool definitions or empty list if failed.
         """
         try:
-            tools = await self.transport.get_tools()
+            tools = await self._rpc.get_tools()
             if not tools:
                 self._logger.warning("Server returned an empty list of tools.")
                 return []
@@ -174,7 +177,7 @@ class ToolClient:
 
                 # Call the tool with the generated arguments
                 try:
-                    result = await self.transport.call_tool(tool_name, args_for_call)
+                    result = await self._rpc.call_tool(tool_name, args_for_call)
                     results.append(
                         {
                             "args": sanitized_args,

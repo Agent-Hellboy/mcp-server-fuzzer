@@ -8,12 +8,13 @@ from pathlib import Path
 from mcp_fuzzer.client.adapters import config_mediator
 from mcp_fuzzer.config.extensions.transports import load_custom_transports
 from mcp_fuzzer.exceptions import ConfigFileError, TransportRegistrationError
-from mcp_fuzzer.transport import create_transport, register_custom_transport
-from mcp_fuzzer.transport.base import TransportProtocol
+from mcp_fuzzer.transport import build_driver, register_custom_driver
+from mcp_fuzzer.transport.interfaces import TransportDriver, JsonRpcAdapter
+from mcp_fuzzer.transport.catalog.custom_catalog import custom_driver_catalog
 from typing import Any, Dict, Optional, AsyncIterator
 
 
-class IntegrationTestTransport(TransportProtocol):
+class IntegrationTestTransport(TransportDriver):
     """Test transport for integration testing."""
 
     def __init__(self, endpoint: str, **kwargs):
@@ -73,10 +74,8 @@ class TestCustomTransportConfiguration:
 
     def setup_method(self):
         """Clear any existing custom transports."""
-        from mcp_fuzzer.transport.custom import registry
-
-        for name in list(registry.list_transports().keys()):
-            registry.unregister(name)
+        for name in list(custom_driver_catalog.list_transports().keys()):
+            custom_driver_catalog.unregister(name)
 
     def test_config_file_custom_transport_loading(self):
         """Test loading custom transports from configuration file."""
@@ -101,13 +100,13 @@ custom_transports:
             assert config_mediator.apply_file(config_path=config_path) is True
 
             # Test that transport was loaded
-            from mcp_fuzzer.transport import list_custom_transports
+            from mcp_fuzzer.transport import list_custom_drivers
 
-            transports = list_custom_transports()
+            transports = list_custom_drivers()
             assert "integration_test" in transports
 
             # Test creating transport instance
-            transport = create_transport("integration_test://test-endpoint")
+            transport = build_driver("integration_test://test-endpoint")
             assert isinstance(transport, IntegrationTestTransport)
             assert transport.endpoint == "test-endpoint"
 
@@ -135,22 +134,20 @@ class TestCustomTransportLifecycle:
 
     def setup_method(self):
         """Clear any existing custom transports."""
-        from mcp_fuzzer.transport.custom import registry
-
-        for name in list(registry.list_transports().keys()):
-            registry.unregister(name)
+        for name in list(custom_driver_catalog.list_transports().keys()):
+            custom_driver_catalog.unregister(name)
 
     async def test_full_transport_lifecycle(self):
         """Test complete transport lifecycle from registration to usage."""
         # Register custom transport
-        register_custom_transport(
+        register_custom_driver(
             name="lifecycle_test",
             transport_class=IntegrationTestTransport,
             description="Lifecycle test transport",
         )
 
         # Create transport instance
-        transport = create_transport("lifecycle_test://test-server")
+        transport = build_driver("lifecycle_test://test-server")
 
         # Test connection
         await transport.connect()
@@ -178,18 +175,22 @@ class TestCustomTransportLifecycle:
             assert response["result"]["payload"] == {"stream": "test"}
             break  # Only test first response
 
-        # Test tools listing (inherited method)
-        # Mock the send_request for tools/list
+        # Test tools listing through JsonRpcAdapter
+        rpc_helper = JsonRpcAdapter(transport)
         original_send_request = transport.send_request
 
         async def mock_tools_request(method, params=None):
             if method == "tools/list":
-                return {"tools": [{"name": "integration_tool"}]}
+                return {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": {"tools": [{"name": "integration_tool"}]},
+                }
             return await original_send_request(method, params)
 
         transport.send_request = mock_tools_request
         try:
-            tools = await transport.get_tools()
+            tools = await rpc_helper.get_tools()
             assert tools == [{"name": "integration_tool"}]
         finally:
             transport.send_request = original_send_request
@@ -204,10 +205,8 @@ class TestCustomTransportErrorHandling:
 
     def setup_method(self):
         """Clear any existing custom transports."""
-        from mcp_fuzzer.transport.custom import registry
-
-        for name in list(registry.list_transports().keys()):
-            registry.unregister(name)
+        for name in list(custom_driver_catalog.list_transports().keys()):
+            custom_driver_catalog.unregister(name)
 
     def test_invalid_registration(self):
         """Test error handling for invalid transport registration."""
@@ -216,25 +215,27 @@ class TestCustomTransportErrorHandling:
             pass
 
         with pytest.raises(
-            TransportRegistrationError, match="must inherit from TransportProtocol"
+            TransportRegistrationError, match="must inherit from TransportDriver"
         ):
-            register_custom_transport(name="invalid", transport_class=InvalidTransport)
+            register_custom_driver(name="invalid", transport_class=InvalidTransport)
 
     def test_duplicate_registration(self):
         """Test error handling for duplicate transport registration."""
-        register_custom_transport(
+        register_custom_driver(
             name="duplicate_test", transport_class=IntegrationTestTransport
         )
 
         with pytest.raises(TransportRegistrationError, match="already registered"):
-            register_custom_transport(
+            register_custom_driver(
                 name="duplicate_test", transport_class=IntegrationTestTransport
             )
 
     def test_unknown_transport_creation(self):
         """Test error handling for unknown transport creation."""
-        with pytest.raises(TransportRegistrationError, match="Unsupported URL scheme"):
-            create_transport("unknown_transport://endpoint")
+        with pytest.raises(
+            TransportRegistrationError, match="Unsupported transport scheme"
+        ):
+            build_driver("unknown_transport://endpoint")
 
 
 class TestCustomTransportWithClient:
@@ -242,20 +243,18 @@ class TestCustomTransportWithClient:
 
     def setup_method(self):
         """Clear any existing custom transports."""
-        from mcp_fuzzer.transport.custom import registry
-
-        for name in list(registry.list_transports().keys()):
-            registry.unregister(name)
+        for name in list(custom_driver_catalog.list_transports().keys()):
+            custom_driver_catalog.unregister(name)
 
     async def test_transport_with_mcp_client(self):
         """Test using custom transport with MCP client."""
         # Register custom transport
-        register_custom_transport(
+        register_custom_driver(
             name="client_test", transport_class=IntegrationTestTransport
         )
 
         # Create transport
-        transport = create_transport("client_test://mcp-server")
+        transport = build_driver("client_test://mcp-server")
 
         # Import and create MCP client (this would normally be done)
         # This is a simplified test - in real usage, you'd use the full client
@@ -268,6 +267,8 @@ class TestCustomTransportWithClient:
         # Test basic functionality
         await transport.connect()
 
-        # Test tool calling through transport
-        result = await transport.call_tool("test_tool", {"arg": "value"})
+        rpc_helper = JsonRpcAdapter(transport)
+
+        # Test tool calling through transport via RPC helper
+        result = await rpc_helper.call_tool("test_tool", {"arg": "value"})
         assert "result" in result

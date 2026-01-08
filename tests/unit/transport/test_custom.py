@@ -4,18 +4,19 @@ import pytest
 from unittest.mock import Mock
 from typing import Any, Dict, Optional, AsyncIterator
 
-from mcp_fuzzer.transport.base import TransportProtocol
-from mcp_fuzzer.transport.custom import (
-    CustomTransportRegistry,
-    register_custom_transport,
-    create_custom_transport,
-    list_custom_transports,
+from mcp_fuzzer.transport.interfaces import TransportDriver, JsonRpcAdapter
+from mcp_fuzzer.transport.catalog import build_driver
+from mcp_fuzzer.transport.catalog.custom_catalog import (
+    CustomDriverCatalog,
+    register_custom_driver,
+    build_custom_driver,
+    list_custom_drivers,
+    custom_driver_catalog,
 )
-from mcp_fuzzer.transport.factory import create_transport
 from mcp_fuzzer.exceptions import ConnectionError, TransportRegistrationError
 
 
-class MockTransport(TransportProtocol):
+class MockTransport(TransportDriver):
     """Mock transport for testing."""
 
     def __init__(self, endpoint: str, **kwargs):
@@ -41,17 +42,20 @@ class MockTransport(TransportProtocol):
         yield {"result": "stream_response"}
 
 
-class TestCustomTransportRegistry:
+class TestCustomDriverCatalog:
     """Test the custom transport registry functionality."""
+
+    def setup_method(self):
+        custom_driver_catalog.clear()
 
     def test_registry_initialization(self):
         """Test that registry initializes correctly."""
-        registry = CustomTransportRegistry()
+        registry = CustomDriverCatalog()
         assert registry.list_transports() == {}
 
     def test_register_transport(self):
         """Test registering a custom transport."""
-        registry = CustomTransportRegistry()
+        registry = CustomDriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -68,7 +72,7 @@ class TestCustomTransportRegistry:
 
     def test_register_duplicate_transport(self):
         """Test that registering a duplicate transport raises an error."""
-        registry = CustomTransportRegistry()
+        registry = CustomDriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -88,14 +92,14 @@ class TestCustomTransportRegistry:
 
     def test_register_invalid_transport_class(self):
         """Test that registering an invalid transport class raises an error."""
-        registry = CustomTransportRegistry()
+        registry = CustomDriverCatalog()
 
         class InvalidTransport:
             pass
 
         with pytest.raises(
             TransportRegistrationError,
-            match="Transport class .* must inherit from TransportProtocol",
+            match="Transport class .* must inherit from TransportDriver",
         ):
             registry.register(
                 name="invalid_transport",
@@ -105,7 +109,7 @@ class TestCustomTransportRegistry:
 
     def test_unregister_transport(self):
         """Test unregistering a custom transport."""
-        registry = CustomTransportRegistry()
+        registry = CustomDriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -118,7 +122,7 @@ class TestCustomTransportRegistry:
 
     def test_unregister_nonexistent_transport(self):
         """Test that unregistering a non-existent transport raises an error."""
-        registry = CustomTransportRegistry()
+        registry = CustomDriverCatalog()
 
         with pytest.raises(
             TransportRegistrationError,
@@ -128,7 +132,7 @@ class TestCustomTransportRegistry:
 
     def test_get_transport_class(self):
         """Test getting transport class from registry."""
-        registry = CustomTransportRegistry()
+        registry = CustomDriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -141,7 +145,7 @@ class TestCustomTransportRegistry:
 
     def test_get_transport_info(self):
         """Test getting transport info from registry."""
-        registry = CustomTransportRegistry()
+        registry = CustomDriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -153,9 +157,9 @@ class TestCustomTransportRegistry:
         assert info["class"] == MockTransport
         assert info["description"] == "Mock transport for testing"
 
-    def test_create_transport(self):
+    def test_build_driver(self):
         """Test creating transport instance from registry."""
-        registry = CustomTransportRegistry()
+        registry = CustomDriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -163,9 +167,7 @@ class TestCustomTransportRegistry:
             description="Mock transport for testing",
         )
 
-        transport = registry.create_transport(
-            "mock_transport", "test-endpoint", timeout=30
-        )
+        transport = registry.build_driver("mock_transport", "test-endpoint", timeout=30)
         assert isinstance(transport, MockTransport)
         assert transport.endpoint == "test-endpoint"
         assert transport.kwargs == {"timeout": 30}
@@ -176,30 +178,30 @@ class TestCustomTransportFunctions:
 
     def setup_method(self):
         """Clear the global registry before each test."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
         registry.clear()
 
-    def test_register_custom_transport(self):
-        """Test the global register_custom_transport function."""
-        register_custom_transport(
+    def test_register_custom_driver(self):
+        """Test the global register_custom_driver function."""
+        register_custom_driver(
             name="global_mock",
             transport_class=MockTransport,
             description="Global mock transport",
         )
 
-        transports = list_custom_transports()
+        transports = list_custom_drivers()
         assert "global_mock" in transports
 
-    def test_create_custom_transport(self):
-        """Test the global create_custom_transport function."""
-        register_custom_transport(
+    def test_build_custom_driver(self):
+        """Test the global build_custom_driver function."""
+        register_custom_driver(
             name="global_mock",
             transport_class=MockTransport,
             description="Global mock transport",
         )
 
-        transport = create_custom_transport("global_mock", "test-endpoint")
+        transport = build_custom_driver("global_mock", "test-endpoint")
         assert isinstance(transport, MockTransport)
         assert transport.endpoint == "test-endpoint"
 
@@ -209,39 +211,39 @@ class TestTransportFactoryIntegration:
 
     def setup_method(self):
         """Clear the global registry before each test."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
         registry.clear()
 
     def test_custom_transport_via_factory(self):
         """Test creating custom transport via factory."""
-        register_custom_transport(
+        register_custom_driver(
             name="factory_mock",
             transport_class=MockTransport,
             description="Factory mock transport",
         )
 
-        transport = create_transport("factory_mock://test-endpoint")
+        transport = build_driver("factory_mock://test-endpoint")
         assert isinstance(transport, MockTransport)
         assert transport.endpoint == "test-endpoint"
 
     def test_custom_transport_via_factory_two_args(self):
         """Back-compat: (protocol, endpoint) for custom transports."""
-        register_custom_transport(
+        register_custom_driver(
             name="factory_mock",
             transport_class=MockTransport,
             description="Factory mock transport",
         )
-        transport = create_transport("factory_mock", "test-endpoint")
+        transport = build_driver("factory_mock", "test-endpoint")
         assert isinstance(transport, MockTransport)
         assert transport.endpoint == "test-endpoint"
 
     def test_unknown_custom_transport(self):
         """Test that unknown custom transport raises error."""
         with pytest.raises(
-            TransportRegistrationError, match="Unsupported URL scheme: unknown"
+            TransportRegistrationError, match="Unsupported transport scheme"
         ):
-            create_transport("unknown://test-endpoint")
+            build_driver("unknown://test-endpoint")
 
     def test_custom_transport_with_config_schema(self):
         """Test custom transport with configuration schema."""
@@ -252,20 +254,20 @@ class TestTransportFactoryIntegration:
             },
         }
 
-        register_custom_transport(
+        register_custom_driver(
             name="schema_mock",
             transport_class=MockTransport,
             description="Schema mock transport",
             config_schema=schema,
         )
 
-        transports = list_custom_transports()
+        transports = list_custom_drivers()
         assert "schema_mock" in transports
         assert transports["schema_mock"]["config_schema"] == schema
 
 
-class TestTransportProtocolCompliance:
-    """Test that custom transports comply with TransportProtocol."""
+class TestTransportDriverCompliance:
+    """Test that custom transports comply with TransportDriver."""
 
     async def test_mock_transport_compliance(self):
         """Test that MockTransport implements all required methods."""
@@ -300,15 +302,19 @@ class TestTransportProtocolCompliance:
             return await original_send_request(method, params)
 
         transport.send_request = mock_send_request
+        rpc_helper = JsonRpcAdapter(transport)
 
-        tools = await transport.get_tools()
-        assert tools == [{"name": "test_tool"}]
+        try:
+            tools = await rpc_helper.get_tools()
+            assert tools == [{"name": "test_tool"}]
+        finally:
+            transport.send_request = original_send_request
 
 
 class TestCustomTransportCloseMethod:
     """Test that custom transports can implement and have their close method invoked."""
 
-    class CloseableTransport(TransportProtocol):
+    class CloseableTransport(TransportDriver):
         """Mock transport that tracks close() calls."""
 
         def __init__(self, endpoint: str, **kwargs):
@@ -373,7 +379,7 @@ class TestCustomTransportCloseMethod:
     async def test_custom_transport_close_with_resources(self):
         """Test that custom transport can clean up resources in close method."""
 
-        class ResourceManagedTransport(TransportProtocol):
+        class ResourceManagedTransport(TransportDriver):
             """Transport that manages resources."""
 
             def __init__(self, endpoint: str):
@@ -423,15 +429,15 @@ class TestCustomTransportSelfRegistration:
 
     def setup_method(self):
         """Clear the global registry before each test."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
         registry.clear()
 
     def test_self_registration_with_registry(self):
         """Test that custom transport can self-register using registry.register."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
-        class SelfRegisteringTransport(TransportProtocol):
+        class SelfRegisteringTransport(TransportDriver):
             """Transport that self-registers on import."""
 
             def __init__(self, endpoint: str, **kwargs):
@@ -473,10 +479,10 @@ class TestCustomTransportSelfRegistration:
 
     def test_self_registration_at_module_level(self):
         """Test self-registration pattern at module level."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
         # Simulate module-level registration
-        class ModuleLevelTransport(TransportProtocol):
+        class ModuleLevelTransport(TransportDriver):
             """Transport registered at module level."""
 
             def __init__(self, endpoint: str):
@@ -509,9 +515,9 @@ class TestCustomTransportSelfRegistration:
 
     def test_self_registration_with_schema(self):
         """Test self-registration with configuration schema."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
-        class ConfigurableTransport(TransportProtocol):
+        class ConfigurableTransport(TransportDriver):
             """Transport with configuration schema."""
 
             def __init__(self, endpoint: str, timeout: float = 30.0):
@@ -563,15 +569,15 @@ class TestSelfRegisteredTransportInstantiation:
 
     def setup_method(self):
         """Clear the global registry before each test."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
         registry.clear()
 
     async def test_instantiate_self_registered_transport(self):
         """Test that self-registered transport can be instantiated and used."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
-        class UsableTransport(TransportProtocol):
+        class UsableTransport(TransportDriver):
             """Fully functional self-registered transport."""
 
             def __init__(self, endpoint: str, **kwargs):
@@ -610,7 +616,7 @@ class TestSelfRegisteredTransportInstantiation:
         registry.register("usable", UsableTransport, description="Usable transport")
 
         # Instantiate via registry
-        transport = registry.create_transport("usable", "test-server", timeout=60)
+        transport = registry.build_driver("usable", "test-server", timeout=60)
 
         # Verify instantiation
         assert isinstance(transport, UsableTransport)
@@ -643,9 +649,9 @@ class TestSelfRegisteredTransportInstantiation:
 
     async def test_instantiate_via_factory(self):
         """Test that self-registered transport can be instantiated via factory."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
-        class FactoryUsableTransport(TransportProtocol):
+        class FactoryUsableTransport(TransportDriver):
             """Transport usable via factory."""
 
             def __init__(self, endpoint: str):
@@ -675,7 +681,7 @@ class TestSelfRegisteredTransportInstantiation:
         )
 
         # Instantiate via factory using URL format
-        transport = create_transport("factory_usable://my-endpoint")
+        transport = build_driver("factory_usable://my-endpoint")
 
         # Verify it works
         assert isinstance(transport, FactoryUsableTransport)
@@ -687,9 +693,9 @@ class TestSelfRegisteredTransportInstantiation:
 
     async def test_instantiate_with_custom_factory(self):
         """Test instantiation with custom factory function."""
-        from mcp_fuzzer.transport.custom import registry
+        registry = custom_driver_catalog
 
-        class FactoryManagedTransport(TransportProtocol):
+        class FactoryManagedTransport(TransportDriver):
             """Transport created via factory function."""
 
             def __init__(self, endpoint: str, custom_arg: str):
@@ -733,7 +739,7 @@ class TestSelfRegisteredTransportInstantiation:
         )
 
         # Instantiate via registry with factory
-        transport = registry.create_transport(
+        transport = registry.build_driver(
             "factory_managed", "test-endpoint", custom_arg="custom_value"
         )
 

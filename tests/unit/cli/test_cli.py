@@ -22,7 +22,7 @@ from mcp_fuzzer.client.runtime.async_runner import AsyncRunner
 from mcp_fuzzer.client.runtime.async_runner import execute_inner_client
 from mcp_fuzzer.client.runtime.retry import run_with_retry_on_interrupt
 from mcp_fuzzer.client.safety import SafetyController
-from mcp_fuzzer.client.transport.factory import create_transport_with_auth
+from mcp_fuzzer.client.transport.factory import build_driver_with_auth
 from mcp_fuzzer.exceptions import ArgumentValidationError, ConfigFileError, MCPError
 
 
@@ -310,10 +310,8 @@ def test_transport_factory_applies_auth_headers():
     args = MagicMock(protocol="http", endpoint="http://example.com", timeout=10.0)
     auth_manager = MagicMock()
     auth_manager.get_default_auth_headers.return_value = {"Authorization": "x"}
-    with patch(
-        "mcp_fuzzer.client.transport.factory.base_create_transport"
-    ) as mock_create:
-        create_transport_with_auth(args, {"auth_manager": auth_manager})
+    with patch("mcp_fuzzer.client.transport.factory.base_build_driver") as mock_create:
+        build_driver_with_auth(args, {"auth_manager": auth_manager})
         mock_create.assert_called_once_with(
             "http",
             "http://example.com",
@@ -400,7 +398,7 @@ def test_validate_transport_errors():
     validator = ValidationManager()
     args = argparse.Namespace(protocol="http", endpoint="http://x", timeout=1)
     with patch(
-        "mcp_fuzzer.cli.validators.create_transport",
+        "mcp_fuzzer.cli.validators.build_driver",
         side_effect=Exception("boom"),
     ):
         with pytest.raises(Exception):
@@ -411,7 +409,7 @@ def test_validate_transport_mcp_error_passthrough():
     validator = ValidationManager()
     args = argparse.Namespace(protocol="http", endpoint="http://x", timeout=1)
     with patch(
-        "mcp_fuzzer.cli.validators.create_transport",
+        "mcp_fuzzer.cli.validators.build_driver",
         side_effect=MCPError("err", code="X"),
     ):
         with pytest.raises(MCPError):

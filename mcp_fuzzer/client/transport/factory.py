@@ -9,12 +9,12 @@ from typing import Any
 
 from rich.console import Console
 
-from ...transport.factory import create_transport as base_create_transport
+from ...transport.catalog import build_driver as base_build_driver
 
 logger = logging.getLogger(__name__)
 
 
-def create_transport_with_auth(args: Any, client_args: dict[str, Any]):
+def build_driver_with_auth(args: Any, client_args: dict[str, Any]):
     """Create a transport with authentication headers when available."""
     try:
         auth_headers = None
@@ -50,7 +50,7 @@ def create_transport_with_auth(args: Any, client_args: dict[str, Any]):
             args.protocol.upper(),
             args.endpoint,
         )
-        transport = base_create_transport(
+        transport = base_build_driver(
             args.protocol,
             args.endpoint,
             **factory_kwargs,
@@ -63,4 +63,4 @@ def create_transport_with_auth(args: Any, client_args: dict[str, Any]):
         sys.exit(1)
 
 
-__all__ = ["create_transport_with_auth"]
+__all__ = ["build_driver_with_auth"]

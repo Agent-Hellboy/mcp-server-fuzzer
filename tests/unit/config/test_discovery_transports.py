@@ -15,11 +15,11 @@ from mcp_fuzzer.config.loading.discovery import (
 from mcp_fuzzer.config.loading.search_params import ConfigSearchParams
 from mcp_fuzzer.config.extensions.transports import load_custom_transports
 from mcp_fuzzer.exceptions import ConfigFileError
-from mcp_fuzzer.transport.base import TransportProtocol
-from mcp_fuzzer.transport.custom import list_custom_transports, registry
+from mcp_fuzzer.transport.catalog import custom_driver_catalog, list_custom_drivers
+from mcp_fuzzer.transport.interfaces.driver import TransportDriver
 
 
-class DummyTransport(TransportProtocol):
+class DummyTransport(TransportDriver):
     """Simple transport stub used for registration tests."""
 
     async def send_request(self, method: str, params=None):
@@ -36,15 +36,15 @@ class DummyTransport(TransportProtocol):
 
 
 class NonTransport:
-    """Helper class that does not inherit TransportProtocol."""
+    """Helper class that does not inherit TransportDriver."""
 
 
 @pytest.fixture(autouse=True)
 def clear_registry():
     """Always clear custom transport registry before and after each test."""
-    registry.clear()
+    custom_driver_catalog.clear()
     yield
-    registry.clear()
+    custom_driver_catalog.clear()
 
 
 def test_find_config_file_prefers_explicit_path(tmp_path):
@@ -100,7 +100,7 @@ def test_load_custom_transports_registers_transport():
     }
 
     load_custom_transports(config_data)
-    transports = list_custom_transports()
+    transports = list_custom_drivers()
     assert "dummy" in transports
 
 
@@ -117,7 +117,7 @@ def test_load_custom_transports_missing_module_raises():
 
 
 def test_load_custom_transports_invalid_class_raises():
-    """Classes that do not inherit TransportProtocol should fail validation."""
+    """Classes that do not inherit TransportDriver should fail validation."""
     with pytest.raises(ConfigFileError):
         load_custom_transports(
             {

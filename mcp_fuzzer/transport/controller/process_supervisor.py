@@ -4,16 +4,16 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from ..events import ProcessEventObserver
-from ..exceptions import TransportError
+from ...events import ProcessEventObserver
+from ...exceptions import TransportError
 
 
 @dataclass
-class TransportProcessState:
+class ProcessState:
     """Lightweight state container for a transport-managed process.
 
     ``restart_count`` tracks the lifetime number of restarts (used for reporting),
-    while :class:`TransportManager._restart_attempts` counts consecutive restart
+    while :class:`ProcessSupervisor._restart_attempts` counts consecutive restart
     trials within the current backoff window.
     """
 
@@ -53,7 +53,7 @@ class TransportProcessState:
         self.last_stderr_tail = text
 
 
-class TransportManager:
+class ProcessSupervisor:
     """Helper that tracks transport process state, backoff, and observer events.
 
     ``_restart_attempts`` counts the consecutive restart trials used for the
@@ -70,7 +70,7 @@ class TransportManager:
         backoff_cap: float = 2.0,  # 2 seconds
         logger: logging.Logger | None = None,
     ) -> None:
-        self.state = TransportProcessState()
+        self.state = ProcessState()
         self._observers: list[ProcessEventObserver] = []
         self._max_read_bytes = max_read_bytes
         self._backoff_base = backoff_base

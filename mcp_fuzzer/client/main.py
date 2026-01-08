@@ -13,7 +13,7 @@ from ..safety_system.safety import SafetyFilter
 from ..exceptions import MCPError
 from .settings import ClientSettings
 from .base import MCPFuzzerClient
-from .transport import create_transport_with_auth
+from .transport import build_driver_with_auth
 
 # For backward compatibility
 UnifiedMCPFuzzerClient = MCPFuzzerClient
@@ -47,7 +47,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
         "auth_manager": config.get("auth_manager"),
     }
 
-    transport = create_transport_with_auth(args, client_args)
+    transport = build_driver_with_auth(args, client_args)
 
     safety_enabled = config.get("safety_enabled", True)
     safety_system = None

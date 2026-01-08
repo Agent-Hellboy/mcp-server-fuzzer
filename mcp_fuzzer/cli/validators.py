@@ -12,7 +12,7 @@ from rich.console import Console
 
 from ..exceptions import ArgumentValidationError
 from ..client.adapters import config_mediator
-from ..transport.factory import create_transport
+from ..transport.catalog import build_driver
 from ..exceptions import MCPError, TransportError
 from ..env import ENVIRONMENT_VARIABLES, ValidationType
 
@@ -158,7 +158,7 @@ class ValidationManager:
 
     def validate_transport(self, args: Any) -> None:
         try:
-            _ = create_transport(
+            _ = build_driver(
                 args.protocol,
                 args.endpoint,
                 timeout=args.timeout,
