@@ -10,9 +10,7 @@ import random
 from typing import Any
 
 from hypothesis import strategies as st
-
-# Import constants directly from config (constants are values, not behavior)
-from ....config.core.constants import DEFAULT_PROTOCOL_VERSION
+from .....config import DEFAULT_PROTOCOL_VERSION
 
 # Helper to keep URIs local-only
 SAFE_FILE_URIS = [

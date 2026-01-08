@@ -111,13 +111,16 @@ value = await executor.run_hypothesis_strategy(int_strategy)
 
 ## Integration with Fuzzing Components
 
-The AsyncFuzzExecutor is integrated with both the ToolFuzzer and ProtocolFuzzer components:
+The AsyncFuzzExecutor is integrated with the fuzz engine executor components:
 
-1. **Strategy Components**: Generate test cases based on schemas or specifications
+1. **Mutators** (`ToolMutator`, `ProtocolMutator`, `BatchMutator`): Generate test data based on schemas or specifications
 2. **AsyncFuzzExecutor**: Manages the execution of test cases with proper concurrency control
-3. **Fuzzing Engine**: Processes the results and provides feedback
+3. **Executors** (`ToolExecutor`, `ProtocolExecutor`, `BatchExecutor`): Orchestrate fuzzing operations and coordinate mutators, safety, and result builders
+4. **FuzzerReporter**: Collects results and calculates metrics
 
-This separation of concerns allows for better maintainability and scalability of the fuzzing system.
+This modular separation of concerns allows for better maintainability, testability, and scalability of the fuzzing system.
+
+See [Fuzz Engine Architecture](./fuzz-engine.md) for detailed information about the complete architecture.
 
 ## Configuration Options
 

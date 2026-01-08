@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Tool Fuzzer
+Tool Executor
 
-This module contains the orchestration logic for fuzzing MCP tools.
+This module contains execution orchestration logic for tool fuzzing.
 """
 
 import asyncio
@@ -10,38 +10,49 @@ import logging
 from typing import Any
 
 from ...safety_system.safety import SafetyFilter, SafetyProvider
-from ..executor import AsyncFuzzExecutor
-from ..strategy import ToolStrategies
+from .async_executor import AsyncFuzzExecutor
+from ..mutators import ToolMutator
+from ..fuzzerreporter import ResultBuilder, ResultCollector
 
 
-class ToolFuzzer:
-    """Orchestrates fuzzing of MCP tools."""
+class ToolExecutor:
+    """Orchestrates tool fuzzing execution."""
 
     def __init__(
         self,
-        max_concurrency: int = 5,
+        mutator: ToolMutator | None = None,
+        executor: AsyncFuzzExecutor | None = None,
+        result_builder: ResultBuilder | None = None,
         safety_system: SafetyProvider | None = None,
         enable_safety: bool = True,
+        max_concurrency: int = 5,
     ):
         """
-        Initialize the tool fuzzer.
+        Initialize the tool executor.
 
         Args:
-            max_concurrency: Maximum number of concurrent fuzzing operations
+            mutator: Tool mutator for generating fuzzed arguments
+            executor: Async executor for running operations
+            result_builder: Result builder for creating standardized results
+            safety_system: Safety system for filtering operations
+            enable_safety: Whether to enable safety system
+            max_concurrency: Maximum number of concurrent operations
         """
-        self.strategies = ToolStrategies()
-        self.executor = AsyncFuzzExecutor(max_concurrency=max_concurrency)
+        self.mutator = mutator or ToolMutator()
+        self.executor = executor or AsyncFuzzExecutor(max_concurrency=max_concurrency)
+        self.result_builder = result_builder or ResultBuilder()
+        self.collector = ResultCollector()
         if not enable_safety:
             self.safety_system = None
         else:
             self.safety_system = safety_system or SafetyFilter()
         self._logger = logging.getLogger(__name__)
 
-    async def fuzz_tool(
+    async def execute(
         self, tool: dict[str, Any], runs: int = 10, phase: str = "aggressive"
     ) -> list[dict[str, Any]]:
         """
-        Fuzz a tool by calling it with arguments based on the specified phase.
+        Execute fuzzing runs for a tool.
 
         Args:
             tool: Tool definition
@@ -51,38 +62,35 @@ class ToolFuzzer:
         Returns:
             List of fuzzing results
         """
-        results = []
         tool_name = tool.get("name", "unknown")
-        # Minimal INFO-level signal for tests and user feedback
         self._logger.info(f"Starting fuzzing for tool: {tool_name}")
 
         # Create a list of operations to execute
         operations = []
         for i in range(runs):
-            operations.append((self._fuzz_tool_single_run, [tool, i, phase], {}))
+            operations.append((self._execute_single_run, [tool, i, phase], {}))
 
         # Execute all operations in parallel with controlled concurrency
         batch_results = await self.executor.execute_batch(operations)
 
-        # Process results
-        for result in batch_results["results"]:
-            if result is not None:
-                results.append(result)
+        # Process results using collector
+        results = self.collector.collect_results(batch_results)
 
         # Process errors
-        for error in batch_results["errors"]:
+        for error in batch_results.get("errors", []):
             self._logger.warning(f"Error during fuzzing {tool_name}: {error}")
             results.append(
-                {
-                    "tool_name": tool_name,
-                    "exception": str(error),
-                    "success": False,
-                }
+                self.result_builder.build_tool_result(
+                    tool_name=tool_name,
+                    run_index=0,  # Error doesn't have a specific run index
+                    success=False,
+                    exception=str(error),
+                )
             )
 
         return results
 
-    async def _fuzz_tool_single_run(
+    async def _execute_single_run(
         self, tool: dict[str, Any], run_index: int, phase: str
     ) -> dict[str, Any] | None:
         """
@@ -99,8 +107,8 @@ class ToolFuzzer:
         tool_name = tool.get("name", "unknown")
 
         try:
-            # Generate fuzz arguments using the strategy with phase
-            args = await self.strategies.fuzz_tool_arguments(tool, phase=phase)
+            # Generate fuzz arguments using mutator
+            args = await self.mutator.mutate(tool, phase)
 
             safety_sanitized = False
             sanitized_args = args
@@ -110,14 +118,14 @@ class ToolFuzzer:
                     self.safety_system.log_blocked_operation(
                         tool_name, args, "Dangerous operation detected"
                     )
-                    return {
-                        "tool_name": tool_name,
-                        "run": run_index + 1,
-                        "args": args,
-                        "success": False,
-                        "safety_blocked": True,
-                        "safety_reason": "Dangerous operation blocked",
-                    }
+                    return self.result_builder.build_tool_result(
+                        tool_name=tool_name,
+                        run_index=run_index,
+                        args=args,
+                        success=False,
+                        safety_blocked=True,
+                        safety_reason="Dangerous operation blocked",
+                    )
 
                 # Sanitize arguments
                 sanitized_args = self.safety_system.sanitize_tool_arguments(
@@ -131,30 +139,30 @@ class ToolFuzzer:
                 f"with args: {sanitized_args}"
             )
 
-            return {
-                "tool_name": tool_name,
-                "run": run_index + 1,
-                "args": sanitized_args,
-                "original_args": (args if args != sanitized_args else None),
-                "success": True,
-                "safety_sanitized": safety_sanitized,
-            }
+            return self.result_builder.build_tool_result(
+                tool_name=tool_name,
+                run_index=run_index,
+                args=sanitized_args,
+                original_args=(args if args != sanitized_args else None),
+                success=True,
+                safety_sanitized=safety_sanitized,
+            )
 
         except Exception as e:
             self._logger.warning(f"Exception during fuzzing {tool_name}: {e}")
-            return {
-                "tool_name": tool_name,
-                "run": run_index + 1,
-                "args": args if "args" in locals() else None,
-                "exception": str(e),
-                "success": False,
-            }
+            return self.result_builder.build_tool_result(
+                tool_name=tool_name,
+                run_index=run_index,
+                args=args if "args" in locals() else None,
+                success=False,
+                exception=str(e),
+            )
 
-    async def fuzz_tool_both_phases(
+    async def execute_both_phases(
         self, tool: dict[str, Any], runs_per_phase: int = 5
     ) -> dict[str, list[dict[str, Any]]]:
         """
-        Fuzz a tool in both realistic and aggressive phases.
+        Execute fuzzing in both realistic and aggressive phases.
 
         Args:
             tool: Tool definition
@@ -170,26 +178,26 @@ class ToolFuzzer:
 
         # Phase 1: Realistic fuzzing
         self._logger.info(f"Phase 1: Realistic fuzzing for {tool_name}")
-        results["realistic"] = await self.fuzz_tool(
+        results["realistic"] = await self.execute(
             tool, runs=runs_per_phase, phase="realistic"
         )
 
         # Phase 2: Aggressive fuzzing
         self._logger.info(f"Phase 2: Aggressive fuzzing for {tool_name}")
-        results["aggressive"] = await self.fuzz_tool(
+        results["aggressive"] = await self.execute(
             tool, runs=runs_per_phase, phase="aggressive"
         )
 
         return results
 
-    async def fuzz_tools(
+    async def execute_multiple(
         self,
         tools: list[dict[str, Any]],
         runs_per_tool: int = 10,
         phase: str = "aggressive",
     ) -> dict[str, list[dict[str, Any]]]:
         """
-        Fuzz multiple tools asynchronously.
+        Execute fuzzing for multiple tools asynchronously.
 
         Args:
             tools: List of tool definitions
@@ -208,7 +216,7 @@ class ToolFuzzer:
         tasks = []
         for tool in tools:
             task = asyncio.create_task(
-                self._fuzz_single_tool(tool, runs_per_tool, phase)
+                self._execute_single_tool(tool, runs_per_tool, phase)
             )
             tasks.append((tool.get("name", "unknown"), task))
 
@@ -223,14 +231,14 @@ class ToolFuzzer:
 
         return all_results
 
-    async def _fuzz_single_tool(
+    async def _execute_single_tool(
         self,
         tool: dict[str, Any],
         runs_per_tool: int,
         phase: str,
     ) -> list[dict[str, Any]]:
         """
-        Fuzz a single tool and log statistics.
+        Execute fuzzing for a single tool and log statistics.
 
         Args:
             tool: Tool definition
@@ -243,7 +251,7 @@ class ToolFuzzer:
         tool_name = tool.get("name", "unknown")
         self._logger.info(f"Starting to fuzz tool: {tool_name}")
 
-        results = await self.fuzz_tool(tool, runs_per_tool, phase)
+        results = await self.execute(tool, runs_per_tool, phase)
 
         # Calculate statistics
         successful = len([r for r in results if r.get("success", False)])

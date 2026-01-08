@@ -45,7 +45,6 @@ CONTENT_TYPE = CONTENT_TYPE_HEADER
 JSON_CT = JSON_CONTENT_TYPE
 SSE_CT = SSE_CONTENT_TYPE
 
-
 class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
     """Streamable HTTP transport with MCP session management.
 

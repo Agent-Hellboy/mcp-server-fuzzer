@@ -7,7 +7,7 @@ import unittest
 import pytest
 from unittest.mock import patch
 
-from mcp_fuzzer.fuzz_engine.invariants import (
+from mcp_fuzzer.fuzz_engine.executor import (
     InvariantViolation,
     check_response_validity,
     check_error_type_correctness,
@@ -130,9 +130,9 @@ class TestInvariants(unittest.TestCase):
             "required": ["name", "age"],
         }
 
-        with patch("mcp_fuzzer.fuzz_engine.invariants.HAVE_JSONSCHEMA", True):
+        with patch("mcp_fuzzer.fuzz_engine.executor.invariants.HAVE_JSONSCHEMA", True):
             with patch(
-                "mcp_fuzzer.fuzz_engine.invariants.jsonschema_validate"
+                "mcp_fuzzer.fuzz_engine.executor.invariants.jsonschema_validate"
             ) as mock_validate:
                 self.assertTrue(check_response_schema_conformity(response, schema))
                 mock_validate.assert_called_once()
@@ -149,9 +149,9 @@ class TestInvariants(unittest.TestCase):
             "required": ["name", "age"],
         }
 
-        with patch("mcp_fuzzer.fuzz_engine.invariants.HAVE_JSONSCHEMA", True):
+        with patch("mcp_fuzzer.fuzz_engine.executor.invariants.HAVE_JSONSCHEMA", True):
             with patch(
-                "mcp_fuzzer.fuzz_engine.invariants.jsonschema_validate"
+                "mcp_fuzzer.fuzz_engine.executor.invariants.jsonschema_validate"
             ) as mock_validate:
                 mock_validate.side_effect = Exception("Validation error")
                 with self.assertRaises(InvariantViolation):
@@ -169,7 +169,7 @@ class TestInvariants(unittest.TestCase):
             "required": ["name", "age"],
         }
 
-        with patch("mcp_fuzzer.fuzz_engine.invariants.HAVE_JSONSCHEMA", False):
+        with patch("mcp_fuzzer.fuzz_engine.executor.invariants.HAVE_JSONSCHEMA", False):
             with self.assertLogs(level="WARNING") as cm:
                 self.assertTrue(check_response_schema_conformity(response, schema))
                 self.assertIn("jsonschema package not installed", cm.output[0])
@@ -180,10 +180,10 @@ class TestInvariants(unittest.TestCase):
 
         with (
             patch(
-                "mcp_fuzzer.fuzz_engine.invariants.check_response_validity"
+                "mcp_fuzzer.fuzz_engine.executor.invariants.check_response_validity"
             ) as mock_validity,
             patch(
-                "mcp_fuzzer.fuzz_engine.invariants.check_response_schema_conformity"
+                "mcp_fuzzer.fuzz_engine.executor.invariants.check_response_schema_conformity"
             ) as mock_schema,
         ):
             mock_validity.return_value = True
@@ -204,10 +204,10 @@ class TestInvariants(unittest.TestCase):
 
         with (
             patch(
-                "mcp_fuzzer.fuzz_engine.invariants.check_response_validity"
+                "mcp_fuzzer.fuzz_engine.executor.invariants.check_response_validity"
             ) as mock_validity,
             patch(
-                "mcp_fuzzer.fuzz_engine.invariants.check_error_type_correctness"
+                "mcp_fuzzer.fuzz_engine.executor.invariants.check_error_type_correctness"
             ) as mock_error,
         ):
             mock_validity.return_value = True
@@ -226,7 +226,7 @@ class TestInvariants(unittest.TestCase):
         ]
 
         with patch(
-            "mcp_fuzzer.fuzz_engine.invariants.verify_response_invariants"
+            "mcp_fuzzer.fuzz_engine.executor.invariants.verify_response_invariants"
         ) as mock_verify:
             mock_verify.return_value = True
 
@@ -244,7 +244,7 @@ class TestInvariants(unittest.TestCase):
         ]
 
         with patch(
-            "mcp_fuzzer.fuzz_engine.invariants.verify_response_invariants"
+            "mcp_fuzzer.fuzz_engine.executor.invariants.verify_response_invariants"
         ) as mock_verify:
             mock_verify.side_effect = [True, InvariantViolation("Invalid version")]
 

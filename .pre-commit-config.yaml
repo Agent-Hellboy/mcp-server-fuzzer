@@ -21,5 +21,7 @@ repos:
       - id: check-json
       - id: check-toml
       - id: end-of-file-fixer
+        exclude: ^\.codex/prompts/precommit-push\.md$
       - id: trailing-whitespace
+        exclude: ^\.codex/prompts/precommit-push\.md$
       - id: debug-statements

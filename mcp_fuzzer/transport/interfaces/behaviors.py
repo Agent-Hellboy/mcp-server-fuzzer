@@ -27,6 +27,7 @@ from ...safety_system.policy import is_host_allowed, sanitize_headers
 from .states import DriverState
 
 
+
 class JSONRPCRequest(TypedDict):
     """Type definition for JSON-RPC request structure."""
 

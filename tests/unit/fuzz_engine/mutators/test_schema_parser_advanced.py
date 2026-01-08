@@ -5,7 +5,7 @@ Advanced unit tests for schema_parser.py - edge cases and uncovered paths.
 
 import unittest
 import pytest
-from mcp_fuzzer.fuzz_engine.strategy.schema_parser import (
+from mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser import (
     make_fuzz_strategy_from_jsonschema,
     _merge_allOf,
     _handle_string_type,
