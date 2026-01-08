@@ -61,24 +61,26 @@ class StreamableHTTPTransport(TransportProtocol):
             "Accept": DEFAULT_HTTP_ACCEPT,
             "Content-Type": JSON_CT,
         }
-        self.auth_headers = {k: v for k, v in (auth_headers or {}).items() if v is not None}
+        self.auth_headers = {
+            k: v for k, v in (auth_headers or {}).items() if v is not None
+        }
 
         self._logger = logging.getLogger(__name__)
-
-    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
-        """Prepare headers with optional safety sanitization and auth headers."""
-        if self.safety_enabled:
-            safe_headers = self._prepare_headers_with_auth(headers)
-        else:
-            safe_headers = headers.copy()
-        # Add auth headers after sanitization (they are user-configured and safe)
-        safe_headers.update(self.auth_headers)
-        return safe_headers
         self.session_id: str | None = None
         self.protocol_version: str | None = None
         self._initialized: bool = False
         self._init_lock: asyncio.Lock = asyncio.Lock()
         self._initializing: bool = False
+
+    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
+        """Prepare headers with optional safety sanitization and auth headers."""
+        if self.safety_enabled:
+            safe_headers = sanitize_headers(headers)
+        else:
+            safe_headers = headers.copy()
+        # Add auth headers after sanitization (they are user-configured and safe)
+        safe_headers.update(self.auth_headers)
+        return safe_headers
 
     def _prepare_headers(self) -> dict[str, str]:
         headers = dict(self.headers)

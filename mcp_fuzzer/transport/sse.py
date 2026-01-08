@@ -23,7 +23,9 @@ class SSETransport(TransportProtocol):
             "Accept": "text/event-stream",
             "Content-Type": "application/json",
         }
-        self.auth_headers = {k: v for k, v in (auth_headers or {}).items() if v is not None}
+        self.auth_headers = {
+            k: v for k, v in (auth_headers or {}).items() if v is not None
+        }
 
     def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
         """Prepare headers with optional safety sanitization and auth headers."""
