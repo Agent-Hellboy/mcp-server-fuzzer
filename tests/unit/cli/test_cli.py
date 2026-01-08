@@ -318,6 +318,7 @@ def test_transport_factory_applies_auth_headers():
             "http",
             "http://example.com",
             timeout=10.0,
+            safety_enabled=True,
             auth_headers={"Authorization": "x"},
         )
 
