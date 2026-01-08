@@ -390,31 +390,43 @@ class ProtocolExecutor:
         all_results = {}
 
         # Create tasks for each protocol type with bounded concurrency
-        tasks = {}
+        tasks = []
         sem = self._get_type_semaphore()
 
         async def _run(pt: str) -> list[dict[str, Any]]:
             async with sem:
                 return await self._execute_single_type(pt, runs_per_type, phase)
 
+        async def _run_with_type(pt: str) -> tuple[str, list[dict[str, Any]], Exception | None]:
+            try:
+                results = await asyncio.wait_for(_run(pt), timeout=30.0)
+                return pt, results, None
+            except Exception as exc:
+                return pt, [], exc
+
         for protocol_type in self.PROTOCOL_TYPES:
-            task = asyncio.create_task(
-                asyncio.wait_for(_run(protocol_type), timeout=30.0),
-                name=f"fuzz_protocol_{protocol_type}",
+            tasks.append(
+                asyncio.create_task(
+                    _run_with_type(protocol_type),
+                    name=f"fuzz_protocol_{protocol_type}",
+                )
             )
-            tasks[task] = protocol_type
 
         # Process tasks as they complete for more responsive timeouts.
         for task in asyncio.as_completed(tasks):
-            protocol_type = tasks[task]
             try:
-                results = await task
+                protocol_type, results, exc = await task
+            except Exception as exc:
+                self._logger.error("Failed to fuzz protocol types: %s", exc)
+                continue
+
+            if exc is None:
                 all_results[protocol_type] = results
-            except asyncio.TimeoutError:
+            elif isinstance(exc, asyncio.TimeoutError):
                 self._logger.error("Timeout while fuzzing %s", protocol_type)
                 all_results[protocol_type] = []
-            except Exception as e:
-                self._logger.error("Failed to fuzz %s: %s", protocol_type, e)
+            else:
+                self._logger.error("Failed to fuzz %s: %s", protocol_type, exc)
                 all_results[protocol_type] = []
 
         return all_results
