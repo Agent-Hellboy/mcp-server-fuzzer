@@ -115,9 +115,15 @@ def method_names() -> st.SearchStrategy[str]:
 
     return st.one_of(prefixes, simple_names)
 
-# TODO: expand this to cover all the InitializeRequest fields
 def fuzz_initialize_request_realistic() -> dict[str, Any]:
-    """Generate realistic InitializeRequest for testing valid behavior."""
+    """Generate realistic InitializeRequest for testing valid behavior.
+    
+    Covers all InitializeRequest fields per MCP specification:
+    - protocolVersion (required)
+    - capabilities (required)
+    - clientInfo (required)
+    - _meta (optional)
+    """
     # Use realistic protocol versions
     protocol_versions = [
         DEFAULT_PROTOCOL_VERSION,
@@ -138,23 +144,32 @@ def fuzz_initialize_request_realistic() -> dict[str, Any]:
         "req-002",
         "init-123",
     ]
+    
+    # Build params with required fields
+    params: dict[str, Any] = {
+        "protocolVersion": random.choice(protocol_versions),
+        # Align with MCP ClientCapabilities spec: include valid fields only
+        # https://modelcontextprotocol.io/specification/draft/schema#ClientCapabilities
+        "capabilities": {
+            "elicitation": {},
+            "experimental": {},
+            "roots": {"listChanged": True},
+            "sampling": {},
+        },
+        "clientInfo": {"name": "test-client", "version": "1.0.0"},
+    }
+    
+    # Optionally include _meta field (realistic usage: ~30% of requests)
+    if random.random() < 0.3:
+        params["_meta"] = {
+            "progressToken": f"progress-{random.randint(1, 999)}",
+        }
 
     return {
         "jsonrpc": "2.0",
         "id": random.choice(id_options),
         "method": "initialize",
-        "params": {
-            "protocolVersion": random.choice(protocol_versions),
-            # Align with MCP ClientCapabilities spec: include valid fields only
-            # https://modelcontextprotocol.io/specification/draft/schema#ClientCapabilities
-            "capabilities": {
-                "elicitation": {},
-                "experimental": {},
-                "roots": {"listChanged": True},
-                "sampling": {},
-            },
-            "clientInfo": {"name": "test-client", "version": "1.0.0"},
-        },
+        "params": params,
     }
 
 def fuzz_list_resources_request_realistic() -> dict[str, Any]:
