@@ -232,9 +232,7 @@ class TestCustomTransportErrorHandling:
 
     def test_unknown_transport_creation(self):
         """Test error handling for unknown transport creation."""
-        with pytest.raises(
-            TransportRegistrationError, match="Unsupported URL scheme"
-        ):
+        with pytest.raises(TransportRegistrationError, match="Unsupported URL scheme"):
             create_transport("unknown_transport://endpoint")
 
 

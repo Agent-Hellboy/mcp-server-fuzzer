@@ -6,8 +6,7 @@ from typing import Any, Protocol
 
 
 class SupportsToDict(Protocol):
-    def to_dict(self) -> dict[str, Any]:
-        ...
+    def to_dict(self) -> dict[str, Any]: ...
 
 
 def normalize_report_data(

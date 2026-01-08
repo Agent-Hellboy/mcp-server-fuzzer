@@ -31,6 +31,7 @@ def test_execute_inner_client_with_aiomonitor(monkeypatch):
     monkeypatch.setenv("PYTEST_CURRENT_TEST", "")
     monkeypatch.setitem(sys.modules, "aiomonitor", _make_aiomonitor())
     fake_loop = asyncio.new_event_loop()
+
     async def dummy():
         return None
 
@@ -63,6 +64,7 @@ def test_execute_inner_client_handles_cancel(monkeypatch):
         patch.object(loop, "run_until_complete", side_effect=_run_until_complete),
     ):
         try:
+
             async def dummy():
                 return None
 
@@ -74,10 +76,13 @@ def test_execute_inner_client_handles_cancel(monkeypatch):
 
 def test_run_with_retry_on_interrupt_exits_when_no_retry(monkeypatch):
     args = MagicMock(enable_safety_system=False, retry_with_safety_on_interrupt=False)
-    with patch(
-        "mcp_fuzzer.client.runtime.retry.execute_inner_client",
-        side_effect=KeyboardInterrupt,
-    ), patch("mcp_fuzzer.client.runtime.retry.Console") as mock_console:
+    with (
+        patch(
+            "mcp_fuzzer.client.runtime.retry.execute_inner_client",
+            side_effect=KeyboardInterrupt,
+        ),
+        patch("mcp_fuzzer.client.runtime.retry.Console") as mock_console,
+    ):
         with pytest.raises(SystemExit) as exc:
             run_with_retry_on_interrupt(args, lambda: None, ["prog"])
         assert exc.value.code == 130

@@ -27,7 +27,6 @@ def _print_mcp_error(error: MCPError) -> None:
         console.print(f"[dim]Context: {error.context}[/dim]")
 
 
-
 def run_cli() -> None:
     safety: SafetyController | None = None
     try:
@@ -45,9 +44,10 @@ def run_cli() -> None:
         cli_config = build_cli_config(args)
         config = cli_config.merged
 
-        is_utility_command = getattr(args, "check_env", False) or getattr(
-            args, "validate_config", None
-        ) is not None
+        is_utility_command = (
+            getattr(args, "check_env", False)
+            or getattr(args, "validate_config", None) is not None
+        )
         if not is_utility_command:
             print_startup_info(args, config)
 

@@ -23,6 +23,7 @@ from ..safety_system.policy import sanitize_subprocess_env
 from ..config.constants import PROCESS_WAIT_TIMEOUT
 from .manager import TransportManager
 
+
 class StdioTransport(TransportProtocol):
     def __init__(
         self,
@@ -445,9 +446,9 @@ class StdioTransport(TransportProtocol):
                             logging.info(
                                 (
                                     "Sent terminate timeout signal to process "
-                                        f"{self.process.pid}"
-                                    )
+                                    f"{self.process.pid}"
                                 )
+                            )
                     elif signal_type == "force":
                         # Send SIGKILL (force kill)
                         if os.name != "nt":
@@ -499,8 +500,8 @@ class StdioTransport(TransportProtocol):
                                 (
                                     "Sent terminate interrupt signal to process "
                                     f"{self.process.pid}"
-                                    )
                                 )
+                            )
                     else:
                         logging.warning(f"Unknown signal type: {signal_type}")
                         return False

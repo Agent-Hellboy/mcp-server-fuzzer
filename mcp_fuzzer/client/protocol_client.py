@@ -15,6 +15,7 @@ from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
 from ..fuzz_engine.fuzzer.protocol_fuzzer import ProtocolFuzzer
 from ..safety_system.safety import SafetyProvider
 
+
 class ProtocolClient:
     """Client for fuzzing MCP protocol types."""
 

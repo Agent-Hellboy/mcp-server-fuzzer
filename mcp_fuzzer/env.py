@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Any, TypedDict
 
+
 class ValidationType(Enum):
     """Types of validation for environment variables."""
 
@@ -8,6 +9,7 @@ class ValidationType(Enum):
     BOOLEAN = "boolean"
     NUMERIC = "numeric"
     STRING = "string"
+
 
 class EnvironmentVariable(TypedDict):
     """Definition for an environment variable with validation rules."""
@@ -17,6 +19,7 @@ class EnvironmentVariable(TypedDict):
     validation_type: ValidationType
     validation_params: dict[str, Any]  # e.g., {"choices": ["DEBUG", "INFO", ...]}
     description: str
+
 
 # Environment variable registry
 ENVIRONMENT_VARIABLES: list[EnvironmentVariable] = [

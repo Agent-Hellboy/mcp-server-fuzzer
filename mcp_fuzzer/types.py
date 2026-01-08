@@ -11,6 +11,7 @@ from typing import Any, TypedDict
 # JSON container types
 JSONContainer = dict[str, Any] | list[Any]
 
+
 class FuzzDataResult(TypedDict, total=False):
     """TypedDict for fuzzing results data structure."""
 
@@ -25,6 +26,7 @@ class FuzzDataResult(TypedDict, total=False):
     exception: str | None
     invariant_violations: list[str]
 
+
 class ProtocolFuzzResult(TypedDict, total=False):
     """TypedDict for protocol fuzzing results."""
 
@@ -35,6 +37,7 @@ class ProtocolFuzzResult(TypedDict, total=False):
     success: bool
     exception: str | None
     traceback: str | None
+
 
 class ToolFuzzResult(TypedDict, total=False):
     """TypedDict for tool fuzzing results."""
@@ -48,6 +51,7 @@ class ToolFuzzResult(TypedDict, total=False):
     traceback: str | None
     error: str | None
 
+
 class BatchExecutionResult(TypedDict):
     """TypedDict for batch execution results."""
 
@@ -57,6 +61,7 @@ class BatchExecutionResult(TypedDict):
     completed: int
     failed: int
 
+
 class SafetyCheckResult(TypedDict):
     """TypedDict for safety check results."""
 
@@ -64,6 +69,7 @@ class SafetyCheckResult(TypedDict):
     sanitized: bool
     blocking_reason: str | None
     data: Any
+
 
 class TransportStats(TypedDict, total=False):
     """TypedDict for transport statistics."""
@@ -77,6 +83,7 @@ class TransportStats(TypedDict, total=False):
     last_activity: float
     process_id: int | None
     active: bool
+
 
 # Constants for timeouts and other magic numbers
 DEFAULT_TIMEOUT = 30.0  # seconds
