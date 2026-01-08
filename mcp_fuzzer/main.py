@@ -47,7 +47,8 @@ async def fuzz_tool(url: str, tool, runs: int = 10):
                             break
                     else:
                         logging.warning(
-                            "Server returned a non-JSON (or SSE) response for tool call. Appending dummy result."
+                            "Server returned a non-JSON (or SSE) response "
+                            "for tool call. Appending dummy result."
                         )
                         result = {"error": "Non-JSON response"}
             results.append({"args": args, "result": result})

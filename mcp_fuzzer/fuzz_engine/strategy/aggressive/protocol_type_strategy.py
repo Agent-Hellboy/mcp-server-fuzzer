@@ -236,9 +236,9 @@ def fuzz_initialize_request_aggressive() -> dict[str, Any]:
                         {"__proto__": {"isAdmin": True}},
                         {"constructor": {"prototype": {"isAdmin": True}}},
                         lambda: {"evil": generate_malicious_string()},
-                        # Add more capabilities structures that include experimental field
+                        # Add more capabilities with experimental field
                         lambda: {"experimental": generate_experimental_payload()},
-                        # Add more capabilities with experimental field for better variety
+                        # Add more capabilities for better variety
                         lambda: {
                             "experimental": generate_malicious_value(),
                             "other_capability": generate_malicious_string(),
