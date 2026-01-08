@@ -5,7 +5,6 @@ Unit tests for ToolStrategies from strategy_manager.py
 
 import unittest
 import pytest
-from unittest.mock import MagicMock
 
 from mcp_fuzzer.fuzz_engine.mutators.strategies import ToolStrategies
 

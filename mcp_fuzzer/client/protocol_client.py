@@ -37,10 +37,6 @@ class ProtocolClient:
         self.safety_system = safety_system
         # Important: let ProtocolClient own sending (safety checks happen here)
         self.protocol_mutator = ProtocolMutator()
-        # Use ProtocolExecutor to get PROTOCOL_TYPES
-        self._protocol_executor = ProtocolExecutor(
-            None, max_concurrency=max_concurrency
-        )
         self._logger = logging.getLogger(__name__)
 
     async def _check_safety_for_protocol_message(
@@ -218,8 +214,8 @@ class ProtocolClient:
             List of protocol type strings
         """
         try:
-            # The protocol executor knows which protocol types to fuzz
-            return list(getattr(self._protocol_executor, "PROTOCOL_TYPES", ()))
+            # Use the class-level protocol type list from ProtocolExecutor
+            return list(getattr(ProtocolExecutor, "PROTOCOL_TYPES", ()))
         except Exception as e:
             self._logger.error(f"Failed to get protocol types: {e}")
             return []
@@ -386,4 +382,4 @@ class ProtocolClient:
 
     async def shutdown(self) -> None:
         """Shutdown the protocol client."""
-        await self._protocol_executor.shutdown()
+        return None

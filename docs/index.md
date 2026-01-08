@@ -106,37 +106,43 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 
 - **Runtime Management** - Async process management and monitoring
 
-- **CLI Interface** - User-friendly command-line interface
+- **CLI** - User-friendly command-line interface
 
 See [Architecture Overview](architecture/architecture.md) and [Fuzz Engine Architecture](architecture/fuzz-engine.md) for detailed diagrams and documentation.
 
 ## Documentation
 
 ### Getting Started
+
 - **[Getting Started](getting-started/getting-started.md)** - Installation and basic usage
 - **[Examples](getting-started/examples.md)** - Working examples and configurations
 
 ### Architecture
+
 - **[Architecture Overview](architecture/architecture.md)** - System design and components
 - **[Fuzz Engine](architecture/fuzz-engine.md)** - Detailed fuzz engine design (Mutators, Executor, FuzzerReporter)
 - **[Client Architecture](architecture/client-architecture.md)** - Client package structure
 - **[Async Executor](architecture/async-executor.md)** - Async execution framework
 
 ### Configuration
+
 - **[Configuration](configuration/configuration.md)** - Configuration options and file formats (YAML/TOML)
 - **[Network Policy](configuration/network-policy.md)** - Network access control
 
 ### Components
+
 - **[Runtime Management](components/runtime-management.md)** - Process management, watchdog system
 - **[Process Management Guide](components/process-management-guide.md)** - Process management best practices
 - **[Safety Guide](components/safety.md)** - Safety system configuration
 
 ### Development
+
 - **[Reference](development/reference.md)** - Complete API reference
 - **[Exceptions](development/exceptions.md)** - Error handling and exception hierarchy
 - **[Contributing](development/contributing.md)** - Development and contribution guide
 
 ### Testing
+
 - **[Fuzz Results](testing/fuzz-results.md)** - Latest fuzzing test results
 
 ## Contributing

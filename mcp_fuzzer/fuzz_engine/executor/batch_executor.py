@@ -97,13 +97,11 @@ class BatchExecutor:
                     e,
                 )
                 results.append(
-                    {
-                        "protocol_type": "BatchRequest",
-                        "run": run_index + 1,
-                        "fuzz_data": [],
-                        "success": False,
-                        "exception": str(e),
-                    }
+                    self.result_builder.build_batch_result(
+                        run_index=run_index,
+                        batch_request=[],
+                        server_error=str(e),
+                    )
                 )
 
         return results
@@ -148,4 +146,3 @@ class BatchExecutor:
     async def shutdown(self) -> None:
         """Shutdown the executor and clean up resources."""
         await self.executor.shutdown()
-

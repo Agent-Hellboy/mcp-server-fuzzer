@@ -131,7 +131,7 @@ class ToolClient:
         for i in range(runs):
             try:
                 # Generate fuzz arguments using the mutator
-                args = await self.tool_mutator.mutate(tool, phase="aggressive")
+                args = await self.tool_mutator.mutate(tool)
 
                 # Check safety before proceeding
                 if self.safety_system and self.safety_system.should_skip_tool_call(
@@ -374,7 +374,7 @@ class ToolClient:
 
     async def fuzz_tool_both_phases(
         self, tool: dict[str, Any], runs_per_phase: int = 5
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> dict[str, Any]:
         """Fuzz a specific tool in both realistic and aggressive phases."""
         tool_name = tool.get("name", "unknown")
         self._logger.info(f"Starting two-phase fuzzing for tool: {tool_name}")
@@ -394,7 +394,7 @@ class ToolClient:
             self._logger.info(f"Phase 2 (Aggressive): {tool_name}")
             aggressive_results = []
             for i in range(runs_per_phase):
-                args = await self.tool_mutator.mutate(tool, phase="aggressive")
+                args = await self.tool_mutator.mutate(tool)
                 aggressive_results.append({"args": args})
             aggressive_processed = await self._process_fuzz_results(
                 tool_name, aggressive_results

@@ -91,8 +91,7 @@ The Mutators module is responsible for generating and mutating test data. It pro
 #### Components
 
 **Base Classes:**
-- `Mutator` (Protocol) - Defines the mutator interface
-- `BaseMutator` (ABC) - Abstract base class for mutator implementations
+- `Mutator` (ABC) - Defines the mutator interface
 
 **Concrete Mutators:**
 - `ToolMutator` - Generates fuzzed tool arguments based on JSON Schema
@@ -111,16 +110,17 @@ The Mutators module is responsible for generating and mutating test data. It pro
 Generates fuzzed arguments for MCP tools based on their JSON Schema specifications.
 
 ```python
-class ToolMutator(BaseMutator):
+class ToolMutator(Mutator):
     """Generates fuzzed tool arguments."""
     
     def __init__(self):
         self.strategies = ToolStrategies()
-        self._logger = logging.getLogger(__name__)
     
-    async def mutate(self, tool: dict[str, Any], phase: str) -> dict[str, Any]:
+    async def mutate(
+        self, tool: dict[str, Any], phase: str = "aggressive"
+    ) -> dict[str, Any]:
         """Generate fuzzed arguments for a tool."""
-        return await self.strategies.fuzz_tool_arguments(tool, phase)
+        return await self.strategies.fuzz_tool_arguments(tool, phase=phase)
 ```
 
 **Features:**
@@ -379,26 +379,21 @@ Aggregates and filters results from fuzzing operations.
 class ResultCollector:
     """Collects and aggregates fuzzing results."""
     
-    def __init__(self):
-        self.results: list[FuzzDataResult] = []
-        self.errors: list[Any] = []
-    
     def collect_results(
         self, batch_results: dict[str, list[Any]]
     ) -> list[FuzzDataResult]:
         """Process batch results from AsyncFuzzExecutor."""
     
     def filter_results(
-        self, filter_type: str = "all"
+        self, results: list[FuzzDataResult], success_only: bool = False
     ) -> list[FuzzDataResult]:
-        """Filter results by type (success_only, failed_only, all)."""
+        """Filter results by success status."""
 ```
 
 **Features:**
-- Collects results from multiple sources
-- Filters None values and errors
-- Supports result filtering
-- Maintains separate error tracking
+- Collects results from batch outputs into a flat list
+- Filters None values and error payloads
+- Supports success-only filtering via a flag
 
 #### MetricsCalculator
 
@@ -759,4 +754,3 @@ results = await protocol_executor.execute("InitializeRequest", runs=10)
 - [Architecture Overview](./architecture.md) - Overall system architecture
 - [Safety System](../components/safety.md) - Safety system integration
 - [Transport Layer](../transport/) - Transport integration
-

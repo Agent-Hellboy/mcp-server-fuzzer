@@ -86,6 +86,7 @@ class ProtocolExecutor:
         batch_mutator: BatchMutator | None = None,
         executor: AsyncFuzzExecutor | None = None,
         result_builder: ResultBuilder | None = None,
+        result_collector: ResultCollector | None = None,
         max_concurrency: int = 5,
     ):
         """
@@ -97,6 +98,7 @@ class ProtocolExecutor:
             batch_mutator: Batch mutator for generating batch requests
             executor: Async executor for running operations
             result_builder: Result builder for creating standardized results
+            result_collector: Result collector for aggregating results
             max_concurrency: Maximum number of concurrent operations
         """
         self.transport = transport
@@ -104,7 +106,7 @@ class ProtocolExecutor:
         self.batch_mutator = batch_mutator or BatchMutator()
         self.executor = executor or AsyncFuzzExecutor(max_concurrency=max_concurrency)
         self.result_builder = result_builder or ResultBuilder()
-        self.collector = ResultCollector()
+        self.collector = result_collector or ResultCollector()
         self._logger = logging.getLogger(__name__)
         # Bound concurrent protocol-type tasks
         self._type_semaphore = None  # Will be created lazily when needed
@@ -514,8 +516,7 @@ class ProtocolExecutor:
                     self.result_builder.build_batch_result(
                         run_index=run_index,
                         batch_request=[],
-                        success=False,
-                        exception=str(e),
+                        server_error=str(e),
                     )
                 )
 
