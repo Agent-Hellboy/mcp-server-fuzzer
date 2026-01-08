@@ -140,6 +140,7 @@ def test_validate_arguments_errors():
     with pytest.raises(ArgumentValidationError):
         validator.validate_arguments(args)
 
+
 def test_validate_arguments_runs_per_type_invalid_type():
     validator = ValidationManager()
     args = argparse.Namespace(
@@ -154,6 +155,7 @@ def test_validate_arguments_runs_per_type_invalid_type():
     )
     with pytest.raises(ArgumentValidationError):
         validator.validate_arguments(args)
+
 
 def test_validate_arguments_timeout_negative():
     validator = ValidationManager()
@@ -218,6 +220,7 @@ def test_validate_arguments_allows_utility_without_endpoint():
     )
     validator.validate_arguments(args)
 
+
 def test_validate_arguments_protocol_type_wrong_mode_with_endpoint():
     validator = ValidationManager()
     args = argparse.Namespace(
@@ -232,6 +235,7 @@ def test_validate_arguments_protocol_type_wrong_mode_with_endpoint():
     )
     with pytest.raises(ArgumentValidationError):
         validator.validate_arguments(args)
+
 
 def test_validate_arguments_runs_not_int():
     validator = ValidationManager()
@@ -267,9 +271,7 @@ def test_build_cli_config_merges_and_returns_cli_config():
 
 def test_handle_validate_config(monkeypatch):
     validator = ValidationManager()
-    with patch(
-        "mcp_fuzzer.cli.validators.load_config_file"
-    ) as mock_load:
+    with patch("mcp_fuzzer.cli.validators.load_config_file") as mock_load:
         validator.validate_config_file("config.yml")
     mock_load.assert_called_once_with("config.yml")
 
@@ -334,8 +336,10 @@ def test_safety_controller():
 
 def test_execute_inner_client_pytest_branch(monkeypatch):
     monkeypatch.setenv("PYTEST_CURRENT_TEST", "1")
+
     async def dummy_main():
         return None
+
     with patch("mcp_fuzzer.client.runtime.async_runner.asyncio.run") as mock_run:
         execute_inner_client(argparse.Namespace(), dummy_main, ["prog"])
         mock_run.assert_called_once()
@@ -557,6 +561,7 @@ def test_build_cli_config_uses_config_file(monkeypatch):
     assert cli_config.merged["runs"] == 42
     assert cli_config.merged["allow_hosts"] == ["a.local"]
 
+
 def test_build_cli_config_handles_apply_config_error(caplog):
     caplog.set_level(logging.DEBUG)
     args = _base_args(config=None)
@@ -567,6 +572,7 @@ def test_build_cli_config_handles_apply_config_error(caplog):
         cli_config = build_cli_config(args)
     assert cli_config.merged["endpoint"] == "http://localhost"
     assert "fail" in "".join(caplog.messages)
+
 
 def test_build_cli_config_raises_config_error():
     args = _base_args(config="bad.yml")

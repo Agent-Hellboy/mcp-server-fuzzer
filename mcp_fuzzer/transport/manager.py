@@ -65,9 +65,9 @@ class TransportManager:
     def __init__(
         self,
         *,
-        max_read_bytes: int = 256 * 1024, # 256KB
-        backoff_base: float = 0.2, # 0.2 seconds
-        backoff_cap: float = 2.0, # 2 seconds
+        max_read_bytes: int = 256 * 1024,  # 256KB
+        backoff_base: float = 0.2,  # 0.2 seconds
+        backoff_cap: float = 2.0,  # 2 seconds
         logger: logging.Logger | None = None,
     ) -> None:
         self.state = TransportProcessState()

@@ -480,7 +480,7 @@ def test_load_auth_config_with_default_provider():
 
         assert isinstance(auth_manager, AuthManager)
         assert auth_manager.default_provider == "api_key"
-        
+
         # Test that default auth headers work
         headers = auth_manager.get_default_auth_headers()
         assert "Authorization" in headers
@@ -493,14 +493,15 @@ def test_setup_auth_from_env_with_default_provider(monkeypatch):
     """Test setting up auth from environment with default provider."""
     monkeypatch.setenv("MCP_API_KEY", "test_key")
     monkeypatch.setenv("MCP_DEFAULT_AUTH_PROVIDER", "api_key")
-    
+
     auth_manager = setup_auth_from_env()
-    
+
     assert auth_manager.default_provider == "api_key"
-    
+
     # Test that default auth headers work
     headers = auth_manager.get_default_auth_headers()
     assert "Authorization" in headers
+
 
 def test_setup_auth_from_env_custom_header_and_prefix(monkeypatch):
     """Environment variables should override header name and prefix."""
@@ -511,6 +512,7 @@ def test_setup_auth_from_env_custom_header_and_prefix(monkeypatch):
     auth_manager = setup_auth_from_env()
     headers = auth_manager.auth_providers["api_key"].get_auth_headers()
     assert headers["X-Auth"] == "Token secret"
+
 
 def test_load_auth_config_rejects_non_dict_provider():
     """Provider entries must be dictionaries."""
@@ -523,6 +525,7 @@ def test_load_auth_config_rejects_non_dict_provider():
             load_auth_config(config_file)
     finally:
         os.unlink(config_file)
+
 
 def test_load_auth_config_supports_tool_mappings_alias():
     """Legacy tool_mappings key should still work."""
@@ -538,6 +541,7 @@ def test_load_auth_config_supports_tool_mappings_alias():
         assert auth_manager.tool_auth_mapping["demo"] == "api_key"
     finally:
         os.unlink(config_file)
+
 
 def test_load_auth_config_rejects_both_tool_mapping_keys():
     """Providing both tool_mapping keys should raise an error."""

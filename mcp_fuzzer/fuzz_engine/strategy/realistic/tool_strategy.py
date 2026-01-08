@@ -16,6 +16,7 @@ from typing import Any
 
 from hypothesis import strategies as st
 
+
 def base64_strings(
     min_size: int = 0, max_size: int = 100, alphabet: str | None = None
 ) -> st.SearchStrategy[str]:
@@ -40,6 +41,7 @@ def base64_strings(
     return st.binary(min_size=min_size, max_size=max_size).map(
         lambda data: base64.b64encode(data).decode("ascii")
     )
+
 
 def uuid_strings(version: int | None = None) -> st.SearchStrategy[str]:
     """
@@ -73,6 +75,7 @@ def uuid_strings(version: int | None = None) -> st.SearchStrategy[str]:
     else:
         raise ValueError(f"Unsupported UUID version: {version}")
 
+
 def timestamp_strings(
     min_year: int = 2020,
     max_year: int = 2030,
@@ -99,6 +102,7 @@ def timestamp_strings(
         )
     )
 
+
 async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str:
     """Generate realistic text using custom strategies."""
     # Normalize bounds and cache loop
@@ -122,9 +126,14 @@ async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str
         if min_size == 0 and max_size > 50:
             # Likely a title or description field - use realistic text
             realistic_titles = [
-                "Sales Performance Q4", "User Growth Metrics", "Revenue Analysis",
-                "Customer Satisfaction Survey", "Product Usage Statistics",
-                "Market Share Analysis", "Performance Dashboard", "Trend Analysis"
+                "Sales Performance Q4",
+                "User Growth Metrics",
+                "Revenue Analysis",
+                "Customer Satisfaction Survey",
+                "Product Usage Statistics",
+                "Market Share Analysis",
+                "Performance Dashboard",
+                "Trend Analysis",
             ]
             return random.choice(realistic_titles)
         else:
@@ -156,6 +165,7 @@ async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str
         return "".join(random.choice(chars) for _ in range(length))
     else:
         return "realistic_value"
+
 
 async def fuzz_tool_arguments_realistic(tool: dict[str, Any]) -> dict[str, Any]:
     """Generate realistic tool arguments based on schema."""
@@ -289,18 +299,26 @@ async def fuzz_tool_arguments_realistic(tool: dict[str, Any]) -> dict[str, Any]:
             # optional ones
             # But only if the property has a simple string schema without enum/format
             # constraints
-            elif (prop_name not in args and
-                  (prop_name in required or random.random() < 0.3)):
+            elif prop_name not in args and (
+                prop_name in required or random.random() < 0.3
+            ):
                 # Only use fallback generation for simple string properties without
                 # constraints
-                if (prop_spec.get("type") == "string" and
-                    not prop_spec.get("enum") and
-                    not prop_spec.get("format") and
-                    not prop_spec.get("pattern")):
+                if (
+                    prop_spec.get("type") == "string"
+                    and not prop_spec.get("enum")
+                    and not prop_spec.get("format")
+                    and not prop_spec.get("pattern")
+                ):
                     args[prop_name] = await generate_realistic_text()
                 # For properties with schemas, let the schema parser handle them
-                elif prop_spec.get("type") in ["integer", "number", "boolean",
-                                               "array", "object"]:
+                elif prop_spec.get("type") in [
+                    "integer",
+                    "number",
+                    "boolean",
+                    "array",
+                    "object",
+                ]:
                     # These should have been handled by the schema parser above
                     pass
                 else:

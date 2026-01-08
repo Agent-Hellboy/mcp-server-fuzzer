@@ -10,6 +10,7 @@ from typing import Any
 from rich.console import Console
 
 from ...transport.factory import create_transport as base_create_transport
+
 logger = logging.getLogger(__name__)
 
 

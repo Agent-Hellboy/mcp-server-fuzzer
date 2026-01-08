@@ -18,6 +18,7 @@ from ..safety_system.policy import (
     resolve_redirect_safely,
 )
 
+
 class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMixin):
     """
     HTTP transport implementation with reduced code duplication.

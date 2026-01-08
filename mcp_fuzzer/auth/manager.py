@@ -2,6 +2,7 @@ from typing import Any
 
 from .providers import AuthProvider
 
+
 class AuthManager:
     """Manages authentication for different tools and services."""
 
@@ -18,7 +19,7 @@ class AuthManager:
 
     def set_default_provider(self, provider_name: str):
         """Set the default auth provider for transport-level authentication.
-        
+
         Args:
             provider_name: Name of the auth provider to use as default
         """
@@ -44,7 +45,7 @@ class AuthManager:
 
     def get_default_auth_headers(self) -> dict[str, str]:
         """Get auth headers from default provider for transport authentication.
-        
+
         Returns:
             Dict of auth headers, or empty dict if no default provider is set
         """

@@ -420,6 +420,8 @@ def test_sanitize_tool_arguments_functionality():
     assert sanitized_args["url"] == "[BLOCKED_URL]"
     assert sanitized_args["safe_arg"] == "value"
     assert sanitized_args["command"] == "[BLOCKED_COMMAND]"
+
+
 # Integration tests for safety functionality
 @pytest.fixture
 def safety_filter_integration():

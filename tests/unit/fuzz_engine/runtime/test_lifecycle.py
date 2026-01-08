@@ -150,9 +150,7 @@ class TestProcessLifecycle:
         self, lifecycle, mock_watchdog, mock_registry
     ):
         """Test starting a process with custom working directory."""
-        config = ProcessConfig(
-            command=["pwd"], name="test_process", cwd="/tmp"
-        )
+        config = ProcessConfig(command=["pwd"], name="test_process", cwd="/tmp")
 
         mock_process = MagicMock()
         mock_process.pid = 12345
@@ -374,6 +372,7 @@ class TestProcessLifecycle:
         self, lifecycle, mock_registry, mock_signal_handler, mock_watchdog
     ):
         """Real subprocess-like object should raise if it never exits."""
+
         class FakeProcess:
             def __init__(self) -> None:
                 self.pid = 12345
@@ -386,12 +385,15 @@ class TestProcessLifecycle:
         }
         mock_registry.get_process.return_value = process_info
 
-        with patch(
-            "mcp_fuzzer.fuzz_engine.runtime.lifecycle.wait_for_process_exit",
-            new_callable=AsyncMock,
-        ), patch(
-            "mcp_fuzzer.fuzz_engine.runtime.lifecycle.asyncio.subprocess.Process",
-            FakeProcess,
+        with (
+            patch(
+                "mcp_fuzzer.fuzz_engine.runtime.lifecycle.wait_for_process_exit",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "mcp_fuzzer.fuzz_engine.runtime.lifecycle.asyncio.subprocess.Process",
+                FakeProcess,
+            ),
         ):
             with pytest.raises(ProcessStopError):
                 await lifecycle.stop(12345, force=True)

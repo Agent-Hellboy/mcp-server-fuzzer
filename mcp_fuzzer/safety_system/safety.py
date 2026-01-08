@@ -115,12 +115,12 @@ class SafetyFilter(SafetyProvider):
     def contains_dangerous_url(self, value: str) -> bool:
         """
         Check if a string contains a dangerous URL pattern.
-        
+
         Detects HTTP/HTTPS URLs, FTP, file:// protocols, and common web domains.
-        
+
         Args:
             value: String to check for dangerous URLs
-            
+
         Returns:
             True if dangerous URL pattern found, False otherwise
         """
@@ -129,12 +129,12 @@ class SafetyFilter(SafetyProvider):
     def contains_dangerous_script(self, value: str) -> bool:
         """
         Check if a string contains dangerous script injection patterns.
-        
+
         Detects HTML/JavaScript injection like <script>, event handlers, eval(), etc.
-        
+
         Args:
             value: String to check for script injection patterns
-            
+
         Returns:
             True if dangerous script pattern found, False otherwise
         """
@@ -143,13 +143,13 @@ class SafetyFilter(SafetyProvider):
     def contains_dangerous_command(self, value: str) -> bool:
         """
         Check if a string contains dangerous command patterns.
-        
+
         Detects browser/app launches (xdg-open, start, open), system modification
         commands (sudo, rm -rf, format, shutdown), and executable patterns.
-        
+
         Args:
             value: String to check for dangerous commands
-            
+
         Returns:
             True if dangerous command pattern found, False otherwise
         """
@@ -158,19 +158,19 @@ class SafetyFilter(SafetyProvider):
     def sanitize_tool_arguments(
         self, tool_name: str, arguments: dict[str, Any]
     ) -> dict[str, Any]:
-        """Sanitize tool arguments to remove dangerous content and enforce 
+        """Sanitize tool arguments to remove dangerous content and enforce
         filesystem sandbox."""
         if not arguments:
             return arguments
 
         # First sanitize for dangerous content
         sanitized_args = self._sanitize_value("root", arguments)
-        
+
         # Then sanitize filesystem paths if sandbox is enabled
         sandbox = self.sandbox_provider.get_sandbox()
         if sandbox:
             sanitized_args = self._sanitize_filesystem_paths(sanitized_args, tool_name)
-            
+
         return sanitized_args
 
     def _sanitize_filesystem_paths(
@@ -187,14 +187,14 @@ class SafetyFilter(SafetyProvider):
     def _sanitize_value(self, key: str, value: Any) -> Any:
         """
         Recursively sanitize any value (string, dict, list, etc.).
-        
+
         Handles nested structures by recursively applying sanitization rules.
         Strings are checked for dangerous patterns; dicts and lists are traversed.
-        
+
         Args:
             key: Argument name/path (used for logging context)
             value: Value to sanitize (any type)
-            
+
         Returns:
             Sanitized value with dangerous patterns replaced or removed
         """
@@ -315,9 +315,7 @@ class SafetyFilter(SafetyProvider):
         """Log details about blocked operations for analysis."""
         # Enhanced logging with more structure
         # Log tool first so tests can assert on the first call containing the tool name
-        event = self._event_logger.build_blocked_operation(
-            tool_name, arguments, reason
-        )
+        event = self._event_logger.build_blocked_operation(tool_name, arguments, reason)
         logging.warning("Tool: %s", tool_name)
         logging.warning("Reason: %s", reason)
         logging.warning("Timestamp: %s", event.timestamp)
@@ -364,7 +362,7 @@ class SafetyFilter(SafetyProvider):
     def get_blocked_operations_summary(self) -> dict[str, Any]:
         """
         Get a summary of all blocked operations for reporting.
-        
+
         Returns:
             Dictionary with keys:
             - total_blocked: Total number of blocked operations

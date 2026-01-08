@@ -485,7 +485,7 @@ async def basic_executor_usage():
 
         # Execute batch with concurrency control
         results = await executor.execute_batch(operations)
-        
+
         print(f"Successful results: {len(results['results'])}")
         print(f"Errors: {len(results['errors'])}")
 
@@ -515,7 +515,7 @@ async def batch_with_errors():
 
         print(f"Successful: {len(results['results'])}")
         print(f"Failed: {len(results['errors'])}")
-        
+
         # Handle errors
         for error in results['errors']:
             print(f"Error: {error}")
@@ -564,7 +564,7 @@ async def hypothesis_example():
     try:
         # Use Hypothesis strategy without asyncio deadlocks
         int_strategy = st.integers(min_value=0, max_value=100)
-        
+
         # Generate values safely in thread pool
         value = await executor.run_hypothesis_strategy(int_strategy)
         print(f"Generated value: {value}")
