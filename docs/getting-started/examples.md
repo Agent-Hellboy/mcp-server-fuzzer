@@ -19,6 +19,16 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --timeout 60.0
 ```
 
+#### Single Tool Fuzzing
+
+```bash
+# Fuzz only a specific tool
+mcp-fuzzer --mode tool --tool analyze_repository --protocol http --endpoint http://localhost:8000 --runs 20
+
+# Fuzz a specific tool with both phases
+mcp-fuzzer --mode tool --tool generate_terraform --phase both --protocol http --endpoint http://localhost:8000 --runs 15
+```
+
 #### Protocol Fuzzing
 
 ```bash

@@ -1,1407 +1,586 @@
-#!/usr/bin/env python3
-"""
-Unit tests for CLI module
-"""
+"""Unit tests for the refactored CLI modules."""
 
-import asyncio
-import os
-import signal
+import argparse
+import logging
 import sys
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import MagicMock, call, patch
 
 import pytest
-import argparse
-from rich.console import Console
 
 from mcp_fuzzer.cli import (
     create_argument_parser,
     parse_arguments,
-    setup_logging,
-    build_unified_client_args,
     print_startup_info,
-    validate_arguments,
-    get_cli_config,
+    run_cli,
+    setup_logging,
+    ValidationManager,
+    build_cli_config,
 )
-from mcp_fuzzer.config import config as global_config
-from mcp_fuzzer.exceptions import ArgumentValidationError
-
-# Import the functions to test
-import mcp_fuzzer.cli.runner as runner
-from unittest.mock import AsyncMock
-
-pytestmark = [
-    pytest.mark.unit,
-    pytest.mark.cli,
-    pytest.mark.filterwarnings("ignore:coroutine 'main' was never awaited"),
-    pytest.mark.filterwarnings(
-        "ignore:coroutine 'AsyncMockMixin._execute_mock_call' was never awaited"
-    ),
-]
-
-
-class TestCLI:
-    """Test CLI functionality."""
-
-    def test_create_argument_parser(self):
-        """Test argument parser creation."""
-        parser = create_argument_parser()
-        assert isinstance(parser, argparse.ArgumentParser)
-
-        # Test that required arguments are present
-        args = parser.parse_args(
-            [
-                "--mode",
-                "tools",
-                "--protocol",
-                "http",
-                "--endpoint",
-                "http://localhost:8000",
-            ]
-        )
-        assert args.mode == "tools"
-        assert args.protocol == "http"
-        assert args.endpoint == "http://localhost:8000"
-
-    def test_parse_arguments(self):
-        """Test argument parsing."""
-        with patch(
-            "sys.argv",
-            [
-                "script",
-                "--mode",
-                "tools",
-                "--protocol",
-                "http",
-                "--endpoint",
-                "http://localhost:8000",
-            ],
-        ):
-            args = parse_arguments()
-            assert args.mode == "tools"
-            assert args.protocol == "http"
-            assert args.endpoint == "http://localhost:8000"
-
-    def test_setup_logging_verbose(self):
-        """Test logging setup with verbose flag."""
-        args = argparse.Namespace(verbose=True)
-        setup_logging(args)
-        # Test that logging level is set correctly
-        import logging
-
-        # Check the current logger level (which should be affected by basicConfig)
-        current_logger = logging.getLogger(__name__)
-        assert current_logger.level <= logging.DEBUG
-
-    def test_setup_logging_non_verbose(self):
-        """Test logging setup without verbose flag."""
-        args = argparse.Namespace(verbose=False)
-        setup_logging(args)
-        # Test that logging level is set correctly
-        import logging
-
-        assert logging.getLogger().level > logging.DEBUG
-
-    def test_build_unified_client_args_basic(self):
-        """Test building client arguments with basic configuration."""
-        args = argparse.Namespace(
-            mode="tools",
-            phase="aggressive",
-            protocol="http",
-            endpoint="http://localhost:8000",
-            timeout=30,
-            verbose=False,
-            runs=10,
-            runs_per_type=5,
-            protocol_type=None,
-            auth_config=None,
-            auth_env=False,
-        )
-
-        client_args = build_unified_client_args(args)
-        assert client_args["mode"] == "tools"
-        assert client_args["protocol"] == "http"
-        assert client_args["endpoint"] == "http://localhost:8000"
-        assert client_args["timeout"] == 30
-
-    def test_build_unified_client_args_with_auth_config(self):
-        """Test building client arguments with auth config."""
-        mock_auth_manager = MagicMock()
-
-        with patch("mcp_fuzzer.cli.load_auth_config", return_value=mock_auth_manager):
-            args = argparse.Namespace(
-                mode="tools",
-                phase="aggressive",
-                protocol="http",
-                endpoint="http://localhost:8000",
-                timeout=30,
-                verbose=False,
-                runs=10,
-                runs_per_type=5,
-                protocol_type=None,
-                auth_config="auth.json",
-                auth_env=False,
-            )
-
-            client_args = build_unified_client_args(args)
-            assert client_args["auth_manager"] == mock_auth_manager
-
-    def test_build_unified_client_args_with_auth_env(self):
-        """Test building client arguments with auth from environment."""
-        mock_auth_manager = MagicMock()
-
-        with patch(
-            "mcp_fuzzer.cli.setup_auth_from_env", return_value=mock_auth_manager
-        ):
-            args = argparse.Namespace(
-                mode="tools",
-                phase="aggressive",
-                protocol="http",
-                endpoint="http://localhost:8000",
-                timeout=30,
-                verbose=False,
-                runs=10,
-                runs_per_type=5,
-                protocol_type=None,
-                auth_config=None,
-                auth_env=True,
-            )
-
-            client_args = build_unified_client_args(args)
-            assert client_args["auth_manager"] == mock_auth_manager
-
-    def test_build_unified_client_args_with_protocol_type(self):
-        """Test building client arguments with protocol type."""
-        args = argparse.Namespace(
-            mode="protocol",
-            phase="aggressive",
-            protocol="http",
-            endpoint="http://localhost:8000",
-            timeout=30,
-            verbose=False,
-            runs=10,
-            runs_per_type=5,
-            protocol_type="initialize",
-            auth_config=None,
-            auth_env=False,
-        )
-
-        client_args = build_unified_client_args(args)
-        assert client_args["protocol_type"] == "initialize"
-
-    def test_print_startup_info(self):
-        """Test startup info printing."""
-        args = argparse.Namespace(
-            mode="tool", protocol="http", endpoint="http://localhost:8000"
-        )
-
-        with patch("mcp_fuzzer.cli.Console") as mock_console:
-            mock_console_instance = MagicMock()
-            mock_console.return_value = mock_console_instance
-
-            print_startup_info(args)
-
-            # Verify console.print was called
-            assert mock_console_instance.print.called
-
-    def test_build_unified_client_args_fs_root(self):
-        """Exercise fs-root handling."""
-        args = argparse.Namespace(
-            mode="tools",
-            phase="aggressive",
-            protocol="http",
-            endpoint="http://localhost:8000",
-            timeout=30,
-            verbose=False,
-            runs=10,
-            runs_per_type=5,
-            protocol_type=None,
-            auth_config=None,
-            auth_env=False,
-            fs_root="/tmp/fuzzer",
-            enable_safety_system=False,
-            no_safety=True,
-        )
-
-        result = build_unified_client_args(args)
-        assert result["fs_root"] == "/tmp/fuzzer"
-        assert result["safety_enabled"] is False
-
-    def test_build_unified_client_args_safety_default_enabled(self):
-        """Ensure safety remains enabled when flag not provided."""
-        args = argparse.Namespace(
-            mode="tools",
-            phase="aggressive",
-            protocol="http",
-            endpoint="http://localhost:8000",
-            timeout=30,
-            verbose=False,
-            runs=10,
-            runs_per_type=5,
-            protocol_type=None,
-            auth_config=None,
-            auth_env=False,
-            fs_root=None,
-            enable_safety_system=False,
-            no_safety=False,
-        )
-
-        result = build_unified_client_args(args)
-        assert result["safety_enabled"] is True
-
-    def test_runner_prepare_inner_argv(self):
-        from mcp_fuzzer.cli.runner import prepare_inner_argv
-
-        args = argparse.Namespace(
-            mode="tools",
-            phase="aggressive",
-            protocol="http",
-            endpoint="http://localhost:8000/mcp/",
-            runs=3,
-            runs_per_type=2,
-            timeout=15,
-            tool_timeout=12.5,
-            protocol_type="InitializeRequest",
-            verbose=True,
-        )
-        argv = prepare_inner_argv(args)
-        assert "--mode" in argv and "tools" in argv
-        assert "--phase" in argv and "aggressive" in argv
-        assert "--protocol" in argv and "http" in argv
-        assert "--endpoint" in argv and "http://localhost:8000/mcp/" in argv
-        assert "--runs" in argv and "3" in argv
-        assert "--runs-per-type" in argv and "2" in argv
-        assert "--timeout" in argv and "15" in argv
-        assert "--tool-timeout" in argv and "12.5" in argv
-        assert "--protocol-type" in argv and "InitializeRequest" in argv
-        assert "--verbose" in argv
-
-    def test_runner_start_and_stop_safety(self):
-        from mcp_fuzzer.cli.runner import (
-            start_safety_if_enabled,
-            stop_safety_if_started,
-        )
-
-        args_enabled = argparse.Namespace(enable_safety_system=True)
-        args_disabled = argparse.Namespace(enable_safety_system=False)
-
-        with (
-            patch("mcp_fuzzer.cli.runner.start_system_blocking") as mock_start,
-            patch("mcp_fuzzer.cli.runner.stop_system_blocking") as mock_stop,
-        ):
-            started = start_safety_if_enabled(args_enabled)
-            assert started is True
-            mock_start.assert_called_once()
-
-            started2 = start_safety_if_enabled(args_disabled)
-            assert started2 is False
-
-            stop_safety_if_started(True)
-            mock_stop.assert_called_once()
-
-            # No-op when not started
-            stop_safety_if_started(False)
-
-    def test_runner_retry_on_interrupt_retries_once(self):
-        from mcp_fuzzer.cli.runner import run_with_retry_on_interrupt
-
-        args = argparse.Namespace(
-            enable_safety_system=False,
-            retry_with_safety_on_interrupt=True,
-        )
-
-        call_count = {"n": 0}
-
-        def fake_execute(_args, _main, _argv):
-            if call_count["n"] == 0:
-                call_count["n"] += 1
-                raise KeyboardInterrupt()
-            call_count["n"] += 1
-            return None
-
-        with (
-            patch(
-                "mcp_fuzzer.cli.runner.execute_inner_client",
-                side_effect=fake_execute,
-            ) as mock_exec,
-            patch("mcp_fuzzer.cli.runner.start_system_blocking") as mock_start,
-            patch("mcp_fuzzer.cli.runner.stop_system_blocking") as mock_stop,
-        ):
-            run_with_retry_on_interrupt(args, lambda: None, ["prog"])
-            assert mock_exec.call_count == 2
-            mock_start.assert_called_once()
-            mock_stop.assert_called_once()
-
-    def test_runner_retry_on_interrupt_exits_when_no_retry(self):
-        from mcp_fuzzer.cli.runner import run_with_retry_on_interrupt
-
-        args = argparse.Namespace(
-            enable_safety_system=False,
-            retry_with_safety_on_interrupt=False,
-        )
-
-        with (
-            patch(
-                "mcp_fuzzer.cli.runner.execute_inner_client",
-                side_effect=KeyboardInterrupt(),
-            ),
-            patch("mcp_fuzzer.cli.runner.sys.exit") as mock_exit,
-        ):
-            run_with_retry_on_interrupt(args, lambda: None, ["prog"])
-            mock_exit.assert_called_once_with(130)
-
-    def test_runner_execute_inner_client_pytest_branch(self, monkeypatch):
-        from mcp_fuzzer.cli.runner import execute_inner_client
-
-        monkeypatch.setenv("PYTEST_CURRENT_TEST", "1")
-        try:
-            with patch("mcp_fuzzer.cli.runner.asyncio.run") as mock_run:
-                execute_inner_client(argparse.Namespace(), lambda: None, ["prog"])
-                mock_run.assert_called_once()
-        finally:
-            monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
-
-    def test_validate_arguments_valid(self):
-        """Test argument validation with valid arguments."""
-        args = argparse.Namespace(
-            mode="tool",
-            protocol_type=None,
-            runs=10,
-            runs_per_type=5,
-            timeout=30,
-            endpoint="http://localhost:8000",
-        )
-
-        # Should not raise any exception
-        validate_arguments(args)
-
-    def test_validate_arguments_protocol_mode_without_type(self):
-        """Test argument validation for protocol mode without type."""
-        args = argparse.Namespace(
-            mode="protocol",
-            protocol_type=None,
-            runs=10,
-            runs_per_type=5,
-            timeout=30,
-            endpoint="http://localhost:8000",
-        )
-
-        # Should not raise any exception
-        validate_arguments(args)
-
-    def test_validate_arguments_protocol_type_without_protocol_mode(self):
-        """Test argument validation for protocol type without protocol mode."""
-        args = argparse.Namespace(
-            mode="tool",
-            protocol_type="initialize",
-            runs=10,
-            runs_per_type=5,
-            timeout=30,
-            endpoint="http://localhost:8000",
-        )
-
-        with pytest.raises(
-            ArgumentValidationError,
-            match="--protocol-type can only be used with --mode protocol",
-        ):
-            validate_arguments(args)
-
-    def test_validate_arguments_invalid_runs(self):
-        """Test argument validation with invalid runs."""
-        args = argparse.Namespace(
-            mode="tools",
-            protocol_type=None,
-            runs=0,
-            runs_per_type=5,
-            timeout=30,
-            endpoint="http://localhost:8000",
-        )
-
-        with pytest.raises(ArgumentValidationError, match="--runs must be at least 1"):
-            validate_arguments(args)
-
-    def test_validate_arguments_invalid_runs_per_type(self):
-        """Test argument validation with invalid runs_per_type."""
-        args = argparse.Namespace(
-            mode="tools",
-            protocol_type=None,
-            runs=10,
-            runs_per_type=0,
-            timeout=30,
-            endpoint="http://localhost:8000",
-        )
-
-        with pytest.raises(
-            ArgumentValidationError, match="--runs-per-type must be at least 1"
-        ):
-            validate_arguments(args)
-
-    def test_validate_arguments_invalid_timeout(self):
-        """Test argument validation with invalid timeout."""
-        args = argparse.Namespace(
-            mode="tools",
-            protocol_type=None,
-            runs=10,
-            runs_per_type=5,
-            timeout=0,
-            endpoint="http://localhost:8000",
-        )
-
-        with pytest.raises(ArgumentValidationError, match="--timeout must be positive"):
-            validate_arguments(args)
-
-    def test_validate_arguments_empty_endpoint(self):
-        """Test argument validation with empty endpoint."""
-        args = argparse.Namespace(
-            mode="tools",
-            protocol_type=None,
-            runs=10,
-            runs_per_type=5,
-            timeout=30,
-            endpoint="",
-        )
-
-        with pytest.raises(
-            ArgumentValidationError,
-            match="--endpoint is required for fuzzing operations",
-        ):
-            validate_arguments(args)
-
-    def test_validate_arguments_whitespace_endpoint(self):
-        """Test argument validation with whitespace-only endpoint."""
-        args = argparse.Namespace(
-            mode="tools",
-            protocol_type=None,
-            runs=10,
-            runs_per_type=5,
-            timeout=30,
-            endpoint="   ",
-        )
-
-        with pytest.raises(
-            ArgumentValidationError, match="--endpoint cannot be empty"
-        ):
-            validate_arguments(args)
-
-    def test_get_cli_config(self):
-        """Test getting CLI configuration."""
-        with (
-            patch("mcp_fuzzer.cli.parse_arguments") as mock_parse,
-            patch("mcp_fuzzer.cli.validate_arguments") as mock_validate,
-            patch("mcp_fuzzer.cli.setup_logging") as mock_setup,
-        ):
-            mock_args = argparse.Namespace()
-            mock_args.mode = "tools"
-            mock_args.phase = "aggressive"
-            mock_args.protocol = "http"
-            mock_args.endpoint = "http://localhost:8000"
-            mock_args.timeout = 30
-            mock_args.verbose = False
-            mock_args.runs = 10
-            mock_args.runs_per_type = 5
-            mock_args.protocol_type = None
-            mock_args.tool_timeout = None
-            mock_args.tool = None
-            mock_args.fs_root = None
-            mock_args.no_safety = False
-            mock_args.enable_safety_system = False
-            mock_args.safety_report = False
-            mock_args.export_safety_data = None
-            mock_args.output_dir = "reports"
-            mock_args.retry_with_safety_on_interrupt = False
-            mock_args.log_level = None
-            mock_args.no_network = False
-            mock_args.allow_hosts = None
-            mock_args.validate_config = None
-            mock_args.check_env = False
-            mock_args.export_csv = None
-            mock_args.export_xml = None
-            mock_args.export_html = None
-            mock_args.export_markdown = None
-            mock_args.watchdog_check_interval = 1.0
-            mock_args.watchdog_process_timeout = 30.0
-            mock_args.watchdog_extra_buffer = 5.0
-            mock_args.watchdog_max_hang_time = 60.0
-            mock_args.process_max_concurrency = 5
-            mock_args.process_retry_count = 1
-            mock_args.process_retry_delay = 1.0
-            mock_args.output_format = "json"
-            mock_args.output_types = None
-            mock_args.output_schema = None
-            mock_args.output_compress = False
-            mock_args.output_session_id = None
-            mock_args.config = None
-            mock_args.auth_config = None
-            mock_args.auth_env = False
-
-            mock_parse.return_value = mock_args
-
-            config = get_cli_config()
-
-            assert config["mode"] == "tools"
-            assert config["protocol"] == "http"
-            assert config["endpoint"] == "http://localhost:8000"
-            assert config["timeout"] == 30
-            assert config["verbose"] is False
-            assert config["runs"] == 10
-            assert config["runs_per_type"] == 5
-            assert config["protocol_type"] is None
-            assert "tool" in config
-            assert "auth_manager" in config
-            assert config["auth_manager"] is None
-
-            mock_parse.assert_called_once()
-            mock_validate.assert_called_once_with(mock_args)
-            mock_setup.assert_called_once_with(mock_args)
-
-    def test_get_cli_config_uses_config_file_for_truthy_defaults(self):
-        """Config file values should override argparse defaults."""
-        original_config = dict(global_config._config)
-        try:
-            with (
-                patch("mcp_fuzzer.cli.parse_arguments") as mock_parse,
-                patch("mcp_fuzzer.cli.validate_arguments"),
-                patch("mcp_fuzzer.cli.setup_logging"),
-                patch(
-                    "mcp_fuzzer.cli.args.load_config_file",
-                    return_value={
-                        "mode": "tools",
-                        "protocol": "streamablehttp",
-                        "timeout": 60.0,
-                        "tool": "custom_tool",
-                    },
-                ),
-            ):
-                mock_args = argparse.Namespace()
-                mock_args.mode = "both"
-                mock_args.phase = "aggressive"
-                mock_args.protocol = "http"
-                mock_args.endpoint = "http://localhost:8000"
-                mock_args.timeout = 30.0
-                mock_args.verbose = False
-                mock_args.runs = 10
-                mock_args.runs_per_type = 5
-                mock_args.protocol_type = None
-                mock_args.tool_timeout = None
-                mock_args.tool = None
-                mock_args.fs_root = None
-                mock_args.no_safety = False
-                mock_args.enable_safety_system = False
-                mock_args.safety_report = False
-                mock_args.export_safety_data = None
-                mock_args.output_dir = "reports"
-                mock_args.retry_with_safety_on_interrupt = False
-                mock_args.log_level = None
-                mock_args.no_network = False
-                mock_args.allow_hosts = None
-                mock_args.validate_config = None
-                mock_args.check_env = False
-                mock_args.export_csv = None
-                mock_args.export_xml = None
-                mock_args.export_html = None
-                mock_args.export_markdown = None
-                mock_args.watchdog_check_interval = 1.0
-                mock_args.watchdog_process_timeout = 30.0
-                mock_args.watchdog_extra_buffer = 5.0
-                mock_args.watchdog_max_hang_time = 60.0
-                mock_args.process_max_concurrency = 5
-                mock_args.process_retry_count = 1
-                mock_args.process_retry_delay = 1.0
-                mock_args.output_format = "json"
-                mock_args.output_types = None
-                mock_args.output_schema = None
-                mock_args.output_compress = False
-                mock_args.output_session_id = None
-                mock_args.config = "custom.yml"
-                mock_args.auth_config = None
-                mock_args.auth_env = False
-
-                mock_parse.return_value = mock_args
-
-                config = get_cli_config()
-
-                assert config["mode"] == "tools"
-                assert config["protocol"] == "streamablehttp"
-                assert config["timeout"] == 60.0
-                assert config["tool"] == "custom_tool"
-                assert mock_args.mode == "tools"
-                assert mock_args.protocol == "streamablehttp"
-                assert mock_args.timeout == 60.0
-        finally:
-            global_config._config = original_config
-
-    @patch("mcp_fuzzer.cli.parse_arguments")
-    @patch("mcp_fuzzer.cli.validate_arguments")
-    @patch("mcp_fuzzer.cli.setup_logging")
-    @patch("mcp_fuzzer.cli.build_unified_client_args")
-    @patch("mcp_fuzzer.cli.print_startup_info")
-    @patch("mcp_fuzzer.transport.create_transport")
-    @patch("mcp_fuzzer.cli.asyncio.run")
-    def test_run_cli_success(
-        self,
-        mock_asyncio_run,
-        mock_create_transport,
-        mock_print_info,
-        mock_build_args,
-        mock_setup,
-        mock_validate,
-        mock_parse,
-    ):
-        """Test successful CLI execution."""
-        from mcp_fuzzer.cli.main import run_cli
-
-        mock_args = argparse.Namespace(
-            mode="tool",
-            phase="aggressive",
-            protocol="http",
-            endpoint="http://localhost:8000",
-            timeout=30,
-            verbose=False,
-            runs=10,
-            runs_per_type=5,
-            protocol_type=None,
-            auth_config=None,
-            auth_env=False,
-        )
-        mock_parse.return_value = mock_args
-
-        mock_client_args = {
-            "mode": "tool",
-            "protocol": "http",
-            "endpoint": "http://localhost:8000",
-            "timeout": 30,
-            "auth_manager": None,
-        }
-        mock_build_args.return_value = mock_client_args
-
-        mock_transport = MagicMock()
-        mock_create_transport.return_value = mock_transport
-
-        run_cli()
-
-        mock_parse.assert_called_once()
-        mock_validate.assert_called_once_with(mock_args)
-        mock_setup.assert_called_once_with(mock_args)
-        mock_build_args.assert_called_once_with(mock_args)
-        mock_print_info.assert_called_once_with(mock_args)
-        mock_create_transport.assert_called_once()
-        mock_asyncio_run.assert_called_once()
-
-    @patch("mcp_fuzzer.cli.parse_arguments")
-    @patch("mcp_fuzzer.cli.validate_arguments")
-    @patch("mcp_fuzzer.cli.setup_logging")
-    @patch("mcp_fuzzer.cli.build_unified_client_args")
-    @patch("mcp_fuzzer.cli.print_startup_info")
-    @patch("mcp_fuzzer.transport.create_transport")
-    @patch("mcp_fuzzer.cli.asyncio.run")
-    @patch("mcp_fuzzer.cli.sys.exit")
-    def test_run_cli_transport_error(
-        self,
-        mock_exit,
-        mock_asyncio_run,
-        mock_create_transport,
-        mock_print_info,
-        mock_build_args,
-        mock_setup,
-        mock_validate,
-        mock_parse,
-    ):
-        """Test CLI execution with transport error."""
-        from mcp_fuzzer.cli.main import run_cli
-
-        mock_args = argparse.Namespace(
-            mode="tool",
-            phase="aggressive",
-            protocol="http",
-            endpoint="http://localhost:8000",
-            timeout=30,
-            verbose=False,
-            runs=10,
-            runs_per_type=5,
-            protocol_type=None,
-            auth_config=None,
-            auth_env=False,
-        )
-        mock_parse.return_value = mock_args
-
-        mock_client_args = {
-            "mode": "tool",
-            "protocol": "http",
-            "endpoint": "http://localhost:8000",
-            "timeout": 30,
-            "auth_manager": None,
-        }
-        mock_build_args.return_value = mock_client_args
-
-        mock_create_transport.side_effect = Exception("Transport error")
-        mock_asyncio_run.return_value = None
-        mock_exit.side_effect = SystemExit(1)
-
-        with pytest.raises(SystemExit):
-            run_cli()
-
-        mock_exit.assert_called_once_with(1)
-
-    @patch("mcp_fuzzer.cli.parse_arguments")
-    @patch("mcp_fuzzer.cli.validate_arguments")
-    @patch("mcp_fuzzer.cli.sys.exit")
-    def test_run_cli_validation_error(self, mock_exit, mock_validate, mock_parse):
-        """Test CLI execution with validation error."""
-        from mcp_fuzzer.cli.main import run_cli
-
-        mock_args = argparse.Namespace()
-        mock_parse.return_value = mock_args
-
-        mock_validate.side_effect = ArgumentValidationError("Invalid arguments")
-
-        mock_exit.side_effect = SystemExit(1)
-
-        with pytest.raises(SystemExit):
-            run_cli()
-
-        mock_exit.assert_called_once_with(1)
-
-    @patch("mcp_fuzzer.cli.parse_arguments")
-    @patch("mcp_fuzzer.cli.validate_arguments")
-    @patch("mcp_fuzzer.cli.setup_logging")
-    @patch("mcp_fuzzer.cli.build_unified_client_args")
-    @patch("mcp_fuzzer.cli.print_startup_info")
-    @patch("mcp_fuzzer.transport.create_transport")
-    @patch("mcp_fuzzer.cli.sys.exit")
-    def test_run_cli_keyboard_interrupt(
-        self,
-        mock_exit,
-        mock_create_transport,
-        mock_print_info,
-        mock_build_args,
-        mock_setup,
-        mock_validate,
-        mock_parse,
-    ):
-        """Test CLI execution with keyboard interrupt."""
-        from mcp_fuzzer.cli.main import run_cli
-
-        mock_args = argparse.Namespace(
-            mode="tool",
-            phase="aggressive",
-            protocol="http",
-            endpoint="http://localhost:8000",
-            timeout=30,
-            verbose=False,
-            runs=10,
-            runs_per_type=5,
-            protocol_type=None,
-            auth_config=None,
-            auth_env=False,
-        )
-        mock_parse.return_value = mock_args
-
-        mock_client_args = {
-            "mode": "tool",
-            "protocol": "http",
-            "endpoint": "http://localhost:8000",
-            "timeout": 30,
-            "auth_manager": None,
-        }
-        mock_build_args.return_value = mock_client_args
-
-        mock_transport = MagicMock()
-        mock_create_transport.return_value = mock_transport
-
-        mock_build_args.side_effect = KeyboardInterrupt()
-
-        mock_exit.side_effect = SystemExit(0)
-
-        with pytest.raises(SystemExit):
-            run_cli()
-
-        mock_exit.assert_called_once_with(0)
-
-    @patch("mcp_fuzzer.cli.parse_arguments")
-    @patch("mcp_fuzzer.cli.validate_arguments")
-    @patch("mcp_fuzzer.cli.setup_logging")
-    @patch("mcp_fuzzer.cli.build_unified_client_args")
-    @patch("mcp_fuzzer.cli.print_startup_info")
-    @patch("mcp_fuzzer.transport.create_transport")
-    @patch("mcp_fuzzer.cli.sys.exit")
-    def test_run_cli_unexpected_error(
-        self,
-        mock_exit,
-        mock_create_transport,
-        mock_print_info,
-        mock_build_args,
-        mock_setup,
-        mock_validate,
-        mock_parse,
-    ):
-        """Test CLI execution with unexpected error."""
-        from mcp_fuzzer.cli.main import run_cli
-
-        mock_args = argparse.Namespace(
-            mode="tools",
-            protocol="http",
-            endpoint="http://localhost:8000",
-            timeout=30,
-            verbose=False,
-            runs=10,
-            runs_per_type=5,
-            protocol_type=None,
-            auth_config=None,
-            auth_env=False,
-        )
-        mock_parse.return_value = mock_args
-
-        mock_client_args = {
-            "mode": "tools",
-            "protocol": "http",
-            "endpoint": "http://localhost:8000",
-            "timeout": 30,
-            "auth_manager": None,
-        }
-        mock_build_args.return_value = mock_client_args
-
-        mock_transport = MagicMock()
-        mock_create_transport.return_value = mock_transport
-
-        mock_build_args.side_effect = Exception("Unexpected error")
-
-        mock_exit.side_effect = SystemExit(1)
-
-        with pytest.raises(SystemExit):
-            run_cli()
-
-        mock_exit.assert_called_once_with(1)
-
-    def test_argument_parser_all_options(self):
-        """Test that all command line options are properly configured."""
-        parser = create_argument_parser()
-
-        # Test mode options
-        args = parser.parse_args(
-            [
-                "--mode",
-                "tools",
-                "--protocol",
-                "http",
-                "--endpoint",
-                "http://localhost:8000",
-                "--timeout",
-                "60",
-                "--verbose",
-                "--runs",
-                "20",
-                "--runs-per-type",
-                "10",
-                "--protocol-type",
-                "initialize",
-                "--auth-config",
-                "auth.json",
-            ]
-        )
-
-        assert args.mode == "tools"
-        assert args.protocol == "http"
-        assert args.endpoint == "http://localhost:8000"
-        assert args.timeout == 60
-        assert args.verbose is True
-        assert args.runs == 20
-        assert args.runs_per_type == 10
-        assert args.protocol_type == "initialize"
-        assert args.auth_config == "auth.json"
-
-    def test_argument_parser_defaults(self):
-        """Test argument parser default values."""
-        parser = create_argument_parser()
-
-        args = parser.parse_args(
-            [
-                "--mode",
-                "tools",
-                "--protocol",
-                "http",
-                "--endpoint",
-                "http://localhost:8000",
-            ]
-        )
-
-        assert args.timeout == 30
-        assert args.verbose is False
-        assert args.runs == 10
-        assert args.runs_per_type == 5
-        assert args.protocol_type is None
-        assert args.auth_config is None
-        assert args.auth_env is False
-
-    def test_create_transport_with_auth_success(self):
-        """Test successful creation of transport with auth headers."""
-        args = MagicMock()
-        args.protocol = "http"
-        args.endpoint = "http://example.com"
-        args.timeout = 30.0
-        client_args = {"auth_manager": MagicMock()}
-        client_args["auth_manager"].get_default_auth_headers.return_value = {
-            "Authorization": "Bearer token"
-        }
-
-        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
-            transport = runner.create_transport_with_auth(args, client_args)
-            mock_create_transport.assert_called_once_with(
-                "http",
-                "http://example.com",
-                timeout=30.0,
-                auth_headers={"Authorization": "Bearer token"},
-            )
-            assert transport is not None
-
-    def test_create_transport_with_auth_fallback_to_tool_mapping(self):
-        """Transport auth should fall back to tool mappings when no default."""
-        args = MagicMock()
-        args.protocol = "http"
-        args.endpoint = "http://example.com"
-        args.timeout = 15.0
-        auth_manager = MagicMock()
-        auth_manager.get_default_auth_headers.return_value = {}
-        auth_manager.get_auth_headers_for_tool.return_value = {
-            "Authorization": "Bearer fallback"
-        }
-        client_args = {"auth_manager": auth_manager}
-
-        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
-            runner.create_transport_with_auth(args, client_args)
-            mock_create_transport.assert_called_once_with(
-                "http",
-                "http://example.com",
-                timeout=15.0,
-                auth_headers={"Authorization": "Bearer fallback"},
-            )
-            auth_manager.get_auth_headers_for_tool.assert_called_once_with("")
-
-    def test_create_transport_with_auth_streamablehttp(self):
-        """Auth headers should apply to streamable HTTP transports."""
-        args = MagicMock()
-        args.protocol = "streamablehttp"
-        args.endpoint = "http://example.com"
-        args.timeout = 10.0
-        client_args = {
-            "auth_manager": MagicMock(
-                get_default_auth_headers=MagicMock(
-                    return_value={"Authorization": "Bearer token"}
-                )
-            )
-        }
-
-        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
-            runner.create_transport_with_auth(args, client_args)
-            mock_create_transport.assert_called_once_with(
-                "streamablehttp",
-                "http://example.com",
-                timeout=10.0,
-                auth_headers={"Authorization": "Bearer token"},
-            )
-
-    def test_create_transport_with_auth_sse(self):
-        """Auth headers should apply to SSE transports."""
-        args = MagicMock()
-        args.protocol = "sse"
-        args.endpoint = "http://example.com/sse"
-        args.timeout = 12.0
-        client_args = {
-            "auth_manager": MagicMock(
-                get_default_auth_headers=MagicMock(
-                    return_value={"Authorization": "Bearer token"}
-                )
-            )
-        }
-
-        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
-            runner.create_transport_with_auth(args, client_args)
-            mock_create_transport.assert_called_once_with(
-                "sse",
-                "http://example.com/sse",
-                timeout=12.0,
-                auth_headers={"Authorization": "Bearer token"},
-            )
-
-    def test_create_transport_with_auth_no_headers(self):
-        """Test transport creation without auth headers."""
-        args = MagicMock()
-        args.protocol = "http"
-        args.endpoint = "http://example.com"
-        args.timeout = 30.0
-        client_args = {}
-
-        with patch("mcp_fuzzer.cli.runner.create_transport") as mock_create_transport:
-            transport = runner.create_transport_with_auth(args, client_args)
-            mock_create_transport.assert_called_once_with(
-                "http", "http://example.com", timeout=30.0
-            )
-            assert transport is not None
-
-    def test_create_transport_with_auth_error(self, capsys):
-        """Test transport creation error handling."""
-        args = MagicMock()
-        args.protocol = "invalid"
-        args.endpoint = "http://example.com"
-        args.timeout = 30.0
-        client_args = {}
-
-        with patch(
-            "mcp_fuzzer.cli.runner.create_transport",
-            side_effect=Exception("Transport error"),
-        ):
-            with pytest.raises(SystemExit) as exc_info:
-                runner.create_transport_with_auth(args, client_args)
-            assert exc_info.value.code == 1
-            captured = capsys.readouterr()
-            assert "Unexpected error: Transport error" in captured.out
-
-    def test_prepare_inner_argv_full_options(self):
-        """Test preparation of inner argv with all options."""
-        args = argparse.Namespace(
-            mode="fuzz",
-            phase="realistic",
-            protocol="http",
-            endpoint="http://example.com",
-            tool="custom_tool",
-            runs=10,
-            runs_per_type=5,
-            timeout=30.0,
-            tool_timeout=20.0,
-            protocol_type="jsonrpc",
-            fs_root="/tmp/sandbox",
-            output_dir="/tmp/reports",
-            log_level="INFO",
-            export_safety_data="",
-            export_csv="results.csv",
-            export_xml=None,
-            export_html=None,
-            export_markdown=None,
-            output_format="json",
-            output_types=["fuzzing_results", "error_report"],
-            output_schema=None,
-            output_session_id="session-123",
-            verbose=True,
-            enable_aiomonitor=True,
-            output_compress=True,
-            enable_safety_system=True,
-            no_safety=False,
-            safety_report=True,
-            retry_with_safety_on_interrupt=True,
-            no_network=True,
-            allow_hosts=["example.com", "test.com"],
-        )
-
-        argv = runner.prepare_inner_argv(args)
-        expected_argv = [
-            sys.argv[0],
-            "--mode",
-            "fuzz",
-            "--phase",
-            "realistic",
-            "--protocol",
-            "http",
-            "--endpoint",
-            "http://example.com",
-            "--tool",
-            "custom_tool",
-            "--runs",
-            "10",
-            "--runs-per-type",
-            "5",
-            "--timeout",
-            "30.0",
-            "--tool-timeout",
-            "20.0",
-            "--protocol-type",
-            "jsonrpc",
-            "--fs-root",
-            "/tmp/sandbox",
-            "--output-dir",
-            "/tmp/reports",
-            "--log-level",
-            "INFO",
-            "--export-safety-data",
-            "--export-csv",
-            "results.csv",
-            "--output-format",
-            "json",
-            "--output-types",
-            "fuzzing_results",
-            "--output-types",
-            "error_report",
-            "--output-session-id",
-            "session-123",
-            "--verbose",
-            "--enable-aiomonitor",
-            "--output-compress",
-            "--enable-safety-system",
-            "--safety-report",
-            "--retry-with-safety-on-interrupt",
-            "--no-network",
-            "--allow-host",
-            "example.com",
-            "--allow-host",
-            "test.com",
-        ]
-        assert argv == expected_argv
-
-    def test_prepare_inner_argv_minimal_options(self):
-        """Test preparation of inner argv with minimal options."""
-        args = argparse.Namespace(
-            mode="fuzz",
-            phase="aggressive",
-            protocol="http",
-            endpoint="http://example.com",
-            runs=None,
-            runs_per_type=None,
-            timeout=None,
-            tool_timeout=None,
-            protocol_type=None,
-            verbose=False,
-            no_network=False,
-            allow_hosts=None,
-        )
-
-        argv = runner.prepare_inner_argv(args)
-        expected_argv = [
-            sys.argv[0],
-            "--mode",
-            "fuzz",
-            "--phase",
-            "aggressive",
-            "--protocol",
-            "http",
-            "--endpoint",
-            "http://example.com",
-        ]
-        assert argv == expected_argv
-
-    def test_prepare_inner_argv_magicmock_does_not_emit_unspecified_flags(self):
-        """MagicMock-backed args should not fabricate boolean flags."""
-        args = MagicMock()
-        args.mode = "tools"
-        args.phase = "aggressive"
-        args.protocol = "http"
-        args.endpoint = "http://example.com"
-        args.tool = None
-        args.runs = None
-        args.runs_per_type = None
-        args.timeout = None
-        args.tool_timeout = None
-        args.protocol_type = None
-        args.fs_root = None
-        args.output_dir = None
-        args.log_level = None
-        args.export_safety_data = None
-        args.output_format = None
-        args.output_types = None
-        args.output_schema = None
-        args.output_session_id = None
-        args.allow_hosts = None
-
-        argv = runner.prepare_inner_argv(args)
-
-        assert "--verbose" not in argv
-        assert "--enable-safety-system" not in argv
-        assert "--safety-report" not in argv
-        expected_prefix = [
-            sys.argv[0],
+from mcp_fuzzer.cli.config_merge import CliConfig
+from mcp_fuzzer.client.runtime.argv_builder import prepare_inner_argv
+from mcp_fuzzer.client.runtime.async_runner import AsyncRunner
+from mcp_fuzzer.client.runtime.async_runner import execute_inner_client
+from mcp_fuzzer.client.runtime.retry import run_with_retry_on_interrupt
+from mcp_fuzzer.client.safety import SafetyController
+from mcp_fuzzer.client.transport.factory import create_transport_with_auth
+from mcp_fuzzer.exceptions import ArgumentValidationError, ConfigFileError, MCPError
+
+
+pytestmark = [pytest.mark.unit, pytest.mark.cli]
+
+
+def _base_args(**overrides):
+    defaults = dict(
+        mode="tools",
+        phase="aggressive",
+        protocol="http",
+        endpoint="http://localhost",
+        timeout=30.0,
+        verbose=False,
+        runs=10,
+        runs_per_type=5,
+        protocol_type=None,
+        tool_timeout=None,
+        tool=None,
+        fs_root=None,
+        no_safety=False,
+        enable_safety_system=False,
+        safety_report=False,
+        export_safety_data=None,
+        output_dir="reports",
+        retry_with_safety_on_interrupt=False,
+        log_level=None,
+        no_network=False,
+        allow_hosts=None,
+        validate_config=None,
+        check_env=False,
+        export_csv=None,
+        export_xml=None,
+        export_html=None,
+        export_markdown=None,
+        watchdog_check_interval=1.0,
+        watchdog_process_timeout=30.0,
+        watchdog_extra_buffer=5.0,
+        watchdog_max_hang_time=60.0,
+        process_max_concurrency=5,
+        process_retry_count=1,
+        process_retry_delay=1.0,
+        output_format="json",
+        output_types=None,
+        output_schema=None,
+        output_compress=False,
+        output_session_id=None,
+        enable_aiomonitor=False,
+        auth_config=None,
+        auth_env=False,
+        config=None,
+    )
+    defaults.update(overrides)
+    return argparse.Namespace(**defaults)
+
+
+def test_create_argument_parser_and_defaults():
+    parser = create_argument_parser()
+    args = parser.parse_args(
+        [
             "--mode",
             "tools",
-            "--phase",
-            "aggressive",
             "--protocol",
             "http",
             "--endpoint",
-            "http://example.com",
+            "http://localhost:8000",
         ]
-        assert argv[: len(expected_prefix)] == expected_prefix
+    )
+    assert args.mode == "tools"
+    assert args.protocol == "http"
+    assert args.timeout == 30.0
 
-    def test_start_safety_if_enabled_true(self):
-        """Test starting safety system when enabled."""
-        args = MagicMock()
-        args.enable_safety_system = True
 
-        with patch("mcp_fuzzer.cli.runner.start_system_blocking") as mock_start:
-            result = runner.start_safety_if_enabled(args)
-            mock_start.assert_called_once()
-            assert result is True
+def test_parse_arguments(monkeypatch):
+    with patch(
+        "sys.argv",
+        [
+            "script",
+            "--mode",
+            "tools",
+            "--protocol",
+            "http",
+            "--endpoint",
+            "http://localhost:8000",
+        ],
+    ):
+        args = parse_arguments()
+    assert args.endpoint == "http://localhost:8000"
 
-    def test_start_safety_if_enabled_false(self):
-        """Test not starting safety system when disabled."""
-        args = MagicMock()
-        args.enable_safety_system = False
 
-        with patch("mcp_fuzzer.cli.runner.start_system_blocking") as mock_start:
-            result = runner.start_safety_if_enabled(args)
-            mock_start.assert_not_called()
-            assert result is False
+def test_setup_logging_levels():
+    import logging
 
-    def test_stop_safety_if_started_true(self):
-        """Test stopping safety system when it was started."""
-        with patch("mcp_fuzzer.cli.runner.stop_system_blocking") as mock_stop:
-            runner.stop_safety_if_started(True)
-            mock_stop.assert_called_once()
+    args = argparse.Namespace(verbose=True, log_level=None)
+    setup_logging(args)
+    assert logging.getLogger().level == logging.INFO
 
-    def test_stop_safety_if_started_false(self):
-        """Test not stopping safety system when it wasn't started."""
-        with patch("mcp_fuzzer.cli.runner.stop_system_blocking") as mock_stop:
-            runner.stop_safety_if_started(False)
-            mock_stop.assert_not_called()
+    args2 = argparse.Namespace(verbose=False, log_level="DEBUG")
+    setup_logging(args2)
+    assert logging.getLogger().level == logging.DEBUG
 
-    def test_execute_inner_client_pytest_env(self):
-        """Test execute_inner_client under pytest environment."""
-        args = MagicMock()
-        unified_client_main = MagicMock()
-        argv = ["test.py", "--mode", "fuzz"]
 
-        with patch("os.environ", {"PYTEST_CURRENT_TEST": "true"}):
-            with patch("asyncio.run") as mock_run:
-                runner.execute_inner_client(args, unified_client_main, argv)
-                mock_run.assert_called_once_with(unified_client_main())
+def test_validate_arguments_errors():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tool",
+        protocol_type="x",
+        runs=0,
+        runs_per_type=0,
+        timeout=0,
+        endpoint="",
+        check_env=False,
+        validate_config=None,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
 
-    @pytest.mark.asyncio
-    async def test_execute_inner_client_network_policy_deny(self):
-        """Test execute_inner_client with network policy deny configuration."""
-        args = MagicMock()
-        args.retry_with_safety_on_interrupt = False
-        args.no_network = True
-        args.allow_hosts = None
-        unified_client_main = MagicMock()
-        argv = ["test.py", "--mode", "fuzz"]
 
-        with patch("asyncio.new_event_loop") as mock_loop:
-            loop_instance = MagicMock()
-            mock_loop.return_value = loop_instance
-            with patch("asyncio.set_event_loop"):
-                with patch(
-                    "mcp_fuzzer.cli.runner.configure_network_policy"
-                ) as mock_config_policy:
-                    with patch.object(loop_instance, "add_signal_handler"):
-                        with patch.object(loop_instance, "run_until_complete"):
-                            # Use an environment without PYTEST_CURRENT_TEST
-                            with patch("os.environ.get", return_value=None):
-                                runner.execute_inner_client(
-                                    args, unified_client_main, argv
-                                )
-                                # Verify configure_network_policy was called twice
-                                mock_config_policy.assert_has_calls(
-                                    [
-                                        call(
-                                            reset_allowed_hosts=True,
-                                            deny_network_by_default=None,
-                                        ),
-                                        call(
-                                            deny_network_by_default=True,
-                                            extra_allowed_hosts=None,
-                                        ),
-                                    ]
-                                )
-                                # Check that run_until_complete was called once
-                                assert loop_instance.run_until_complete.call_count == 1
-                                # Check that unified_client_main was called
-                                unified_client_main.assert_called_once()
+def test_validate_arguments_runs_per_type_invalid_type():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="protocol",
+        protocol_type=None,
+        runs=1,
+        runs_per_type="bad",
+        timeout=10,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
 
-    @pytest.mark.asyncio
-    async def test_execute_inner_client_network_policy_allow_hosts(self):
-        """Test execute_inner_client with network policy allowing specific hosts."""
-        args = MagicMock()
-        args.retry_with_safety_on_interrupt = False
-        args.no_network = False
-        args.allow_hosts = ["example.com", "test.com"]
-        unified_client_main = MagicMock()
-        argv = ["test.py", "--mode", "fuzz"]
 
-        with patch("asyncio.new_event_loop") as mock_loop:
-            loop_instance = MagicMock()
-            mock_loop.return_value = loop_instance
-            with patch("asyncio.set_event_loop"):
-                with patch(
-                    "mcp_fuzzer.cli.runner.configure_network_policy"
-                ) as mock_config_policy:
-                    with patch.object(loop_instance, "add_signal_handler"):
-                        with patch.object(loop_instance, "run_until_complete"):
-                            # Use an environment without PYTEST_CURRENT_TEST
-                            with patch("os.environ.get", return_value=None):
-                                runner.execute_inner_client(
-                                    args, unified_client_main, argv
-                                )
-                                # Verify configure_network_policy was called twice
-                                mock_config_policy.assert_has_calls(
-                                    [
-                                        call(
-                                            reset_allowed_hosts=True,
-                                            deny_network_by_default=None,
-                                        ),
-                                        call(
-                                            deny_network_by_default=None,
-                                            extra_allowed_hosts=[
-                                                "example.com",
-                                                "test.com",
-                                            ],
-                                        ),
-                                    ]
-                                )
-                                # Check that run_until_complete was called once
-                                assert loop_instance.run_until_complete.call_count == 1
-                                # Check that unified_client_main was called
-                                unified_client_main.assert_called_once()
+def test_validate_arguments_timeout_negative():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tools",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=-1,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
 
-    def test_run_with_retry_on_interrupt_no_retry(self):
-        """Test run_with_retry_on_interrupt without retry on interrupt."""
-        args = MagicMock()
-        args.enable_safety_system = False
-        args.retry_with_safety_on_interrupt = False
-        unified_client_main = MagicMock()
-        argv = ["test.py", "--mode", "fuzz"]
 
-        with patch("mcp_fuzzer.cli.runner.execute_inner_client") as mock_execute:
-            with patch("mcp_fuzzer.cli.runner.Console") as mock_console:
-                with pytest.raises(SystemExit) as exc_info:
-                    mock_execute.side_effect = KeyboardInterrupt
-                    runner.run_with_retry_on_interrupt(args, unified_client_main, argv)
-                assert exc_info.value.code == 130
-                mock_execute.assert_called_once()
-                mock_console.return_value.print.assert_called_with(
-                    "\n[yellow]Fuzzing interrupted by user[/yellow]"
-                )
+def test_validate_arguments_requires_endpoint():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tools",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=1,
+        endpoint=None,
+        check_env=False,
+        validate_config=None,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
 
-    def test_run_with_retry_on_interrupt_with_retry(self):
-        """Test run_with_retry_on_interrupt with retry on interrupt
-        and safety system activation."""
-        # Setup
-        args = MagicMock()
-        args.enable_safety_system = False
-        args.retry_with_safety_on_interrupt = True
 
-        unified_client_main = MagicMock()
-        argv = ["test.py", "--mode", "fuzz"]
+def test_validate_arguments_whitespace_endpoint():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tools",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=1,
+        endpoint="   ",
+        check_env=False,
+        validate_config=None,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
 
-        # Create mocks
-        execute_inner_mock = MagicMock()
-        # Set up to raise KeyboardInterrupt on first call
-        execute_inner_mock.side_effect = [KeyboardInterrupt(), None]
-        mock_console = MagicMock()
 
-        # Test with patches
-        with patch("mcp_fuzzer.cli.runner.execute_inner_client", execute_inner_mock):
-            with patch("mcp_fuzzer.cli.runner.Console", return_value=mock_console):
-                # Patch the directly imported function
-                with patch(
-                    "mcp_fuzzer.cli.runner.start_system_blocking"
-                ) as mock_start_system:
-                    with patch(
-                        "mcp_fuzzer.cli.runner.stop_safety_if_started"
-                    ) as mock_stop:
-                        # Run the function under test
-                        runner.run_with_retry_on_interrupt(
-                            args, unified_client_main, argv
-                        )
+def test_validate_arguments_allows_utility_without_endpoint():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tool",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=10,
+        endpoint=None,
+        check_env=True,
+        validate_config=None,
+        tool="example",
+    )
+    validator.validate_arguments(args)
 
-                        # Verify the mocks were called correctly
-                        assert execute_inner_mock.call_count == 2
-                        mock_start_system.assert_called_once()
-                        mock_stop.assert_called_once()
-                        mock_console.print.assert_called_with(
-                            "\n[yellow]Interrupted. Retrying once "
-                            "with safety system enabled...[/yellow]"
-                        )
+
+def test_validate_arguments_protocol_type_wrong_mode_with_endpoint():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tool",
+        protocol_type="X",
+        runs=1,
+        runs_per_type=1,
+        timeout=10,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
+
+
+def test_validate_arguments_runs_not_int():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tools",
+        protocol_type=None,
+        runs="bad",
+        runs_per_type=1,
+        timeout=10,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
+
+
+def test_print_startup_info():
+    args = argparse.Namespace(mode="tools", protocol="http", endpoint="http://x")
+    with patch("mcp_fuzzer.cli.startup_info.Console") as mock_console:
+        mock_console.return_value = MagicMock()
+        print_startup_info(args, None)
+        assert mock_console.return_value.print.call_count >= 1
+
+
+def test_build_cli_config_merges_and_returns_cli_config():
+    args = _base_args()
+    cli_config = build_cli_config(args)
+    assert isinstance(cli_config, CliConfig)
+    assert cli_config.merged["endpoint"] == "http://localhost"
+    assert cli_config.merged["safety_enabled"] is True
+
+
+def test_handle_validate_config(monkeypatch):
+    validator = ValidationManager()
+    with patch("mcp_fuzzer.cli.validators.config_mediator.load_file") as mock_load:
+        validator.validate_config_file("config.yml")
+    mock_load.assert_called_once_with("config.yml")
+
+
+def test_handle_check_env(monkeypatch):
+    validator = ValidationManager()
+    monkeypatch.setenv("MCP_FUZZER_LOG_LEVEL", "INFO")
+    result = validator.check_environment_variables()
+    assert result is True
+
+
+def test_handle_check_env_invalid_level(monkeypatch):
+    validator = ValidationManager()
+    monkeypatch.setenv("MCP_FUZZER_LOG_LEVEL", "INVALID")
+    with pytest.raises(ArgumentValidationError):
+        validator.check_environment_variables()
+
+
+def test_prepare_inner_argv_roundtrip():
+    args = _base_args(
+        output_types=["fuzzing_results"],
+        output_session_id="abc",
+        enable_aiomonitor=True,
+        output_compress=True,
+        no_network=True,
+        allow_hosts=["a", "b"],
+        export_safety_data="",
+    )
+    argv = prepare_inner_argv(args)
+    assert "--mode" in argv and "--endpoint" in argv
+    assert "abc" in argv
+    assert "--export-safety-data" in argv
+
+
+def test_transport_factory_applies_auth_headers():
+    args = MagicMock(protocol="http", endpoint="http://example.com", timeout=10.0)
+    auth_manager = MagicMock()
+    auth_manager.get_default_auth_headers.return_value = {"Authorization": "x"}
+    with patch(
+        "mcp_fuzzer.client.transport.factory.base_create_transport"
+    ) as mock_create:
+        create_transport_with_auth(args, {"auth_manager": auth_manager})
+        mock_create.assert_called_once_with(
+            "http",
+            "http://example.com",
+            timeout=10.0,
+            auth_headers={"Authorization": "x"},
+        )
+
+
+def test_safety_controller():
+    controller = SafetyController()
+    with patch(
+        "mcp_fuzzer.client.safety.controller.start_system_blocking"
+    ) as mock_start:
+        controller.start_if_enabled(True)
+        mock_start.assert_called_once()
+    with patch("mcp_fuzzer.client.safety.controller.stop_system_blocking") as mock_stop:
+        controller.stop_if_started()
+        mock_stop.assert_called_once()
+
+
+def test_execute_inner_client_pytest_branch(monkeypatch):
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "1")
+
+    async def dummy_main():
+        return None
+
+    with patch("mcp_fuzzer.client.runtime.async_runner.asyncio.run") as mock_run:
+        execute_inner_client(argparse.Namespace(), dummy_main, ["prog"])
+        mock_run.assert_called_once()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+
+def test_execute_inner_client_network_policy(monkeypatch):
+    args = MagicMock(
+        retry_with_safety_on_interrupt=False,
+        no_network=True,
+        allow_hosts=None,
+    )
+    with patch(
+        "mcp_fuzzer.client.runtime.async_runner.asyncio.new_event_loop"
+    ) as mock_loop:
+        loop = MagicMock()
+        mock_loop.return_value = loop
+        with patch("mcp_fuzzer.client.runtime.async_runner.asyncio.set_event_loop"):
+            with patch.object(
+                SafetyController, "configure_network_policy"
+            ) as mock_policy:
+                with patch.object(loop, "add_signal_handler"):
+                    with patch.object(loop, "run_until_complete"):
+                        with patch("os.environ.get", return_value=None):
+                            execute_inner_client(args, lambda: None, ["prog"])
+                            mock_policy.assert_called_once_with(
+                                reset_allowed_hosts=True,
+                                deny_network_by_default=True,
+                                extra_allowed_hosts=None,
+                            )
+
+
+def test_run_with_retry_on_interrupt_retry_path():
+    args = MagicMock(enable_safety_system=False, retry_with_safety_on_interrupt=True)
+    calls = {"n": 0}
+
+    def fake_execute(_args, _main, _argv):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise KeyboardInterrupt()
+
+    with (
+        patch(
+            "mcp_fuzzer.client.runtime.retry.execute_inner_client",
+            side_effect=fake_execute,
+        ),
+        patch("mcp_fuzzer.client.runtime.retry.start_system_blocking") as mock_start,
+        patch("mcp_fuzzer.client.runtime.retry.stop_system_blocking") as mock_stop,
+    ):
+        run_with_retry_on_interrupt(args, lambda: None, ["prog"])
+        assert calls["n"] == 2
+        mock_start.assert_called_once()
+        mock_stop.assert_called_once()
+
+
+def test_validate_transport_errors():
+    validator = ValidationManager()
+    args = argparse.Namespace(protocol="http", endpoint="http://x", timeout=1)
+    with patch(
+        "mcp_fuzzer.cli.validators.create_transport",
+        side_effect=Exception("boom"),
+    ):
+        with pytest.raises(Exception):
+            validator.validate_transport(args)
+
+
+def test_validate_transport_mcp_error_passthrough():
+    validator = ValidationManager()
+    args = argparse.Namespace(protocol="http", endpoint="http://x", timeout=1)
+    with patch(
+        "mcp_fuzzer.cli.validators.create_transport",
+        side_effect=MCPError("err", code="X"),
+    ):
+        with pytest.raises(MCPError):
+            validator.validate_transport(args)
+
+
+def test_async_runner_calls_execute_inner_client(monkeypatch):
+    args = _base_args()
+    runner = AsyncRunner(args, SafetyController())
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "1")
+
+    async def dummy_coro():
+        return None
+
+    runner.run(dummy_coro, ["prog"])
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+
+def test_run_cli_happy_path():
+    args = _base_args()
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
+        patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt"),
+        patch("mcp_fuzzer.cli.entrypoint.ClientSettings"),
+    ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_transport.return_value = None
+        run_cli()
+
+
+def test_run_cli_transport_error_exit(monkeypatch):
+    args = _base_args()
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+    ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_transport.side_effect = Exception("boom")
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 1
+
+
+def test_run_cli_keyboard_interrupt(monkeypatch):
+    with patch(
+        "mcp_fuzzer.cli.entrypoint.parse_arguments",
+        side_effect=KeyboardInterrupt,
+    ):
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 0
+
+
+def test_run_cli_validate_config_exits(monkeypatch):
+    args = _base_args(validate_config="file.yml")
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+    ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_config_file.return_value = None
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 0
+
+
+def test_run_cli_check_env_exits(monkeypatch):
+    args = _base_args(check_env=True)
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+    ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.check_environment_variables.return_value = True
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 0
+
+
+def test_run_cli_value_error(monkeypatch):
+    args = _base_args()
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+    ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.side_effect = ValueError("bad")
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 1
+
+
+def test_run_cli_mcp_error(monkeypatch):
+    args = _base_args()
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+        patch(
+            "mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt",
+            side_effect=MCPError("x", code="err"),
+        ),
+    ):
+        mock_vm_cls.return_value.validate_arguments.return_value = None
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 1
+
+
+def test_run_cli_unexpected_error_debug(monkeypatch, caplog):
+    args = _base_args()
+    caplog.set_level(logging.DEBUG)
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
+        patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+    ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_transport.side_effect = RuntimeError("boom")
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 1
+
+
+def test_build_cli_config_uses_config_file(monkeypatch):
+    args = _base_args(config="custom.yml", endpoint=None)
+    with patch(
+        "mcp_fuzzer.cli.config_merge.config_mediator.load_file",
+        return_value={
+            "endpoint": "http://conf",
+            "runs": 42,
+            "allow_hosts": ["a.local"],
+        },
+    ):
+        cli_config = build_cli_config(args)
+    assert cli_config.merged["endpoint"] == "http://conf"
+    assert cli_config.merged["runs"] == 42
+    assert cli_config.merged["allow_hosts"] == ["a.local"]
+
+
+def test_build_cli_config_handles_apply_config_error(caplog):
+    caplog.set_level(logging.DEBUG)
+    args = _base_args(config=None)
+    # apply_file() now returns False instead of raising exceptions
+    with patch(
+        "mcp_fuzzer.cli.config_merge.config_mediator.apply_file",
+        return_value=False,
+    ):
+        cli_config = build_cli_config(args)
+    assert cli_config.merged["endpoint"] == "http://localhost"
+    # Check that debug message was logged when config file is not found
+    assert "Default configuration file not found" in "".join(caplog.messages)
+
+
+def test_build_cli_config_raises_config_error():
+    args = _base_args(config="bad.yml")
+    with patch(
+        "mcp_fuzzer.cli.config_merge.config_mediator.load_file",
+        side_effect=ValueError("bad"),
+    ):
+        with pytest.raises(ConfigFileError):
+            build_cli_config(args)

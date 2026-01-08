@@ -43,7 +43,7 @@ First, ensure you have an MCP server running. You can use any of these transport
 #### Tool Fuzzing (Default Mode)
 
 ```bash
-# Basic tool fuzzing
+# Basic tool fuzzing (all tools)
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
 
 # With verbose output
@@ -51,6 +51,16 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 
 
 # With safety system enabled
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 5 --enable-safety-system
+```
+
+#### Single Tool Fuzzing
+
+```bash
+# Fuzz only a specific tool
+mcp-fuzzer --mode tool --tool analyze_repository --protocol http --endpoint http://localhost:8000 --runs 20
+
+# Fuzz a specific tool with both phases
+mcp-fuzzer --mode tool --tool generate_terraform --phase both --protocol http --endpoint http://localhost:8000 --runs 15
 ```
 
 #### Protocol Fuzzing

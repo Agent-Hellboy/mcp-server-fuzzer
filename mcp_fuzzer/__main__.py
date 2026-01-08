@@ -6,7 +6,7 @@ This module provides the main entry point for the MCP fuzzer,
 delegating to the CLI module.
 """
 
-from .cli.main import run_cli
+from .cli.entrypoint import run_cli
 
 
 def main():

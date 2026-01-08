@@ -10,7 +10,8 @@ import httpx
 from .base import TransportProtocol
 from .mixins import NetworkTransportMixin, ResponseParsingMixin
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
-from ..config import (
+# Import constants directly from config (constants are values, not behavior)
+from ..config.core.constants import (
     JSON_CONTENT_TYPE,
     DEFAULT_HTTP_ACCEPT,
 )
@@ -49,6 +50,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         timeout: float = 30.0,
         auth_headers: dict[str, str | None] | None = None,
         safety_enabled: bool = True,
+        process_manager: ProcessManager | None = None,
     ):
         self.url = url
         self.timeout = timeout
@@ -57,10 +59,26 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
             "Accept": DEFAULT_HTTP_ACCEPT,
             "Content-Type": JSON_CONTENT_TYPE,
         }
-        self.auth_headers = {k: v for k, v in (auth_headers or {}).items() if v is not None}
+        self.auth_headers = {
+            k: v for k, v in (auth_headers or {}).items() if v is not None
+        }
 
         # Track last activity for process management
         self._last_activity = time.time()
+
+        # Initialize process manager for any subprocesses (like proxy servers)
+        self._owns_process_manager = process_manager is None
+        if process_manager is None:
+            watchdog_config = WatchdogConfig(
+                check_interval=1.0,
+                process_timeout=timeout,
+                extra_buffer=5.0,
+                max_hang_time=timeout + 10.0,
+                auto_kill=True,
+            )
+            self.process_manager = ProcessManager.from_config(watchdog_config)
+        else:
+            self.process_manager = process_manager
 
     def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
         """Prepare headers with optional safety sanitization and auth headers."""
@@ -71,16 +89,6 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         # Add auth headers after sanitization (they are user-configured and safe)
         safe_headers.update(self.auth_headers)
         return safe_headers
-
-        # Initialize process manager for any subprocesses (like proxy servers)
-        watchdog_config = WatchdogConfig(
-            check_interval=1.0,
-            process_timeout=timeout,
-            extra_buffer=5.0,
-            max_hang_time=timeout + 10.0,
-            auto_kill=True,
-        )
-        self.process_manager = ProcessManager(watchdog_config)
 
     async def _update_activity(self):
         """Update last activity timestamp."""
@@ -299,7 +307,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
     async def close(self):
         """Close the transport and cleanup resources."""
         try:
-            if hasattr(self, "process_manager"):
+            if hasattr(self, "process_manager") and self._owns_process_manager:
                 await self.process_manager.shutdown()
         except Exception as e:
             logging.warning(f"Error shutting down HTTP transport process manager: {e}")

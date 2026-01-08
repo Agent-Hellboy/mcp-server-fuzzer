@@ -12,7 +12,8 @@ from typing import Any
 from ..auth import AuthManager
 from ..fuzz_engine.fuzzer import ToolFuzzer
 from ..safety_system.safety import SafetyFilter, SafetyProvider
-from ..config import (
+# Import constants directly from config (constants are values, not behavior)
+from ..config.core.constants import (
     DEFAULT_TOOL_RUNS,
     DEFAULT_MAX_TOOL_TIME,
     DEFAULT_MAX_TOTAL_FUZZING_TIME,
@@ -65,6 +66,7 @@ class ToolClient:
                 self._logger.warning("Server returned an empty list of tools.")
                 return []
             self._logger.info(f"Found {len(tools)} tools to fuzz")
+            self._logger.debug(f"Tools: {tools}")
             return tools
         except Exception as e:
             self._logger.error(f"Failed to get tools from server: {e}")

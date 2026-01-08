@@ -394,7 +394,7 @@ The `ProcessManager` provides robust process lifecycle management with watchdog 
 ```python
 import asyncio
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import WatchdogConfig
+from mcp_fuzzer.fuzz_engine.runtime import WatchdogConfig
 
 async def basic_process_management():
     # Configure watchdog
@@ -405,7 +405,7 @@ async def basic_process_management():
     )
 
     # Create process manager
-    manager = ProcessManager(watchdog_config)
+    manager = ProcessManager.from_config(watchdog_config)
 
     try:
         # Start a test server
@@ -439,7 +439,7 @@ if __name__ == "__main__":
 import time
 
 async def process_with_activity_monitoring():
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     # Activity callback for hang detection
     last_activity = time.time()
@@ -477,7 +477,7 @@ async def process_with_activity_monitoring():
 
 ```python
 async def multiple_process_management():
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     try:
         # Start multiple worker processes

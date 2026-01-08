@@ -168,11 +168,13 @@ class TestStdioTransport:
         """Test _receive_message method."""
         self.transport._initialized = True
         self.transport.stdout = AsyncMock()
-        self.transport.stdout.readline.return_value = b'{"response": "ok"}\n'
+        self.transport.manager.read_with_cap = AsyncMock(
+            return_value=b'{"response": "ok"}\n'
+        )
         with patch.object(self.transport, "_update_activity") as mock_update:
             result = await self.transport._receive_message()
             assert result == {"response": "ok"}
-            self.transport.stdout.readline.assert_awaited_once()
+            self.transport.manager.read_with_cap.assert_awaited_once()
             mock_update.assert_called_once()
 
     @pytest.mark.asyncio
@@ -180,19 +182,20 @@ class TestStdioTransport:
         """Test _receive_message when empty response is received."""
         self.transport._initialized = True
         self.transport.stdout = AsyncMock()
-        self.transport.stdout.readline.return_value = b""
+        self.transport.manager.read_with_cap = AsyncMock(return_value=b"")
         result = await self.transport._receive_message()
         assert result is None
-        self.transport.stdout.readline.assert_awaited_once()
+        self.transport.manager.read_with_cap.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_receive_message_not_initialized(self):
         """Test _receive_message when not initialized."""
         self.transport._initialized = False
         # We need to mock stdout to prevent NoneType error
-        mock_stdout = AsyncMock()
-        mock_stdout.readline = AsyncMock(return_value=b'{"response": "ok"}\n')
-        self.transport.stdout = mock_stdout
+        self.transport.stdout = AsyncMock()
+        self.transport.manager.read_with_cap = AsyncMock(
+            return_value=b'{"response": "ok"}\n'
+        )
 
         with patch.object(
             self.transport, "_ensure_connection", new=AsyncMock()

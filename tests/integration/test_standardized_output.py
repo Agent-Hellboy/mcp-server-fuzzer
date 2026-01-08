@@ -71,7 +71,7 @@ class TestStandardizedOutputIntegration:
         )
 
         # Generate standardized reports
-        generated_files = reporter.generate_standardized_report()
+        generated_files = await reporter.generate_standardized_report()
 
         # Verify files were created
         assert "fuzzing_results" in generated_files
@@ -123,10 +123,10 @@ class TestStandardizedOutputIntegration:
 
     def test_configuration_driven_output(self):
         """Test that output generation respects configuration settings."""
-        from mcp_fuzzer.config import config
+        from mcp_fuzzer.client.adapters import config_mediator
 
         # Set output configuration
-        config.update({
+        config_mediator.update({
             "output": {
                 "format": "json",
                 "directory": self.temp_dir,
@@ -234,7 +234,8 @@ class TestStandardizedOutputIntegration:
         assert data["data"]["risk_assessment"] == "medium"
         assert len(data["data"]["blocked_operations"]) == 2
 
-    def test_multiple_output_types_generation(self):
+    @pytest.mark.asyncio
+    async def test_multiple_output_types_generation(self):
         """Test generating multiple output types in a single session."""
         from mcp_fuzzer.reports import FuzzerReporter
 
@@ -254,7 +255,7 @@ class TestStandardizedOutputIntegration:
 
         # Generate multiple output types
         output_types = ["fuzzing_results", "error_report"]
-        generated_files = reporter.generate_standardized_report(
+        generated_files = await reporter.generate_standardized_report(
             output_types=output_types
         )
 

@@ -14,6 +14,11 @@ The runtime management system provides robust, asynchronous subprocess lifecycle
 
 The `ProcessManager` provides fully asynchronous subprocess lifecycle management with comprehensive process tracking and signal handling.
 
+### Construction Patterns
+
+- **Default wiring**: `ProcessManager.from_config()` constructs a manager with default watchdog/registry/signal handler/lifecycle/monitor components.
+- **Custom wiring**: You can instantiate collaborators yourself and pass them to the `ProcessManager` constructor to fully control dependencies (useful in tests).
+
 ### Core Features
 
 - **Async Process Creation**: Uses `asyncio.create_subprocess_exec` for non-blocking process spawning
@@ -51,7 +56,7 @@ class ProcessConfig:
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
 
 async def basic_process_management():
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     # Start a process
     config = ProcessConfig(
@@ -78,7 +83,7 @@ async def basic_process_management():
 import time
 
 async def process_with_activity_monitoring():
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     # Activity callback that reports current time
     def activity_callback():
@@ -106,7 +111,7 @@ async def process_with_activity_monitoring():
 
 ```python
 async def multiple_process_management():
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
 
     # Start multiple processes
     processes = []
@@ -155,7 +160,7 @@ async def multiple_process_management():
 - `async list_processes() -> List[Dict[str, Any]]`
   - Get list of all managed processes with their status
 
-- `async wait_for_process(pid: int, timeout: Optional[float] = None) -> Optional[int]`
+- `async wait(pid: int, timeout: Optional[float] = None) -> Optional[int]`
   - Wait for a process to complete
   - Returns exit code or None if timeout
 
@@ -171,6 +176,105 @@ async def multiple_process_management():
 
 - `async shutdown() -> None`
   - Shutdown the process manager and stop all processes
+
+### Custom Signal Strategies
+
+`SignalDispatcher` supports dependency injection of custom signal strategies,
+enabling extension without modifying core code. Strategies can be registered
+at construction time or runtime.
+
+#### Strategy Registration Pattern
+
+##### Method 1: Dependency Injection at Construction
+
+```python
+import logging
+from mcp_fuzzer.fuzz_engine.runtime.signals import (
+    ProcessRegistry,
+    ProcessSignalStrategy,
+    SignalDispatcher,
+)
+
+
+class CustomTermStrategy(ProcessSignalStrategy):
+    def __init__(self, registry: ProcessRegistry, logger: logging.Logger) -> None:
+        self._registry = registry
+        self._logger = logger
+
+    async def send(self, pid: int, process_info=None) -> bool:
+        # Custom termination logic using injected dependencies
+        return True
+
+
+class MyCustomStrategy(ProcessSignalStrategy):
+    async def send(self, pid: int, process_info=None) -> bool:
+        # Add your own behavior here
+        return True
+
+
+registry = ProcessRegistry()
+logger = logging.getLogger(__name__)
+
+# Create with custom strategies
+custom_strategies = {
+    "timeout": CustomTermStrategy(registry, logger),
+    "custom": MyCustomStrategy(),
+}
+dispatcher = SignalDispatcher.from_config(
+    registry,
+    logger,
+    strategies=custom_strategies,
+    register_defaults=True,  # Still register defaults, custom overrides them
+)
+
+# Or use only custom strategies
+dispatcher = SignalDispatcher.from_config(
+    registry,
+    logger,
+    strategies=custom_strategies,
+    register_defaults=False,  # No default strategies
+)
+```
+
+##### Method 2: Runtime Registration
+
+```python
+from mcp_fuzzer.fuzz_engine.runtime.signals import ProcessSignalStrategy
+from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager
+
+class NoopSignal(ProcessSignalStrategy):
+    async def send(self, pid: int, process_info=None) -> bool:
+        return True  # Custom behavior
+
+manager = ProcessManager.from_config()
+manager.signal_dispatcher.register_strategy("noop", NoopSignal())
+
+# Override existing strategy
+manager.signal_dispatcher.register_strategy("timeout", CustomTermStrategy())
+```
+
+##### Method 3: Strategy Management
+
+```python
+# List all registered strategies
+strategies = manager.signal_dispatcher.list_strategies()
+# Returns: ["timeout", "force", "interrupt", "noop"]
+
+# Unregister a strategy
+manager.signal_dispatcher.unregister_strategy("noop")
+
+# Check if strategy exists
+if "custom" in manager.signal_dispatcher.list_strategies():
+    # Use custom strategy
+    pass
+```
+
+#### Benefits
+
+- **Extensibility**: Add new signal types without modifying core code
+- **Testability**: Inject mock strategies for testing
+- **Flexibility**: Override default strategies or use custom-only configurations
+- **Maintainability**: Clear separation between strategy interface and implementation
 
 ## ProcessWatchdog
 
@@ -200,50 +304,63 @@ class WatchdogConfig:
 #### Basic Watchdog Usage
 
 ```python
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import ProcessWatchdog, WatchdogConfig
+import asyncio
+import logging
+from mcp_fuzzer.fuzz_engine.runtime import (
+    ProcessConfig,
+    ProcessRegistry,
+    ProcessWatchdog,
+    SignalDispatcher,
+    WatchdogConfig,
+)
+
 
 async def basic_watchdog_usage():
-    # Configure watchdog
-    config = WatchdogConfig(
-        check_interval=2.0,
-        process_timeout=30.0,
-        auto_kill=True
-    )
+    config = WatchdogConfig(check_interval=2.0, process_timeout=30.0, auto_kill=True)
+    logger = logging.getLogger(__name__)
 
-    watchdog = ProcessWatchdog(config)
-
-    # Start monitoring
+    registry = ProcessRegistry()
+    signals = SignalDispatcher(registry, logger)
+    watchdog = ProcessWatchdog(registry, signals, config, logger=logger)
     await watchdog.start()
 
-    # Register a process for monitoring
     process = await asyncio.create_subprocess_exec("python", "test_server.py")
-    await watchdog.register_process(
+    await registry.register(
         process.pid,
         process,
-        None,  # No activity callback
-        "test_server"
+        ProcessConfig(command=["python", "test_server.py"], name="test_server"),
     )
+    await watchdog.update_activity(process.pid)
 
-    # Let it run for a while
+    # One-off scan (the background loop runs when start() is called)
+    await watchdog.scan_once(await registry.snapshot())
     await asyncio.sleep(10)
-
-    # Stop monitoring
     await watchdog.stop()
 ```
 
 #### Watchdog with Activity Callbacks
 
 ```python
+import asyncio
+import logging
 import time
+from mcp_fuzzer.fuzz_engine.runtime import (
+    ProcessConfig,
+    ProcessRegistry,
+    ProcessWatchdog,
+    SignalDispatcher,
+    WatchdogConfig,
+)
+
 
 async def watchdog_with_activity():
-    config = WatchdogConfig(
-        check_interval=1.0,
-        process_timeout=10.0,
-        auto_kill=True
+    registry = ProcessRegistry()
+    signals = SignalDispatcher(registry, logging.getLogger(__name__))
+    watchdog = ProcessWatchdog(
+        registry,
+        signals,
+        WatchdogConfig(check_interval=1.0, process_timeout=10.0, auto_kill=True),
     )
-
-    watchdog = ProcessWatchdog(config)
     await watchdog.start()
 
     # Activity callback that simulates periodic activity
@@ -251,41 +368,54 @@ async def watchdog_with_activity():
 
     def activity_callback():
         nonlocal last_activity
-        # Simulate activity every 5 seconds
         if time.time() - last_activity > 5:
             last_activity = time.time()
         return last_activity
 
     process = await asyncio.create_subprocess_exec("python", "server.py")
-    await watchdog.register_process(
+    await registry.register(
         process.pid,
         process,
-        activity_callback,
-        "server"
+        ProcessConfig(
+            command=["python", "server.py"],
+            name="server",
+            activity_callback=activity_callback,
+        ),
     )
+    await watchdog.update_activity(process.pid)
 
-    # Let it run
     await asyncio.sleep(20)
-
     await watchdog.stop()
 ```
 
 #### Context Manager Usage
 
 ```python
-async def watchdog_context_manager():
-    config = WatchdogConfig(auto_kill=True)
+import asyncio
+import logging
+from mcp_fuzzer.fuzz_engine.runtime import (
+    ProcessConfig,
+    ProcessRegistry,
+    ProcessWatchdog,
+    SignalDispatcher,
+    WatchdogConfig,
+)
 
-    async with ProcessWatchdog(config) as watchdog:
+
+async def watchdog_context_manager():
+    registry = ProcessRegistry()
+    dispatcher = SignalDispatcher(registry, logging.getLogger(__name__))
+
+    async with ProcessWatchdog(
+        registry, dispatcher, WatchdogConfig(auto_kill=True)
+    ) as watchdog:
         process = await asyncio.create_subprocess_exec("python", "server.py")
-        await watchdog.register_process(
+        await registry.register(
             process.pid,
             process,
-            None,
-            "server"
+            ProcessConfig(command=["python", "server.py"], name="server"),
         )
-
-        # Watchdog automatically starts and stops
+        await watchdog.update_activity(process.pid)
         await asyncio.sleep(10)
 ```
 
@@ -297,23 +427,19 @@ async def watchdog_context_manager():
   - Start the watchdog monitoring loop
 
 - `async stop() -> None`
-  - Stop the watchdog monitoring loop
+  - Stop the watchdog monitoring loop and await the loop task
 
-- `async register_process(pid: int, process: Any, activity_callback: Optional[Callable[[], float]], name: str) -> None`
-  - Register a process for monitoring
-  - Activity callback should return timestamp of last activity
-
-- `async unregister_process(pid: int) -> None`
-  - Unregister a process from monitoring
+- `async scan_once(processes: dict[int, ProcessRecord]) -> dict[str, Any]`
+  - Run a single hang-detection pass against a registry snapshot
 
 - `async update_activity(pid: int) -> None`
-  - Update activity timestamp for a process
-
-- `async is_process_registered(pid: int) -> bool`
-  - Check if a process is registered for monitoring
+  - Update the last-activity timestamp for a tracked pid
 
 - `async get_stats() -> dict`
-  - Get statistics about monitored processes
+  - Lightweight statistics including last scan time and registry counts
+
+Note: processes are registered with the `ProcessRegistry` (or via `ProcessLifecycle`),
+and the watchdog reads that shared registry instead of keeping its own table.
 
 ## AsyncFuzzExecutor
 
@@ -471,8 +597,9 @@ async def hypothesis_example():
 
 ```python
 import asyncio
+import time
 from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
-from mcp_fuzzer.fuzz_engine.runtime.watchdog import ProcessWatchdog, WatchdogConfig
+from mcp_fuzzer.fuzz_engine.runtime import ProcessWatchdog, WatchdogConfig
 from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
 
 async def complete_runtime_example():
@@ -484,7 +611,7 @@ async def complete_runtime_example():
     )
 
     # Create runtime components
-    manager = ProcessManager(watchdog_config)
+    manager = ProcessManager.from_config(watchdog_config)
     executor = AsyncFuzzExecutor(max_concurrency=3)
 
     try:
@@ -551,7 +678,7 @@ class ManagedStdioTransport(StdioTransport):
 
 # Usage
 async def managed_transport_example():
-    manager = ProcessManager()
+    manager = ProcessManager.from_config()
     transport = ManagedStdioTransport("python test_server.py", manager)
 
     try:
