@@ -4,6 +4,7 @@
 import os
 from typing import Any
 
+
 class Configuration:
     """Centralized configuration management for MCP Fuzzer."""
 
@@ -47,6 +48,7 @@ class Configuration:
     def update(self, config_dict: dict[str, Any]) -> None:
         """Update configuration with values from a dictionary."""
         self._config.update(config_dict)
+
 
 # Global configuration instance
 config = Configuration()

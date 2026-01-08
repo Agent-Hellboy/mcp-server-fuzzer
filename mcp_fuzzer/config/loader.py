@@ -19,6 +19,7 @@ import importlib
 
 logger = logging.getLogger(__name__)
 
+
 def find_config_file(
     config_path: str | None = None,
     search_paths: list[str] | None = None,
@@ -61,6 +62,7 @@ def find_config_file(
 
     return None
 
+
 def load_config_file(file_path: str) -> dict[str, Any]:
     """Load configuration from a YAML file.
 
@@ -99,6 +101,7 @@ def load_config_file(file_path: str) -> dict[str, Any]:
             f"Unexpected error reading configuration file {file_path}: {str(e)}"
         )
 
+
 def apply_config_file(
     config_path: str | None = None,
     search_paths: list[str] | None = None,
@@ -129,6 +132,7 @@ def apply_config_file(
         return False
     config.update(config_data)
     return True
+
 
 def get_config_schema() -> dict[str, Any]:
     """Get the configuration schema.
@@ -321,6 +325,7 @@ def get_config_schema() -> dict[str, Any]:
             },
         },
     }
+
 
 def load_custom_transports(config_data: dict[str, Any]) -> None:
     """Load and register custom transports from configuration.

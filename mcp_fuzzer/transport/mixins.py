@@ -24,6 +24,7 @@ except ImportError:  # pragma: no cover
 
 from ..safety_system.policy import is_host_allowed, sanitize_headers
 
+
 class JSONRPCRequest(TypedDict):
     """Type definition for JSON-RPC request structure."""
 
@@ -32,12 +33,14 @@ class JSONRPCRequest(TypedDict):
     params: NotRequired[list[Any] | dict[str, Any]]
     id: str | int | None
 
+
 class JSONRPCNotification(TypedDict):
     """Type definition for JSON-RPC notification structure."""
 
     jsonrpc: Literal["2.0"]
     method: str
     params: NotRequired[list[Any] | dict[str, Any]]
+
 
 class JSONRPCErrorObject(TypedDict):
     """Type definition for JSON-RPC error object."""
@@ -46,12 +49,14 @@ class JSONRPCErrorObject(TypedDict):
     message: str
     data: NotRequired[Any]
 
+
 class JSONRPCSuccessResponse(TypedDict):
     """Type definition for JSON-RPC success response."""
 
     jsonrpc: Literal["2.0"]
     result: Any
     id: str | int | None
+
 
 class JSONRPCErrorResponse(TypedDict):
     """Type definition for JSON-RPC error response."""
@@ -60,22 +65,27 @@ class JSONRPCErrorResponse(TypedDict):
     error: JSONRPCErrorObject
     id: str | int | None
 
+
 JSONRPCResponse = JSONRPCSuccessResponse | JSONRPCErrorResponse
+
 
 class TransportError(Exception):
     """Base exception for transport-related errors."""
 
     pass
 
+
 class NetworkError(TransportError):
     """Exception raised for network-related errors."""
 
     pass
 
+
 class PayloadValidationError(TransportError):
     """Exception raised for invalid payload validation."""
 
     pass
+
 
 class ResponseParser(Protocol):
     """Protocol for response parsing functionality."""
@@ -87,6 +97,7 @@ class ResponseParser(Protocol):
     def parse_sse_response(self, response_text: str) -> dict[str, Any | None]:
         """Parse SSE response and extract JSON data."""
         ...
+
 
 class BaseTransportMixin(ABC):
     """Base mixin providing common transport functionality."""
@@ -179,27 +190,36 @@ class BaseTransportMixin(ABC):
                 raise PayloadValidationError("'method' must be a non-empty string")
             if "params" in payload and not isinstance(payload["params"], (list, dict)):
                 raise PayloadValidationError("'params' must be array or object")
-            if "id" in payload and not isinstance(payload["id"], (str, int)) \
-                and payload["id"] is not None:
+            if (
+                "id" in payload
+                and not isinstance(payload["id"], (str, int))
+                and payload["id"] is not None
+            ):
                 raise PayloadValidationError("'id' must be string, number, or null")
             if strict and "id" not in payload:
                 # In strict mode treat request-like payloads without id as invalid
                 raise PayloadValidationError("Missing required field: id")
         else:
             if has_result == has_error:
-                raise PayloadValidationError("Response must have exactly one of \
-result or error")
+                raise PayloadValidationError(
+                    "Response must have exactly one of \
+result or error"
+                )
             if "id" not in payload:
                 raise PayloadValidationError("Response must include 'id'")
             if not isinstance(payload["id"], (str, int)) and payload["id"] is not None:
                 raise PayloadValidationError("'id' must be string, number, or null")
             if has_error:
                 err = payload["error"]
-                if not isinstance(err, dict) or "code" not in err \
-                    or "message" not in err:
+                if (
+                    not isinstance(err, dict)
+                    or "code" not in err
+                    or "message" not in err
+                ):
                     raise PayloadValidationError("Invalid error object")
-                if not isinstance(err["code"], int) \
-                    or not isinstance(err["message"], str):
+                if not isinstance(err["code"], int) or not isinstance(
+                    err["message"], str
+                ):
                     raise PayloadValidationError("Invalid error fields")
 
     def _validate_payload_serializable(self, payload: dict[str, Any]) -> None:
@@ -259,6 +279,7 @@ result or error")
             return {"result": data}
 
         return data
+
 
 class NetworkTransportMixin(BaseTransportMixin):
     """Mixin for network-based transports (HTTP, SSE, WebSocket)."""
@@ -363,6 +384,7 @@ class NetworkTransportMixin(BaseTransportMixin):
                         continue
 
             raise TransportError("No valid JSON data found in response")
+
 
 class ResponseParsingMixin(BaseTransportMixin):
     """Mixin providing shared response parsing functionality."""

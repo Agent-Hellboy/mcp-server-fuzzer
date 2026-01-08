@@ -224,6 +224,7 @@ class ServerUnavailableError(ServerError):
     code = "50002"
     description = "Server is unavailable or not responding"
 
+
 class ProtocolError(ServerError):
     """Raised when the server protocol is incompatible."""
 

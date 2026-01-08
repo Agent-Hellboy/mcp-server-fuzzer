@@ -37,6 +37,7 @@ CONTENT_TYPE = CONTENT_TYPE_HEADER
 JSON_CT = JSON_CONTENT_TYPE
 SSE_CT = SSE_CONTENT_TYPE
 
+
 class StreamableHTTPTransport(TransportProtocol):
     """Streamable HTTP transport with basic SSE support and session headers.
 

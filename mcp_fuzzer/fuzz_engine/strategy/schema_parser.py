@@ -28,6 +28,7 @@ from typing import Any
 # Maximum depth for recursive parsing
 MAX_RECURSION_DEPTH = 5
 
+
 def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Deep merge for allOf schemas.
@@ -126,6 +127,7 @@ def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
             merged[key] = value
 
     return merged
+
 
 def make_fuzz_strategy_from_jsonschema(
     schema: dict[str, Any],
@@ -226,6 +228,7 @@ def make_fuzz_strategy_from_jsonschema(
     # Default fallback
     return _generate_default_value(phase)
 
+
 def _handle_enum(enum_values: list[Any], phase: str) -> Any:
     """Handle enum values in schema."""
     if phase == "realistic":
@@ -258,6 +261,7 @@ def _handle_enum(enum_values: list[Any], phase: str) -> Any:
                 return value
             else:
                 return "INVALID_ENUM_VALUE"
+
 
 def _handle_object_type(
     schema: dict[str, Any], phase: str, recursion_depth: int
@@ -313,6 +317,7 @@ def _handle_object_type(
         )
 
     return result
+
 
 def _handle_array_type(
     schema: dict[str, Any], phase: str, recursion_depth: int
@@ -393,6 +398,7 @@ def _handle_array_type(
 
     return result
 
+
 def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
     """Handle string type schema."""
     # Handle string constraints
@@ -447,6 +453,7 @@ def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
                 "mixed123!@#",  # Special characters
             ]
             return random.choice(edge_cases)
+
 
 def _handle_string_format(format_type: str, phase: str) -> str:
     """Handle specific string formats."""
@@ -549,6 +556,7 @@ def _handle_string_format(format_type: str, phase: str) -> str:
     # Default: treat as regular string
     return _handle_string_type({"type": "string"}, phase)
 
+
 def _generate_string_from_pattern(
     pattern: str, min_length: int, max_length: int
 ) -> str:
@@ -580,6 +588,7 @@ def _generate_string_from_pattern(
     return "".join(
         random.choice(string.ascii_letters + string.digits) for _ in range(length)
     )
+
 
 def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
     """Handle integer type schema."""
@@ -647,6 +656,7 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
                 return random.choice(valid_edge_cases)
             else:
                 return random.randint(minimum, maximum)
+
 
 def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
     """Handle number type schema."""
@@ -724,6 +734,7 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
             else:
                 return random.uniform(minimum, maximum)
 
+
 def _handle_boolean_type(phase: str) -> bool:
     """Handle boolean type schema."""
     if phase == "realistic":
@@ -745,6 +756,7 @@ def _handle_boolean_type(phase: str) -> bool:
                     "no",
                 ]
             )
+
 
 def _generate_default_value(phase: str) -> Any:
     """Generate a default value when schema type is unknown."""

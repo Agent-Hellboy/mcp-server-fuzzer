@@ -100,7 +100,7 @@ class ProcessManager:
         register_default_signal_strategies: bool = True,
     ) -> "ProcessManager":
         """Factory method for creating a ProcessManager with default components.
-        
+
         Args:
             config: Optional WatchdogConfig instance.
             config_dict: Optional mapping used to create a WatchdogConfig; when both

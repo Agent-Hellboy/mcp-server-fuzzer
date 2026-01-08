@@ -533,10 +533,10 @@ async def basic_executor_usage():
 
         # Execute batch with concurrency control
         results = await executor.execute_batch(operations)
-        
+
         print(f"Successful results: {len(results['results'])}")
         print(f"Errors: {len(results['errors'])}")
-        
+
         for result in results['results']:
             print(f"Result: {result}")
 

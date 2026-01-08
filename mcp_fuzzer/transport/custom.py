@@ -12,6 +12,7 @@ from ..exceptions import TransportRegistrationError
 
 logger = logging.getLogger(__name__)
 
+
 class CustomTransportRegistry:
     """Registry for custom transport implementations."""
 
@@ -151,8 +152,10 @@ class CustomTransportRegistry:
             # Pass through as-is; factories can handle full URLs or endpoints.
             return factory(*args, **kwargs)
 
+
 # Global registry instance
 registry = CustomTransportRegistry()
+
 
 def register_custom_transport(
     name: str,
@@ -174,6 +177,7 @@ def register_custom_transport(
         name, transport_class, description, config_schema, factory_function
     )
 
+
 def create_custom_transport(name: str, *args, **kwargs) -> TransportProtocol:
     """Create an instance of a registered custom transport.
 
@@ -186,6 +190,7 @@ def create_custom_transport(name: str, *args, **kwargs) -> TransportProtocol:
         Transport instance
     """
     return registry.create_transport(name, *args, **kwargs)
+
 
 def list_custom_transports() -> dict[str, dict[str, Any]]:
     """List all registered custom transports.

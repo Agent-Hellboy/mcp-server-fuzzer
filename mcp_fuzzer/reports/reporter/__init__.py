@@ -220,9 +220,7 @@ class FuzzerReporter:
         return str(json_filename)
 
     async def generate_standardized_report(
-        self,
-        output_types: list[str] = None,
-        include_safety: bool = True
+        self, output_types: list[str] = None, include_safety: bool = True
     ) -> dict[str, str]:
         """Generate standardized reports using the new output protocol."""
         generated_files = {}
@@ -335,9 +333,7 @@ class FuzzerReporter:
         self, include_safety: bool, finalize: bool
     ) -> ReportSnapshot:
         """Create a snapshot of the current report state."""
-        metadata = (
-            self._finalize_metadata() if finalize else self._ensure_metadata()
-        )
+        metadata = self._finalize_metadata() if finalize else self._ensure_metadata()
         safety_data = self._gather_safety_data(include_safety)
         if include_safety and safety_data:
             self.collector.update_safety_data(safety_data)
@@ -391,7 +387,7 @@ class FuzzerReporter:
         """Gather runtime/process statistics from transport if available."""
         if not self._transport:
             return {}
-        
+
         try:
             # Check if transport has get_process_stats method
             if hasattr(self._transport, "get_process_stats"):
@@ -399,7 +395,7 @@ class FuzzerReporter:
                 return {"process_stats": stats}
         except Exception as exc:
             logging.debug("Failed to gather runtime data: %s", exc)
-        
+
         return {}
 
     async def _generate_summary_stats(self) -> dict[str, Any]:

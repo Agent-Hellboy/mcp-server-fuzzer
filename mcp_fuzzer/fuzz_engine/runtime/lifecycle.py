@@ -34,7 +34,6 @@ def _format_output(data: Any) -> str:
     return str(data).strip()
 
 
-
 class ProcessLifecycle:
     """SINGLE responsibility: Start and stop processes."""
 
@@ -147,9 +146,7 @@ class ProcessLifecycle:
 
             final_returncode = _normalize_returncode(process.returncode)
             if final_returncode is None:
-                if isinstance(
-                    process, (asyncio.subprocess.Process, subprocess.Popen)
-                ):
+                if isinstance(process, (asyncio.subprocess.Process, subprocess.Popen)):
                     raise ProcessStopError(
                         f"Process {pid} ({name}) did not exit after stop attempt",
                         context={"pid": pid, "force": force, "name": name},
@@ -174,9 +171,7 @@ class ProcessLifecycle:
                 context={"pid": pid, "force": force, "name": name},
             ) from e
 
-    async def _force_kill_process(
-        self, pid: int, process_info: ProcessRecord
-    ) -> None:
+    async def _force_kill_process(self, pid: int, process_info: ProcessRecord) -> None:
         """Force kill a process."""
         process = process_info["process"]
         name = process_info["config"].name

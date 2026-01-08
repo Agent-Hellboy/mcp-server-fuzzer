@@ -38,9 +38,7 @@ class _BaseSignalStrategy:
 
 
 class TermSignalStrategy(_BaseSignalStrategy):
-    async def send(
-        self, pid: int, process_info: ProcessRecord | None = None
-    ) -> bool:
+    async def send(self, pid: int, process_info: ProcessRecord | None = None) -> bool:
         process, name = await self._resolve_process(pid, process_info)
         if process is None:
             return False
@@ -59,9 +57,7 @@ class TermSignalStrategy(_BaseSignalStrategy):
 
 
 class KillSignalStrategy(_BaseSignalStrategy):
-    async def send(
-        self, pid: int, process_info: ProcessRecord | None = None
-    ) -> bool:
+    async def send(self, pid: int, process_info: ProcessRecord | None = None) -> bool:
         process, name = await self._resolve_process(pid, process_info)
         if process is None:
             return False
@@ -80,9 +76,7 @@ class KillSignalStrategy(_BaseSignalStrategy):
 
 
 class InterruptSignalStrategy(_BaseSignalStrategy):
-    async def send(
-        self, pid: int, process_info: ProcessRecord | None = None
-    ) -> bool:
+    async def send(self, pid: int, process_info: ProcessRecord | None = None) -> bool:
         process, name = await self._resolve_process(pid, process_info)
         if process is None:
             return False

@@ -34,7 +34,9 @@ except ImportError:
         """Placeholder when jsonschema is not available."""
         pass
 
+
 logger = logging.getLogger(__name__)
+
 
 class InvariantViolation(Exception):
     """Exception raised when an invariant is violated."""
@@ -43,6 +45,7 @@ class InvariantViolation(Exception):
         self.message = message
         self.response = response
         super().__init__(message)
+
 
 def check_response_validity(response: Any) -> bool:
     """
@@ -129,6 +132,7 @@ def check_response_validity(response: Any) -> bool:
 
     return True
 
+
 def check_error_type_correctness(
     error: Any, expected_codes: list[int] | None = None
 ) -> bool:
@@ -187,6 +191,7 @@ def check_error_type_correctness(
 
     return True
 
+
 def check_response_schema_conformity(response: Any, schema: dict[str, Any]) -> bool:
     """
     Check if a response conforms to a given schema.
@@ -212,6 +217,7 @@ def check_response_schema_conformity(response: Any, schema: dict[str, Any]) -> b
     else:
         logger.warning("jsonschema package not installed, skipping schema validation")
         return True
+
 
 def verify_response_invariants(
     response: Any,
@@ -244,6 +250,7 @@ def verify_response_invariants(
         check_response_schema_conformity(response, schema)
 
     return True
+
 
 async def verify_batch_responses(
     responses: list[Any],
@@ -300,6 +307,7 @@ async def verify_batch_responses(
         results[idx] = result
 
     return results
+
 
 def check_state_consistency(
     before_state: dict[str, Any],
