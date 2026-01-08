@@ -199,8 +199,5 @@ def test_build_batch_result_with_invariant_violations(result_builder):
 
 def test_build_batch_result_empty_batch(result_builder):
     """Test building a batch result with empty batch."""
-    result = result_builder.build_batch_result(
-        run_index=0, batch_request=[]
-    )
+    result = result_builder.build_batch_result(run_index=0, batch_request=[])
     assert result["batch_size"] == 0
-

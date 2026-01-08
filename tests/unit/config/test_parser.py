@@ -89,4 +89,3 @@ def test_load_config_file_none_yaml_result(tmp_path):
 
     result = load_config_file(str(comment_file))
     assert result == {}
-

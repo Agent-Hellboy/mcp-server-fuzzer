@@ -71,9 +71,7 @@ async def test_execute_success(batch_executor, mock_transport):
 async def test_execute_with_protocol_types(batch_executor):
     """Test execution with specific protocol types."""
     protocol_types = ["InitializeRequest", "ListResourcesRequest"]
-    results = await batch_executor.execute(
-        protocol_types=protocol_types, runs=2
-    )
+    results = await batch_executor.execute(protocol_types=protocol_types, runs=2)
     assert len(results) == 2
 
 
@@ -113,9 +111,7 @@ async def test_execute_transport_error(batch_executor, mock_transport):
 @pytest.mark.asyncio
 async def test_execute_empty_batch_request(batch_executor):
     """Test execution when batch mutator returns None."""
-    with patch.object(
-        batch_executor.batch_mutator, "mutate", return_value=None
-    ):
+    with patch.object(batch_executor.batch_mutator, "mutate", return_value=None):
         results = await batch_executor.execute(runs=3)
         assert len(results) == 0
 
@@ -135,12 +131,8 @@ async def test_execute_exception_handling(batch_executor):
 @pytest.mark.asyncio
 async def test_execute_different_phases(batch_executor):
     """Test execution in different phases."""
-    realistic_results = await batch_executor.execute(
-        runs=2, phase="realistic"
-    )
-    aggressive_results = await batch_executor.execute(
-        runs=2, phase="aggressive"
-    )
+    realistic_results = await batch_executor.execute(runs=2, phase="realistic")
+    aggressive_results = await batch_executor.execute(runs=2, phase="aggressive")
     assert len(realistic_results) == 2
     assert len(aggressive_results) == 2
 
@@ -152,4 +144,3 @@ async def test_shutdown(batch_executor):
     batch_executor.executor.shutdown = AsyncMock()
     await batch_executor.shutdown()
     batch_executor.executor.shutdown.assert_awaited_once()
-

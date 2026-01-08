@@ -8,6 +8,7 @@ from .base import TransportProtocol
 from ..exceptions import NetworkPolicyViolation, ServerError, TransportError
 from ..safety_system.policy import is_host_allowed, sanitize_headers
 
+
 class SSETransport(TransportProtocol):
     def __init__(
         self,

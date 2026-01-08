@@ -98,6 +98,7 @@ async def test_mutate_with_sync_method(protocol_mutator):
 @pytest.mark.asyncio
 async def test_mutate_with_phase_parameter(protocol_mutator):
     """Test mutation when method accepts phase parameter."""
+
     def method_with_phase(phase="aggressive"):
         return {"phase": phase}
 
@@ -113,6 +114,7 @@ async def test_mutate_with_phase_parameter(protocol_mutator):
 @pytest.mark.asyncio
 async def test_mutate_without_phase_parameter(protocol_mutator):
     """Test mutation when method doesn't accept phase parameter."""
+
     def method_without_phase():
         return {"no_phase": True}
 
@@ -144,4 +146,3 @@ async def test_mutate_various_protocol_types(protocol_mutator):
     for protocol_type in protocol_types:
         result = await protocol_mutator.mutate(protocol_type, phase="realistic")
         assert isinstance(result, dict)
-

@@ -15,9 +15,10 @@ from rich.console import Console
 
 from ...client.safety.controller import SafetyController
 
+
 class AsyncRunner:
     """Manages async execution with proper event loop handling and cleanup."""
-    
+
     def __init__(self, args: Any, safety: SafetyController):
         self.args = args
         self.old_argv = None
@@ -29,7 +30,7 @@ class AsyncRunner:
     def run(self, main_coro: Callable[[], Awaitable[object]], argv: list[str]) -> None:
         """Main execution method that orchestrates the entire async runtime."""
         self._setup_environment(argv)
-        
+
         try:
             if self._is_pytest_environment():
                 asyncio.run(main_coro())
@@ -38,7 +39,7 @@ class AsyncRunner:
             self._setup_event_loop()
             self._setup_aiomonitor()
             self._setup_signal_handlers()
-            
+
             try:
                 self._configure_network_policy()
                 self._execute_main_coroutine(main_coro)
@@ -46,7 +47,7 @@ class AsyncRunner:
                 self._handle_cancellation()
             finally:
                 self._cleanup_pending_tasks()
-                
+
         finally:
             self._final_cleanup()
 
@@ -89,7 +90,7 @@ class AsyncRunner:
             try:
                 self.loop.add_signal_handler(signal.SIGINT, self._cancel_all_tasks)
                 self.loop.add_signal_handler(signal.SIGTERM, self._cancel_all_tasks)
-                self.loop.add_signal_handler(signal.SIGQUIT, self._cancel_all_tasks) 
+                self.loop.add_signal_handler(signal.SIGQUIT, self._cancel_all_tasks)
             except NotImplementedError:
                 pass
 
@@ -124,9 +125,10 @@ class AsyncRunner:
     ) -> None:
         """Execute the main coroutine with optional monitoring."""
         enable_aiomonitor = getattr(self.args, "enable_aiomonitor", False)
-        
+
         if enable_aiomonitor:
             import aiomonitor
+
             with aiomonitor.start_monitor(
                 self.loop,
                 console_enabled=True,
@@ -144,9 +146,7 @@ class AsyncRunner:
     def _cleanup_pending_tasks(self) -> None:
         """Clean up any pending tasks."""
         try:
-            pending = [
-                t for t in asyncio.all_tasks(self.loop) if not t.done()
-            ]
+            pending = [t for t in asyncio.all_tasks(self.loop) if not t.done()]
             for t in pending:
                 t.cancel()
             if pending:

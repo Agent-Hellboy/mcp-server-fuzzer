@@ -2,4 +2,3 @@
 """
 Unit tests for fuzzerreporter module.
 """
-

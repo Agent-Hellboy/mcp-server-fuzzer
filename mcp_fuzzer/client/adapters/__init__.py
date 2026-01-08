@@ -8,4 +8,3 @@ This is where the mediation between modules happens.
 from .config_adapter import ConfigAdapter, config_mediator
 
 __all__ = ["ConfigAdapter", "config_mediator"]
-

@@ -25,4 +25,3 @@ class Mutator(ABC):
             Mutated or generated fuzzing input
         """
         pass
-

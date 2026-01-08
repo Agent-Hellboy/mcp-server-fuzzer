@@ -24,6 +24,7 @@ class TestStandardizedOutputIntegration:
     def teardown_method(self):
         """Clean up test fixtures."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     @pytest.mark.asyncio
@@ -42,18 +43,13 @@ class TestStandardizedOutputIntegration:
                 {
                     "success": False,
                     "exception": "ValueError: invalid input",
-                    "args": {"param": "value2"}
+                    "args": {"param": "value2"},
                 },
-                {"success": True, "args": {"param": "value3"}}
+                {"success": True, "args": {"param": "value3"}},
             ]
         }
 
-        protocol_results = {
-            "InitializeRequest": [
-                {"success": True},
-                {"success": True}
-            ]
-        }
+        protocol_results = {"InitializeRequest": [{"success": True}, {"success": True}]}
 
         # Add results to reporter
         reporter.add_tool_results("test_tool", tool_results["test_tool"])
@@ -67,7 +63,7 @@ class TestStandardizedOutputIntegration:
             protocol="http",
             endpoint="http://test-server:8000",
             runs=3,
-            runs_per_type=2
+            runs_per_type=2,
         )
 
         # Generate standardized reports
@@ -126,14 +122,16 @@ class TestStandardizedOutputIntegration:
         from mcp_fuzzer.client.adapters import config_mediator
 
         # Set output configuration
-        config_mediator.update({
-            "output": {
-                "format": "json",
-                "directory": self.temp_dir,
-                "compress": False,
-                "types": ["fuzzing_results", "error_report"]
+        config_mediator.update(
+            {
+                "output": {
+                    "format": "json",
+                    "directory": self.temp_dir,
+                    "compress": False,
+                    "types": ["fuzzing_results", "error_report"],
+                }
             }
-        })
+        )
 
         # Create reporter (should pick up config)
         reporter = FuzzerReporter()
@@ -156,21 +154,21 @@ class TestStandardizedOutputIntegration:
                 "tool_name": "dangerous_tool",
                 "severity": "high",
                 "message": "Command injection detected",
-                "arguments": {"cmd": "rm -rf /"}
+                "arguments": {"cmd": "rm -rf /"},
             },
             {
                 "type": "protocol_error",
                 "protocol_type": "InitializeRequest",
                 "severity": "medium",
                 "message": "Invalid JSON in request",
-                "details": {"field": "jsonrpc", "expected": "2.0", "got": "1.0"}
+                "details": {"field": "jsonrpc", "expected": "2.0", "got": "1.0"},
             },
             {
                 "type": "system_error",
                 "severity": "low",
                 "message": "Network timeout",
-                "context": {"endpoint": "http://test.com", "timeout": 30}
-            }
+                "context": {"endpoint": "http://test.com", "timeout": 30},
+            },
         ]
 
         filepath = manager.save_error_report(errors=errors)
@@ -199,14 +197,14 @@ class TestStandardizedOutputIntegration:
                 "tool_name": "file_operations",
                 "reason": "File system access blocked",
                 "arguments": {"path": "/etc/passwd"},
-                "timestamp": "2024-01-01T10:00:00Z"
+                "timestamp": "2024-01-01T10:00:00Z",
             },
             {
                 "tool_name": "network_tools",
                 "reason": "Network access blocked",
                 "arguments": {"url": "http://malicious.com"},
-                "timestamp": "2024-01-01T10:01:00Z"
-            }
+                "timestamp": "2024-01-01T10:01:00Z",
+            },
         ]
 
         safety_data = {
@@ -214,10 +212,10 @@ class TestStandardizedOutputIntegration:
             "statistics": {
                 "total_operations_blocked": 3,
                 "unique_tools_blocked": 2,
-                "risk_assessment": "medium"
+                "risk_assessment": "medium",
             },
             "blocked_operations": blocked_operations,
-            "risk_assessment": "medium"
+            "risk_assessment": "medium",
         }
 
         filepath = manager.save_safety_summary(safety_data)
@@ -242,15 +240,15 @@ class TestStandardizedOutputIntegration:
         reporter = FuzzerReporter(output_dir=self.temp_dir)
 
         # Add some mock data with errors to ensure error report is generated
-        reporter.add_tool_results("test_tool", [
-            {"success": True},
-            {"success": False, "exception": "ValueError: test error"}
-        ])
+        reporter.add_tool_results(
+            "test_tool",
+            [
+                {"success": True},
+                {"success": False, "exception": "ValueError: test error"},
+            ],
+        )
         reporter.set_fuzzing_metadata(
-            mode="tools",
-            protocol="http",
-            endpoint="http://test.com",
-            runs=2
+            mode="tools", protocol="http", endpoint="http://test.com", runs=2
         )
 
         # Generate multiple output types
@@ -291,7 +289,7 @@ class TestStandardizedOutputIntegration:
 
         # Verify filename format: timestamp_output_type.json
         filename = Path(filepath).name
-        pattern = r'^\d{8}_\d{6}_fuzzing_results\.json$'
+        pattern = r"^\d{8}_\d{6}_fuzzing_results\.json$"
         assert re.match(pattern, filename)
 
     def test_session_isolation(self):

@@ -53,4 +53,3 @@ class ResultCollector:
         if success_only:
             return [r for r in results if r.get("success", False)]
         return results
-

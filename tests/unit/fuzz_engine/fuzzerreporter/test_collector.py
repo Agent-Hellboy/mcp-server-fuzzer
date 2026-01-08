@@ -110,4 +110,3 @@ def test_filter_results_no_success_field(collector):
     filtered = collector.filter_results(results, success_only=True)
     assert len(filtered) == 1
     assert filtered[0]["success"] is True
-

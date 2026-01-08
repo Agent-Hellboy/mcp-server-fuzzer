@@ -20,4 +20,3 @@ def test_mutator_has_mutate_method():
     """Test that Mutator defines the mutate method."""
     assert hasattr(Mutator, "mutate")
     assert Mutator.mutate.__isabstractmethod__
-

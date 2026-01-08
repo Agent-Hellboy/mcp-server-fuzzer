@@ -13,6 +13,7 @@ from .providers import (
 
 logger = logging.getLogger(__name__)
 
+
 def setup_auth_from_env() -> AuthManager:
     auth_manager = AuthManager()
 
@@ -70,6 +71,7 @@ def setup_auth_from_env() -> AuthManager:
 
     return auth_manager
 
+
 def load_auth_config(config_file: str) -> AuthManager:
     auth_manager = AuthManager()
 
@@ -87,7 +89,7 @@ def load_auth_config(config_file: str) -> AuthManager:
                 f"expected an object, got {type(provider_config).__name__}"
             )
         provider_type = provider_config.get("type")
-        
+
         try:
             if provider_type == "api_key":
                 if "api_key" not in provider_config:
@@ -179,8 +181,7 @@ def load_auth_config(config_file: str) -> AuthManager:
     final_tool_mappings = tool_mappings or legacy_tool_mappings or {}
     if final_tool_mappings and not isinstance(final_tool_mappings, dict):
         raise AuthConfigError(
-            f"'tool_mapping' must be a dict, "
-            f"got {type(final_tool_mappings).__name__}"
+            f"'tool_mapping' must be a dict, got {type(final_tool_mappings).__name__}"
         )
 
     for tool_name, auth_provider_name in final_tool_mappings.items():

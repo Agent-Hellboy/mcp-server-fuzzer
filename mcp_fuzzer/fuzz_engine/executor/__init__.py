@@ -31,4 +31,3 @@ __all__ = [
     "verify_batch_responses",
     "check_state_consistency",
 ]
-

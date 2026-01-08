@@ -168,9 +168,7 @@ class TestCrossPlatformProcessManagement:
                     process_manager.signal_dispatcher, "send", return_value=True
                 ) as mock_send:
                     await process_manager.send_timeout_signal(process.pid)
-                    mock_send.assert_called_once_with(
-                        "timeout", process.pid, ANY
-                    )
+                    mock_send.assert_called_once_with("timeout", process.pid, ANY)
 
     def test_process_config_validation(self):
         """Test process config validation across platforms."""

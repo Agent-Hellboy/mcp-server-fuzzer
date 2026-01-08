@@ -137,4 +137,3 @@ class ResultBuilder:
         }
 
         return result
-

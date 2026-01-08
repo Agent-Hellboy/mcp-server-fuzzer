@@ -25,9 +25,10 @@ class ValidationManager:
 
     def validate_arguments(self, args: argparse.Namespace) -> None:
         """Validate CLI arguments for fuzzing operations."""
-        is_utility_command = getattr(args, "check_env", False) or getattr(
-            args, "validate_config", None
-        ) is not None
+        is_utility_command = (
+            getattr(args, "check_env", False)
+            or getattr(args, "validate_config", None) is not None
+        )
 
         if not is_utility_command and not getattr(args, "endpoint", None):
             raise ArgumentValidationError(
@@ -67,16 +68,13 @@ class ValidationManager:
         """Validate a config file and print success message."""
         config_mediator.load_file(path)
         success_msg = (
-            "[green]:heavy_check_mark: Configuration file "
-            f"'{path}' is valid[/green]"
+            f"[green]:heavy_check_mark: Configuration file '{path}' is valid[/green]"
         )
         self.console.print(emoji.emojize(success_msg, language="alias"))
-
 
     def check_environment_variables(self) -> bool:
         """Print environment variable status and return validation result."""
         self.console.print("[bold]Environment variables check:[/bold]")
-
 
         all_valid = True
         for env_var in ENVIRONMENT_VARIABLES:
@@ -154,13 +152,9 @@ class ValidationManager:
             )
         elif validation_type == ValidationType.NUMERIC:
             return (
-                "[red]:heavy_multiplication_x: "
-                f"{name}={value} (must be numeric)[/red]"
+                f"[red]:heavy_multiplication_x: {name}={value} (must be numeric)[/red]"
             )
-        return (
-            "[red]:heavy_multiplication_x: "
-            f"{name}={value} (invalid value)[/red]"
-        )
+        return f"[red]:heavy_multiplication_x: {name}={value} (invalid value)[/red]"
 
     def validate_transport(self, args: Any) -> None:
         try:

@@ -178,6 +178,7 @@ async def test_fuzz_tool_arguments_realistic():
     """Test realistic tool argument generation with various schema types."""
     # Set seed for deterministic behavior
     import random
+
     random.seed(42)
 
     # Test with string type properties
@@ -209,9 +210,10 @@ async def test_fuzz_tool_arguments_realistic():
         assert isinstance(result["uuid_field"], str)
         # Should be a valid UUID format
         import re
+
         assert re.match(
-            r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-            result["uuid_field"]
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            result["uuid_field"],
         )
     if "datetime_field" in result:
         assert isinstance(result["datetime_field"], str)
@@ -570,6 +572,8 @@ async def test_fuzz_tool_arguments_numeric_constraints():
     result = await fuzz_tool_arguments_realistic(tool)
 
     assert 0.1 <= result["small_float"] <= 0.9
+
+
 @pytest.mark.asyncio
 async def test_generate_realistic_text_bounds_swapping():
     """Test that generate_realistic_text handles min_size > max_size correctly."""
@@ -595,7 +599,7 @@ async def test_generate_realistic_text_fallback():
     import random
     from unittest.mock import patch
 
-    with patch.object(random, 'choice', return_value='invalid_strategy'):
+    with patch.object(random, "choice", return_value="invalid_strategy"):
         text = await generate_realistic_text()
         # Should trigger line 151: else: return "realistic_value"
         assert text == "realistic_value"
@@ -608,13 +612,13 @@ async def test_fuzz_tool_arguments_exception_handling():
 
     # Mock the schema parser to raise an exception
     with patch(
-        'mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema',
-        side_effect=Exception("Test exception")
+        "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
+        side_effect=Exception("Test exception"),
     ):
         tool = {
             "inputSchema": {
                 "properties": {"test": {"type": "string"}},
-                "required": ["test"]
+                "required": ["test"],
             }
         }
 

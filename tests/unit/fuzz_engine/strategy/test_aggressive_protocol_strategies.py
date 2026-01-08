@@ -347,7 +347,7 @@ class TestAggressiveProtocolStrategies:
         non_callable_options = [1, 2, 3, "test", None, True]
         result = choice_lazy(non_callable_options)
         assert result in non_callable_options
-        
+
         # Test with callable options
         callable_options = [
             lambda: "generated_string",
@@ -356,7 +356,7 @@ class TestAggressiveProtocolStrategies:
         ]
         result = choice_lazy(callable_options)
         assert isinstance(result, (str, dict, list))
-        
+
         # Test with mixed options
         mixed_options = [
             "static_value",
@@ -371,23 +371,23 @@ class TestAggressiveProtocolStrategies:
         """Ensure experimental payload generation returns varied values."""
         # Generate multiple experimental payloads to test variety
         payloads = [generate_experimental_payload() for _ in range(50)]
-        
+
         # Should have some variety
         unique_payloads = set(str(p) for p in payloads)
         assert len(unique_payloads) > 1, (
             "Should generate different experimental payloads"
         )
-        
+
         # Should include None values
         assert any(p is None for p in payloads), (
             "Should include None experimental payloads"
         )
-        
+
         # Should include non-None values
         assert any(p is not None for p in payloads), (
             "Should include non-None experimental payloads"
         )
-        
+
         # Should include various types
         types = {type(p) for p in payloads}
         assert len(types) > 1, "Should generate different experimental payload types"
@@ -396,17 +396,17 @@ class TestAggressiveProtocolStrategies:
         """Test that lazy generation doesn't eagerly evaluate all options."""
         # This test ensures we're not generating all options upfront
         # by checking that we can generate values without side effects
-        
+
         # Test that generate_malicious_value uses lazy evaluation
         values = [generate_malicious_value() for _ in range(10)]
-        
+
         # Should have variety
         unique_values = set(str(v) for v in values)
         assert len(unique_values) > 1, "Should generate different malicious values"
-        
+
         # Test that generate_experimental_payload uses lazy evaluation
         experimental_values = [generate_experimental_payload() for _ in range(10)]
-        
+
         # Should have variety
         unique_experimental = set(str(v) for v in experimental_values)
         assert len(unique_experimental) > 1, (
@@ -418,14 +418,14 @@ class TestAggressiveProtocolStrategies:
         # Test choice_lazy with lambda functions
         lambda_options = [
             lambda: "lambda_result_1",
-            lambda: "lambda_result_2", 
+            lambda: "lambda_result_2",
             lambda: {"lambda": "object"},
             lambda: [1, 2, 3],
         ]
-        
+
         result = choice_lazy(lambda_options)
         assert isinstance(result, (str, dict, list))
-        
+
         # Test that each lambda is called independently
         results = [choice_lazy(lambda_options) for _ in range(20)]
         unique_results = set(str(r) for r in results)

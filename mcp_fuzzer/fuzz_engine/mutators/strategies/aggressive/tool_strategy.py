@@ -69,6 +69,7 @@ NULL_BYTES = ["\x00", "\x01", "\x02", "\x03", "\x04", "\x05"]
 ESCAPE_CHARS = ["\\", "\\'", '\\"', "\\n", "\\r", "\\t", "\\b", "\\f"]
 HTML_ENTITIES = ["&lt;", "&gt;", "&amp;", "&quot;", "&#x27;", "&#x2F;"]
 
+
 def generate_aggressive_text(min_size: int = 1, max_size: int = 100) -> str:
     """Generate aggressive text for security/robustness testing."""
     strategy = random.choice(
@@ -159,6 +160,7 @@ def generate_aggressive_text(min_size: int = 1, max_size: int = 100) -> str:
     else:
         return "".join(random.choice(string.printable) for _ in range(length))
 
+
 def _generate_aggressive_integer(
     min_value: int = -1000000, max_value: int = 1000000
 ) -> int:
@@ -205,6 +207,7 @@ def _generate_aggressive_integer(
     else:
         return random.randint(min_value, max_value)
 
+
 def _generate_aggressive_float() -> float:
     """Generate aggressive random float with extreme values and edge cases."""
     strategy = random.choice(
@@ -235,6 +238,7 @@ def _generate_aggressive_float() -> float:
         return random.uniform(1e10, 1e15)
     else:
         return random.uniform(-1000.0, 1000.0)
+
 
 def fuzz_tool_arguments_aggressive(tool: dict[str, Any]) -> dict[str, Any]:
     """Generate aggressive/malicious tool arguments."""

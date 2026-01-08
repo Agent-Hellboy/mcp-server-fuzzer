@@ -36,4 +36,3 @@ class BatchMutator(Mutator):
         return self.strategies.generate_batch_request(
             protocol_types=protocol_types, phase=phase
         )
-

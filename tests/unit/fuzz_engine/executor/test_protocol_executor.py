@@ -209,4 +209,3 @@ async def test_shutdown(protocol_executor):
     protocol_executor.executor.shutdown = AsyncMock()
     await protocol_executor.shutdown()
     protocol_executor.executor.shutdown.assert_awaited_once()
-

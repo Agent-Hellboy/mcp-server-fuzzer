@@ -8,4 +8,3 @@ All modules should depend on ports, not concrete implementations.
 from .config_port import ConfigPort
 
 __all__ = ["ConfigPort"]
-

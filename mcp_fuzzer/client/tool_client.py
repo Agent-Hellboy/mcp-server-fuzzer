@@ -12,6 +12,7 @@ from typing import Any
 from ..auth import AuthManager
 from ..fuzz_engine.mutators import ToolMutator
 from ..safety_system.safety import SafetyFilter, SafetyProvider
+
 # Import constants directly from config (constants are values, not behavior)
 from ..config.core.constants import (
     DEFAULT_TOOL_RUNS,
@@ -19,6 +20,7 @@ from ..config.core.constants import (
     DEFAULT_MAX_TOTAL_FUZZING_TIME,
     DEFAULT_FORCE_KILL_TIMEOUT,
 )
+
 
 class ToolClient:
     """Client for fuzzing MCP tools."""
@@ -90,7 +92,7 @@ class ToolClient:
         try:
             tool_task = asyncio.create_task(
                 self.fuzz_tool(tool, runs_per_tool, tool_timeout=tool_timeout),
-                name=f"fuzz_tool_{tool_name}"
+                name=f"fuzz_tool_{tool_name}",
             )
 
             try:
@@ -172,9 +174,7 @@ class ToolClient:
 
                 # Call the tool with the generated arguments
                 try:
-                    result = await self.transport.call_tool(
-                        tool_name, args_for_call
-                    )
+                    result = await self.transport.call_tool(tool_name, args_for_call)
                     results.append(
                         {
                             "args": sanitized_args,
@@ -303,11 +303,11 @@ class ToolClient:
         fuzz_results: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Process fuzz results with safety checks and tool calls.
-        
+
         Args:
             tool_name: Name of the tool being fuzzed
             fuzz_results: List of fuzz results from the fuzzer
-            
+
         Returns:
             List of processed results with tool call outcomes
         """

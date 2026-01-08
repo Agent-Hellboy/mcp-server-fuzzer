@@ -68,4 +68,3 @@ class ProtocolMutator(Mutator):
             return await maybe_coro
         else:
             return maybe_coro
-

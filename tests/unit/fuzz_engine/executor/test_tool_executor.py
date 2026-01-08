@@ -99,6 +99,7 @@ async def test_execute_safety_blocked(tool_executor, safety_mock):
 @pytest.mark.asyncio
 async def test_execute_safety_sanitized(tool_executor, safety_mock):
     """Test execution with sanitized arguments."""
+
     def sanitize(tool_name, args):
         return {"sanitized": True}
 
@@ -187,12 +188,8 @@ async def test_execute_multiple_tools_exception(tool_executor):
 async def test_execute_different_phases(tool_executor):
     """Test execution in different phases."""
     tool = {"name": "test_tool", "inputSchema": {"properties": {}}}
-    realistic_results = await tool_executor.execute(
-        tool, runs=2, phase="realistic"
-    )
-    aggressive_results = await tool_executor.execute(
-        tool, runs=2, phase="aggressive"
-    )
+    realistic_results = await tool_executor.execute(tool, runs=2, phase="realistic")
+    aggressive_results = await tool_executor.execute(tool, runs=2, phase="aggressive")
     assert len(realistic_results) == 2
     assert len(aggressive_results) == 2
 
@@ -200,6 +197,7 @@ async def test_execute_different_phases(tool_executor):
 @pytest.mark.asyncio
 async def test_execute_with_original_args(tool_executor, safety_mock):
     """Test execution preserves original args when sanitized."""
+
     def sanitize(tool_name, args):
         return {"sanitized": True}
 
@@ -217,4 +215,3 @@ async def test_shutdown(tool_executor):
     tool_executor.executor.shutdown = AsyncMock()
     await tool_executor.shutdown()
     tool_executor.executor.shutdown.assert_awaited_once()
-

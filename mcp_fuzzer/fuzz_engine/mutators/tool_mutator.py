@@ -32,4 +32,3 @@ class ToolMutator(Mutator):
             Dictionary of fuzzed tool arguments
         """
         return await self.strategies.fuzz_tool_arguments(tool, phase=phase)
-

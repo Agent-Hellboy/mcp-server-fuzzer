@@ -1,4 +1,3 @@
-
 from .base import TransportProtocol
 from .http import HTTPTransport
 from .sse import SSETransport
@@ -7,6 +6,7 @@ from .streamable_http import StreamableHTTPTransport
 from .custom import registry as custom_registry
 from urllib.parse import urlparse, urlunparse
 from ..exceptions import TransportRegistrationError
+
 
 class TransportRegistry:
     """Registry for transport classes."""
@@ -40,6 +40,7 @@ registry.register("https", HTTPTransport)
 registry.register("sse", SSETransport)
 registry.register("stdio", StdioTransport)
 registry.register("streamablehttp", StreamableHTTPTransport)
+
 
 def create_transport(
     url_or_protocol: str, endpoint: str | None = None, **kwargs

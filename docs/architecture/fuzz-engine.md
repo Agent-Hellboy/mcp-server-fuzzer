@@ -7,7 +7,7 @@ This document describes the architecture of the redesigned fuzz engine, which pr
 The fuzz engine has been refactored into three distinct, specialized modules that follow clean separation of concerns:
 
 1. **Mutators** - Data generation and mutation
-2. **Executor** - Execution orchestration and coordination  
+2. **Executor** - Execution orchestration and coordination
 3. **FuzzerReporter** - Result collection and reporting
 
 This modular design enables better testability, maintainability, and extensibility while maintaining high performance through asynchronous execution.
@@ -20,65 +20,65 @@ graph TD
         TM[ToolMutator]
         PM[ProtocolMutator]
         BM[BatchMutator]
-        
+
         subgraph Strategies
             TS[ToolStrategies]
             PS[ProtocolStrategies]
             SP[SchemaParser]
         end
-        
+
         TM --> TS
         PM --> PS
         BM --> PS
         TS --> SP
         PS --> SP
     end
-    
+
     subgraph Executor[Executor Module]
         TE[ToolExecutor]
         PE[ProtocolExecutor]
         BE[BatchExecutor]
         AE[AsyncFuzzExecutor]
         INV[Invariants]
-        
+
         TE --> AE
         PE --> AE
         BE --> AE
         PE --> INV
     end
-    
+
     subgraph Reporter[FuzzerReporter Module]
         RB[ResultBuilder]
         RC[ResultCollector]
         MC[MetricsCalculator]
     end
-    
+
     subgraph External[External Systems]
         SS[SafetySystem]
         TR[Transport]
         CL[Client]
     end
-    
+
     TE --> TM
     PE --> PM
     BE --> BM
-    
+
     TE --> RB
     PE --> RB
     BE --> RB
-    
+
     TE --> RC
     PE --> RC
     BE --> RC
-    
+
     TE --> SS
     CL --> TE
     CL --> PE
     CL --> BE
-    
+
     PE --> TR
     BE --> TR
-    
+
     RC --> MC
 ```
 
@@ -112,10 +112,10 @@ Generates fuzzed arguments for MCP tools based on their JSON Schema specificatio
 ```python
 class ToolMutator(Mutator):
     """Generates fuzzed tool arguments."""
-    
+
     def __init__(self):
         self.strategies = ToolStrategies()
-    
+
     async def mutate(
         self, tool: dict[str, Any], phase: str = "aggressive"
     ) -> dict[str, Any]:
@@ -136,11 +136,11 @@ Generates fuzzed MCP protocol messages including requests, notifications, and re
 ```python
 class ProtocolMutator(BaseMutator):
     """Generates fuzzed protocol messages."""
-    
+
     def __init__(self):
         self.strategies = ProtocolStrategies()
         self._logger = logging.getLogger(__name__)
-    
+
     async def mutate(
         self, protocol_type: str, phase: str = "aggressive"
     ) -> dict[str, Any]:
@@ -165,7 +165,7 @@ Generates batch requests containing multiple protocol messages.
 ```python
 class BatchMutator(BaseMutator):
     """Generates fuzzed batch requests."""
-    
+
     async def mutate(
         self, protocol_types: list[str] | None = None, phase: str = "aggressive"
     ) -> list[dict[str, Any]]:
@@ -203,7 +203,7 @@ Orchestrates tool fuzzing by integrating mutators, safety checks, and result col
 ```python
 class ToolExecutor:
     """Orchestrates tool fuzzing execution."""
-    
+
     def __init__(
         self,
         mutator: ToolMutator,
@@ -217,7 +217,7 @@ class ToolExecutor:
         self.executor = executor or AsyncFuzzExecutor(max_concurrency)
         self.result_builder = result_builder or ResultBuilder()
         self.safety_system = safety_system or SafetyFilter() if enable_safety else None
-    
+
     async def execute(
         self, tool: dict[str, Any], runs: int = 10, phase: str = "aggressive"
     ) -> list[FuzzDataResult]:
@@ -244,13 +244,13 @@ Orchestrates protocol fuzzing with invariant validation and batch response handl
 ```python
 class ProtocolExecutor:
     """Orchestrates fuzzing of MCP protocol types."""
-    
+
     PROTOCOL_TYPES = (
         "InitializeRequest", "ProgressNotification", "CancelNotification",
         "ListResourcesRequest", "ReadResourceRequest", "SetLevelRequest",
         # ... 30+ protocol types
     )
-    
+
     async def execute(
         self,
         protocol_type: str,
@@ -281,7 +281,7 @@ Orchestrates batch request fuzzing with specialized batch handling.
 ```python
 class BatchExecutor:
     """Orchestrates batch fuzzing execution."""
-    
+
     async def execute(
         self,
         protocol_types: list[str] | None = None,
@@ -305,12 +305,12 @@ Provides the async execution framework with concurrency control and error handli
 ```python
 class AsyncFuzzExecutor:
     """Async execution framework with concurrency control."""
-    
+
     def __init__(self, max_concurrency: int = 5):
         self.max_concurrency = max_concurrency
         self._semaphore = None
         self._tasks = set()
-    
+
     async def execute_batch(
         self, operations: list[tuple]
     ) -> dict[str, list[Any]]:
@@ -343,7 +343,7 @@ Creates standardized, typed result dictionaries for tool, protocol, and batch fu
 ```python
 class ResultBuilder:
     """Builds standardized fuzzing results."""
-    
+
     def build_tool_result(
         self,
         tool_name: str,
@@ -358,10 +358,10 @@ class ResultBuilder:
         safety_sanitized: bool = False,
     ) -> FuzzDataResult:
         """Create standardized tool fuzzing result."""
-    
+
     def build_protocol_result(...) -> FuzzDataResult:
         """Create standardized protocol fuzzing result."""
-    
+
     def build_batch_result(...) -> FuzzDataResult:
         """Create standardized batch fuzzing result."""
 ```
@@ -378,12 +378,12 @@ Aggregates and filters results from fuzzing operations.
 ```python
 class ResultCollector:
     """Collects and aggregates fuzzing results."""
-    
+
     def collect_results(
         self, batch_results: dict[str, list[Any]]
     ) -> list[FuzzDataResult]:
         """Process batch results from AsyncFuzzExecutor."""
-    
+
     def filter_results(
         self, results: list[FuzzDataResult], success_only: bool = False
     ) -> list[FuzzDataResult]:
@@ -402,21 +402,21 @@ Calculates comprehensive metrics from fuzzing results.
 ```python
 class MetricsCalculator:
     """Calculates metrics from fuzzing results."""
-    
+
     def calculate_tool_metrics(
         self, results: list[FuzzDataResult]
     ) -> dict[str, Any]:
         """Calculates metrics for tool fuzzing results."""
         # Returns: total_runs, successful_runs, failed_runs, success_rate,
         #          safety_blocked, safety_sanitized, exceptions
-    
+
     def calculate_protocol_metrics(
         self, results: list[FuzzDataResult]
     ) -> dict[str, Any]:
         """Calculates metrics for protocol fuzzing results."""
         # Returns: total_runs, successful_runs, server_rejections,
         #          invariant_violations, success_rate, exceptions
-    
+
     def calculate_overall_metrics(
         self, all_results: dict[str, list[FuzzDataResult]]
     ) -> dict[str, Any]:
@@ -441,14 +441,14 @@ sequenceDiagram
     participant SafetySystem
     participant ResultBuilder
     participant ResultCollector
-    
+
     Client->>ToolExecutor: execute(tool, runs=10)
     ToolExecutor->>AsyncExecutor: execute_batch(operations)
-    
+
     loop For each run (concurrent)
         AsyncExecutor->>ToolMutator: mutate(tool, phase)
         ToolMutator-->>AsyncExecutor: fuzzed_args
-        
+
         AsyncExecutor->>SafetySystem: should_skip_tool_call?
         alt Blocked
             SafetySystem-->>AsyncExecutor: blocked
@@ -459,7 +459,7 @@ sequenceDiagram
         end
         ResultBuilder-->>AsyncExecutor: result
     end
-    
+
     AsyncExecutor-->>ToolExecutor: batch_results
     ToolExecutor->>ResultCollector: collect_results(batch_results)
     ResultCollector-->>ToolExecutor: aggregated_results
@@ -477,18 +477,18 @@ sequenceDiagram
     participant Transport
     participant Invariants
     participant ResultBuilder
-    
+
     Client->>ProtocolExecutor: execute(protocol_type, runs=10)
     ProtocolExecutor->>AsyncExecutor: execute_batch(operations)
-    
+
     loop For each run (concurrent)
         AsyncExecutor->>ProtocolMutator: mutate(protocol_type, phase)
         ProtocolMutator-->>AsyncExecutor: fuzzed_message
-        
+
         alt With Transport
             AsyncExecutor->>Transport: send_raw(fuzzed_message)
             Transport-->>AsyncExecutor: server_response
-            
+
             AsyncExecutor->>Invariants: verify_response_invariants
             alt Violation
                 Invariants-->>AsyncExecutor: InvariantViolation
@@ -496,11 +496,11 @@ sequenceDiagram
                 Invariants-->>AsyncExecutor: OK
             end
         end
-        
+
         AsyncExecutor->>ResultBuilder: build_protocol_result
         ResultBuilder-->>AsyncExecutor: result
     end
-    
+
     AsyncExecutor-->>ProtocolExecutor: batch_results
     ProtocolExecutor-->>Client: results
 ```
@@ -521,7 +521,7 @@ class ToolClient:
             safety_system=safety_system,
             max_concurrency=5
         )
-    
+
     async def fuzz_tool(self, tool, runs=10):
         return await self.executor.execute(tool, runs)
 
@@ -534,7 +534,7 @@ class ProtocolClient:
             transport=transport,
             max_concurrency=5
         )
-    
+
     async def fuzz_protocol_type(self, protocol_type, runs=10):
         return await self.executor.execute(protocol_type, runs)
 ```
@@ -555,7 +555,7 @@ if self.safety_system:
             safety_blocked=True,
             safety_reason="Dangerous operation detected"
         )
-    
+
     # Sanitize arguments
     sanitized_args = self.safety_system.sanitize_tool_arguments(
         tool_name, args

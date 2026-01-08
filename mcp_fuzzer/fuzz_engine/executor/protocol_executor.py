@@ -397,7 +397,9 @@ class ProtocolExecutor:
             async with sem:
                 return await self._execute_single_type(pt, runs_per_type, phase)
 
-        async def _run_with_type(pt: str) -> tuple[str, list[dict[str, Any]], Exception | None]:
+        async def _run_with_type(
+            pt: str,
+        ) -> tuple[str, list[dict[str, Any]], Exception | None]:
             try:
                 results = await asyncio.wait_for(_run(pt), timeout=30.0)
                 return pt, results, None

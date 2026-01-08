@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from hypothesis import strategies as st
 
+
 class AsyncFuzzExecutor:
     """Executes fuzzing operations asynchronously with controlled concurrency."""
 
@@ -53,11 +54,10 @@ class AsyncFuzzExecutor:
         # Create tasks for all operations
         tasks = []
         for i, (func, args, kwargs) in enumerate(operations):
-            func_name = func.__name__ if hasattr(func, '__name__') else 'unknown'
+            func_name = func.__name__ if hasattr(func, "__name__") else "unknown"
             task_name = f"fuzz_operation_{i}_{func_name}"
             task = asyncio.create_task(
-                self._execute_single(func, args, kwargs),
-                name=task_name
+                self._execute_single(func, args, kwargs), name=task_name
             )
             tasks.append(task)
 

@@ -257,13 +257,16 @@ class TestStdioTransport:
 
                     mock_send.assert_awaited_once()
                     mock_receive.assert_awaited_once()
+
     @pytest.mark.asyncio
     async def test_send_request_no_response(self):
         """send_request should raise TransportError when no response arrives."""
-        with patch.object(
-            self.transport, "_send_message", new=AsyncMock()
-        ), patch("mcp_fuzzer.transport.stdio.uuid") as mock_uuid, patch.object(
-            self.transport, "_receive_message", new=AsyncMock(return_value=None)
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()),
+            patch("mcp_fuzzer.transport.stdio.uuid") as mock_uuid,
+            patch.object(
+                self.transport, "_receive_message", new=AsyncMock(return_value=None)
+            ),
         ):
             mock_uuid.uuid4.return_value = "test_id"
             with pytest.raises(TransportError):
@@ -458,13 +461,15 @@ class TestStdioTransport:
         self.transport.process = None
         result = await self.transport.send_timeout_signal("timeout")
         assert result is False
+
     @pytest.mark.asyncio
     async def test_send_raw_no_response(self):
         """send_raw should raise TransportError when no message arrives."""
-        with patch.object(
-            self.transport, "_send_message", new=AsyncMock()
-        ), patch.object(
-            self.transport, "_receive_message", new=AsyncMock(return_value=None)
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()),
+            patch.object(
+                self.transport, "_receive_message", new=AsyncMock(return_value=None)
+            ),
         ):
             with pytest.raises(TransportError):
                 await self.transport.send_raw({"raw": "data"})

@@ -68,9 +68,7 @@ class ToolExecutor:
         # Create a list of operations to execute
         operations = []
         for i in range(runs):
-            operations.append(
-                (self._execute_single_run, [tool, i, phase], {})
-            )
+            operations.append((self._execute_single_run, [tool, i, phase], {}))
 
         # Execute all operations in parallel with controlled concurrency
         batch_results = await self.executor.execute_batch(operations)
@@ -272,4 +270,3 @@ class ToolExecutor:
     async def shutdown(self) -> None:
         """Shutdown the executor and clean up resources."""
         await self.executor.shutdown()
-

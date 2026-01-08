@@ -40,8 +40,10 @@ async def test_execute_batch_success(executor):
 @pytest.mark.asyncio
 async def test_execute_batch_sync_and_kwargs(executor):
     """Sync function with kwargs should work."""
+
     def add(x, *, y=0):
         return x + y
+
     operations = [(add, [2], {"y": 3})]
     results = await executor.execute_batch(operations)
     assert results["results"][0] == 5

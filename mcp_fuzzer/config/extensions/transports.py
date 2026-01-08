@@ -71,9 +71,7 @@ def load_custom_transports(config_data: dict[str, Any]) -> None:
         except MCPError:
             raise
         except Exception as e:
-            logger.error(
-                "Failed to load custom transport '%s': %s", transport_name, e
-            )
+            logger.error("Failed to load custom transport '%s': %s", transport_name, e)
             raise ConfigFileError(
                 f"Failed to load custom transport '{transport_name}': {e}"
             ) from e

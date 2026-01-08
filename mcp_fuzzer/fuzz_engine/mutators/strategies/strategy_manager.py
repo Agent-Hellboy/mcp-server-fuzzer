@@ -28,6 +28,7 @@ from .aggressive import (
     get_protocol_fuzzer_method as get_aggressive_fuzzer_method,
 )
 
+
 class ProtocolStrategies:
     """Unified protocol strategies with two-phase approach."""
 
@@ -238,6 +239,7 @@ class ProtocolStrategies:
                 request["id"] = ids[i % len(ids)]
 
         return batch
+
 
 class ToolStrategies:
     """Unified tool strategies with two-phase approach."""

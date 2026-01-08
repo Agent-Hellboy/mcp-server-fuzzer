@@ -100,4 +100,3 @@ async def test_mutate_strategies_integration(tool_mutator, sample_tool):
         result = await tool_mutator.mutate(sample_tool, phase="realistic")
         mock_fuzz.assert_called_once_with(sample_tool, phase="realistic")
         assert result == {"test": "value"}
-

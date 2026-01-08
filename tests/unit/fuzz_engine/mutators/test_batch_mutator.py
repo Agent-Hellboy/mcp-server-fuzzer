@@ -101,4 +101,3 @@ async def test_mutate_with_many_protocol_types(batch_mutator):
         protocol_types=protocol_types, phase="aggressive"
     )
     assert result is None or isinstance(result, list)
-

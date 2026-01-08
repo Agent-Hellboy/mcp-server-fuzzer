@@ -124,4 +124,3 @@ def test_calculate_protocol_metrics_no_rejection_field(metrics_calculator):
     ]
     metrics = metrics_calculator.calculate_protocol_metrics(results)
     assert metrics["server_rejections"] == 0
-

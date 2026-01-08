@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 import httpx
+
 # Import constants directly from config (constants are values, not behavior)
 from ..config.core.constants import (
     DEFAULT_PROTOCOL_VERSION,
@@ -37,6 +38,7 @@ MCP_PROTOCOL_VERSION = MCP_PROTOCOL_VERSION_HEADER
 CONTENT_TYPE = CONTENT_TYPE_HEADER
 JSON_CT = JSON_CONTENT_TYPE
 SSE_CT = SSE_CONTENT_TYPE
+
 
 class StreamableHTTPTransport(TransportProtocol):
     """Streamable HTTP transport with basic SSE support and session headers.

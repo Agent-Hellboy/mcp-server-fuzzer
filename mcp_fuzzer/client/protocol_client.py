@@ -16,6 +16,7 @@ from ..fuzz_engine.mutators import ProtocolMutator
 from ..fuzz_engine.executor import ProtocolExecutor
 from ..safety_system.safety import SafetyProvider
 
+
 class ProtocolClient:
     """Client for fuzzing MCP protocol types."""
 

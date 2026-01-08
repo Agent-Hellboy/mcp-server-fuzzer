@@ -10,6 +10,7 @@ import httpx
 from .base import TransportProtocol
 from .mixins import NetworkTransportMixin, ResponseParsingMixin
 from ..fuzz_engine.runtime import ProcessManager, WatchdogConfig
+
 # Import constants directly from config (constants are values, not behavior)
 from ..config.core.constants import (
     JSON_CONTENT_TYPE,
@@ -18,6 +19,7 @@ from ..config.core.constants import (
 from ..safety_system.policy import (
     resolve_redirect_safely,
 )
+
 
 class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMixin):
     """

@@ -11,9 +11,7 @@ from typing import Any
 class MetricsCalculator:
     """Calculates metrics from fuzzing results."""
 
-    def calculate_tool_metrics(
-        self, results: list[dict[str, Any]]
-    ) -> dict[str, Any]:
+    def calculate_tool_metrics(self, results: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Calculate metrics for tool fuzzing results.
 
@@ -59,4 +57,3 @@ class MetricsCalculator:
             "success_rate": successful / total if total > 0 else 0.0,
             "rejection_rate": server_rejections / total if total > 0 else 0.0,
         }
-

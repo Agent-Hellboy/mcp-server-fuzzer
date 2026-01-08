@@ -14,4 +14,3 @@ __all__ = [
     "apply_config_file",
     "ConfigSearchParams",
 ]
-

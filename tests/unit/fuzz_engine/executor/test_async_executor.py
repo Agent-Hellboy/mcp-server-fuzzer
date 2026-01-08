@@ -39,6 +39,7 @@ async def test_get_semaphore_lazy_initialization(executor):
 @pytest.mark.asyncio
 async def test_execute_batch_success(executor):
     """Test successful batch execution."""
+
     async def test_op(value):
         return value * 2
 
@@ -51,6 +52,7 @@ async def test_execute_batch_success(executor):
 @pytest.mark.asyncio
 async def test_execute_batch_sync_and_kwargs(executor):
     """Sync function with kwargs should work."""
+
     def add(x, *, y=0):
         return x + y
 
@@ -62,6 +64,7 @@ async def test_execute_batch_sync_and_kwargs(executor):
 @pytest.mark.asyncio
 async def test_execute_batch_exception(executor):
     """Test exception handling during batch execution."""
+
     async def failing_op():
         raise ValueError("Test error")
 
@@ -75,6 +78,7 @@ async def test_execute_batch_exception(executor):
 @pytest.mark.asyncio
 async def test_execute_batch_cancelled_error(executor):
     """Test that CancelledError is re-raised."""
+
     async def cancelled_op():
         raise asyncio.CancelledError
 
@@ -86,6 +90,7 @@ async def test_execute_batch_cancelled_error(executor):
 @pytest.mark.asyncio
 async def test_execute_batch_multiple_operations(executor):
     """Test batch execution with multiple operations."""
+
     async def op1():
         return "result1"
 
@@ -102,6 +107,7 @@ async def test_execute_batch_multiple_operations(executor):
 @pytest.mark.asyncio
 async def test_execute_batch_mixed_success_and_errors(executor):
     """Test batch execution with mixed success and errors."""
+
     async def success_op():
         return "success"
 
@@ -153,9 +159,7 @@ async def test_run_hypothesis_strategy_complex(executor):
     """Test Hypothesis strategy with complex data."""
     import hypothesis.strategies as st
 
-    strategy = st.dictionaries(
-        st.text(), st.integers(), min_size=1, max_size=3
-    )
+    strategy = st.dictionaries(st.text(), st.integers(), min_size=1, max_size=3)
     result = await executor.run_hypothesis_strategy(strategy)
     assert isinstance(result, dict)
     assert len(result) > 0
@@ -171,6 +175,7 @@ async def test_shutdown(executor):
 @pytest.mark.asyncio
 async def test_execute_single_async_function(executor):
     """Test executing a single async function."""
+
     async def async_func(x, y):
         return x + y
 
@@ -181,6 +186,7 @@ async def test_execute_single_async_function(executor):
 @pytest.mark.asyncio
 async def test_execute_single_sync_function(executor):
     """Test executing a single sync function."""
+
     def sync_func(x, y):
         return x * y
 
@@ -191,6 +197,7 @@ async def test_execute_single_sync_function(executor):
 @pytest.mark.asyncio
 async def test_execute_single_with_kwargs(executor):
     """Test executing a function with kwargs."""
+
     def func(x, *, multiplier=1):
         return x * multiplier
 
@@ -201,6 +208,7 @@ async def test_execute_single_with_kwargs(executor):
 @pytest.mark.asyncio
 async def test_execute_single_exception(executor):
     """Test exception handling in _execute_single."""
+
     async def failing_func():
         raise RuntimeError("Test error")
 
@@ -214,4 +222,3 @@ async def test_execute_batch_empty_operations(executor):
     results = await executor.execute_batch([])
     assert len(results["results"]) == 0
     assert len(results["errors"]) == 0
-

@@ -79,5 +79,6 @@ class Configuration:
         """Update configuration with values from a dictionary."""
         self._config.update(config_dict)
 
+
 # Global configuration instance
 config = Configuration()
