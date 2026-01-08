@@ -49,16 +49,19 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
         url: str,
         timeout: float = 30.0,
         auth_headers: dict[str, str | None] | None = None,
+        safety_enabled: bool = True,
         process_manager: ProcessManager | None = None,
     ):
         self.url = url
         self.timeout = timeout
+        self.safety_enabled = safety_enabled
         self.headers = {
             "Accept": DEFAULT_HTTP_ACCEPT,
             "Content-Type": JSON_CONTENT_TYPE,
         }
-        if auth_headers:
-            self.headers.update(auth_headers)
+        self.auth_headers = {
+            k: v for k, v in (auth_headers or {}).items() if v is not None
+        }
 
         # Track last activity for process management
         self._last_activity = time.time()
@@ -76,6 +79,16 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
             self.process_manager = ProcessManager.from_config(watchdog_config)
         else:
             self.process_manager = process_manager
+
+    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
+        """Prepare headers with optional safety sanitization and auth headers."""
+        if self.safety_enabled:
+            safe_headers = self._prepare_safe_headers(headers)
+        else:
+            safe_headers = headers.copy()
+        # Add auth headers after sanitization (they are user-configured and safe)
+        safe_headers.update(self.auth_headers)
+        return safe_headers
 
     async def _update_activity(self):
         """Update last activity timestamp."""
@@ -124,7 +137,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
 
         # Use shared network functionality
         self._validate_network_request(self.url)
-        safe_headers = self._prepare_safe_headers(self.headers)
+        safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -168,7 +181,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
 
         # Use shared network functionality
         self._validate_network_request(self.url)
-        safe_headers = self._prepare_safe_headers(self.headers)
+        safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -208,7 +221,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
 
         # Use shared network functionality
         self._validate_network_request(self.url)
-        safe_headers = self._prepare_safe_headers(self.headers)
+        safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -248,7 +261,7 @@ class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMix
 
         # Use shared network functionality
         self._validate_network_request(self.url)
-        safe_headers = self._prepare_safe_headers(self.headers)
+        safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:
             # First request
