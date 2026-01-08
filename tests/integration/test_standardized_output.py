@@ -11,9 +11,6 @@ import pytest
 
 from mcp_fuzzer.client import MCPFuzzerClient
 from mcp_fuzzer.reports import FuzzerReporter
-from mcp_fuzzer.transport import build_driver
-
-
 class TestStandardizedOutputIntegration:
     """Integration tests for standardized output generation."""
 

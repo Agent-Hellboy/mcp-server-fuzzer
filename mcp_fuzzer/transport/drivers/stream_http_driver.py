@@ -241,7 +241,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         self,
         client: httpx.AsyncClient,
         url: str,
-        json: dict[str, Any],
+        payload: dict[str, Any],
         headers: dict[str, str],
         retries: int = 2,
     ) -> httpx.Response:
@@ -250,7 +250,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Args:
             client: HTTP client
             url: URL to post to
-            json: JSON payload
+            payload: JSON payload
             headers: Request headers
             retries: Maximum retry attempts
 
@@ -264,12 +264,17 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         attempt = 0
         while True:
             try:
-                return await client.post(url, json=json, headers=headers)
-            except (httpx.ConnectError, httpx.ReadTimeout) as e:
+                return await client.post(url, json=payload, headers=headers)
+            except (
+                httpx.ConnectError,
+                httpx.ReadTimeout,
+                httpx.WriteTimeout,
+                httpx.PoolTimeout,
+            ) as e:
                 # Only retry for safe, idempotent, or initialization-like methods
                 method = None
                 try:
-                    method = json.get("method")
+                    method = payload.get("method")
                 except Exception:
                     pass
                 safe = method in (
@@ -345,7 +350,8 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         headers = self._prepare_headers()
 
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(headers)
 
         async with self._create_http_client(self.timeout) as client:
@@ -402,7 +408,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                     self._initialized = True
                 if parsed is None:
                     return {}
-                return parsed if isinstance(parsed, dict) else {"result": parsed}
+                return self._extract_result_from_response(parsed)
 
             raise TransportError(
                 f"Unexpected content type: {ct}",
@@ -422,7 +428,8 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         headers = self._prepare_headers()
 
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(headers)
 
         async with self._create_http_client(self.timeout) as client:
@@ -480,7 +487,8 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         headers = self._prepare_headers()
 
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(headers)
 
         async with self._create_http_client(self.timeout) as client:

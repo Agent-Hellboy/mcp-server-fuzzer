@@ -61,6 +61,7 @@ class HttpDriver(
         safety_enabled: bool = True,
         process_manager: ProcessManager | None = None,
     ):
+        super().__init__()
         self.url = url
         self.timeout = timeout
         self.safety_enabled = safety_enabled
@@ -145,7 +146,8 @@ class HttpDriver(
         await self._update_activity()
 
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:
@@ -189,7 +191,8 @@ class HttpDriver(
         await self._update_activity()
 
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:
@@ -229,7 +232,8 @@ class HttpDriver(
         await self._update_activity()
 
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:
@@ -269,7 +273,8 @@ class HttpDriver(
         await self._update_activity()
 
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:

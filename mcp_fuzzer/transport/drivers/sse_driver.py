@@ -88,57 +88,64 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
             ServerError: If server returns an error
         """
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:
-            response = await client.post(self.url, json=payload, headers=safe_headers)
-            self._handle_http_response_error(response)
+            async with client.stream(
+                "POST", self.url, json=payload, headers=safe_headers
+            ) as response:
+                self._handle_http_response_error(response)
 
-            # Process response text as SSE stream
-            buffer: list[str] = []
+                # Process response text as SSE stream
+                buffer: list[str] = []
+                raw_lines: list[str] = []
 
-            def flush_once() -> dict[str, Any] | None:
-                """Flush buffer and parse as SSE event."""
-                if not buffer:
-                    return None
-                event_text = "\n".join(buffer)
-                buffer.clear()
-                try:
-                    data = self.parse_sse_event(event_text)
-                except json.JSONDecodeError:
-                    self._logger.error("Failed to parse SSE data as JSON")
-                    return None
-                if data is None:
-                    return None
-                # Use shared result extraction
-                return self._extract_result_from_response(data)
+                def flush_once() -> dict[str, Any] | None:
+                    """Flush buffer and parse as SSE event."""
+                    if not buffer:
+                        return None
+                    event_text = "\n".join(buffer)
+                    buffer.clear()
+                    try:
+                        data = self.parse_sse_event(event_text)
+                    except json.JSONDecodeError:
+                        self._logger.error("Failed to parse SSE data as JSON")
+                        return None
+                    if data is None:
+                        return None
+                    # Use shared result extraction
+                    return self._extract_result_from_response(data)
 
-            # Parse response text line by line
-            for line in response.text.splitlines():
-                if not line.strip():
-                    result = flush_once()
-                    if result is not None:
-                        return result
-                    continue
-                buffer.append(line)
+                # Parse response text line by line
+                async for line in response.aiter_lines():
+                    raw_lines.append(line)
+                    if not line.strip():
+                        result = flush_once()
+                        if result is not None:
+                            return result
+                        continue
+                    buffer.append(line)
 
-            # Flush remaining buffer
-            result = flush_once()
-            if result is not None:
-                return result
+                # Flush remaining buffer
+                result = flush_once()
+                if result is not None:
+                    return result
 
-            # Try parsing entire response as JSON
-            try:
-                data = response.json()
-                return self._extract_result_from_response(data)
-            except json.JSONDecodeError:
-                pass
+                # Try parsing entire response as JSON
+                raw_text = "\n".join(raw_lines).strip()
+                if raw_text:
+                    try:
+                        data = json.loads(raw_text)
+                        return self._extract_result_from_response(data)
+                    except json.JSONDecodeError:
+                        pass
 
-            raise TransportError(
-                "No valid SSE response received",
-                context={"url": self.url},
-            )
+                raise TransportError(
+                    "No valid SSE response received",
+                    context={"url": self.url},
+                )
 
     async def send_notification(
         self, method: str, params: dict[str, Any | None] | None = None
@@ -155,7 +162,8 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
         payload = self._create_jsonrpc_notification(method, params)
 
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:
@@ -177,7 +185,8 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
             TransportError: If streaming fails
         """
         # Use shared network functionality
-        self._validate_network_request(self.url)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
         safe_headers = self._prepare_headers_with_auth(self.headers)
 
         async with self._create_http_client(self.timeout) as client:

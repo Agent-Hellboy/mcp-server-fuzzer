@@ -181,7 +181,11 @@ class TestCustomTransportLifecycle:
 
         async def mock_tools_request(method, params=None):
             if method == "tools/list":
-                return {"tools": [{"name": "integration_tool"}]}
+                return {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": {"tools": [{"name": "integration_tool"}]},
+                }
             return await original_send_request(method, params)
 
         transport.send_request = mock_tools_request

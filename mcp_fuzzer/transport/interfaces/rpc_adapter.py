@@ -62,14 +62,24 @@ class JsonRpcAdapter:
                 )
                 return []
 
-            if "tools" not in response:
-                self._logger.warning(
-                    "Server response missing 'tools' key. Keys present: %s",
-                    list(response.keys()),
-                )
-                return []
-
-            tools = response["tools"]
+            if "tools" in response:
+                tools = response["tools"]
+            else:
+                result = response.get("result")
+                if isinstance(result, dict) and "tools" in result:
+                    tools = result["tools"]
+                elif "error" in response:
+                    self._logger.warning(
+                        "Server returned error for tools/list: %s",
+                        response.get("error"),
+                    )
+                    return []
+                else:
+                    self._logger.warning(
+                        "Server response missing 'tools' key. Keys present: %s",
+                        list(response.keys()),
+                    )
+                    return []
             self._logger.info("Found %d tools from server", len(tools))
             return tools
         except Exception as e:

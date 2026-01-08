@@ -23,6 +23,7 @@ try:
 except ImportError:  # pragma: no cover
     from typing_extensions import NotRequired
 
+from ...exceptions import TransportError, NetworkError, PayloadValidationError
 from ...safety_system.policy import is_host_allowed, sanitize_headers
 from .states import DriverState
 
@@ -70,24 +71,6 @@ class JSONRPCErrorResponse(TypedDict):
 
 
 JSONRPCResponse = JSONRPCSuccessResponse | JSONRPCErrorResponse
-
-
-class TransportError(Exception):
-    """Base exception for transport driver errors."""
-
-    pass
-
-
-class NetworkError(TransportError):
-    """Exception raised for network-related errors."""
-
-    pass
-
-
-class PayloadValidationError(TransportError):
-    """Exception raised for invalid payload validation."""
-
-    pass
 
 
 class ResponseParser(Protocol):
@@ -525,7 +508,7 @@ class LifecycleBehavior(DriverBaseBehavior):
         """Check if transport is in error state."""
         return self._connection_state == DriverState.ERROR
 
-    def _update_activity(self) -> None:
+    def _touch_activity(self) -> None:
         """Update the last activity timestamp."""
         self._last_activity = time.time()
 
@@ -574,23 +557,23 @@ class LifecycleBehavior(DriverBaseBehavior):
     async def _lifecycle_connect(self) -> None:
         """Mark connection as starting and update state."""
         self._set_connection_state(DriverState.CONNECTING)
-        self._update_activity()
+        self._touch_activity()
 
     async def _lifecycle_connected(self) -> None:
         """Mark connection as established and update state."""
         self._set_connection_state(DriverState.CONNECTED)
-        self._update_activity()
+        self._touch_activity()
 
     async def _lifecycle_disconnect(self) -> None:
         """Mark connection as disconnecting and update state."""
         if self._connection_state == DriverState.CONNECTED:
             self._set_connection_state(DriverState.DISCONNECTING)
-        self._update_activity()
+        self._touch_activity()
 
     async def _lifecycle_closed(self) -> None:
         """Mark connection as closed and update state."""
         self._set_connection_state(DriverState.CLOSED)
-        self._update_activity()
+        self._touch_activity()
 
     async def _lifecycle_error(self, error: Exception | None = None) -> None:
         """Mark connection as in error state.
@@ -601,7 +584,7 @@ class LifecycleBehavior(DriverBaseBehavior):
         self._set_connection_state(DriverState.ERROR)
         if error:
             self._logger.error(f"Connection error: {error}")
-        self._update_activity()
+        self._touch_activity()
 
     async def _cleanup_resources(self) -> None:
         """Cleanup any resources held by the transport.
