@@ -125,7 +125,8 @@ async def test_execute_exception_handling(batch_executor):
         results = await batch_executor.execute(runs=1)
         assert len(results) == 1
         assert results[0]["success"] is False
-        assert "exception" in results[0]
+        assert results[0]["server_error"] == "Test error"
+        assert results[0]["server_rejected_input"] is True
 
 
 @pytest.mark.asyncio
