@@ -837,24 +837,29 @@ This section provides comprehensive testing results for various MCP server imple
 
 ## Package Layout and Fuzz Engine
 
-The codebase is organized around a modular fuzz engine with clear boundaries between generation (strategies), orchestration (fuzzers), and execution (runtime):
+The codebase is organized around a modular fuzz engine with clear boundaries between generation (mutators), orchestration (executors), and execution (runtime):
 
 ```
 mcp_fuzzer/
   fuzz_engine/
-    fuzzer/
-      protocol_fuzzer.py   # Orchestrates protocol-type fuzzing
-      tool_fuzzer.py       # Orchestrates tool fuzzing
-    strategy/
-      schema_parser.py     # JSON Schema parser for test data generation
-      strategy_manager.py  # Selects strategies per phase/type
-      realistic/
-        tool_strategy.py
-        protocol_type_strategy.py
-      aggressive/
-        tool_strategy.py
-        protocol_type_strategy.py
-    invariants.py         # Property-based invariants and checks
+    mutators/
+      tool_mutator.py       # Generates fuzzed tool arguments
+      protocol_mutator.py   # Generates fuzzed protocol envelopes
+      batch_mutator.py      # Generates JSON-RPC batch requests
+      strategies/
+        schema_parser.py    # JSON Schema parser for test data generation
+        strategy_manager.py # Realistic/aggressive strategy selection
+        realistic/
+          tool_strategy.py
+          protocol_type_strategy.py
+        aggressive/
+          tool_strategy.py
+          protocol_type_strategy.py
+    executor/
+      tool_executor.py      # Orchestrates tool fuzzing (uses AsyncFuzzExecutor)
+      protocol_executor.py  # Orchestrates protocol-type fuzzing + invariants
+      batch_executor.py     # Orchestrates batch fuzzing
+      invariants.py         # Property-based invariants and checks
     runtime/
       manager.py           # Async ProcessManager (start/stop, signals)
       watchdog.py          # ProcessWatchdog (hang detection)
@@ -960,9 +965,9 @@ except InvariantViolation as e:
     print(f"Violation: {e}")
 ```
 
-- Strategy: Generates inputs for tools and protocol types in two phases:
+- Mutators: Generate inputs for tools and protocol types in two phases:
   - realistic (valid/spec-conformant), aggressive (malformed/attack vectors).
-- Fuzzer: Runs strategies, sends envelopes via a transport, and records results.
+- Executors: Run mutators, send envelopes via a transport, and record results.
 - Runtime: Manages subprocess lifecycles with a watchdog for hang/timeout handling.
 - Transport: Pluggable I/O. Use `--protocol http|sse|stdio|streamablehttp`.
 

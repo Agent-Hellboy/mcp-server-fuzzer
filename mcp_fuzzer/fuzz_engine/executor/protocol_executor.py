@@ -188,7 +188,8 @@ class ProtocolExecutor:
             results.append(
                 {
                     "protocol_type": protocol_type,
-                    "run": 0,
+                    # Use -1 to indicate a batch-level error without a run index.
+                    "run": -1,
                     "fuzz_data": {},
                     "success": False,
                     "exception": str(error),
@@ -387,7 +388,7 @@ class ProtocolExecutor:
         all_results = {}
 
         # Create tasks for each protocol type with bounded concurrency
-        tasks = []
+        tasks = {}
         sem = self._get_type_semaphore()
 
         async def _run(pt: str) -> list[dict[str, Any]]:
@@ -395,22 +396,23 @@ class ProtocolExecutor:
                 return await self._execute_single_type(pt, runs_per_type, phase)
 
         for protocol_type in self.PROTOCOL_TYPES:
-            task = asyncio.create_task(_run(protocol_type))
-            tasks.append((protocol_type, task))
+            task = asyncio.create_task(
+                asyncio.wait_for(_run(protocol_type), timeout=30.0),
+                name=f"fuzz_protocol_{protocol_type}",
+            )
+            tasks[task] = protocol_type
 
-        # Wait for all tasks to complete with timeout
-        for protocol_type, task in tasks:
+        # Process tasks as they complete for more responsive timeouts.
+        for task in asyncio.as_completed(tasks):
+            protocol_type = tasks[task]
             try:
-                # Add a timeout to prevent hanging indefinitely
-                results = await asyncio.wait_for(task, timeout=30.0)
+                results = await task
                 all_results[protocol_type] = results
             except asyncio.TimeoutError:
-                self._logger.error(f"Timeout while fuzzing {protocol_type}")
+                self._logger.error("Timeout while fuzzing %s", protocol_type)
                 all_results[protocol_type] = []
-                # Cancel the task to avoid orphaned tasks
-                task.cancel()
             except Exception as e:
-                self._logger.error(f"Failed to fuzz {protocol_type}: {e}")
+                self._logger.error("Failed to fuzz %s: %s", protocol_type, e)
                 all_results[protocol_type] = []
 
         return all_results
@@ -522,4 +524,3 @@ class ProtocolExecutor:
     async def shutdown(self) -> None:
         """Shutdown the executor and clean up resources."""
         await self.executor.shutdown()
-
