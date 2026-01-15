@@ -31,11 +31,13 @@ Provides controlled concurrency for executing asynchronous operations with timeo
 The executor's concurrency can be configured in several ways:
 
 1. **Direct instantiation**:
+
    ```python
    executor = AsyncFuzzExecutor(max_concurrency=10)
    ```
 
 2. **Via UnifiedMCPFuzzerClient**:
+
    ```python
    client = UnifiedMCPFuzzerClient(
        transport,

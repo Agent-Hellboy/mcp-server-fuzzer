@@ -3,6 +3,7 @@
 Unit tests for transport behaviors/mixins.
 """
 
+import itertools
 import json
 
 import httpx
@@ -135,7 +136,7 @@ def test_parse_streaming_response_bad_json():
 
 def test_lifecycle_state_changes(monkeypatch):
     lifecycle = DummyLifecycle()
-    import itertools
+
 
     times = itertools.count(start=100.0, step=5.0)
     monkeypatch.setattr(
