@@ -57,7 +57,10 @@ class TestProtocolRequestDispatch:
             "ListResourcesRequest", {"params": {"cursor": "abc"}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("resources/list", {"cursor": "abc"})
+        client.transport.send_request.assert_called_with(
+            "resources/list",
+            {"cursor": "abc"},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_read_resource_request(self, client):
@@ -66,7 +69,10 @@ class TestProtocolRequestDispatch:
             "ReadResourceRequest", {"params": {"uri": "file:///path"}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("resources/read", {"uri": "file:///path"})
+        client.transport.send_request.assert_called_with(
+            "resources/read",
+            {"uri": "file:///path"},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_list_resource_templates_request(self, client):
@@ -75,7 +81,10 @@ class TestProtocolRequestDispatch:
             "ListResourceTemplatesRequest", {"params": {}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("resources/templates/list", {})
+        client.transport.send_request.assert_called_with(
+            "resources/templates/list",
+            {},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_set_level_request(self, client):
@@ -84,7 +93,10 @@ class TestProtocolRequestDispatch:
             "SetLevelRequest", {"params": {"level": "DEBUG"}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("logging/setLevel", {"level": "DEBUG"})
+        client.transport.send_request.assert_called_with(
+            "logging/setLevel",
+            {"level": "DEBUG"},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_create_message_request(self, client):
@@ -93,7 +105,10 @@ class TestProtocolRequestDispatch:
             "CreateMessageRequest", {"params": {"messages": []}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("sampling/createMessage", {"messages": []})
+        client.transport.send_request.assert_called_with(
+            "sampling/createMessage",
+            {"messages": []},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_list_prompts_request(self, client):
@@ -102,7 +117,10 @@ class TestProtocolRequestDispatch:
             "ListPromptsRequest", {"params": {"cursor": "xyz"}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("prompts/list", {"cursor": "xyz"})
+        client.transport.send_request.assert_called_with(
+            "prompts/list",
+            {"cursor": "xyz"},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_get_prompt_request(self, client):
@@ -111,7 +129,10 @@ class TestProtocolRequestDispatch:
             "GetPromptRequest", {"params": {"name": "test_prompt"}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("prompts/get", {"name": "test_prompt"})
+        client.transport.send_request.assert_called_with(
+            "prompts/get",
+            {"name": "test_prompt"},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_list_roots_request(self, client):
@@ -129,7 +150,10 @@ class TestProtocolRequestDispatch:
             "SubscribeRequest", {"params": {"uri": "file:///sub"}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("resources/subscribe", {"uri": "file:///sub"})
+        client.transport.send_request.assert_called_with(
+            "resources/subscribe",
+            {"uri": "file:///sub"},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_unsubscribe_request(self, client):
@@ -138,7 +162,10 @@ class TestProtocolRequestDispatch:
             "UnsubscribeRequest", {"params": {"uri": "file:///unsub"}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("resources/unsubscribe", {"uri": "file:///unsub"})
+        client.transport.send_request.assert_called_with(
+            "resources/unsubscribe",
+            {"uri": "file:///unsub"},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_complete_request(self, client):
@@ -147,25 +174,36 @@ class TestProtocolRequestDispatch:
             "CompleteRequest", {"params": {"ref": "ref1", "argument": "arg1"}}
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("completion/complete", {"ref": "ref1", "argument": "arg1"})
+        client.transport.send_request.assert_called_with(
+            "completion/complete",
+            {"ref": "ref1", "argument": "arg1"},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_generic_request_fallback(self, client):
         """Test dispatching unknown type falls back to generic."""
         result = await client._send_protocol_request(
-            "UnknownRequestType", {"method": "custom/method", "params": {"foo": "bar"}}
+            "UnknownRequestType",
+            {"method": "custom/method", "params": {"foo": "bar"}},
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("custom/method", {"foo": "bar"})
+        client.transport.send_request.assert_called_with(
+            "custom/method",
+            {"foo": "bar"},
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_initialize_request(self, client):
         """Test dispatching InitializeRequest."""
         result = await client._send_protocol_request(
-            "InitializeRequest", {"params": {"protocolVersion": "2024-11-05"}}
+            "InitializeRequest",
+            {"params": {"protocolVersion": "2024-11-05"}},
         )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("initialize", {"protocolVersion": "2024-11-05"})
+        client.transport.send_request.assert_called_with(
+            "initialize",
+            {"protocolVersion": "2024-11-05"},
+        )
 
 
 class TestGetProtocolTypes:
@@ -174,7 +212,9 @@ class TestGetProtocolTypes:
     @pytest.mark.asyncio
     async def test_get_protocol_types_returns_list(self, client):
         """Test getting protocol types returns a list."""
-        with patch('mcp_fuzzer.client.protocol_client.ProtocolExecutor') as mock_executor:
+        with patch(
+            "mcp_fuzzer.client.protocol_client.ProtocolExecutor"
+        ) as mock_executor:
             mock_executor.PROTOCOL_TYPES = ["InitializeRequest", "ListResourcesRequest"]
             result = await client._get_protocol_types()
             assert result == ["InitializeRequest", "ListResourcesRequest"]
@@ -182,7 +222,9 @@ class TestGetProtocolTypes:
     @pytest.mark.asyncio
     async def test_get_protocol_types_handles_missing_attr(self, client):
         """Test getting protocol types handles missing attribute."""
-        with patch('mcp_fuzzer.client.protocol_client.ProtocolExecutor') as mock_executor:
+        with patch(
+            "mcp_fuzzer.client.protocol_client.ProtocolExecutor"
+        ) as mock_executor:
             del mock_executor.PROTOCOL_TYPES
             result = await client._get_protocol_types()
             assert result == []
@@ -190,7 +232,10 @@ class TestGetProtocolTypes:
     @pytest.mark.asyncio
     async def test_get_protocol_types_handles_exception(self, client):
         """Test getting protocol types handles exceptions."""
-        with patch('mcp_fuzzer.client.protocol_client.ProtocolExecutor', side_effect=Exception("fail")):
+        with patch(
+            "mcp_fuzzer.client.protocol_client.ProtocolExecutor",
+            side_effect=Exception("fail"),
+        ):
             result = await client._get_protocol_types()
             assert result == []
 
@@ -216,10 +261,12 @@ class TestFuzzAllProtocolTypes:
     async def test_fuzz_all_runs_for_each_type(self, client):
         """Test fuzzing all types runs for each protocol type."""
         client._get_protocol_types = AsyncMock(return_value=["InitializeRequest"])
-        client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
-        
+        client._process_single_protocol_fuzz = AsyncMock(
+            return_value={"success": True}
+        )
+
         result = await client.fuzz_all_protocol_types(runs_per_type=2)
-        
+
         assert "InitializeRequest" in result
         assert len(result["InitializeRequest"]) == 2
 
@@ -230,28 +277,39 @@ class TestGenericRequest:
     @pytest.mark.asyncio
     async def test_generic_request_with_valid_method(self, client):
         """Test generic request with valid method string."""
-        result = await client._send_generic_request({"method": "custom/endpoint", "params": {"a": 1}})
+        result = await client._send_generic_request(
+            {"method": "custom/endpoint", "params": {"a": 1}}
+        )
         assert result == {"result": "ok"}
-        client.transport.send_request.assert_called_with("custom/endpoint", {"a": 1})
+        client.transport.send_request.assert_called_with(
+            "custom/endpoint",
+            {"a": 1},
+        )
 
     @pytest.mark.asyncio
     async def test_generic_request_with_empty_method(self, client):
         """Test generic request with empty method string."""
-        result = await client._send_generic_request({"method": "", "params": {}})
+        result = await client._send_generic_request(
+            {"method": "", "params": {}}
+        )
         assert result == {"result": "ok"}
         client.transport.send_request.assert_called_with("unknown", {})
 
     @pytest.mark.asyncio
     async def test_generic_request_with_non_string_method(self, client):
         """Test generic request with non-string method."""
-        result = await client._send_generic_request({"method": 123, "params": {}})
+        result = await client._send_generic_request(
+            {"method": 123, "params": {}}
+        )
         assert result == {"result": "ok"}
         client.transport.send_request.assert_called_with("unknown", {})
 
     @pytest.mark.asyncio
     async def test_generic_request_with_none_method(self, client):
         """Test generic request with None method."""
-        result = await client._send_generic_request({"method": None, "params": {}})
+        result = await client._send_generic_request(
+            {"method": None, "params": {}}
+        )
         assert result == {"result": "ok"}
         client.transport.send_request.assert_called_with("unknown", {})
 

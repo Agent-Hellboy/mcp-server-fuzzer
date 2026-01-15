@@ -137,7 +137,6 @@ def test_parse_streaming_response_bad_json():
 def test_lifecycle_state_changes(monkeypatch):
     lifecycle = DummyLifecycle()
 
-
     times = itertools.count(start=100.0, step=5.0)
     monkeypatch.setattr(
         "mcp_fuzzer.transport.interfaces.behaviors.time.time",

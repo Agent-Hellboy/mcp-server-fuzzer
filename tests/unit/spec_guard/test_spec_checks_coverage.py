@@ -54,10 +54,14 @@ def test_check_logging_notification_missing_params():
     assert checks == []
 
 def test_check_resource_templates_list_not_dict_or_list():
-    checks = spec_checks.check_resource_templates_list({"resourceTemplates": "not-list"})
+    checks = spec_checks.check_resource_templates_list(
+        {"resourceTemplates": "not-list"}
+    )
     assert checks[0]["id"] == "resources-templates-type"
-    
-    checks = spec_checks.check_resource_templates_list({"resourceTemplates": ["not-dict"]})
+
+    checks = spec_checks.check_resource_templates_list(
+        {"resourceTemplates": ["not-dict"]}
+    )
     assert checks[0]["id"] == "resources-templates-item"
 
 def test_check_prompts_list_missing_prompts():

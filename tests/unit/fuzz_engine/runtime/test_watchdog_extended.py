@@ -60,7 +60,7 @@ class TestWaitForProcessExit:
         async def async_wait():
             return 0
         process = MagicMock()
-        process.wait = MagicMock(return_value=async_wait())
+        process.wait = MagicMock(side_effect=async_wait)
         result = await wait_for_process_exit(process)
         assert result == 0
 
@@ -70,7 +70,7 @@ class TestWaitForProcessExit:
         async def async_wait():
             return 0
         process = MagicMock()
-        process.wait = MagicMock(return_value=async_wait())
+        process.wait = MagicMock(side_effect=async_wait)
         result = await wait_for_process_exit(process, timeout=5.0)
         assert result == 0
 
@@ -217,6 +217,64 @@ class TestBestEffortTerminationStrategy:
                     result = await strategy.terminate(123, process_info, 10.0)
                     assert result is True
 
+    @pytest.mark.asyncio
+    async def test_termination_on_windows(self):
+        """Test termination on Windows systems."""
+        logger = MagicMock()
+        wait_fn = AsyncMock(return_value=None)
+        strategy = BestEffortTerminationStrategy(logger=logger, wait_fn=wait_fn)
+
+        process = MagicMock()
+        config = ProcessConfig(command=["test"], name="test_proc")
+        process_info = {"process": process, "config": config}
+
+        with patch("sys.platform", "win32"):
+            result = await strategy.terminate(123, process_info, 10.0)
+
+        process.terminate.assert_called_once()
+        process.kill.assert_not_called()
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_fallback_on_oserror(self):
+        """Test fallback to process termination when getpgid fails."""
+        logger = MagicMock()
+        wait_fn = AsyncMock(return_value=None)
+        strategy = BestEffortTerminationStrategy(logger=logger, wait_fn=wait_fn)
+
+        process = MagicMock()
+        config = ProcessConfig(command=["test"], name="test_proc")
+        process_info = {"process": process, "config": config}
+
+        with patch("sys.platform", "linux"):
+            with patch("os.getpgid", side_effect=OSError("no pgid")):
+                result = await strategy.terminate(123, process_info, 10.0)
+
+        process.terminate.assert_called_once()
+        process.kill.assert_not_called()
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_force_kill_after_timeout(self):
+        """Test force kill path after graceful timeout."""
+        logger = MagicMock()
+        wait_fn = AsyncMock(
+            side_effect=[asyncio.TimeoutError(), None]
+        )
+        strategy = BestEffortTerminationStrategy(logger=logger, wait_fn=wait_fn)
+
+        process = MagicMock()
+        config = ProcessConfig(command=["test"], name="test_proc")
+        process_info = {"process": process, "config": config}
+
+        with patch("sys.platform", "linux"):
+            with patch("os.getpgid", return_value=123):
+                with patch("os.killpg") as mock_killpg:
+                    result = await strategy.terminate(123, process_info, 10.0)
+
+        assert mock_killpg.call_count == 2
+        assert result is True
+
 
 class TestProcessWatchdog:
     """Test ProcessWatchdog class."""
@@ -237,7 +295,9 @@ class TestProcessWatchdog:
         assert watchdog._task is None
 
     @pytest.mark.asyncio
-    async def test_start_already_running(self, mock_registry, mock_dispatcher, watchdog_config):
+    async def test_start_already_running(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
         """Test starting when already running is a no-op."""
         watchdog = ProcessWatchdog(
             registry=mock_registry,
@@ -254,7 +314,9 @@ class TestProcessWatchdog:
         await watchdog.stop()
 
     @pytest.mark.asyncio
-    async def test_update_activity(self, mock_registry, mock_dispatcher, watchdog_config):
+    async def test_update_activity(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
         """Test updating activity for a process."""
         watchdog = ProcessWatchdog(
             registry=mock_registry,
@@ -267,7 +329,9 @@ class TestProcessWatchdog:
         assert watchdog._last_activity[123] == 1000.0
 
     @pytest.mark.asyncio
-    async def test_scan_once_removes_finished_processes(self, mock_registry, mock_dispatcher, watchdog_config):
+    async def test_scan_once_removes_finished_processes(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
         """Test scan_once removes finished processes."""
         watchdog = ProcessWatchdog(
             registry=mock_registry,
@@ -289,7 +353,9 @@ class TestProcessWatchdog:
         mock_registry.unregister.assert_called_with(123)
 
     @pytest.mark.asyncio
-    async def test_scan_once_detects_hung_processes(self, mock_registry, mock_dispatcher, watchdog_config):
+    async def test_scan_once_detects_hung_processes(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
         """Test scan_once detects hung processes."""
         call_time = [1000.0]
         def mock_clock():
@@ -321,7 +387,9 @@ class TestProcessWatchdog:
         assert 123 in result["killed"]
 
     @pytest.mark.asyncio
-    async def test_scan_once_cleans_up_missing_pids(self, mock_registry, mock_dispatcher, watchdog_config):
+    async def test_scan_once_cleans_up_missing_pids(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
         """Test scan_once cleans up metadata for missing PIDs."""
         watchdog = ProcessWatchdog(
             registry=mock_registry,
@@ -345,9 +413,9 @@ class TestProcessWatchdog:
         process.returncode = None
         config = ProcessConfig(command=["test"], name="test_proc")
         
-        mock_registry.snapshot = AsyncMock(return_value={
-            123: {"process": process, "config": config}
-        })
+        mock_registry.snapshot = AsyncMock(
+            return_value={123: {"process": process, "config": config}}
+        )
         
         watchdog = ProcessWatchdog(
             registry=mock_registry,
@@ -362,7 +430,9 @@ class TestProcessWatchdog:
         assert stats["watchdog_active"] is False
 
     @pytest.mark.asyncio
-    async def test_get_stats_with_metrics_sampler(self, mock_registry, mock_dispatcher, watchdog_config):
+    async def test_get_stats_with_metrics_sampler(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
         """Test get_stats includes metrics from sampler."""
         mock_registry.snapshot = AsyncMock(return_value={})
         
@@ -381,7 +451,9 @@ class TestProcessWatchdog:
         assert stats["system_metrics"]["cpu"] == 50
 
     @pytest.mark.asyncio
-    async def test_context_manager(self, mock_registry, mock_dispatcher, watchdog_config):
+    async def test_context_manager(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
         """Test watchdog as async context manager."""
         watchdog = ProcessWatchdog(
             registry=mock_registry,
@@ -395,7 +467,9 @@ class TestProcessWatchdog:
         assert watchdog._task is None
 
     @pytest.mark.asyncio
-    async def test_on_hang_callback(self, mock_registry, mock_dispatcher, watchdog_config):
+    async def test_on_hang_callback(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
         """Test on_hang callback is called for hung processes."""
         hang_callback = MagicMock()
         
@@ -422,7 +496,9 @@ class TestProcessWatchdog:
         hang_callback.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_on_hang_callback_exception_handled(self, mock_registry, mock_dispatcher, watchdog_config):
+    async def test_on_hang_callback_exception_handled(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
         """Test on_hang callback exception is handled gracefully."""
         def failing_callback(pid, info, duration):
             raise Exception("callback failed")
@@ -451,7 +527,9 @@ class TestProcessWatchdog:
         assert 123 in result["hung"]
 
     @pytest.mark.asyncio
-    async def test_fallback_to_best_effort_strategy(self, mock_registry, watchdog_config):
+    async def test_fallback_to_best_effort_strategy(
+        self, mock_registry, watchdog_config
+    ):
         """Test fallback to BestEffortTerminationStrategy when no dispatcher."""
         watchdog = ProcessWatchdog(
             registry=mock_registry,

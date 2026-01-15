@@ -59,7 +59,8 @@ class TestGetToolsFromServer:
     @pytest.mark.asyncio
     async def test_get_tools_exception(self, tool_client):
         """Test handling exception when getting tools."""
-        tool_client._rpc.get_tools = AsyncMock(side_effect=Exception("connection failed"))
+        err = Exception("connection failed")
+        tool_client._rpc.get_tools = AsyncMock(side_effect=err)
         
         result = await tool_client._get_tools_from_server()
         assert result == []
@@ -67,11 +68,15 @@ class TestGetToolsFromServer:
     @pytest.mark.asyncio
     async def test_get_tools_records_schema_checks(self, tool_client):
         """Test that schema checks are recorded for tools."""
-        tool_client._rpc.get_tools = AsyncMock(return_value=[
-            {"name": "test_tool"}  # Missing inputSchema should trigger check
-        ])
+        tool_client._rpc.get_tools = AsyncMock(
+            return_value=[
+                {"name": "test_tool"}  # Missing inputSchema should trigger check
+            ]
+        )
         
-        with patch('mcp_fuzzer.client.tool_client.check_tool_schema_fields') as mock_check:
+        with patch(
+            "mcp_fuzzer.client.tool_client.check_tool_schema_fields"
+        ) as mock_check:
             mock_check.return_value = [{"status": "FAIL", "message": "Missing schema"}]
             await tool_client._get_tools_from_server()
             assert "test_tool" in tool_client._tool_schema_checks
@@ -109,10 +114,13 @@ class TestFuzzTool:
     @pytest.mark.asyncio
     async def test_fuzz_tool_safety_sanitized(self, tool_client, mock_safety):
         """Test tool fuzzing when safety sanitizes arguments."""
+        mock_safety.sanitize_tool_arguments.side_effect = None
         mock_safety.sanitize_tool_arguments.return_value = {"cmd": "safe_value"}
         
         tool = {"name": "test_tool"}
-        tool_client.tool_mutator.mutate = AsyncMock(return_value={"cmd": "dangerous_value"})
+        tool_client.tool_mutator.mutate = AsyncMock(
+            return_value={"cmd": "dangerous_value"}
+        )
         tool_client._rpc.call_tool = AsyncMock(return_value={"content": []})
         
         results = await tool_client.fuzz_tool(tool, runs=1)
@@ -125,7 +133,9 @@ class TestFuzzTool:
         """Test handling exception during tool call."""
         tool = {"name": "test_tool"}
         tool_client.tool_mutator.mutate = AsyncMock(return_value={})
-        tool_client._rpc.call_tool = AsyncMock(side_effect=Exception("call failed"))
+        tool_client._rpc.call_tool = AsyncMock(
+            side_effect=Exception("call failed")
+        )
         
         results = await tool_client.fuzz_tool(tool, runs=1)
         
@@ -137,7 +147,9 @@ class TestFuzzTool:
     async def test_fuzz_tool_mutator_exception(self, tool_client):
         """Test handling exception from mutator."""
         tool = {"name": "test_tool"}
-        tool_client.tool_mutator.mutate = AsyncMock(side_effect=Exception("mutator failed"))
+        tool_client.tool_mutator.mutate = AsyncMock(
+            side_effect=Exception("mutator failed")
+        )
         
         results = await tool_client.fuzz_tool(tool, runs=1)
         
@@ -152,11 +164,15 @@ class TestFuzzAllTools:
     @pytest.mark.asyncio
     async def test_fuzz_all_tools_success(self, tool_client):
         """Test fuzzing all tools successfully."""
-        tool_client._get_tools_from_server = AsyncMock(return_value=[
-            {"name": "tool1"},
-            {"name": "tool2"},
-        ])
-        tool_client._fuzz_single_tool_with_timeout = AsyncMock(return_value=[{"success": True}])
+        tool_client._get_tools_from_server = AsyncMock(
+            return_value=[
+                {"name": "tool1"},
+                {"name": "tool2"},
+            ]
+        )
+        tool_client._fuzz_single_tool_with_timeout = AsyncMock(
+            return_value=[{"success": True}]
+        )
         
         results = await tool_client.fuzz_all_tools(runs_per_tool=1)
         
@@ -174,7 +190,9 @@ class TestFuzzAllTools:
     @pytest.mark.asyncio
     async def test_fuzz_all_tools_timeout_protection(self, tool_client):
         """Test overall timeout protection."""
-        tool_client._get_tools_from_server = AsyncMock(return_value=[{"name": "tool1"}])
+        tool_client._get_tools_from_server = AsyncMock(
+            return_value=[{"name": "tool1"}]
+        )
         
         # Simulate very slow fuzzing
         async def slow_fuzz(*args, **kwargs):
@@ -214,8 +232,8 @@ class TestFuzzSingleToolWithTimeout:
         tool_client.fuzz_tool = slow_fuzz
         
         # Patch the default max time to be very short
-        with patch.object(tool_client, 'fuzz_tool', slow_fuzz):
-            with patch('mcp_fuzzer.client.tool_client.DEFAULT_MAX_TOOL_TIME', 0.1):
+        with patch.object(tool_client, "fuzz_tool", slow_fuzz):
+            with patch("mcp_fuzzer.client.tool_client.DEFAULT_MAX_TOOL_TIME", 0.1):
                 results = await tool_client._fuzz_single_tool_with_timeout(tool, 1)
         
                 assert len(results) == 1
@@ -254,7 +272,9 @@ class TestFuzzToolBothPhases:
     async def test_both_phases_exception(self, tool_client):
         """Test handling exception in two-phase fuzzing."""
         tool = {"name": "test_tool"}
-        tool_client.tool_mutator.mutate = AsyncMock(side_effect=Exception("mutator error"))
+        tool_client.tool_mutator.mutate = AsyncMock(
+            side_effect=Exception("mutator error")
+        )
         
         results = await tool_client.fuzz_tool_both_phases(tool, runs_per_phase=1)
         
@@ -309,11 +329,12 @@ class TestFuzzAllToolsBothPhases:
     @pytest.mark.asyncio
     async def test_fuzz_all_both_phases_success(self, tool_client):
         """Test fuzzing all tools in both phases."""
-        tool_client._get_tools_from_server = AsyncMock(return_value=[{"name": "tool1"}])
-        tool_client._fuzz_single_tool_both_phases = AsyncMock(return_value={
-            "realistic": [],
-            "aggressive": []
-        })
+        tool_client._get_tools_from_server = AsyncMock(
+            return_value=[{"name": "tool1"}]
+        )
+        tool_client._fuzz_single_tool_both_phases = AsyncMock(
+            return_value={"realistic": [], "aggressive": []}
+        )
         
         results = await tool_client.fuzz_all_tools_both_phases(runs_per_phase=1)
         
@@ -377,10 +398,9 @@ class TestFuzzSingleToolBothPhases:
     async def test_single_tool_both_phases_success(self, tool_client):
         """Test _fuzz_single_tool_both_phases success."""
         tool = {"name": "test_tool"}
-        tool_client.fuzz_tool_both_phases = AsyncMock(return_value={
-            "realistic": [],
-            "aggressive": []
-        })
+        tool_client.fuzz_tool_both_phases = AsyncMock(
+            return_value={"realistic": [], "aggressive": []}
+        )
         
         result = await tool_client._fuzz_single_tool_both_phases(tool, 2)
         
@@ -391,7 +411,9 @@ class TestFuzzSingleToolBothPhases:
     async def test_single_tool_both_phases_error_result(self, tool_client):
         """Test _fuzz_single_tool_both_phases with error in result."""
         tool = {"name": "test_tool"}
-        tool_client.fuzz_tool_both_phases = AsyncMock(return_value={"error": "some error"})
+        tool_client.fuzz_tool_both_phases = AsyncMock(
+            return_value={"error": "some error"}
+        )
         
         result = await tool_client._fuzz_single_tool_both_phases(tool, 2)
         
