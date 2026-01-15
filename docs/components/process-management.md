@@ -44,6 +44,7 @@ The executor's concurrency can be configured in several ways:
    ```
 
 3. **CLI flags**:
+
    ```bash
    # Limit concurrent client operations
    mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \

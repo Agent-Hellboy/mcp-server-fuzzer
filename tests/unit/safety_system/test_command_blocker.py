@@ -98,10 +98,6 @@ def test_clear_blocked_operations_removes_log(tmp_path):
     assert not log_file.exists()
 
 
-def test_get_blocked_commands_wrapper_reflects_state():
-    original = list(command_blocker._system_blocker.blocked_commands)
-    try:
-        command_blocker._system_blocker.blocked_commands = ["open"]
-        assert "open" in command_blocker.get_blocked_commands()
-    finally:
-        command_blocker._system_blocker.blocked_commands = original
+def test_get_blocked_commands_wrapper_reflects_state(monkeypatch):
+    monkeypatch.setattr(command_blocker._system_blocker, "blocked_commands", ["open"])
+    assert "open" in command_blocker.get_blocked_commands()

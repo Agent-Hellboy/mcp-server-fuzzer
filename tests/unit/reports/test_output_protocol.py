@@ -186,6 +186,7 @@ class TestOutputProtocol:
     def test_result_has_failure_detects_flags(self):
         assert _result_has_failure({"error": "problem"})
         assert _result_has_failure({"exception": "boom"})
+        assert _result_has_failure({"server_error": "connection failed"})
         assert _result_has_failure({"success": False})
         assert not _result_has_failure({"success": True})
 

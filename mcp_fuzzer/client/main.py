@@ -9,6 +9,7 @@ from typing import Any
 import emoji
 
 from ..reports import FuzzerReporter
+from ..reports.formatters.common import extract_tool_runs
 from ..safety_system.safety import SafetyFilter
 from ..exceptions import MCPError
 from .settings import ClientSettings
@@ -17,26 +18,6 @@ from .transport import build_driver_with_auth
 
 # For backward compatibility
 UnifiedMCPFuzzerClient = MCPFuzzerClient
-
-
-def _tool_runs_from_entry(entry: Any) -> list[dict[str, Any]]:
-    if isinstance(entry, dict):
-        runs = entry.get("runs", [])
-        if isinstance(runs, list):
-            return runs
-        realistic = entry.get("realistic")
-        aggressive = entry.get("aggressive")
-        if isinstance(realistic, list) or isinstance(aggressive, list):
-            combined: list[dict[str, Any]] = []
-            if isinstance(realistic, list):
-                combined.extend(realistic)
-            if isinstance(aggressive, list):
-                combined.extend(aggressive)
-            return combined
-        return []
-    if isinstance(entry, list):
-        return entry
-    return []
 
 
 async def _run_spec_guard_if_enabled(
@@ -212,10 +193,10 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
                 total_tools = len(tool_results)
                 total_runs = sum(
-                    len(_tool_runs_from_entry(runs)) for runs in tool_results.values()
+                    len(extract_tool_runs(runs)[0]) for runs in tool_results.values()
                 )
                 total_exceptions = sum(
-                    len([r for r in _tool_runs_from_entry(runs) if r.get("exception")])
+                    len([r for r in extract_tool_runs(runs)[0] if r.get("exception")])
                     for runs in tool_results.values()
                 )
 
@@ -234,7 +215,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
                 vulnerable_tools = []
                 for tool_name, runs in tool_results.items():
-                    run_entries = _tool_runs_from_entry(runs)
+                    run_entries = extract_tool_runs(runs)[0]
                     exceptions = len([r for r in run_entries if r.get("exception")])
                     if exceptions > 0:
                         vulnerable_tools.append(
@@ -261,8 +242,11 @@ async def unified_client_main(settings: ClientSettings) -> int:
             logging.warning(f"Failed to display table summary: {exc}")
 
         if isinstance(protocol_results, dict) and protocol_results:
-            for protocol_type, results in protocol_results.items():
-                client.reporter.add_protocol_results(protocol_type, results)
+            if client.reporter:
+                for protocol_type, results in protocol_results.items():
+                    client.reporter.add_protocol_results(protocol_type, results)
+            else:
+                logging.warning("No reporter available to record protocol results")
 
         try:  # pragma: no cover
             output_types = config.get("output_types")

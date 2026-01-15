@@ -112,4 +112,4 @@ async def test_run_spec_suite_prompts_and_completion(monkeypatch):
     methods = [method for method, _params in transport.requests]
     assert "prompts/get" in methods
     assert "completion/complete" in methods
-    assert checks is not None
+    assert isinstance(checks, list)

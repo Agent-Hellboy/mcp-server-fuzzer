@@ -21,9 +21,10 @@ def extract_tool_runs(
     tool_entry: Any,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     if isinstance(tool_entry, dict):
-        runs = tool_entry.get("runs", [])
-        if isinstance(runs, list):
-            return runs, tool_entry
+        if "runs" in tool_entry:
+            runs = tool_entry.get("runs")
+            if isinstance(runs, list):
+                return runs, tool_entry
         realistic = tool_entry.get("realistic")
         aggressive = tool_entry.get("aggressive")
         if isinstance(realistic, list) or isinstance(aggressive, list):

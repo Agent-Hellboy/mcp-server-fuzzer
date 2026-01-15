@@ -104,7 +104,7 @@ class ResultBuilder:
             "server_rejected_input": server_error is not None,
             "invariant_violations": invariant_violations or [],
         }
-        if spec_checks:
+        if spec_checks is not None:
             result["spec_checks"] = spec_checks
         if spec_scope:
             result["spec_scope"] = spec_scope

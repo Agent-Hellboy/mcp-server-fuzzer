@@ -169,12 +169,12 @@ class ReportCollector:
             for run in runs:
                 payload_checks = run.payload.get("spec_checks")
                 if isinstance(payload_checks, list):
-                    checks.extend(payload_checks)
+                    checks.extend(deepcopy(payload_checks))
         for runs in self.protocol_results.values():
             for run in runs:
                 payload_checks = run.payload.get("spec_checks")
                 if isinstance(payload_checks, list):
-                    checks.extend(payload_checks)
+                    checks.extend(deepcopy(payload_checks))
         return checks
 
     def _build_spec_summary(self) -> dict[str, Any]:

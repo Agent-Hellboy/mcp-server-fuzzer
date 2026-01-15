@@ -164,9 +164,8 @@ class WebSocketTransport(TransportDriver):
                             request_id,
                         )
                         if "error" in response:
-                            error_msg = f"Server error: {response['error']}"
-                            logger.error(error_msg)
-                            raise Exception(error_msg)
+                            logger.error("Server error: %s", response["error"])
+                            return response
                         return response
                     logger.debug("Ignoring out-of-band WebSocket message: %s", response)
 

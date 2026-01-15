@@ -41,6 +41,7 @@ from ...types import (
     RETRY_DELAY,
 )
 from ...exceptions import TransportError
+from ...safety_system.policy import resolve_redirect_safely
 
 # Back-compat local aliases (referenced by tests)
 MCP_SESSION_ID = MCP_SESSION_ID_HEADER
@@ -169,9 +170,6 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         if not location:
             return None
 
-        # Use the base mixin's redirect resolution (imported from safety policy)
-        from ...safety_system.policy import resolve_redirect_safely
-
         resolved = resolve_redirect_safely(self.url, location)
         if not resolved:
             self._logger.warning(
@@ -269,11 +267,13 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             response = await self._post_with_retries(
                 client, self.url, payload, safe_headers
             )
+            self._maybe_extract_session_headers(response)
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 response = await self._post_with_retries(
                     client, redirect_url, payload, safe_headers
                 )
+                self._maybe_extract_session_headers(response)
             self._handle_http_response_error(response)
 
     async def _post_with_retries(

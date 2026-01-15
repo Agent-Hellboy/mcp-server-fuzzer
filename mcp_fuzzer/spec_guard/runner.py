@@ -36,6 +36,13 @@ _PROMPTS_SPEC = {
     "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/prompts",
 }
 
+_COMPLETIONS_SPEC = {
+    "spec_id": "MCP-Completions",
+    "spec_url": (
+        "https://modelcontextprotocol.io/specification/2025-06-18/server/completions"
+    ),
+}
+
 
 def _parse_prompt_args(raw: str | None) -> dict[str, Any] | None:
     if not raw:
@@ -207,7 +214,7 @@ async def run_spec_suite(
                     _fail(
                         "completion-complete",
                         f"completion/complete failed: {exc}",
-                        _SCHEMA_SPEC,
+                        _COMPLETIONS_SPEC,
                     )
                 )
         else:
@@ -215,7 +222,7 @@ async def run_spec_suite(
                 _warn(
                     "completion-complete",
                     "No prompt name provided; skipping completion/complete",
-                    _SCHEMA_SPEC,
+                    _COMPLETIONS_SPEC,
                 )
             )
 

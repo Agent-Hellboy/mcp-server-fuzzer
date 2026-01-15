@@ -108,7 +108,10 @@ def build_fuzzing_schema() -> dict[str, Any]:
         },
         "spec_prompt_args": {
             "type": "string",
-            "description": "JSON string of prompt arguments for spec guard checks",
+            "description": (
+                "JSON object string of prompt arguments for spec guard checks "
+                '(e.g., \'{"query": "probe"}\')'
+            ),
         },
         "max_concurrency": {
             "type": "integer",

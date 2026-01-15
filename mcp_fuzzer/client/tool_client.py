@@ -377,6 +377,11 @@ class ToolClient:
             try:
                 result = await self.transport.call_tool(tool_name, args_for_call)
                 spec_checks = check_tool_result_content(result)
+                spec_payload = (
+                    {"spec_checks": spec_checks, "spec_scope": "tool_result"}
+                    if spec_checks
+                    else {}
+                )
                 processed.append(
                     {
                         "args": sanitized_args,
@@ -384,11 +389,7 @@ class ToolClient:
                         "safety_blocked": False,
                         "safety_sanitized": safety_sanitized,
                         "success": True,
-                        **(
-                            {"spec_checks": spec_checks, "spec_scope": "tool_result"}
-                            if spec_checks
-                            else {}
-                        ),
+                        **spec_payload,
                     }
                 )
             except Exception as e:

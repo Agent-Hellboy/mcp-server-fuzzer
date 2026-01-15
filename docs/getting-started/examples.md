@@ -32,7 +32,7 @@ mcp-fuzzer --mode tools --tool generate_terraform --phase both --protocol http -
 #### Protocol Fuzzing
 
 ```bash
-# Fuzz all protocol types
+# Fuzz InitializeRequest protocol type
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5
 
 # Fuzz specific protocol type

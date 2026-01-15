@@ -61,6 +61,7 @@ watchdog_extra_buffer: 5.0
 watchdog_max_hang_time: 60.0
 
 # Reporting
+# output_dir is deprecated; prefer output.directory
 output_dir: "reports"
 output:
   directory: "reports"
@@ -92,6 +93,31 @@ The following environment variables are currently read at startup:
 - `MCP_FUZZER_HTTP_TIMEOUT`
 - `MCP_FUZZER_SSE_TIMEOUT`
 - `MCP_FUZZER_STDIO_TIMEOUT`
+
+## Migration From Pre-Redesign Configs (<=3d61ee4)
+
+The configuration schema is now flat. Ensure these keys are at the top level:
+`mode`, `protocol`, `endpoint`, `runs`, `phase`, and `output`. The legacy
+`output_dir` key is still accepted but deprecated; prefer `output.directory`.
+
+Legacy (pre-redesign) configs:
+
+```yaml
+# output_dir (legacy)
+output_dir: "reports"
+```
+
+Current configs:
+
+```yaml
+mode: "tools"
+protocol: "http"
+endpoint: "http://localhost:8000"
+runs: 10
+phase: "aggressive"
+output:
+  directory: "reports"
+```
 
 Authentication-related environment variables are documented in the getting-started guide and are used when `--auth-env` is set.
 

@@ -25,6 +25,7 @@ The transport layer had significant code duplication and inconsistencies across 
 ### 2. Standardized Error Handling
 
 **Before**: Inconsistent error handling across transports:
+
 ```python
 # HttpDriver - logs before raising
 logging.error("Server returned error: %s", data["error"])
@@ -35,6 +36,7 @@ raise Exception(f"Server error: {data['error']}")
 ```
 
 **After**: Consistent error handling with proper logging:
+
 ```python
 def _log_error_and_raise(self, message: str, error_data: Any = None) -> None:
     """Log error and raise TransportError with consistent formatting."""

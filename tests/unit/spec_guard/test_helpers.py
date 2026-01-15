@@ -20,4 +20,14 @@ def test_warn_builds_warning_record():
     record = helpers.warn("warn-id", "notice", spec)
     assert record["id"] == "warn-id"
     assert record["status"] == "WARN"
+    assert record["spec_id"] == "S-321"
+    assert record["spec_url"] == "https://spec"
+
+
+def test_pass_builds_pass_record():
+    spec = {"spec_id": "S-999", "spec_url": "https://spec"}
+    record = helpers.pass_check("pass-id", "all good", spec)
+    assert record["id"] == "pass-id"
+    assert record["status"] == "PASS"
+    assert record["spec_id"] == "S-999"
     assert record["spec_url"] == "https://spec"

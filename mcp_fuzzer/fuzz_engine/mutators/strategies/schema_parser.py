@@ -556,6 +556,28 @@ def _handle_string_format(format_type: str, phase: str) -> str:
                         "http://<script>alert('xss')</script>",
                     ]
                 )
+    elif format_type == "ipv4":
+        # IPv4 format
+        def _ipv4() -> str:
+            return ".".join(str(random.randint(0, 255)) for _ in range(4))
+
+        if phase == "realistic":
+            return _ipv4()
+        if random.random() < 0.7:
+            return _ipv4()
+        return random.choice(["999.999.999.999", "abc.def.ghi.jkl", "256.256.256.256"])
+
+    elif format_type == "ipv6":
+        # IPv6 format
+        def _ipv6() -> str:
+            groups = [f"{random.randint(0, 0xFFFF):x}" for _ in range(8)]
+            return ":".join(groups)
+
+        if phase == "realistic":
+            return _ipv6()
+        if random.random() < 0.7:
+            return _ipv6()
+        return random.choice(["gggg::1", "12345::", ":::"])
 
     # Default: treat as regular string
     return _handle_string_type({"type": "string"}, phase)

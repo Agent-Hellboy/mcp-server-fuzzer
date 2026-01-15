@@ -80,3 +80,51 @@ def test_save_csv_report_accepts_supports_to_dict(tmp_path: Path):
     rows = _read_csv(output)
     assert rows[0][0] == "Tool Name"
     assert rows[1][0] == "x"
+
+
+def test_save_csv_report_multiple_tools_and_runs(tmp_path: Path):
+    report_data = {
+        "tool_results": {
+            "tool-x": [{"success": True}, {"success": False}],
+            "tool-y": [{"success": True}],
+        }
+    }
+
+    output = tmp_path / "multi.csv"
+    CSVFormatter().save_csv_report(report_data, output)
+
+    rows = _read_csv(output)
+    assert len(rows) == 1 + 3
+    tool_names = [row[0] for row in rows[1:]]
+    assert tool_names.count("tool-x") == 2
+    assert tool_names.count("tool-y") == 1
+
+
+def test_save_csv_report_with_runs_key(tmp_path: Path):
+    report_data = {
+        "tool_results": {"tool-x": {"runs": [{"success": True}, {"success": True}]}}
+    }
+
+    output = tmp_path / "runs_key.csv"
+    CSVFormatter().save_csv_report(report_data, output)
+
+    rows = _read_csv(output)
+    assert len(rows) == 1 + 2
+    assert all(row[0] == "tool-x" for row in rows[1:])
+
+
+def test_save_csv_report_with_realistic_aggressive(tmp_path: Path):
+    report_data = {
+        "tool_results": {
+            "tool-x": {
+                "realistic": [{"success": True}],
+                "aggressive": [{"success": False}],
+            }
+        }
+    }
+
+    output = tmp_path / "phases.csv"
+    CSVFormatter().save_csv_report(report_data, output)
+
+    rows = _read_csv(output)
+    assert len(rows) == 1 + 2

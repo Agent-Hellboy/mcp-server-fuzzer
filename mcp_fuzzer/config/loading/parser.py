@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import yaml
 
 from ...exceptions import ConfigFileError
+
+logger = logging.getLogger(__name__)
 
 
 def load_config_file(file_path: str) -> dict[str, Any]:
@@ -42,6 +45,16 @@ def load_config_file(file_path: str) -> dict[str, Any]:
                 f"Top-level configuration in {file_path} must be a mapping/object, "
                 f"got {type(data).__name__}"
             )
+
+        if "output_dir" in data:
+            logger.warning(
+                "Config key 'output_dir' is deprecated; use 'output.directory' instead."
+            )
+            output_section = data.get("output")
+            if not isinstance(output_section, dict):
+                output_section = {}
+                data["output"] = output_section
+            output_section.setdefault("directory", data["output_dir"])
 
         return data
     except yaml.YAMLError as e:

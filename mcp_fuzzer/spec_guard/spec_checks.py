@@ -337,24 +337,32 @@ def check_resources_read(result: Any) -> list[SpecCheck]:
         )
         return checks
 
-    first = contents[0]
-    if isinstance(first, dict):
-        if not first.get("uri"):
-            checks.append(
-                _fail("resources-read-uri", "Content missing uri", _RESOURCES_SPEC)
-            )
-        if not (first.get("text") or first.get("blob")):
+    for idx, item in enumerate(contents):
+        if isinstance(item, dict):
+            if not item.get("uri"):
+                checks.append(
+                    _fail(
+                        "resources-read-uri",
+                        f"Content {idx} missing uri",
+                        _RESOURCES_SPEC,
+                    )
+                )
+            if not (item.get("text") or item.get("blob")):
+                checks.append(
+                    _fail(
+                        "resources-read-body",
+                        f"Content {idx} missing text or blob",
+                        _RESOURCES_SPEC,
+                    )
+                )
+        else:
             checks.append(
                 _fail(
-                    "resources-read-body",
-                    "Content missing text or blob",
+                    "resources-read-item",
+                    f"Content {idx} is not object",
                     _RESOURCES_SPEC,
                 )
             )
-    else:
-        checks.append(
-            _fail("resources-read-item", "Content item is not object", _RESOURCES_SPEC)
-        )
 
     return checks
 

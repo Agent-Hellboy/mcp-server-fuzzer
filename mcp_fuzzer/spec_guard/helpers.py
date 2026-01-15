@@ -36,3 +36,14 @@ def warn(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
         "spec_id": spec.get("spec_id", ""),
         "spec_url": spec.get("spec_url", ""),
     }
+
+
+def pass_check(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
+    """Create a passing SpecCheck."""
+    return {
+        "id": check_id,
+        "status": "PASS",
+        "message": message,
+        "spec_id": spec.get("spec_id", ""),
+        "spec_url": spec.get("spec_url", ""),
+    }

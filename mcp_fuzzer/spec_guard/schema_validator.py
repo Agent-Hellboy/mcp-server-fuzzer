@@ -75,7 +75,8 @@ def validate_definition(
             )
         ]
 
-    definitions = schema.get("definitions", {})
+    defs_key = "$defs" if "$defs" in schema else "definitions"
+    definitions = schema.get(defs_key, {})
     if definition_name not in definitions:
         return [
             _make_check(
@@ -87,8 +88,8 @@ def validate_definition(
 
     wrapper = {
         "$schema": schema.get("$schema"),
-        "$ref": f"#/definitions/{definition_name}",
-        "definitions": definitions,
+        "$ref": f"#/{defs_key}/{definition_name}",
+        defs_key: definitions,
     }
 
     try:
