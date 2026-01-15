@@ -61,6 +61,7 @@ def test_block_command_adds_and_creates_when_active(tmp_path, monkeypatch):
 
     tracker = MagicMock()
     monkeypatch.setattr(blocker, "create_fake_executable", tracker)
+    monkeypatch.setattr(blocker, "is_blocking_active", lambda: True)
 
     blocker.block_command("new-app")
 

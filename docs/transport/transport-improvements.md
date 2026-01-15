@@ -50,6 +50,7 @@ def _log_error_and_raise(self, message: str, error_data: Any = None) -> None:
 ### 3. Enhanced Type Safety
 
 **Before**: Overuse of `Any` types:
+
 ```python
 async def send_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
 ```
@@ -251,7 +252,12 @@ from mcp_fuzzer.transport.mixins import JSONRPCRequest
 
 async def send_validated_request(transport: HttpDriver, method: str) -> Dict[str, Any]:
     # Create validated request
-    payload: JSONRPCRequest = transport._create_jsonrpc_request(method)
+    payload: JSONRPCRequest = {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": {},
+        "id": "req-1",
+    }
 
     # Send with validation
     return await transport.send_raw(payload)

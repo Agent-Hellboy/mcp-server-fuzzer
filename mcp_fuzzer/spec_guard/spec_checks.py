@@ -2,38 +2,32 @@
 
 from typing import Any
 
-from .helpers import SpecCheck, fail as _fail, warn as _warn
+from .helpers import (
+    LOGGING_SPEC,
+    PROMPTS_SPEC,
+    RESOURCES_SPEC,
+    SCHEMA_SPEC,
+    SSE_SPEC,
+    TOOLS_SPEC,
+    SpecCheck,
+    fail as _fail,
+    spec_variant,
+    warn as _warn,
+)
 
 
-_TOOLS_SPEC = {
-    "spec_id": "MCP-Tools-Call",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/tools#calling-tools",
-}
-
-_LOGGING_SPEC = {
-    "spec_id": "MCP-Logging",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/utilities/logging",
-}
-
-_SCHEMA_SPEC = {
-    "spec_id": "MCP-JSON-Schema",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/schema",
-}
-
-_RESOURCES_SPEC = {
-    "spec_id": "MCP-Resources",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/resources",
-}
-
-_PROMPTS_SPEC = {
-    "spec_id": "MCP-Prompts",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/prompts",
-}
-
-_SSE_SPEC = {
-    "spec_id": "MCP-SSE",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#sse-transport",
-}
+_TOOLS_SPEC = spec_variant(
+    TOOLS_SPEC,
+    spec_id="MCP-Tools-Call",
+    spec_url=(
+        "https://modelcontextprotocol.io/specification/2025-06-18/server/tools#calling-tools"
+    ),
+)
+_LOGGING_SPEC = LOGGING_SPEC
+_SCHEMA_SPEC = spec_variant(SCHEMA_SPEC, spec_id="MCP-JSON-Schema")
+_RESOURCES_SPEC = RESOURCES_SPEC
+_PROMPTS_SPEC = PROMPTS_SPEC
+_SSE_SPEC = SSE_SPEC
 
 
 def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
@@ -443,14 +437,6 @@ def check_prompts_list(result: Any) -> list[SpecCheck]:
                 _fail(
                     "prompts-list-name",
                     f"Prompt {idx} missing name",
-                    _PROMPTS_SPEC,
-                )
-            )
-        if not prompt.get("description"):
-            checks.append(
-                _fail(
-                    "prompts-list-description",
-                    f"Prompt {idx} missing description",
                     _PROMPTS_SPEC,
                 )
             )

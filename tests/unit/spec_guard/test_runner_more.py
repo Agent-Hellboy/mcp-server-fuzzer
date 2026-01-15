@@ -11,12 +11,12 @@ from mcp_fuzzer.spec_guard import runner
 
 
 def test_parse_prompt_args_invalid_json():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="spec_prompt_args is not valid JSON"):
         runner._parse_prompt_args("{bad")
 
 
 def test_parse_prompt_args_non_object():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="spec_prompt_args must be a JSON object"):
         runner._parse_prompt_args("[1, 2]")
 
 

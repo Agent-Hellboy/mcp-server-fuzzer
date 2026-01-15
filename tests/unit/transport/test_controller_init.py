@@ -8,22 +8,18 @@ import pytest
 import mcp_fuzzer.transport.controller as controller
 
 
-def test_controller_getattr_transport_coordinator():
-    cls = getattr(controller, "TransportCoordinator")
+@pytest.mark.parametrize(
+    ("attr", "expected"),
+    [
+        ("TransportCoordinator", "TransportCoordinator"),
+        ("ProcessSupervisor", "ProcessSupervisor"),
+        ("ProcessState", "ProcessState"),
+    ],
+)
+def test_controller_getattr_known_symbols(attr, expected):
+    cls = getattr(controller, attr)
 
-    assert cls.__name__ == "TransportCoordinator"
-
-
-def test_controller_getattr_process_supervisor():
-    cls = getattr(controller, "ProcessSupervisor")
-
-    assert cls.__name__ == "ProcessSupervisor"
-
-
-def test_controller_getattr_process_state():
-    cls = getattr(controller, "ProcessState")
-
-    assert cls.__name__ == "ProcessState"
+    assert cls.__name__ == expected
 
 
 def test_controller_getattr_unknown():

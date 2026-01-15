@@ -565,7 +565,19 @@ def _handle_string_format(format_type: str, phase: str) -> str:
             return _ipv4()
         if random.random() < 0.7:
             return _ipv4()
-        return random.choice(["999.999.999.999", "abc.def.ghi.jkl", "256.256.256.256"])
+        return random.choice(
+            [
+                "999.999.999.999",
+                "abc.def.ghi.jkl",
+                "256.256.256.256",
+                "-1.0.0.0",
+                "1.2.3",
+                "01.02.03.04",
+                "300.1.2.3",
+                "1.2.3.4.5",
+                "1..2.3",
+            ]
+        )
 
     elif format_type == "ipv6":
         # IPv6 format
@@ -577,7 +589,19 @@ def _handle_string_format(format_type: str, phase: str) -> str:
             return _ipv6()
         if random.random() < 0.7:
             return _ipv6()
-        return random.choice(["gggg::1", "12345::", ":::"])
+        return random.choice(
+            [
+                "gggg::1",
+                "12345::",
+                ":::",
+                "1::1::1",
+                "fe80%",
+                "::ffff:192.0.2.256",
+                "2001:db8::g",
+                "",
+                "2001:db8:::1",
+            ]
+        )
 
     # Default: treat as regular string
     return _handle_string_type({"type": "string"}, phase)

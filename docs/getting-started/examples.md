@@ -35,11 +35,27 @@ mcp-fuzzer --mode tools --tool generate_terraform --phase both --protocol http -
 # Fuzz InitializeRequest protocol type
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5
 
-# Fuzz specific protocol type
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000
+# Fuzz a different protocol type
+mcp-fuzzer --mode protocol --protocol-type ProgressNotification --protocol http --endpoint http://localhost:8000
 
 # With verbose output
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5 --verbose
+```
+
+#### Spec Guard Modes
+
+```bash
+# Run deterministic resource checks
+mcp-fuzzer --mode resources --protocol http --endpoint http://localhost:8000 \
+  --spec-resource-uri file:///tmp/resource.txt
+
+# Run deterministic prompt checks
+mcp-fuzzer --mode prompts --protocol http --endpoint http://localhost:8000 \
+  --spec-prompt-name summarize \
+  --spec-prompt-args '{"text":"hello"}'
+
+# Run tools + protocol fuzzing with spec checks
+mcp-fuzzer --mode all --phase both --protocol http --endpoint http://localhost:8000
 ```
 
 ### SSE Transport Examples

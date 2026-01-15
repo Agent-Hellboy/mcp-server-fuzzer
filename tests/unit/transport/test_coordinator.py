@@ -179,3 +179,4 @@ async def test_cleanup_handles_disconnect_errors():
 
     await coordinator.cleanup()
     coordinator.disconnect.assert_called_once()
+    assert coordinator._active_transports == {}

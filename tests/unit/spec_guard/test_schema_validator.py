@@ -40,6 +40,35 @@ def test_validate_definition_missing_definition(monkeypatch):
     assert "Schema definition not found" in checks[0]["message"]
 
 
+def test_validate_definition_uses_defs(monkeypatch):
+    def _validator_for(schema, default=None):
+        class Validator:
+            def __init__(self, wrapper):
+                self.wrapper = wrapper
+
+            def iter_errors(self, instance):
+                return []
+
+        return Validator
+
+    monkeypatch.setattr(sv, "HAVE_JSONSCHEMA", True)
+    monkeypatch.setattr(
+        sv,
+        "_load_schema",
+        lambda version: {"$schema": "x", "$defs": {"Thing": {}}},
+    )
+    monkeypatch.setattr(sv, "Draft202012Validator", object())
+    monkeypatch.setattr(
+        sv,
+        "validators",
+        SimpleNamespace(validator_for=_validator_for),
+    )
+
+    checks = sv.validate_definition("Thing", {"name": "example"})
+
+    assert checks[0]["status"] == "PASS"
+
+
 def test_validate_definition_validator_error(monkeypatch):
     def _raise_validator_error(schema, default=None):
         raise ValueError("bad")

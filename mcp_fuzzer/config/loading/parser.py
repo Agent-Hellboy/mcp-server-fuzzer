@@ -51,10 +51,15 @@ def load_config_file(file_path: str) -> dict[str, Any]:
                 "Config key 'output_dir' is deprecated; use 'output.directory' instead."
             )
             output_section = data.get("output")
+            if output_section is not None and not isinstance(output_section, dict):
+                logger.warning(
+                    "Config key 'output' must be a mapping; replacing invalid value."
+                )
             if not isinstance(output_section, dict):
                 output_section = {}
                 data["output"] = output_section
             output_section.setdefault("directory", data["output_dir"])
+            data.pop("output_dir", None)
 
         return data
     except yaml.YAMLError as e:

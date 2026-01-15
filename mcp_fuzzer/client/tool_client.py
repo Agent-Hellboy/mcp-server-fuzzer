@@ -375,7 +375,7 @@ class ToolClient:
 
             # Call the tool with the generated arguments
             try:
-                result = await self.transport.call_tool(tool_name, args_for_call)
+                result = await self._rpc.call_tool(tool_name, args_for_call)
                 spec_checks = check_tool_result_content(result)
                 spec_payload = (
                     {"spec_checks": spec_checks, "spec_scope": "tool_result"}
@@ -465,8 +465,13 @@ class ToolClient:
                     tool, runs_per_phase
                 )
                 if tool_name in self._tool_schema_checks:
-                    phase_results["spec_checks"] = self._tool_schema_checks[tool_name]
+                    schema_checks = self._tool_schema_checks[tool_name]
+                    phase_results["spec_checks"] = schema_checks
                     phase_results["spec_scope"] = "tool_schema"
+                    phase_results["spec_checks_passed"] = not any(
+                        str(check.get("status", "")).upper() == "FAIL"
+                        for check in schema_checks
+                    )
                 all_results[tool_name] = phase_results
 
             return all_results

@@ -148,13 +148,14 @@ async def test_process_fuzz_results_safety_blocked():
 @pytest.mark.asyncio
 async def test_process_fuzz_results_success_and_spec_checks():
     transport = MagicMock()
-    transport.call_tool = AsyncMock(return_value={"content": []})
     safety = MagicMock()
     safety.should_skip_tool_call.return_value = False
     safety.sanitize_tool_arguments.return_value = {"x": 2}
     auth = MagicMock()
     auth.get_auth_params_for_tool.return_value = {"token": "abc"}
     client = ToolClient(transport, auth_manager=auth, safety_system=safety)
+    client._rpc = MagicMock()
+    client._rpc.call_tool = AsyncMock(return_value={"content": []})
 
     with patch(
         "mcp_fuzzer.client.tool_client.check_tool_result_content",
@@ -165,7 +166,7 @@ async def test_process_fuzz_results_success_and_spec_checks():
     assert results[0]["success"] is True
     assert results[0]["args"] == {"x": 2}
     assert results[0]["spec_checks"] == [{"id": "spec"}]
-    transport.call_tool.assert_called_once_with("alpha", {"x": 2, "token": "abc"})
+    client._rpc.call_tool.assert_called_once_with("alpha", {"x": 2, "token": "abc"})
 
 
 @pytest.mark.asyncio

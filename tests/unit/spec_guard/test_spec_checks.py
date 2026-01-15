@@ -155,14 +155,13 @@ def test_check_prompts_list_flags_missing_fields():
         {
             "prompts": [
                 "not-dict",
-                {"name": "", "description": ""},
+                {"name": ""},
             ]
         }
     )
     ids = {check["id"] for check in checks}
     assert "prompts-list-item" in ids
     assert "prompts-list-name" in ids
-    assert "prompts-list-description" in ids
 
     wrong_type = spec_checks.check_prompts_list({"prompts": "not-list"})
     assert wrong_type and wrong_type[0]["id"] == "prompts-list-type"

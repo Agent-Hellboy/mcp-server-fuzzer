@@ -24,9 +24,9 @@ async def _run_spec_guard_if_enabled(
     client: MCPFuzzerClient,
     config: dict[str, Any],
     reporter: FuzzerReporter | None,
-) -> list[dict[str, Any]]:
+) -> None:
     if not config.get("spec_guard", True):
-        return []
+        return
     checks = await client.run_spec_suite(
         resource_uri=config.get("spec_resource_uri"),
         prompt_name=config.get("spec_prompt_name"),
@@ -40,7 +40,6 @@ async def _run_spec_guard_if_enabled(
     )
     if reporter:
         reporter.add_spec_checks(checks)
-    return checks
 
 
 async def unified_client_main(settings: ClientSettings) -> int:

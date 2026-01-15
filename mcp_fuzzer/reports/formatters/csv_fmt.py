@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from .common import SupportsToDict, extract_tool_runs, normalize_report_data
@@ -13,7 +14,7 @@ class CSVFormatter:
     def save_csv_report(
         self,
         report_data: dict[str, Any] | SupportsToDict,
-        filename: str,
+        filename: str | Path,
     ):
         import csv
 

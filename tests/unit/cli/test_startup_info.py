@@ -4,10 +4,7 @@ Unit tests for CLI startup info.
 """
 
 import json
-import tempfile
 from argparse import Namespace
-
-import pytest
 
 from mcp_fuzzer.cli import startup_info
 
@@ -20,31 +17,29 @@ def _dummy_console_factory(calls):
     return DummyConsole
 
 
-def test_print_startup_info_basic(monkeypatch):
+def test_print_startup_info_basic(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(startup_info, "Console", _dummy_console_factory(calls))
     monkeypatch.setattr(
         "mcp_fuzzer.client.runtime.argv_builder.prepare_inner_argv",
-        lambda args: ["mcp-fuzzer", "--mode", "tool"],
+        lambda args: ["mcp-fuzzer", "--mode", "tools"],
     )
     monkeypatch.setattr(
         "mcp_fuzzer.client.adapters.config_mediator.load_file",
-        lambda path: {"mode": "tool"},
+        lambda path: {"mode": "tools"},
     )
 
-    with tempfile.NamedTemporaryFile("w", delete=False) as cfg:
-        cfg.write(json.dumps({"mode": "tool"}))
-        cfg_path = cfg.name
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps({"mode": "tools"}))
 
-    with tempfile.NamedTemporaryFile("w", delete=False) as auth:
-        auth.write(json.dumps({"token": "abc"}))
-        auth_path = auth.name
+    auth_path = tmp_path / "auth.json"
+    auth_path.write_text(json.dumps({"token": "abc"}))
 
     args = Namespace(
-        config=cfg_path,
-        auth_config=auth_path,
+        config=str(cfg_path),
+        auth_config=str(auth_path),
         auth_env=True,
-        mode="tool",
+        mode="tools",
         phase=None,
         protocol=None,
         endpoint=None,
@@ -81,22 +76,29 @@ def test_print_startup_info_basic(monkeypatch):
 
     startup_info.print_startup_info(args, config={"auth_manager": None})
 
-    assert calls
+    rendered = [" ".join(str(arg) for arg in call[0]) for call in calls]
+    assert any("MCP Fuzzer v" in text for text in rendered)
+    assert any("Main Configuration File" in text for text in rendered)
+    assert not any("Could not build argv preview" in text for text in rendered)
 
 
 def test_print_startup_info_argv_error(monkeypatch):
     calls = []
     monkeypatch.setattr(startup_info, "Console", _dummy_console_factory(calls))
+
+    def _raise():
+        raise RuntimeError("boom")
+
     monkeypatch.setattr(
         "mcp_fuzzer.client.runtime.argv_builder.prepare_inner_argv",
-        lambda args: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda args: _raise(),
     )
 
     args = Namespace(
         config=None,
         auth_config=None,
         auth_env=False,
-        mode="tool",
+        mode="tools",
         phase=None,
         protocol=None,
         endpoint=None,
@@ -133,4 +135,5 @@ def test_print_startup_info_argv_error(monkeypatch):
 
     startup_info.print_startup_info(args, config=None)
 
-    assert calls
+    rendered = [" ".join(str(arg) for arg in call[0]) for call in calls]
+    assert any("Could not build argv preview" in text for text in rendered)

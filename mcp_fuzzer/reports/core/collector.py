@@ -164,7 +164,7 @@ class ReportCollector:
 
     def _collect_spec_checks(self) -> list[dict[str, Any]]:
         checks: list[dict[str, Any]] = []
-        checks.extend(self.spec_checks)
+        checks.extend(deepcopy(self.spec_checks))
         for runs in self.tool_results.values():
             for run in runs:
                 payload_checks = run.payload.get("spec_checks")

@@ -5,7 +5,16 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .helpers import SpecCheck, fail as _fail, warn as _warn
+from .helpers import (
+    COMPLETIONS_SPEC,
+    PROMPTS_SPEC,
+    RESOURCES_SPEC,
+    SCHEMA_SPEC,
+    TOOLS_SPEC,
+    SpecCheck,
+    fail as _fail,
+    warn as _warn,
+)
 from .schema_validator import validate_definition
 from .spec_checks import (
     check_resources_list,
@@ -16,32 +25,11 @@ from .spec_checks import (
     check_tool_schema_fields,
 )
 
-_TOOLS_SPEC = {
-    "spec_id": "MCP-Tools",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/tools",
-}
-
-_SCHEMA_SPEC = {
-    "spec_id": "MCP-Schema",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/schema",
-}
-
-_RESOURCES_SPEC = {
-    "spec_id": "MCP-Resources",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/resources",
-}
-
-_PROMPTS_SPEC = {
-    "spec_id": "MCP-Prompts",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/prompts",
-}
-
-_COMPLETIONS_SPEC = {
-    "spec_id": "MCP-Completions",
-    "spec_url": (
-        "https://modelcontextprotocol.io/specification/2025-06-18/server/completions"
-    ),
-}
+_TOOLS_SPEC = TOOLS_SPEC
+_SCHEMA_SPEC = SCHEMA_SPEC
+_RESOURCES_SPEC = RESOURCES_SPEC
+_PROMPTS_SPEC = PROMPTS_SPEC
+_COMPLETIONS_SPEC = COMPLETIONS_SPEC
 
 
 def _parse_prompt_args(raw: str | None) -> dict[str, Any] | None:

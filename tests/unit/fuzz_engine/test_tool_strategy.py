@@ -3,8 +3,6 @@
 Unit tests for aggressive tool strategy helpers.
 """
 
-from unittest.mock import patch
-
 import pytest
 
 from mcp_fuzzer.fuzz_engine.mutators.strategies import schema_parser
@@ -74,3 +72,4 @@ def test_fuzz_tool_arguments_aggressive_fallback(monkeypatch):
     assert args["a"] == "text"
     assert args["b"] == 7
     assert args["c"] == "text"
+    assert set(args.keys()).issubset({"a", "b", "c"})

@@ -3,8 +3,6 @@
 Unit tests for SseDriver.
 """
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from mcp_fuzzer.transport.drivers.sse_driver import SseDriver
