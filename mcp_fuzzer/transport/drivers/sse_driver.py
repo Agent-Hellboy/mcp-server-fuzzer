@@ -11,6 +11,10 @@ from typing import Any, AsyncIterator
 
 from ..interfaces.driver import TransportDriver
 from ..interfaces.behaviors import HttpClientBehavior, ResponseParserBehavior
+from ..interfaces.server_requests import (
+    build_sampling_create_message_response,
+    is_server_request,
+)
 from ...exceptions import TransportError
 
 
@@ -102,7 +106,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                 buffer: list[str] = []
                 raw_lines: list[str] = []
 
-                def flush_once() -> dict[str, Any] | None:
+                async def flush_once() -> dict[str, Any] | None:
                     """Flush buffer and parse as SSE event."""
                     if not buffer:
                         return None
@@ -115,6 +119,10 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                         return None
                     if data is None:
                         return None
+                    if is_server_request(data):
+                        handled = await self._handle_server_request(data)
+                        if handled:
+                            return None
                     # Use shared result extraction
                     return self._extract_result_from_response(data)
 
@@ -122,14 +130,14 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                 async for line in response.aiter_lines():
                     raw_lines.append(line)
                     if not line.strip():
-                        result = flush_once()
+                        result = await flush_once()
                         if result is not None:
                             return result
                         continue
                     buffer.append(line)
 
                 # Flush remaining buffer
-                result = flush_once()
+                result = await flush_once()
                 if result is not None:
                     return result
 
@@ -219,6 +227,14 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                                         event_text = "\n".join(buffer)
                                         parsed = self.parse_sse_event(event_text)
                                         if parsed is not None:
+                                            if is_server_request(parsed):
+                                                handled = (
+                                                    await self._handle_server_request(
+                                                        parsed
+                                                    )
+                                                )
+                                                if handled:
+                                                    continue
                                             yield parsed
                                     except json.JSONDecodeError:
                                         self._logger.error(
@@ -243,6 +259,14 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                                         event_text = "\n".join(buffer)
                                         parsed = self.parse_sse_event(event_text)
                                         if parsed is not None:
+                                            if is_server_request(parsed):
+                                                handled = (
+                                                    await self._handle_server_request(
+                                                        parsed
+                                                    )
+                                                )
+                                                if handled:
+                                                    continue
                                             yield parsed
                                     except json.JSONDecodeError:
                                         self._logger.error(
@@ -257,6 +281,30 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                         event_text = "\n".join(buffer)
                         parsed = self.parse_sse_event(event_text)
                         if parsed is not None:
+                            if is_server_request(parsed):
+                                handled = await self._handle_server_request(parsed)
+                                if handled:
+                                    return
                             yield parsed
                     except json.JSONDecodeError:
                         self._logger.error("Failed to parse SSE event payload as JSON")
+
+    async def _handle_server_request(self, payload: dict[str, Any]) -> bool:
+        """Handle server->client requests delivered over SSE."""
+        method = payload.get("method")
+        request_id = payload.get("id")
+        if method == "sampling/createMessage" and request_id is not None:
+            response_payload = build_sampling_create_message_response(request_id)
+            await self._send_client_response(response_payload)
+            return True
+        return False
+
+    async def _send_client_response(self, payload: dict[str, Any]) -> None:
+        """Send a JSON-RPC response back to the server."""
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
+        safe_headers = self._prepare_headers_with_auth(self.headers)
+
+        async with self._create_http_client(self.timeout) as client:
+            response = await client.post(self.url, json=payload, headers=safe_headers)
+            self._handle_http_response_error(response)

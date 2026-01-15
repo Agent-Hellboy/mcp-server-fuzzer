@@ -21,6 +21,8 @@ class FuzzDataResult(TypedDict, total=False):
     server_response: JSONContainer | None
     server_error: str | None
     server_rejected_input: bool
+    spec_checks: list[dict[str, Any]]
+    spec_scope: str
     run: int
     protocol_type: str
     exception: str | None
@@ -32,6 +34,8 @@ class ProtocolFuzzResult(TypedDict, total=False):
 
     fuzz_data: dict[str, Any]
     result: dict[str, Any]
+    spec_checks: list[dict[str, Any]]
+    spec_scope: str
     safety_blocked: bool
     safety_sanitized: bool
     success: bool
@@ -44,6 +48,8 @@ class ToolFuzzResult(TypedDict, total=False):
 
     args: dict[str, Any]
     result: dict[str, Any]
+    spec_checks: list[dict[str, Any]]
+    spec_scope: str
     safety_blocked: bool
     safety_sanitized: bool
     success: bool

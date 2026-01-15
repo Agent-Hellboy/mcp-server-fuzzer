@@ -56,9 +56,11 @@ The modularity improvements (dependency injection, registries) make it maintaine
 # Install from PyPI
 pip install mcp-fuzzer
 
-# Or install from source
-git clone https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
+# Or install from source (includes MCP spec submodule)
+git clone --recursive https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
 cd mcp-server-fuzzer
+# If you already cloned without submodules, run:
+git submodule update --init --recursive
 pip install -e .
 ```
 
@@ -72,23 +74,23 @@ pip install -e .
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000
 
 # Fuzz protocol types on an SSE server
-mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8000/sse
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --endpoint http://localhost:8000/sse
 ```
 
 ### Advanced Usage
 
 ```bash
 # Two-phase fuzzing (realistic + aggressive)
-mcp-fuzzer --mode both --phase both --protocol http --endpoint http://localhost:8000
+mcp-fuzzer --mode all --phase both --protocol http --endpoint http://localhost:8000
 
 # With safety system enabled
 mcp-fuzzer --mode tools --enable-safety-system --safety-report
 
 # Export results to multiple formats
-mcp-fuzzer --mode tools --export-csv results.csv --export-json results.json
+mcp-fuzzer --mode tools --export-csv results.csv --export-html results.html
 
 # Use configuration file
-mcp-fuzzer --config my-config.yaml --server production_api
+mcp-fuzzer --config my-config.yaml
 ```
 
 ## Examples
@@ -108,7 +110,7 @@ mcp-fuzzer --mode tools --protocol http --endpoint https://api.example.com \
 
 ```bash
 # SSE protocol fuzzing
-mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8080/sse \
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --endpoint http://localhost:8080/sse \
            --runs-per-type 25 --verbose
 ```
 
@@ -124,25 +126,23 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" \
 
 ```yaml
 # config.yaml
-servers:
-  local_dev:
-    protocol: stdio
-    endpoint: "python dev_server.py"
-    runs: 10
-    phase: realistic
+mode: tools
+protocol: stdio
+endpoint: "python dev_server.py"
+runs: 10
+phase: realistic
 
-  production:
-    protocol: http
-    endpoint: "https://api.prod.com"
-    runs: 100
-    phase: both
-    auth:
-      type: api_key
-      api_key: "${API_KEY}"
+# Optional output configuration
+output:
+  directory: "reports"
+  format: "json"
+  types:
+    - "fuzzing_results"
+    - "safety_summary"
 ```
 
 ```bash
-mcp-fuzzer --config config.yaml --server local_dev
+mcp-fuzzer --config config.yaml
 ```
 
 ## Configuration
@@ -150,7 +150,7 @@ mcp-fuzzer --config config.yaml --server local_dev
 ### Configuration Methods (in order of precedence)
 
 1. **Command-line arguments** (highest precedence)
-2. **Configuration files** (YAML/TOML)
+2. **Configuration files** (YAML)
 3. **Environment variables** (lowest precedence)
 
 ### Environment Variables
@@ -159,7 +159,6 @@ mcp-fuzzer --config config.yaml --server local_dev
 # Core settings
 export MCP_FUZZER_TIMEOUT=60.0
 export MCP_FUZZER_LOG_LEVEL=DEBUG
-export MCP_FUZZER_VERBOSE=true
 
 # Safety settings
 export MCP_FUZZER_SAFETY_ENABLED=true
@@ -191,7 +190,7 @@ mcp-fuzzer --timeout 120 --process-retry-count 5 --process-retry-delay 2.0
 | Intelligent Testing | Hypothesis-based data generation with custom strategies |
 | Rich Reporting | Detailed output with exception tracking and safety reports |
 | Multiple Output Formats | JSON, CSV, HTML, Markdown, and XML export options |
-| Flexible Configuration | CLI args, YAML/TOML configs, environment variables |
+| Flexible Configuration | CLI args, YAML configs, environment variables |
 | Asynchronous Execution | Efficient concurrent fuzzing with configurable limits |
 | Comprehensive Monitoring | Process watchdog, timeout handling, and resource management |
 | Authentication Support | API keys, basic auth, OAuth, and custom providers |
@@ -288,8 +287,10 @@ We welcome contributions! Please see our [Contributing Guide](https://agent-hell
 
 **Quick Start for Contributors:**
 ```bash
-git clone https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
+git clone --recursive https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
 cd mcp-server-fuzzer
+# If you already cloned without submodules, run:
+git submodule update --init --recursive
 pip install -e .[dev]
 pytest tests/
 ```

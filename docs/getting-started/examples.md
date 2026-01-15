@@ -23,23 +23,39 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 
 
 ```bash
 # Fuzz only a specific tool
-mcp-fuzzer --mode tool --tool analyze_repository --protocol http --endpoint http://localhost:8000 --runs 20
+mcp-fuzzer --mode tools --tool analyze_repository --protocol http --endpoint http://localhost:8000 --runs 20
 
 # Fuzz a specific tool with both phases
-mcp-fuzzer --mode tool --tool generate_terraform --phase both --protocol http --endpoint http://localhost:8000 --runs 15
+mcp-fuzzer --mode tools --tool generate_terraform --phase both --protocol http --endpoint http://localhost:8000 --runs 15
 ```
 
 #### Protocol Fuzzing
 
 ```bash
-# Fuzz all protocol types
-mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --runs-per-type 5
+# Fuzz InitializeRequest protocol type
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5
 
-# Fuzz specific protocol type
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000
+# Fuzz a different protocol type
+mcp-fuzzer --mode protocol --protocol-type ProgressNotification --protocol http --endpoint http://localhost:8000
 
 # With verbose output
-mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --runs-per-type 5 --verbose
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5 --verbose
+```
+
+#### Spec Guard Modes
+
+```bash
+# Run deterministic resource checks
+mcp-fuzzer --mode resources --protocol http --endpoint http://localhost:8000 \
+  --spec-resource-uri file:///tmp/resource.txt
+
+# Run deterministic prompt checks
+mcp-fuzzer --mode prompts --protocol http --endpoint http://localhost:8000 \
+  --spec-prompt-name summarize \
+  --spec-prompt-args '{"text":"hello"}'
+
+# Run tools + protocol fuzzing with spec checks
+mcp-fuzzer --mode all --phase both --protocol http --endpoint http://localhost:8000
 ```
 
 ### SSE Transport Examples
@@ -61,7 +77,7 @@ mcp-fuzzer --mode tools --phase aggressive --protocol sse --endpoint http://loca
 
 ```bash
 # SSE protocol fuzzing
-mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 8
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 8
 
 # Fuzz specific protocol type with SSE
 mcp-fuzzer --mode protocol --protocol-type CreateMessageRequest --protocol sse --endpoint http://localhost:8000/sse
@@ -198,13 +214,13 @@ mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://loc
 
 ```bash
 # Two-phase protocol fuzzing
-mcp-fuzzer --mode protocol --phase both --protocol http --endpoint http://localhost:8000 --runs-per-type 10
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase both --protocol http --endpoint http://localhost:8000 --runs-per-type 10
 
 # Realistic protocol testing
-mcp-fuzzer --mode protocol --phase realistic --protocol http --endpoint http://localhost:8000 --runs-per-type 8
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase realistic --protocol http --endpoint http://localhost:8000 --runs-per-type 8
 
 # Aggressive protocol testing
-mcp-fuzzer --mode protocol --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
 ```
 
 ## Configuration Examples
@@ -242,7 +258,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10
 
 # Test both modes on local server
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 15
-mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --runs-per-type 8
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 8
 ```
 
 ### Production-Like Environment Testing
@@ -252,7 +268,7 @@ mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --ru
 mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api.example.com --runs 10
 
 # Test protocol compliance
-mcp-fuzzer --mode protocol --phase realistic --protocol http --endpoint https://api.example.com --runs-per-type 5
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase realistic --protocol http --endpoint https://api.example.com --runs-per-type 5
 
 # Test with authentication
 mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api.example.com --auth-config auth.json
@@ -265,11 +281,11 @@ mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api
 mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 25
 
 # Protocol security testing
-mcp-fuzzer --mode protocol --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
 
 # Combined security testing
 mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 20
-mcp-fuzzer --mode protocol --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 10
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 10
 ```
 
 ## Reporting Examples
@@ -455,7 +471,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --ru
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 100
 
 # High-volume protocol fuzzing
-mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --runs-per-type 50
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 50
 
 # Concurrent testing with multiple endpoints
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 50 &

@@ -9,10 +9,10 @@ Usage:
     python custom_websocket_transport.py
 
 Or integrate with MCP Fuzzer:
-    from mcp_fuzzer.transport import register_custom_transport
+    from mcp_fuzzer.transport import register_custom_driver
     from custom_websocket_transport import WebSocketTransport
 
-    register_custom_transport(
+    register_custom_driver(
         name="websocket",
         transport_class=WebSocketTransport,
         description="WebSocket-based MCP transport"
@@ -31,13 +31,13 @@ except ImportError as e:
         "websockets package is required. Install with: pip install websockets"
     ) from e
 
-from mcp_fuzzer.transport.base import TransportProtocol
+from mcp_fuzzer.transport import TransportDriver
 from mcp_fuzzer.exceptions import ConnectionError
 
 logger = logging.getLogger(__name__)
 
 
-class WebSocketTransport(TransportProtocol):
+class WebSocketTransport(TransportDriver):
     """
     WebSocket-based transport for MCP communication.
 
@@ -164,9 +164,8 @@ class WebSocketTransport(TransportProtocol):
                             request_id,
                         )
                         if "error" in response:
-                            error_msg = f"Server error: {response['error']}"
-                            logger.error(error_msg)
-                            raise Exception(error_msg)
+                            logger.error("Server error: %s", response["error"])
+                            return response
                         return response
                     logger.debug("Ignoring out-of-band WebSocket message: %s", response)
 
@@ -313,13 +312,16 @@ async def demo_websocket_transport():
         print("Connected to WebSocket MCP server")
 
         # List tools
-        tools = await transport.get_tools()
+        from mcp_fuzzer.transport import JsonRpcAdapter
+
+        adapter = JsonRpcAdapter(transport)
+        tools = await adapter.get_tools()
         print(f"Available tools: {len(tools)}")
 
         # Call a tool (example)
         if tools:
             tool_name = tools[0]["name"]
-            result = await transport.call_tool(tool_name, {})
+            result = await adapter.call_tool(tool_name, {})
             print(f"Tool result: {result}")
 
     except Exception as e:
@@ -330,7 +332,7 @@ async def demo_websocket_transport():
 
 def register_for_mcp_fuzzer():
     """Register this transport with MCP Fuzzer."""
-    from mcp_fuzzer.transport import register_custom_transport
+    from mcp_fuzzer.transport import register_custom_driver
 
     def _factory(first_arg: str, **kwargs):
         s = (first_arg or "").strip()
@@ -340,7 +342,7 @@ def register_for_mcp_fuzzer():
         url = s if s.startswith(("ws://", "wss://")) else f"ws://{s.lstrip('/')}"
         return WebSocketTransport(url, **kwargs)
 
-    register_custom_transport(
+    register_custom_driver(
         name="websocket",
         transport_class=WebSocketTransport,
         description="WebSocket-based MCP transport for real-time communication",
@@ -380,10 +382,10 @@ if __name__ == "__main__":
     print("WebSocket transport example loaded successfully!")
     print("Usage in MCP Fuzzer:")
     print(
-        "  transport = create_transport('websocket://localhost:8080/mcp')"
+        "  transport = build_driver('websocket://localhost:8080/mcp')"
         "  # custom scheme"
     )
     print(
-        "  transport = create_transport('ws://localhost:8080/mcp')"
+        "  transport = build_driver('ws://localhost:8080/mcp')"
         "        # direct ws URL"
     )

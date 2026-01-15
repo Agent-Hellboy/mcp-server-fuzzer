@@ -21,6 +21,7 @@ class ReportCollector:
     def __init__(self):
         self.tool_results: dict[str, list[RunRecord]] = {}
         self.protocol_results: dict[str, list[RunRecord]] = {}
+        self.spec_checks: list[dict[str, Any]] = []
         self.safety_data: dict[str, Any] = {}
         self.runtime_data: dict[str, Any] = {}
 
@@ -31,6 +32,11 @@ class ReportCollector:
     def add_protocol_results(self, protocol_type: str, results: list[dict[str, Any]]):
         bucket = self.protocol_results.setdefault(protocol_type, [])
         bucket.extend(self._coerce_result(r) for r in results)
+
+    def add_spec_checks(self, checks: list[dict[str, Any]]):
+        if not checks:
+            return
+        self.spec_checks.extend(deepcopy(checks))
 
     def update_safety_data(self, safety_data: dict[str, Any]):
         self.safety_data.update(deepcopy(safety_data))
@@ -90,6 +96,7 @@ class ReportCollector:
             tool_results=deepcopy(self.tool_results),
             protocol_results=deepcopy(self.protocol_results),
             summary=self.build_summary(),
+            spec_summary=self._build_spec_summary(),
             safety_data=safety,
             runtime_data=runtime,
         )
@@ -154,3 +161,52 @@ class ReportCollector:
         if isinstance(result, RunRecord):
             return result
         return RunRecord(payload=deepcopy(result))
+
+    def _collect_spec_checks(self) -> list[dict[str, Any]]:
+        checks: list[dict[str, Any]] = []
+        checks.extend(deepcopy(self.spec_checks))
+        for runs in self.tool_results.values():
+            for run in runs:
+                payload_checks = run.payload.get("spec_checks")
+                if isinstance(payload_checks, list):
+                    checks.extend(deepcopy(payload_checks))
+        for runs in self.protocol_results.values():
+            for run in runs:
+                payload_checks = run.payload.get("spec_checks")
+                if isinstance(payload_checks, list):
+                    checks.extend(deepcopy(payload_checks))
+        return checks
+
+    def _build_spec_summary(self) -> dict[str, Any]:
+        checks = self._collect_spec_checks()
+        summary: dict[str, Any] = {
+            "totals": {"total": 0, "failed": 0, "warned": 0, "passed": 0},
+            "by_spec_id": {},
+        }
+        for check in checks:
+            spec_id = check.get("spec_id") or "UNKNOWN"
+            status = str(check.get("status", "")).upper()
+            spec_bucket = summary["by_spec_id"].setdefault(
+                spec_id,
+                {
+                    "spec_url": check.get("spec_url"),
+                    "total": 0,
+                    "failed": 0,
+                    "warned": 0,
+                    "passed": 0,
+                },
+            )
+            spec_bucket["total"] += 1
+            summary["totals"]["total"] += 1
+
+            if status in ("FAIL", "FAILURE", "ERROR"):
+                spec_bucket["failed"] += 1
+                summary["totals"]["failed"] += 1
+            elif status in ("WARN", "WARNING"):
+                spec_bucket["warned"] += 1
+                summary["totals"]["warned"] += 1
+            else:
+                spec_bucket["passed"] += 1
+                summary["totals"]["passed"] += 1
+
+        return summary

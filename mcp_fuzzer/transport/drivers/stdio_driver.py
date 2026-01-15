@@ -22,6 +22,10 @@ from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from ...safety_system.policy import sanitize_subprocess_env
 from ...config import PROCESS_WAIT_TIMEOUT
 from ..controller.process_supervisor import ProcessSupervisor
+from ..interfaces.server_requests import (
+    build_sampling_create_message_response,
+    is_server_request,
+)
 
 
 class StdioDriver(TransportDriver):
@@ -202,6 +206,20 @@ class StdioDriver(TransportDriver):
                 context={"message": message},
             ) from e
 
+    async def _handle_server_request(self, message: Any) -> bool:
+        """Handle server->client requests while waiting for a response."""
+        if not is_server_request(message):
+            return False
+
+        method = message.get("method")
+        request_id = message.get("id")
+        if method == "sampling/createMessage" and request_id is not None:
+            response = build_sampling_create_message_response(request_id)
+            await self._send_message(response)
+            return True
+
+        return False
+
     async def _readline_with_cap(self) -> bytes | None:
         """Read a single line from stdout, capping size to avoid limit overruns."""
         if not self.stdout:
@@ -256,6 +274,9 @@ class StdioDriver(TransportDriver):
                     context={"request_id": request_id},
                 )
 
+            if await self._handle_server_request(response):
+                continue
+
             if response.get("id") == request_id:
                 if "error" in response:
                     logging.error(f"Server returned error: {response['error']}")
@@ -271,22 +292,26 @@ class StdioDriver(TransportDriver):
         await self._send_message(payload)
 
         # Wait for response
-        response = await self._receive_message()
-        if response is None:
-            raise TransportError(
-                "No response received from stdio transport",
-                context={"payload": payload},
-            )
+        while True:
+            response = await self._receive_message()
+            if response is None:
+                raise TransportError(
+                    "No response received from stdio transport",
+                    context={"payload": payload},
+                )
 
-        if "error" in response:
-            logging.error(f"Server returned error: {response['error']}")
-            raise ServerError(
-                "Server returned error",
-                context={"error": response["error"]},
-            )
+            if await self._handle_server_request(response):
+                continue
 
-        result = response.get("result", response)
-        return result if isinstance(result, dict) else {"result": result}
+            if "error" in response:
+                logging.error(f"Server returned error: {response['error']}")
+                raise ServerError(
+                    "Server returned error",
+                    context={"error": response["error"]},
+                )
+
+            result = response.get("result", response)
+            return result if isinstance(result, dict) else {"result": result}
 
     async def _send_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Compatibility method for tests expecting sys-based stdio behavior.

@@ -116,7 +116,7 @@ class TestReporterIntegration:
 
         # Set up fuzzing session
         reporter.set_fuzzing_metadata(
-            mode="tool",
+            mode="tools",
             protocol="stdio",
             endpoint="test_endpoint",
             runs=100,
@@ -157,7 +157,7 @@ class TestReporterIntegration:
         with open(report_file, "r") as f:
             report_data = json.load(f)
 
-        assert report_data["metadata"]["mode"] == "tool"
+        assert report_data["metadata"]["mode"] == "tools"
         assert report_data["metadata"]["protocol"] == "stdio"
         assert "test_tool" in report_data["tool_results"]
         assert "test_protocol" in report_data["protocol_results"]

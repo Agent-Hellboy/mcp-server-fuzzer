@@ -272,7 +272,7 @@ class TestTextFormatter:
         report_data = {
             "metadata": {
                 "session_id": "test_session",
-                "mode": "tool",
+                "mode": "tools",
                 "protocol": "stdio",
             },
             "summary": {

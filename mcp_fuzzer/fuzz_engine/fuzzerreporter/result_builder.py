@@ -75,6 +75,8 @@ class ResultBuilder:
         server_response: dict[str, Any] | list[dict[str, Any]] | None = None,
         server_error: str | None = None,
         invariant_violations: list[str] | None = None,
+        spec_checks: list[dict[str, Any]] | None = None,
+        spec_scope: str | None = None,
     ) -> FuzzDataResult:
         """
         Create standardized protocol fuzzing result.
@@ -86,6 +88,8 @@ class ResultBuilder:
             server_response: Response from server, if any
             server_error: Error from server, if any
             invariant_violations: List of invariant violations, if any
+            spec_checks: List of spec guard check results, if any
+            spec_scope: Scope identifier for spec checks, if any
 
         Returns:
             Standardized protocol result dictionary
@@ -100,6 +104,10 @@ class ResultBuilder:
             "server_rejected_input": server_error is not None,
             "invariant_violations": invariant_violations or [],
         }
+        if spec_checks is not None:
+            result["spec_checks"] = spec_checks
+        if spec_scope:
+            result["spec_scope"] = spec_scope
 
         return result
 

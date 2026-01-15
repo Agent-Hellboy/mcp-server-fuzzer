@@ -22,6 +22,7 @@ from ..formatters import (
     TextFormatter,
     XMLFormatter,
 )
+from ..formatters.common import extract_tool_runs
 from ..output import OutputManager
 from .config import ReporterConfig
 from .contracts import (
@@ -163,17 +164,22 @@ class FuzzerReporter:
         """Add protocol fuzzing results to the reporter."""
         self.collector.add_protocol_results(protocol_type, results)
 
+    def add_spec_checks(self, checks: list[dict[str, Any]]):
+        """Add spec guard checks to the reporter."""
+        self.collector.add_spec_checks(checks)
+
     def add_safety_data(self, safety_data: dict[str, Any]):
         """Add safety system data to the reporter."""
         self.collector.update_safety_data(safety_data)
 
-    def print_tool_summary(self, results: dict[str, list[dict[str, Any]]]):
+    def print_tool_summary(self, results: dict[str, Any]):
         """Print tool fuzzing summary to console."""
         self.console_formatter.print_tool_summary(results)
 
         # Store results for final report
         for tool_name, tool_results in results.items():
-            self.add_tool_results(tool_name, tool_results)
+            runs, _ = extract_tool_runs(tool_results)
+            self.add_tool_results(tool_name, runs)
 
     def print_protocol_summary(self, results: dict[str, list[dict[str, Any]]]):
         """Print protocol fuzzing summary to console."""
@@ -185,7 +191,7 @@ class FuzzerReporter:
 
     def print_overall_summary(
         self,
-        tool_results: dict[str, list[dict[str, Any]]],
+        tool_results: dict[str, Any],
         protocol_results: dict[str, list[dict[str, Any]]],
     ):
         """Print overall summary to console."""

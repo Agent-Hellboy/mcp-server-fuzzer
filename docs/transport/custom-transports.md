@@ -10,7 +10,7 @@ MCP Server Fuzzer now supports custom transport mechanisms that can be registere
 
 The custom transport system consists of:
 
-1. **Transport Registry**: A centralized registry for managing custom transport implementations.
+1. **Driver Catalog**: A centralized registry for managing transport implementations.
 2. **Factory Integration**: Automatic discovery and instantiation of custom transports.
 3. **Configuration Support**: Declarative configuration of custom transports via YAML.
 4. **Type Safety**: Full type checking and validation for custom transport implementations.
@@ -19,14 +19,14 @@ The custom transport system consists of:
 
 ### 1. Create a Transport Class
 
-Your custom transport must inherit from `TransportProtocol` and implement all required abstract methods:
+Your custom transport must inherit from `TransportDriver` and implement all required abstract methods:
 
 ```python
-from mcp_fuzzer.transport.base import TransportProtocol
+from mcp_fuzzer.transport import TransportDriver
 from typing import Any, Dict, Optional, AsyncIterator
 import asyncio
 
-class MyCustomTransport(TransportProtocol):
+class MyCustomTransport(TransportDriver):
     def __init__(self, endpoint: str, **kwargs):
         self.endpoint = endpoint
         # Initialize your transport-specific configuration
@@ -61,11 +61,6 @@ class MyCustomTransport(TransportProtocol):
         # Implement notification sending logic
         pass
 
-    async def close(self) -> None:
-        """Close the transport connection."""
-        # Cleanup logic
-        pass
-
     async def _stream_request(
         self, payload: Dict[str, Any]
     ) -> AsyncIterator[Dict[str, Any]]:
@@ -86,8 +81,10 @@ custom_transports:
   my-custom:
     module: "my_package.transports"
     class: "MyCustomTransport"
-    # Optional: additional init kwargs
-    extra_arg: "value"
+    # Optional metadata for validation/discovery
+    description: "My custom transport"
+    config_schema: {}
+    factory: "my_package.transports.build_transport"
 ```
 
 ### 3. Use in CLI
@@ -98,19 +95,19 @@ Now you can use your custom transport via the CLI:
 mcp-fuzzer --protocol my-custom --config config.yaml --endpoint my-endpoint
 ```
 
-## Advanced: Self-Registration with Registry
+## Advanced: Self-Registration with the Catalog
 
-The transport factory now uses a `TransportRegistry` for built-in transports. For custom transports, you can optionally self-register in your module for even easier extension:
+The transport catalog uses a `DriverCatalog` for built-in transports. For custom transports, you can optionally self-register in your module for even easier extension:
 
 ```python
 # In my_package/transports.py
-from mcp_fuzzer.transport.factory import registry
+from mcp_fuzzer.transport import register_custom_driver, TransportDriver
 
-class MyCustomTransport(TransportProtocol):
+class MyCustomTransport(TransportDriver):
     # ... implementation ...
 
 # Self-register (runs when module is imported)
-registry.register("my-custom", MyCustomTransport)
+register_custom_driver("my-custom", MyCustomTransport)
 ```
 
 This makes extension simpler – no factory changes needed, and CLI usage remains unchanged.
@@ -127,9 +124,9 @@ import json
 import websockets
 from typing import Any, Dict, Optional, AsyncIterator
 
-from mcp_fuzzer.transport.base import TransportProtocol
+from mcp_fuzzer.transport import TransportDriver
 
-class WebSocketTransport(TransportProtocol):
+class WebSocketTransport(TransportDriver):
     def __init__(self, url: str, timeout: float = 30.0):
         self.url = url
         self.timeout = timeout
@@ -264,18 +261,18 @@ Create unit tests for your custom transport:
 
 ```python
 import pytest
-from mcp_fuzzer.transport import register_custom_transport
+from mcp_fuzzer.transport import register_custom_driver
 
 def test_custom_transport_registration():
     """Test that custom transport can be registered and used."""
-    register_custom_transport(
+    register_custom_driver(
         name="test_transport",
         transport_class=MyCustomTransport,
         description="Test transport"
     )
 
-    from mcp_fuzzer.transport import create_transport
-    transport = create_transport("test_transport://test-endpoint")
+    from mcp_fuzzer.transport import build_driver
+    transport = build_driver("test_transport://test-endpoint")
     assert isinstance(transport, MyCustomTransport)
 ```
 
@@ -284,11 +281,11 @@ def test_custom_transport_registration():
 Custom transports integrate seamlessly with the fuzzing framework:
 
 ```python
-from mcp_fuzzer.transport import create_transport
+from mcp_fuzzer.transport import build_driver
 from mcp_fuzzer.client import MCPClient
 
 # Create custom transport
-transport = create_transport("mytransport://server-endpoint")
+transport = build_driver("mytransport://server-endpoint")
 
 # Use with MCP client
 client = MCPClient(transport)
@@ -297,7 +294,7 @@ tools = await client.list_tools()
 
 ## Best Practices
 
-1. **Inherit from TransportProtocol**: Ensure your transport implements all required methods
+1. **Inherit from TransportDriver**: Ensure your transport implements all required methods
 2. **Handle Connections Properly**: Implement connect/disconnect methods for resource management
 3. **Use Timeouts**: Always implement appropriate timeouts for operations
 4. **Validate Input**: Validate method names, parameters, and payloads
@@ -310,7 +307,7 @@ tools = await client.list_tools()
 ### Common Issues
 
 1. **Import Errors**: Ensure your transport module is on the Python path.
-2. **Registration Failures**: Check that your transport class inherits from `TransportProtocol`.
+2. **Registration Failures**: Check that your transport class inherits from `TransportDriver`.
 3. **Connection Issues**: Verify endpoint URLs and network connectivity.
 4. **Configuration Errors**: Validate your YAML configuration against the schema
 

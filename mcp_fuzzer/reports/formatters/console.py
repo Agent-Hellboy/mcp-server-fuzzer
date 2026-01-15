@@ -7,7 +7,7 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
-from .common import calculate_tool_success_rate
+from .common import calculate_tool_success_rate, extract_tool_runs
 
 
 def _result_has_failure(result: dict[str, Any]) -> bool:
@@ -26,7 +26,7 @@ class ConsoleFormatter:
     def __init__(self, console: Console):
         self.console = console
 
-    def print_tool_summary(self, results: dict[str, list[dict[str, Any]]]):
+    def print_tool_summary(self, results: dict[str, Any]):
         """Print tool fuzzing summary to console."""
         if not results:
             self.console.print("[yellow]No tool results to display[/yellow]")
@@ -40,11 +40,10 @@ class ConsoleFormatter:
         table.add_column("Success Rate", style="blue")
 
         for tool_name, tool_results in results.items():
-            total_runs = len(tool_results)
-            exceptions = sum(1 for r in tool_results if "exception" in r)
-            safety_blocked = sum(
-                1 for r in tool_results if r.get("safety_blocked", False)
-            )
+            runs, _ = extract_tool_runs(tool_results)
+            total_runs = len(runs)
+            exceptions = sum(1 for r in runs if "exception" in r)
+            safety_blocked = sum(1 for r in runs if r.get("safety_blocked", False))
             success_rate = calculate_tool_success_rate(
                 total_runs, exceptions, safety_blocked
             )
@@ -85,7 +84,7 @@ class ConsoleFormatter:
 
     def print_overall_summary(
         self,
-        tool_results: dict[str, list[dict[str, Any]]],
+        tool_results: dict[str, Any],
         protocol_results: dict[str, list[dict[str, Any]]],
     ):
         """Print overall summary statistics."""
@@ -95,8 +94,9 @@ class ConsoleFormatter:
         total_tool_runs = 0
 
         for tool_results_list in tool_results.values():
-            total_tool_runs += len(tool_results_list)
-            for result in tool_results_list:
+            runs, _ = extract_tool_runs(tool_results_list)
+            total_tool_runs += len(runs)
+            for result in runs:
                 if "exception" in result:
                     tools_with_exceptions += 1
                 elif _result_has_failure(result):

@@ -13,6 +13,7 @@ from typing import Any
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
 
 from ..fuzz_engine.mutators import ProtocolMutator
+from ..spec_guard import get_spec_checks_for_protocol_type
 from ..fuzz_engine.executor import ProtocolExecutor
 from ..safety_system.safety import SafetyProvider
 
@@ -178,12 +179,24 @@ class ProtocolClient:
             # Check for safety metadata
             safety_blocked = safety_result["blocked"]
             safety_sanitized = safety_result["sanitized"]
+            spec_checks: list[dict[str, Any]] = []
+            spec_scope: str | None = None
+            if isinstance(server_response, dict):
+                payload = server_response.get("result", server_response)
+                method = (
+                    fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
+                )
+                spec_checks, spec_scope = get_spec_checks_for_protocol_type(
+                    protocol_type, payload, method=method
+                )
 
             return {
                 "fuzz_data": fuzz_data,
                 "result": result,
                 "safety_blocked": safety_blocked,
                 "safety_sanitized": safety_sanitized,
+                "spec_checks": spec_checks,
+                "spec_scope": spec_scope,
                 "success": success,
             }
 
@@ -275,6 +288,8 @@ class ProtocolClient:
             return await self._send_list_resources_request(data)
         elif protocol_type == "ReadResourceRequest":
             return await self._send_read_resource_request(data)
+        elif protocol_type == "ListResourceTemplatesRequest":
+            return await self._send_list_resource_templates_request(data)
         elif protocol_type == "SetLevelRequest":
             return await self._send_set_level_request(data)
         elif protocol_type == "CreateMessageRequest":
@@ -323,6 +338,12 @@ class ProtocolClient:
         """Send a read resource request."""
         return await self.transport.send_request(
             "resources/read", self._extract_params(data)
+        )
+
+    async def _send_list_resource_templates_request(self, data: Any) -> dict[str, Any]:
+        """Send a list resource templates request."""
+        return await self.transport.send_request(
+            "resources/templates/list", self._extract_params(data)
         )
 
     async def _send_set_level_request(self, data: Any) -> dict[str, Any]:

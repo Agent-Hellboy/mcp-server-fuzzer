@@ -60,7 +60,7 @@ class OutputManagerPort(Protocol):
 class ConsoleSummaryPort(Protocol):
     """Port used for console summary output."""
 
-    def print_tool_summary(self, results: dict[str, list[dict[str, Any]]]) -> None: ...
+    def print_tool_summary(self, results: dict[str, Any]) -> None: ...
 
     def print_protocol_summary(
         self, results: dict[str, list[dict[str, Any]]]
@@ -68,7 +68,7 @@ class ConsoleSummaryPort(Protocol):
 
     def print_overall_summary(
         self,
-        tool_results: dict[str, list[dict[str, Any]]],
+        tool_results: dict[str, Any],
         protocol_results: dict[str, list[dict[str, Any]]],
     ) -> None: ...
 

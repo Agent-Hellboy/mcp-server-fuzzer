@@ -14,6 +14,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from ...exceptions import ValidationError
 from ..core import ReportSnapshot
+from ..formatters.common import extract_tool_runs
 
 try:
     TOOL_VERSION = version("mcp-fuzzer")
@@ -74,12 +75,13 @@ class OutputProtocol:
         mode: str,
         protocol: str,
         endpoint: str,
-        tool_results: dict[str, list[dict[str, Any]]],
+        tool_results: dict[str, Any],
         protocol_results: dict[str, list[dict[str, Any]]],
         execution_time: str,
         total_tests: int,
         success_rate: float,
         safety_enabled: bool = False,
+        spec_summary: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create fuzzing results output."""
         data = {
@@ -90,6 +92,7 @@ class OutputProtocol:
             "total_protocol_types": len(protocol_results),
             "tools_tested": self._format_tool_results(tool_results),
             "protocol_types_tested": self._format_protocol_results(protocol_results),
+            "spec_summary": spec_summary or {},
         }
         metadata = {
             "execution_time": execution_time,
@@ -123,6 +126,7 @@ class OutputProtocol:
             total_tests=snapshot.total_tests(),
             success_rate=snapshot.overall_success_rate(),
             safety_enabled=safety_enabled,
+            spec_summary=snapshot.spec_summary,
         )
 
     def create_error_report_output(
@@ -253,14 +257,15 @@ class OutputProtocol:
         return str(filepath)
 
     def _format_tool_results(
-        self, tool_results: dict[str, list[dict[str, Any]]]
+        self, tool_results: dict[str, Any]
     ) -> list[dict[str, Any]]:
         """Format tool results for output."""
         formatted = []
         for tool_name, results in tool_results.items():
-            total_runs = len(results)
-            exceptions = sum(1 for r in results if "exception" in r)
-            safety_blocked = sum(1 for r in results if r.get("safety_blocked", False))
+            runs, _ = extract_tool_runs(results)
+            total_runs = len(runs)
+            exceptions = sum(1 for r in runs if "exception" in r)
+            safety_blocked = sum(1 for r in runs if r.get("safety_blocked", False))
             successful = max(total_runs - exceptions - safety_blocked, 0)
             success_rate = (successful / total_runs * 100) if total_runs > 0 else 0
             formatted.append(
@@ -281,7 +286,7 @@ class OutputProtocol:
                             "message": str(r.get("exception", "")),
                             "arguments": r.get("args", {}),
                         }
-                        for r in results
+                        for r in runs
                         if "exception" in r
                     ],
                 }

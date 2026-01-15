@@ -9,6 +9,7 @@ from typing import Any
 import emoji
 
 from ..reports import FuzzerReporter
+from ..reports.formatters.common import extract_tool_runs
 from ..safety_system.safety import SafetyFilter
 from ..exceptions import MCPError
 from .settings import ClientSettings
@@ -17,6 +18,28 @@ from .transport import build_driver_with_auth
 
 # For backward compatibility
 UnifiedMCPFuzzerClient = MCPFuzzerClient
+
+
+async def _run_spec_guard_if_enabled(
+    client: MCPFuzzerClient,
+    config: dict[str, Any],
+    reporter: FuzzerReporter | None,
+) -> None:
+    if not config.get("spec_guard", True):
+        return
+    checks = await client.run_spec_suite(
+        resource_uri=config.get("spec_resource_uri"),
+        prompt_name=config.get("spec_prompt_name"),
+        prompt_args=config.get("spec_prompt_args"),
+    )
+    failed = [c for c in checks if str(c.get("status", "")).upper() == "FAIL"]
+    logging.info(
+        "Spec guard checks completed: %d total, %d failed",
+        len(checks),
+        len(failed),
+    )
+    if reporter:
+        reporter.add_spec_checks(checks)
 
 
 async def unified_client_main(settings: ClientSettings) -> int:
@@ -78,49 +101,78 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
     try:
         tool_results: dict[str, Any] = {}
-        if config["mode"] == "tools":
+        protocol_results: dict[str, Any] = {}
+        mode = config["mode"]
+        if mode == "tools":
             if config.get("phase") == "both":
-                tool_results = await client.fuzz_all_tools_both_phases(
-                    runs_per_phase=config.get("runs", 10)
-                )
+                if config.get("tool"):
+                    tool_results = await client.fuzz_tool_both_phases(
+                        config["tool"], runs_per_phase=config.get("runs", 10)
+                    )
+                else:
+                    tool_results = await client.fuzz_all_tools_both_phases(
+                        runs_per_phase=config.get("runs", 10)
+                    )
             else:
-                tool_results = await client.fuzz_all_tools(
-                    runs_per_tool=config.get("runs", 10)
-                )
-        elif config["mode"] == "tool":
-            if config.get("phase") == "both":
-                tool_results = await client.fuzz_tool_both_phases(
-                    config["tool"], runs_per_phase=config.get("runs", 10)
-                )
-            else:
-                tool_results = await client.fuzz_tool(
-                    config["tool"], runs=config.get("runs", 10)
-                )
-        elif config["mode"] == "protocol":
+                if config.get("tool"):
+                    tool_results = await client.fuzz_tool(
+                        config["tool"], runs=config.get("runs", 10)
+                    )
+                else:
+                    tool_results = await client.fuzz_all_tools(
+                        runs_per_tool=config.get("runs", 10)
+                    )
+        elif mode == "protocol":
+            await _run_spec_guard_if_enabled(client, config, reporter)
             if config.get("protocol_type"):
-                await client.fuzz_protocol_type(
-                    config["protocol_type"], runs=config.get("runs_per_type", 10)
+                protocol_type = config["protocol_type"]
+                protocol_results[protocol_type] = await client.fuzz_protocol_type(
+                    protocol_type,
+                    runs=config.get("runs_per_type", 10),
                 )
             else:
-                await client.fuzz_all_protocol_types(
+                protocol_results = await client.fuzz_all_protocol_types(
                     runs_per_type=config.get("runs_per_type", 10)
                 )
-        elif config["mode"] == "both":
+        elif mode == "resources":
+            await _run_spec_guard_if_enabled(client, config, reporter)
+            protocol_results = await client.fuzz_resources(
+                runs_per_type=config.get("runs_per_type", 10)
+            )
+        elif mode == "prompts":
+            await _run_spec_guard_if_enabled(client, config, reporter)
+            protocol_results = await client.fuzz_prompts(
+                runs_per_type=config.get("runs_per_type", 10)
+            )
+        elif mode == "all":
             logging.info("Running both tools and protocol fuzzing")  # pragma: no cover
             if config.get("phase") == "both":
-                tool_results = await client.fuzz_all_tools_both_phases(
-                    runs_per_phase=config.get("runs", 10)
-                )
+                if config.get("tool"):
+                    tool_results = await client.fuzz_tool_both_phases(
+                        config["tool"], runs_per_phase=config.get("runs", 10)
+                    )
+                else:
+                    tool_results = await client.fuzz_all_tools_both_phases(
+                        runs_per_phase=config.get("runs", 10)
+                    )
             else:
-                tool_results = await client.fuzz_all_tools(
-                    runs_per_tool=config.get("runs", 10)
-                )
+                if config.get("tool"):
+                    tool_results = await client.fuzz_tool(
+                        config["tool"], runs=config.get("runs", 10)
+                    )
+                else:
+                    tool_results = await client.fuzz_all_tools(
+                        runs_per_tool=config.get("runs", 10)
+                    )
+            await _run_spec_guard_if_enabled(client, config, reporter)
             if config.get("protocol_type"):
-                await client.fuzz_protocol_type(
-                    config["protocol_type"], runs=config.get("runs_per_type", 10)
+                protocol_type = config["protocol_type"]
+                protocol_results[protocol_type] = await client.fuzz_protocol_type(
+                    protocol_type,
+                    runs=config.get("runs_per_type", 10),
                 )
             else:
-                await client.fuzz_all_protocol_types(
+                protocol_results = await client.fuzz_all_protocol_types(
                     runs_per_type=config.get("runs_per_type", 10)
                 )
         else:
@@ -128,16 +180,22 @@ async def unified_client_main(settings: ClientSettings) -> int:
             return 1
 
         try:  # pragma: no cover
-            if (config["mode"] in ["tools", "tool", "both"]) and tool_results:
+            if (
+                mode in ["tools", "all"]
+                and isinstance(tool_results, dict)
+                and tool_results
+            ):
                 print("\n" + "=" * 80)
                 print(f"{emoji.emojize(':bullseye:')} MCP FUZZER TOOL RESULTS SUMMARY")
                 print("=" * 80)
                 client.print_tool_summary(tool_results)
 
                 total_tools = len(tool_results)
-                total_runs = sum(len(runs) for runs in tool_results.values())
+                total_runs = sum(
+                    len(extract_tool_runs(runs)[0]) for runs in tool_results.values()
+                )
                 total_exceptions = sum(
-                    len([r for r in runs if r.get("exception")])
+                    len([r for r in extract_tool_runs(runs)[0] if r.get("exception")])
                     for runs in tool_results.values()
                 )
 
@@ -156,9 +214,12 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
                 vulnerable_tools = []
                 for tool_name, runs in tool_results.items():
-                    exceptions = len([r for r in runs if r.get("exception")])
+                    run_entries = extract_tool_runs(runs)[0]
+                    exceptions = len([r for r in run_entries if r.get("exception")])
                     if exceptions > 0:
-                        vulnerable_tools.append((tool_name, exceptions, len(runs)))
+                        vulnerable_tools.append(
+                            (tool_name, exceptions, len(run_entries))
+                        )
 
                 if vulnerable_tools:
                     print(
@@ -178,6 +239,13 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display table summary: {exc}")
+
+        if isinstance(protocol_results, dict) and protocol_results:
+            if client.reporter:
+                for protocol_type, results in protocol_results.items():
+                    client.reporter.add_protocol_results(protocol_type, results)
+            else:
+                logging.warning("No reporter available to record protocol results")
 
         try:  # pragma: no cover
             output_types = config.get("output_types")

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from .common import calculate_tool_success_rate, normalize_report_data
+from .common import (
+    calculate_tool_success_rate,
+    extract_tool_runs,
+    normalize_report_data,
+)
 
 
 def _result_has_failure(result: dict[str, Any]) -> bool:
@@ -75,23 +79,45 @@ class TextFormatter:
                         f"Protocol Success Rate: {protocols['success_rate']:.1f}%\n\n"
                     )
 
+            if "spec_summary" in data:
+                spec_summary = data.get("spec_summary") or {}
+                totals = spec_summary.get("totals", {})
+                if totals:
+                    f.write("SPEC GUARD SUMMARY\n")
+                    f.write("-" * 40 + "\n")
+                    f.write(f"Total Checks: {totals.get('total', 0)}\n")
+                    f.write(f"Failed: {totals.get('failed', 0)}\n")
+                    f.write(f"Warned: {totals.get('warned', 0)}\n")
+                    f.write(f"Passed: {totals.get('passed', 0)}\n\n")
+                    by_spec = spec_summary.get("by_spec_id") or {}
+                    for spec_id, details in by_spec.items():
+                        f.write(f"{spec_id}: ")
+                        f.write(
+                            f"{details.get('failed', 0)} failed, "
+                            f"{details.get('warned', 0)} warned, "
+                            f"{details.get('passed', 0)} passed "
+                            f"({details.get('total', 0)} total)\n"
+                        )
+                    f.write("\n")
+
             if "tool_results" in data:
                 f.write("TOOL FUZZING RESULTS\n")
                 f.write("-" * 40 + "\n")
                 for tool_name, results in data["tool_results"].items():
+                    runs, _ = extract_tool_runs(results)
                     f.write(f"\nTool: {tool_name}\n")
-                    f.write(f"  Total Runs: {len(results)}\n")
+                    f.write(f"  Total Runs: {len(runs)}\n")
 
-                    exceptions = sum(1 for r in results if "exception" in r)
+                    exceptions = sum(1 for r in runs if "exception" in r)
                     safety_blocked = sum(
-                        1 for r in results if r.get("safety_blocked", False)
+                        1 for r in runs if r.get("safety_blocked", False)
                     )
                     f.write(f"  Exceptions: {exceptions}\n")
                     f.write(f"  Safety Blocked: {safety_blocked}\n")
 
-                    if results:
+                    if runs:
                         success_rate = calculate_tool_success_rate(
-                            len(results), exceptions, safety_blocked
+                            len(runs), exceptions, safety_blocked
                         )
                         f.write(f"  Success Rate: {success_rate:.1f}%\n")
 

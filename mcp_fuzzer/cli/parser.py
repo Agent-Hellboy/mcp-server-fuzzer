@@ -21,16 +21,20 @@ Examples:
   mcp-fuzzer --mode protocol --protocol http \
     --endpoint http://localhost:8000/mcp/ --runs-per-type 5
 
-  # Fuzz both tools and protocols (default)
-  mcp-fuzzer --mode both --protocol http \
+  # Fuzz tools + protocol (default)
+  mcp-fuzzer --mode all --protocol http \
     --endpoint http://localhost:8000/mcp/ --runs 10 --runs-per-type 5
 
   # Fuzz specific protocol type
   mcp-fuzzer --mode protocol --protocol-type InitializeRequest \
     --protocol http --endpoint http://localhost:8000/mcp/
 
+  # Fuzz a single tool
+  mcp-fuzzer --mode tools --tool analyze_repository --protocol http \
+    --endpoint http://localhost:8000/mcp/ --runs 10
+
   # Fuzz with verbose output
-  mcp-fuzzer --mode both --protocol http \
+  mcp-fuzzer --mode all --protocol http \
     --endpoint http://localhost:8000/mcp/ --verbose
             """
         ),
@@ -46,22 +50,20 @@ Examples:
 
     parser.add_argument(
         "--mode",
-        choices=["tools", "tool", "protocol", "both"],
-        default="both",
+        choices=["tools", "protocol", "resources", "prompts", "all"],
+        default="all",
         help=(
-            "Fuzzing mode: 'tools' for all tool fuzzing, 'tool' for single tool "
-            "fuzzing (requires --tool), 'protocol' for protocol fuzzing, 'both' "
-            "for both (default: both)"
+            "Fuzzing mode: 'tools' for tool fuzzing (optionally --tool), "
+            "'protocol' for protocol fuzzing, "
+            "'resources' for resources endpoints, 'prompts' for prompts endpoints, "
+            "'all' for tools + protocol (default: all)"
         ),
     )
 
     parser.add_argument(
         "--tool",
         type=str,
-        help=(
-            "Specific tool name to fuzz when using --mode tool "
-            "(e.g., 'analyze_repository')"
-        ),
+        help="Optional tool name to fuzz when using --mode tools",
     )
 
     parser.add_argument(
@@ -137,6 +139,33 @@ Examples:
     parser.add_argument(
         "--protocol-type",
         help="Fuzz only a specific protocol type (when mode is protocol)",
+    )
+    parser.add_argument(
+        "--spec-guard",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Run deterministic spec guard checks before protocol fuzzing "
+            "(default: true)"
+        ),
+    )
+
+    parser.add_argument(
+        "--spec-resource-uri",
+        help="Resource URI to use for spec guard resources/read checks",
+    )
+
+    parser.add_argument(
+        "--spec-prompt-name",
+        help="Prompt name to use for spec guard prompts/get checks",
+    )
+
+    parser.add_argument(
+        "--spec-prompt-args",
+        help=(
+            "JSON string of arguments to use for spec guard prompts/get checks "
+            '(e.g., \'{"name":"value"}\')'
+        ),
     )
 
     parser.add_argument(

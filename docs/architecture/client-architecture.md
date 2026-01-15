@@ -69,10 +69,10 @@ The new client can be used in the same way as the old client:
 
 ```python
 from mcp_fuzzer.client import MCPFuzzerClient
-from mcp_fuzzer.transport.factory import create_transport
+from mcp_fuzzer.transport.catalog import build_driver
 
 async def fuzz_server():
-    transport = create_transport('http', 'http://localhost:8000')
+    transport = build_driver('http', 'http://localhost:8000')
     client = MCPFuzzerClient(transport)
     results = await client.fuzz_all_tools(runs_per_tool=5)
     print(f"Fuzzing results: {results}")
@@ -84,7 +84,7 @@ asyncio.run(fuzz_server())
 ## Future Improvements
 
 1. **Plugin Architecture**: Add support for custom fuzzing strategies via plugins
-2. **Additional Output Formats**: Implement support for JSON, XML, and CSV output formats
+2. **Richer Report Customization**: Expand export styling and templates for HTML/Markdown
 3. **Configuration Integration**: Better integration with the configuration system
 4. **Metrics Collection**: Add detailed metrics collection for performance monitoring
 5. **Async Context Manager**: Implement `__aenter__` and `__aexit__` for use in async with statements

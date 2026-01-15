@@ -97,7 +97,7 @@ echo "🧪 Running comprehensive fuzzing test (tools + protocol)..."
 python -m mcp_fuzzer \
     --protocol stdio \
     --endpoint "node $SERVER_DIR/build/index.js" \
-    --mode both \
+    --mode all \
     --runs 5 \
     --verbose \
     --enable-safety-system \

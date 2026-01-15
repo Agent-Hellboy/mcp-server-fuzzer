@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from .common import SupportsToDict, normalize_report_data
+from .common import SupportsToDict, extract_tool_runs, normalize_report_data
 
 
 class CSVFormatter:
@@ -13,7 +14,7 @@ class CSVFormatter:
     def save_csv_report(
         self,
         report_data: dict[str, Any] | SupportsToDict,
-        filename: str,
+        filename: str | Path,
     ):
         import csv
 
@@ -34,7 +35,8 @@ class CSVFormatter:
 
             if "tool_results" in data:
                 for tool_name, results in data["tool_results"].items():
-                    for i, result in enumerate(results):
+                    runs, _ = extract_tool_runs(results)
+                    for i, result in enumerate(runs):
                         writer.writerow(
                             [
                                 tool_name,

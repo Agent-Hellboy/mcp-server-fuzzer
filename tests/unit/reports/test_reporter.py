@@ -151,7 +151,7 @@ class TestFuzzerReporter:
     def test_set_fuzzing_metadata(self, reporter):
         """Test setting fuzzing metadata."""
         metadata = {
-            "mode": "tool",
+            "mode": "tools",
             "protocol": "stdio",
             "endpoint": "test_endpoint",
             "runs": 100,
@@ -161,7 +161,7 @@ class TestFuzzerReporter:
         reporter.set_fuzzing_metadata(**metadata)
 
         assert reporter.fuzzing_metadata["session_id"] == reporter.session_id
-        assert reporter.fuzzing_metadata["mode"] == "tool"
+        assert reporter.fuzzing_metadata["mode"] == "tools"
         assert reporter.fuzzing_metadata["protocol"] == "stdio"
         assert reporter.fuzzing_metadata["endpoint"] == "test_endpoint"
         assert reporter.fuzzing_metadata["runs"] == 100
@@ -261,7 +261,7 @@ class TestFuzzerReporter:
     async def test_generate_final_report_without_safety(self, reporter):
         """Test generating final report without safety data."""
         # Set up test data
-        reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
+        reporter.set_fuzzing_metadata("tools", "stdio", "test", 10)
         reporter.add_tool_results("test_tool", [{"success": True}])
         reporter.add_protocol_results("test_protocol", [{"success": True}])
 
@@ -280,7 +280,7 @@ class TestFuzzerReporter:
     async def test_generate_final_report_with_safety(self, reporter):
         """Test generating final report with safety data."""
         # Set up test data
-        reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
+        reporter.set_fuzzing_metadata("tools", "stdio", "test", 10)
         reporter.add_tool_results("test_tool", [{"success": True}])
 
         # Mock safety reporter methods
@@ -365,7 +365,7 @@ class TestFuzzerReporter:
 
     def test_get_current_status(self, reporter):
         """Test getting current status."""
-        reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
+        reporter.set_fuzzing_metadata("tools", "stdio", "test", 10)
         reporter.add_tool_results("tool1", [{"success": True}])
         reporter.add_protocol_results("protocol1", [{"success": True}])
         reporter.add_safety_data({"test": "data"})
@@ -380,7 +380,7 @@ class TestFuzzerReporter:
 
     def test_print_status(self, reporter):
         """Test printing status."""
-        reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
+        reporter.set_fuzzing_metadata("tools", "stdio", "test", 10)
 
         reporter.print_status()
 
@@ -424,7 +424,7 @@ class TestFuzzerReporter:
     @pytest.mark.asyncio
     async def test_metadata_end_time_set(self, reporter):
         """Test that end time is set in final report."""
-        reporter.set_fuzzing_metadata("tool", "stdio", "test", 10)
+        reporter.set_fuzzing_metadata("tools", "stdio", "test", 10)
 
         await reporter.generate_final_report()
 

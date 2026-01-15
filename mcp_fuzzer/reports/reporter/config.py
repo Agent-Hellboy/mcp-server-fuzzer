@@ -21,7 +21,7 @@ class ReporterConfig:
     def from_provider(
         cls,
         *,
-        provider: Mapping[str, Any],
+        provider: Mapping[str, Any] | None,
         requested_output_dir: str,
         default_output_dir: str = "reports",
         compress_fallback: bool = False,
@@ -35,8 +35,9 @@ class ReporterConfig:
         output_section = provider.get("output", {}) if provider else {}
         raw_dir = requested_output_dir or default_output_dir
         if raw_dir == default_output_dir:
-            raw_dir = provider.get(
-                "output_dir", output_section.get("directory", default_output_dir)
+            provider_output_dir = provider.get("output_dir") if provider else None
+            raw_dir = provider_output_dir or output_section.get(
+                "directory", default_output_dir
             )
 
         resolved_dir = Path(raw_dir).expanduser()

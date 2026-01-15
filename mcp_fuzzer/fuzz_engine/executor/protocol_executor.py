@@ -18,6 +18,7 @@ from .invariants import (
 )
 from ..mutators import ProtocolMutator, BatchMutator
 from ..fuzzerreporter import ResultBuilder, ResultCollector
+from ...spec_guard import get_spec_checks_for_method
 
 
 class ProtocolExecutor:
@@ -264,6 +265,15 @@ class ProtocolExecutor:
                         e,
                     )
 
+            spec_checks: list[dict[str, Any]] = []
+            spec_scope: str | None = None
+            if isinstance(server_response, dict) and not generate_only:
+                payload = server_response.get("result", server_response)
+                method = (
+                    fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
+                )
+                spec_checks, spec_scope = get_spec_checks_for_method(method, payload)
+
             # Create the result
             result = self.result_builder.build_protocol_result(
                 protocol_type=protocol_type,
@@ -272,6 +282,8 @@ class ProtocolExecutor:
                 server_response=server_response,
                 server_error=server_error,
                 invariant_violations=invariant_violations,
+                spec_checks=spec_checks,
+                spec_scope=spec_scope,
             )
 
             self._logger.debug(f"Fuzzed {protocol_type} run {run_index + 1}")

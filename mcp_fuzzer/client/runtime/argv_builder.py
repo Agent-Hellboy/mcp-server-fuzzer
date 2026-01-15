@@ -46,6 +46,9 @@ def prepare_inner_argv(args: Any) -> list[str]:
     _add_value("--timeout", _get_attr("timeout", None))
     _add_value("--tool-timeout", _get_attr("tool_timeout", None))
     _add_value("--protocol-type", _get_attr("protocol_type", None))
+    _add_value("--spec-resource-uri", _get_attr("spec_resource_uri", None))
+    _add_value("--spec-prompt-name", _get_attr("spec_prompt_name", None))
+    _add_value("--spec-prompt-args", _get_attr("spec_prompt_args", None))
     _add_value("--fs-root", _get_attr("fs_root", None))
     _add_value("--output-dir", _get_attr("output_dir", None))
     _add_value("--log-level", _get_attr("log_level", None))
@@ -74,6 +77,9 @@ def prepare_inner_argv(args: Any) -> list[str]:
     _add_bool("--safety-report", "safety_report")
     _add_bool("--retry-with-safety-on-interrupt", "retry_with_safety_on_interrupt")
     _add_bool("--no-network", "no_network")
+
+    if _get_attr("spec_guard", True) is False:
+        argv.append("--no-spec-guard")
 
     _add_list("--allow-host", _get_attr("allow_hosts", None))
 

@@ -19,6 +19,10 @@ from ..interfaces.behaviors import (
     ResponseParserBehavior,
     NetworkError as DriverNetworkError,
 )
+from ..interfaces.server_requests import (
+    build_sampling_create_message_response,
+    is_server_request,
+)
 from ...config import (
     DEFAULT_PROTOCOL_VERSION,
     CONTENT_TYPE_HEADER,
@@ -37,6 +41,7 @@ from ...types import (
     RETRY_DELAY,
 )
 from ...exceptions import TransportError
+from ...safety_system.policy import resolve_redirect_safely
 
 # Back-compat local aliases (referenced by tests)
 MCP_SESSION_ID = MCP_SESSION_ID_HEADER
@@ -44,6 +49,7 @@ MCP_PROTOCOL_VERSION = MCP_PROTOCOL_VERSION_HEADER
 CONTENT_TYPE = CONTENT_TYPE_HEADER
 JSON_CT = JSON_CONTENT_TYPE
 SSE_CT = SSE_CONTENT_TYPE
+
 
 class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
     """Streamable HTTP transport with MCP session management.
@@ -164,9 +170,6 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         if not location:
             return None
 
-        # Use the base mixin's redirect resolution (imported from safety policy)
-        from ...safety_system.policy import resolve_redirect_safely
-
         resolved = resolve_redirect_safely(self.url, location)
         if not resolved:
             self._logger.warning(
@@ -206,6 +209,11 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                     payload = None
 
                 if isinstance(payload, dict):
+                    if is_server_request(payload):
+                        handled = await self._handle_server_request(payload)
+                        if handled:
+                            event = {"event": "message", "data": []}
+                            continue
                     # JSON-RPC error passthrough
                     if "error" in payload:
                         return payload
@@ -236,6 +244,37 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         # If we exit loop without a response, return None
         return None
+
+    async def _handle_server_request(self, payload: dict[str, Any]) -> bool:
+        """Handle server->client requests delivered over SSE."""
+        method = payload.get("method")
+        request_id = payload.get("id")
+        if method == "sampling/createMessage" and request_id is not None:
+            response_payload = build_sampling_create_message_response(request_id)
+            await self._send_client_response(response_payload)
+            return True
+        return False
+
+    async def _send_client_response(self, payload: dict[str, Any]) -> None:
+        """Send a JSON-RPC response back to the server."""
+        headers = self._prepare_headers()
+
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
+        safe_headers = self._prepare_headers_with_auth(headers)
+
+        async with self._create_http_client(self.timeout) as client:
+            response = await self._post_with_retries(
+                client, self.url, payload, safe_headers
+            )
+            self._maybe_extract_session_headers(response)
+            redirect_url = self._resolve_redirect(response)
+            if redirect_url:
+                response = await self._post_with_retries(
+                    client, redirect_url, payload, safe_headers
+                )
+                self._maybe_extract_session_headers(response)
+            self._handle_http_response_error(response)
 
     async def _post_with_retries(
         self,
@@ -455,7 +494,6 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 "capabilities": {
                     "elicitation": {},
                     "experimental": {},
-                    "roots": {"listChanged": True},
                     "sampling": {},
                 },
                 "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},

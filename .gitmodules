@@ -1,0 +1,3 @@
+[submodule "schemas/mcp-spec"]
+	path = schemas/mcp-spec
+	url = https://github.com/modelcontextprotocol/modelcontextprotocol.git

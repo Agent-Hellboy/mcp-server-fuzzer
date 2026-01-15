@@ -73,8 +73,11 @@ This understanding will help you:
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/mcp-server-fuzzer.git
+git clone --recursive https://github.com/YOUR_USERNAME/mcp-server-fuzzer.git
 cd mcp-server-fuzzer
+
+# If you already cloned without submodules
+git submodule update --init --recursive
 
 # Create virtual environment
 python3 -m venv venv
@@ -90,6 +93,25 @@ pre-commit install
 mcp-fuzzer --help
 ```
 
+### MCP Spec Submodule
+
+This repo vendors the MCP spec as a git submodule at `schemas/mcp-spec`. The
+spec guard schema validator (`mcp_fuzzer/spec_guard/schema_validator.py`) reads
+schemas from `schemas/mcp-spec/schema/{version}/schema.json`, and the current
+default version is `2025-06-18`. CI already initializes submodules (see
+`e2e-test.yml` with `submodules: recursive`).
+
+To bump the spec version:
+
+1. Update the `schemas/mcp-spec` submodule to the desired tagged release
+   (recommended) or commit. The current submodule pin is
+   `c1e0b4d39a630fd87807602c6ace6eefc15154a5`.
+2. Ensure the target schema directory exists under
+   `schemas/mcp-spec/schema/{version}`.
+3. Update the default version in `mcp_fuzzer/spec_guard/schema_validator.py`
+   if needed.
+4. Verify schema loading with `pytest tests/unit/spec_guard/test_schema_validator.py`.
+
 > A project-wide `requirements.txt` is included for quick bootstrapping.
 > After activating your virtual environment you can also run
 > `pip install -r requirements.txt` to pull in every dependency the docs and
@@ -104,12 +126,12 @@ having to run the entire CLI:
 
 ```python
 import asyncio
-from mcp_fuzzer.transport import create_transport
+from mcp_fuzzer.transport import build_driver
 from mcp_fuzzer.client import MCPFuzzerClient
 
 
 async def explore_client():
-    transport = create_transport("http", "http://localhost:8000", timeout=5.0)
+    transport = build_driver("http", "http://localhost:8000", timeout=5.0)
     client = MCPFuzzerClient(transport=transport, safety_enabled=False)
     print(f"Initialized {transport.__class__.__name__} at {transport.url}")
     print(
@@ -165,11 +187,11 @@ pytest
 pytest --cov=mcp_fuzzer --cov-report=html
 
 # Run specific test modules
-pytest tests/test_transport.py
+pytest tests/unit/transport/test_transport.py
 pytest tests/test_cli.py
 
 #Run Individual test
-pytest tests/test_transport.py::TestTransportProtocol.test_get_tools_success
+pytest tests/unit/transport/test_transport.py::test_build_driver_http
 
 # Run with verbose output
 pytest -v -s
@@ -323,16 +345,16 @@ docs/
 To add a new transport protocol:
 
 1. **Create transport class** in `mcp_fuzzer/transport/`
-2. **Implement TransportProtocol interface**
-3. **Add to transport factory**
+2. **Implement TransportDriver interface**
+3. **Add to transport.catalog**
 4. **Write comprehensive tests**
 5. **Update documentation**
 
 ```python
 # Example: Custom Transport Protocol
-from mcp_fuzzer.transport import TransportProtocol
+from mcp_fuzzer.transport import TransportDriver
 
-class CustomTransport(TransportProtocol):
+class CustomTransport(TransportDriver):
     def __init__(self, endpoint: str, **kwargs):
         self.endpoint = endpoint
         self.config = kwargs
@@ -622,9 +644,9 @@ async def custom_executor_configuration():
 To create a custom transport protocol:
 
 ```python
-from mcp_fuzzer.transport import TransportProtocol
+from mcp_fuzzer.transport import TransportDriver
 
-class CustomTransport(TransportProtocol):
+class CustomTransport(TransportDriver):
     def __init__(self, endpoint, **kwargs):
         self.endpoint = endpoint
         self.config = kwargs

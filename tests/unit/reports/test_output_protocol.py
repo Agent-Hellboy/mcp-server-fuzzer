@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from mcp_fuzzer.reports.output import OutputProtocol, OutputManager
+from mcp_fuzzer.reports.output.protocol import _result_has_failure
 
 from importlib.metadata import version, PackageNotFoundError
 
@@ -134,6 +135,60 @@ class TestOutputProtocol:
         output["output_type"] = "invalid_type"
 
         assert self.protocol.validate_output(output) is False
+
+    def test_format_tool_results_calculates_rates_and_exceptions(self):
+        tool_results = {
+            "toolX": [
+                {"success": True},
+                {"exception": "boom", "args": {"foo": "bar"}},
+                {"success": False, "safety_blocked": True},
+            ]
+        }
+
+        formatted = self.protocol._format_tool_results(tool_results)
+        assert len(formatted) == 1
+        entry = formatted[0]
+        assert entry["runs"] == 3
+        assert entry["exceptions"] == 1
+        assert entry["safety_blocked"] == 1
+        assert entry["successful"] == 1
+        assert entry["success_rate"] == pytest.approx(33.33, rel=1e-3)
+        assert entry["exception_details"][0]["arguments"] == {"foo": "bar"}
+
+    def test_format_protocol_results_handles_errors_and_successes(self):
+        protocol_results = {
+            "rpc": [
+                {"success": True},
+                {"success": False, "error": "bad"},
+                {"exception": "boom"},
+            ]
+        }
+
+        formatted = self.protocol._format_protocol_results(protocol_results)
+        assert len(formatted) == 1
+        entry = formatted[0]
+        assert entry["errors"] == 2
+        assert entry["success_rate"] == pytest.approx(33.33, rel=1e-3)
+
+    def test_calculate_error_severity_priorities(self):
+        assert self.protocol._calculate_error_severity([]) == "none"
+        assert (
+            self.protocol._calculate_error_severity([{"severity": "medium"}])
+            == "medium"
+        )
+        assert self.protocol._calculate_error_severity([{"severity": "high"}]) == "high"
+        assert (
+            self.protocol._calculate_error_severity([{"severity": "critical"}])
+            == "critical"
+        )
+        assert self.protocol._calculate_error_severity([{}]) == "low"
+
+    def test_result_has_failure_detects_flags(self):
+        assert _result_has_failure({"error": "problem"})
+        assert _result_has_failure({"exception": "boom"})
+        assert _result_has_failure({"server_error": "connection failed"})
+        assert _result_has_failure({"success": False})
+        assert not _result_has_failure({"success": True})
 
     def test_save_output(self):
         """Test saving output to file."""

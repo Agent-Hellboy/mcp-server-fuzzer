@@ -24,9 +24,9 @@ except ImportError:  # pragma: no cover
     from typing_extensions import NotRequired
 
 from ...exceptions import TransportError, NetworkError, PayloadValidationError
+from ...spec_guard import check_sse_event_text
 from ...safety_system.policy import is_host_allowed, sanitize_headers
 from .states import DriverState
-
 
 
 class JSONRPCRequest(TypedDict):
@@ -395,6 +395,15 @@ class ResponseParserBehavior(DriverBaseBehavior):
             return None
 
         data_parts = []
+        warnings = check_sse_event_text(event_text)
+        if warnings:
+            logger = logging.getLogger(self.__class__.__name__)
+            for warning in warnings:
+                logger.warning(
+                    "SSE spec warning (%s): %s",
+                    warning.get("id"),
+                    warning.get("message"),
+                )
         for raw_line in event_text.splitlines():
             line = raw_line.strip()
             if not line:

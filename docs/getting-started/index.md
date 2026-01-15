@@ -18,9 +18,11 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 # Basic installation
 pip install mcp-fuzzer
 
-# From source
-git clone https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
+# From source (includes MCP spec submodule)
+git clone --recursive https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
 cd mcp-server-fuzzer
+# If you already cloned without submodules, run:
+git submodule update --init --recursive
 pip install -e .
 ```
 
@@ -33,7 +35,7 @@ pip install -e .
    mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
 
    # Fuzz protocol types on an SSE server
-   mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 5
+   mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 5
 
    # Fuzz with safety system enabled
    mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 5 --enable-safety-system
@@ -108,7 +110,7 @@ See [Architecture](../architecture/architecture.md) for detailed diagrams and fl
 ## Documentation
 
 - **[Getting Started](getting-started.md)** - Installation and basic usage
-- **[Configuration](../configuration/configuration.md)** - Configuration options and file formats (YAML/TOML)
+- **[Configuration](../configuration/configuration.md)** - Configuration options and file formats (YAML)
 - **[Architecture](../architecture/architecture.md)** - System design and components
 - **[Runtime Management](../components/runtime-management.md)** - Process management, watchdog system, and async executor
 - **[Process Management Guide](../components/process-management-guide.md)** - Process management best practices and troubleshooting

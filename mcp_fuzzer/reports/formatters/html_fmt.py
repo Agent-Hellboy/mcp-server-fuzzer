@@ -5,7 +5,7 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
-from .common import normalize_report_data
+from .common import extract_tool_runs, normalize_report_data
 
 
 class HTMLFormatter:
@@ -47,6 +47,40 @@ class HTMLFormatter:
                 )
             html_content += "</ul>"
 
+        if "spec_summary" in data:
+            spec_summary = data.get("spec_summary") or {}
+            totals = spec_summary.get("totals", {})
+            if totals:
+                html_content += "<h2>Spec Guard Summary</h2>"
+                html_content += "<ul>"
+                total_checks = escape(str(totals.get("total", 0)))
+                failed = escape(str(totals.get("failed", 0)))
+                warned = escape(str(totals.get("warned", 0)))
+                passed = escape(str(totals.get("passed", 0)))
+                html_content += (
+                    f"<li><strong>Total Checks:</strong> {total_checks}</li>"
+                    f"<li><strong>Failed:</strong> {failed}</li>"
+                    f"<li><strong>Warned:</strong> {warned}</li>"
+                    f"<li><strong>Passed:</strong> {passed}</li>"
+                )
+                html_content += "</ul>"
+                html_content += "<table>"
+                html_content += (
+                    "<tr><th>Spec ID</th><th>Failed</th><th>Warned</th>"
+                    "<th>Passed</th><th>Total</th></tr>"
+                )
+                for spec_id, details in (spec_summary.get("by_spec_id") or {}).items():
+                    html_content += (
+                        "<tr>"
+                        f"<td>{escape(str(spec_id))}</td>"
+                        f"<td>{escape(str(details.get('failed', 0)))}</td>"
+                        f"<td>{escape(str(details.get('warned', 0)))}</td>"
+                        f"<td>{escape(str(details.get('passed', 0)))}</td>"
+                        f"<td>{escape(str(details.get('total', 0)))}</td>"
+                        "</tr>"
+                    )
+                html_content += "</table>"
+
         if "tool_results" in data:
             html_content += "<h2>Tool Results</h2><table>"
             html_content += (
@@ -55,7 +89,8 @@ class HTMLFormatter:
             )
 
             for tool_name, results in data["tool_results"].items():
-                for i, result in enumerate(results):
+                runs, _ = extract_tool_runs(results)
+                for i, result in enumerate(runs):
                     success = result.get("success", False)
                     success_class = "success" if success else "error"
                     html_content += f"""

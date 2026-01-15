@@ -45,8 +45,9 @@ class ValidationManager:
                 "--protocol-type can only be used with --mode protocol"
             )
 
-        if args.mode == "tool" and not getattr(args, "tool", None):
-            raise ArgumentValidationError("--tool is required when --mode tool")
+        if args.mode == "tools" and getattr(args, "tool", None):
+            if not args.tool.strip():
+                raise ArgumentValidationError("--tool cannot be empty")
 
         if hasattr(args, "runs") and args.runs is not None:
             if not isinstance(args.runs, int) or args.runs < 1:

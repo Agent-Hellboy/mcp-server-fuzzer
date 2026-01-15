@@ -34,6 +34,21 @@ from mcp_fuzzer.exceptions import TransportRegistrationError
 pytestmark = [pytest.mark.unit, pytest.mark.transport]
 
 
+class _DummySSELinesResponse:
+    def __init__(self, lines):
+        self.status_code = 200
+        self.headers = {"content-type": "text/event-stream"}
+        self._lines = lines
+
+    def raise_for_status(self) -> None:  # pragma: no cover
+        pass
+
+    async def aiter_lines(self):
+        for line in self._lines:
+            await asyncio.sleep(0)
+            yield line
+
+
 # Test cases for TransportDriver class
 @pytest.mark.asyncio
 async def test_transport_protocol_abstract():
@@ -349,6 +364,35 @@ async def test_sse_transport_stream_request(sse_transport):
         assert responses[0] == {"id": 1, "result": "streaming"}
         assert responses[1] == {"id": 2, "result": "complete"}
         mock_stream.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_sse_transport_send_raw_handles_sampling_request():
+    """SseDriver should reply to sampling/createMessage and continue."""
+    sse_events = [
+        "event: message",
+        (
+            'data: {"jsonrpc": "2.0", "id": "srv-1", '
+            '"method": "sampling/createMessage", '
+            '"params": {"messages": [], "maxTokens": 1}}'
+        ),
+        "",
+        "event: message",
+        'data: {"jsonrpc": "2.0", "id": "1", "result": {"ok": true}}',
+        "",
+    ]
+    driver = SseDriver("http://test", timeout=1)
+
+    with (
+        patch.object(httpx.AsyncClient, "stream") as mock_stream,
+        patch.object(driver, "_send_client_response", new=AsyncMock()) as mock_send,
+    ):
+        mock_response = _DummySSELinesResponse(sse_events)
+        mock_stream.return_value.__aenter__.return_value = mock_response
+        result = await driver.send_raw({"jsonrpc": "2.0", "id": "1"})
+
+    assert result == {"ok": True}
+    mock_send.assert_awaited_once()
 
 
 @pytest.mark.asyncio

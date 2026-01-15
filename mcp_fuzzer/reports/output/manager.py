@@ -23,7 +23,7 @@ class OutputManager:
         mode: str,
         protocol: str,
         endpoint: str,
-        tool_results: dict[str, list[dict[str, Any]]],
+        tool_results: dict[str, Any],
         protocol_results: dict[str, list[dict[str, Any]]],
         execution_time: str,
         total_tests: int,

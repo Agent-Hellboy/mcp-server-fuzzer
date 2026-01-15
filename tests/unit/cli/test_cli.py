@@ -128,7 +128,7 @@ def test_setup_logging_levels():
 def test_validate_arguments_errors():
     validator = ValidationManager()
     args = argparse.Namespace(
-        mode="tool",
+        mode="tools",
         protocol_type="x",
         runs=0,
         runs_per_type=0,
@@ -208,7 +208,7 @@ def test_validate_arguments_whitespace_endpoint():
 def test_validate_arguments_allows_utility_without_endpoint():
     validator = ValidationManager()
     args = argparse.Namespace(
-        mode="tool",
+        mode="tools",
         protocol_type=None,
         runs=1,
         runs_per_type=1,
@@ -224,10 +224,27 @@ def test_validate_arguments_allows_utility_without_endpoint():
 def test_validate_arguments_protocol_type_wrong_mode_with_endpoint():
     validator = ValidationManager()
     args = argparse.Namespace(
-        mode="tool",
+        mode="tools",
         protocol_type="X",
         runs=1,
         runs_per_type=1,
+        timeout=10,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
+
+
+def test_validate_arguments_protocol_mode_requires_protocol_type():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="protocol",
+        protocol="http",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=5,
         timeout=10,
         endpoint="http://x",
         check_env=False,
@@ -299,11 +316,15 @@ def test_prepare_inner_argv_roundtrip():
         no_network=True,
         allow_hosts=["a", "b"],
         export_safety_data="",
+        spec_prompt_name="example_prompt",
+        spec_prompt_args='{"query": "probe"}',
     )
     argv = prepare_inner_argv(args)
     assert "--mode" in argv and "--endpoint" in argv
     assert "abc" in argv
     assert "--export-safety-data" in argv
+    assert "--spec-prompt-name" in argv
+    assert "--spec-prompt-args" in argv
 
 
 def test_transport_factory_applies_auth_headers():

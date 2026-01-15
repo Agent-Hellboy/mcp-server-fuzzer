@@ -7,7 +7,7 @@ This page provides a complete reference for MCP Server Fuzzer, including all com
 ### Basic Syntax
 
 ```bash
-mcp-fuzzer [OPTIONS] --mode {tools|protocol|both} --protocol {http|sse|stdio|streamablehttp} --endpoint ENDPOINT
+mcp-fuzzer [OPTIONS] --mode {tools|protocol|resources|prompts|all} --protocol {http|sse|stdio|streamablehttp} --endpoint ENDPOINT
 ```
 
 ### Global Options
@@ -15,15 +15,21 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol|both} --protocol {http|sse|stdio|str
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--help` | Flag | - | Show help message and exit |
-| `--version` | Flag | - | Show version and exit |
 | `--verbose` | Flag | False | Enable verbose logging |
 | `--log-level` | Choice | WARNING (INFO with `--verbose`) | Set log level (CRITICAL, ERROR, WARNING, INFO, DEBUG). Defaults to WARNING, or INFO when `--verbose` is set |
+
+### Utility Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--validate-config` | Path | - | Validate configuration file and exit |
+| `--check-env` | Flag | False | Validate environment variables and exit |
 
 ### Mode Options
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `--mode` | Choice | Yes | Fuzzing mode: `tools`, `protocol`, or `both` |
+| `--mode` | Choice | Yes | Fuzzing mode: `tools`, `protocol`, `resources`, `prompts`, or `all` |
 | `--protocol` | Choice | Yes | Transport protocol: `http`, `sse`, `stdio`, or `streamablehttp` |
 | `--endpoint` | String | Yes | Server endpoint (URL for http/sse, command for stdio) |
 
@@ -49,8 +55,17 @@ Notes:
 |--------|------|---------|-------------|
 | `--phase` | Choice | aggressive | Fuzzing phase: `realistic`, `aggressive`, or `both` |
 | `--runs` | Integer | 10 | Number of fuzzing runs per tool (tool mode only) |
-| `--runs-per-type` | Integer | 5 | Number of runs per protocol type (protocol mode only) |
-| `--protocol-type` | String | - | Fuzz only specific protocol type (protocol mode only) |
+| `--runs-per-type` | Integer | 5 | Number of runs per protocol/resource/prompt type |
+| `--protocol-type` | String | - | Fuzz only a specific protocol type (protocol mode only; required by the CLI when using `--mode protocol`) |
+
+### Spec Guard Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--spec-guard` | Bool | True | Run deterministic spec guard checks before protocol/resources/prompts fuzzing |
+| `--spec-resource-uri` | String | - | Resource URI used for spec guard resources/read checks |
+| `--spec-prompt-name` | String | - | Prompt name used for spec guard prompts/get checks |
+| `--spec-prompt-args` | String | - | JSON string of prompt arguments for spec guard prompts/get checks |
 
 ### Safety Options
 
@@ -61,6 +76,13 @@ Notes:
 | `--fs-root` | Path | ~/.mcp_fuzzer | Restrict filesystem operations to specified directory |
 | `--retry-with-safety-on-interrupt` | Flag | False | Retry once with safety system enabled on Ctrl-C |
 
+### Network Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--no-network` | Flag | False | Disallow network to non-local hosts |
+| `--allow-host` | String | - | Permit additional hostnames when `--no-network` is set (repeatable) |
+
 ### Reporting Options
 
 | Option | Type | Default | Description |
@@ -68,12 +90,44 @@ Notes:
 | `--output-dir` | Path | reports | Directory to save reports and exports |
 | `--safety-report` | Flag | False | Show comprehensive safety report at end of fuzzing |
 | `--export-safety-data` | String | - | Export safety data to JSON file (optional filename) |
+| `--output-format` | Choice | json | Output format for standardized reports |
+| `--output-types` | List | - | Output types to generate (fuzzing_results, error_report, safety_summary, performance_metrics, configuration_dump) |
+| `--output-schema` | Path | - | Path to custom output schema file |
+| `--output-compress` | Flag | False | Compress output files |
+| `--output-session-id` | String | - | Custom session ID for output files |
+
+Notes:
+
+- Standardized output files are currently emitted as JSON; `--output-format` is accepted for compatibility.
+
+### Export Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--export-csv` | Path | - | Export fuzzing results to CSV format |
+| `--export-xml` | Path | - | Export fuzzing results to XML format |
+| `--export-html` | Path | - | Export fuzzing results to HTML format |
+| `--export-markdown` | Path | - | Export fuzzing results to Markdown format |
+
+### Runtime Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--watchdog-check-interval` | Float | 1.0 | How often to check processes for hanging (seconds) |
+| `--watchdog-process-timeout` | Float | 30.0 | Time before a process is considered hanging (seconds) |
+| `--watchdog-extra-buffer` | Float | 5.0 | Extra time before auto-kill (seconds) |
+| `--watchdog-max-hang-time` | Float | 60.0 | Maximum time before force kill (seconds) |
+| `--process-max-concurrency` | Integer | 5 | Maximum concurrent process operations |
+| `--max-concurrency` | Integer | 5 | Maximum concurrent client operations |
+| `--process-retry-count` | Integer | 1 | Number of retries for failed operations |
+| `--process-retry-delay` | Float | 1.0 | Delay between retries (seconds) |
 
 ### Advanced Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--tool-timeout` | Float | 30.0 | Per-tool call timeout in seconds |
+| `--tool-timeout` | Float | - | Per-tool call timeout in seconds (defaults to `--timeout` when unset) |
+| `--enable-aiomonitor` | Flag | False | Enable AIOMonitor for async debugging (connect with `telnet localhost 20101`) |
 
 ## Configuration Reference
 
@@ -499,9 +553,6 @@ mcp-fuzzer --mode tools --help
 
 # Show help for specific protocol
 mcp-fuzzer --protocol stdio --help
-
-# Interactive configuration wizard
-mcp-fuzzer --interactive-config
 ```
 
 ### Argument Validation
@@ -510,12 +561,12 @@ The CLI now validates argument combinations and provides helpful error messages:
 
 ```bash
 # Invalid combination detection
-mcp-fuzzer --mode protocol --runs 10
-# Error: --runs is only valid for tool mode. Use --runs-per-type for protocol mode.
+mcp-fuzzer --mode protocol
+# Error: --protocol-type is required when --mode protocol
 
 # Missing required arguments
 mcp-fuzzer --mode tools
-# Error: --protocol and --endpoint are required for tool mode.
+# Error: --endpoint is required for fuzzing operations
 ```
 
 ### Verbose Output Improvements
@@ -680,19 +731,6 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --log-l
 
 #### Diagnostic Information
 
-Built-in diagnostic information for troubleshooting:
-
-```bash
-# System diagnostic information
-mcp-fuzzer --diagnostics
-# Output: "System Diagnostics:"
-#         "  Python version: 3.10.17"
-#         "  Platform: Linux x86_64"
-#         "  Available protocols: http, sse, stdio, streamablehttp"
-#         "  Safety system: available"
-#         "  Network connectivity: OK"
-```
-
 ## Additional Export Formats
 
 The MCP Server Fuzzer supports multiple export formats for reports:
@@ -704,12 +742,6 @@ Export fuzzing results to CSV format for analysis in spreadsheet applications:
 ```bash
 # Export to CSV format
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-csv results.csv
-
-# Export with custom CSV configuration
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
-    --export-csv results.csv \
-    --csv-delimiter "," \
-    --csv-quote-char "\""
 ```
 
 CSV output includes:
@@ -728,12 +760,6 @@ Export fuzzing results to XML format for integration with XML-based tools:
 ```bash
 # Export to XML format
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-xml results.xml
-
-# Export with custom XML configuration
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
-    --export-xml results.xml \
-    --xml-indent 2 \
-    --xml-encoding "utf-8"
 ```
 
 ### HTML Export
@@ -743,12 +769,6 @@ Export results to HTML format for web-based reporting:
 ```bash
 # Export to HTML format
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-html results.html
-
-# Export with custom HTML template
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
-    --export-html results.html \
-    --html-template custom_template.html \
-    --html-title "Fuzzing Results Report"
 ```
 
 ### Markdown Export
@@ -758,73 +778,22 @@ Export results to Markdown format for documentation:
 ```bash
 # Export to Markdown format
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-markdown results.md
-
-# Export with custom Markdown configuration
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
-    --export-markdown results.md \
-    --markdown-style github \
-    --markdown-toc true
 ```
 
-### Export Format Options
+Notes:
 
-#### CSV Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--csv-delimiter` | "," | Field delimiter |
-| `--csv-quote-char` | "\"" | Quote character |
-| `--csv-escape-char` | "\\" | Escape character |
-| `--csv-line-terminator` | "\\n" | Line terminator |
-
-#### XML Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--xml-indent` | 2 | Indentation spaces |
-| `--xml-encoding` | "utf-8" | Character encoding |
-| `--xml-root-name` | "fuzzing_results" | Root element name |
-| `--xml-attribute-quotes` | "double" | Attribute quote style |
-
-#### HTML Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--html-template` | "default" | HTML template to use |
-| `--html-title` | "Fuzzing Results" | Page title |
-| `--html-css` | "default" | CSS style to apply |
-| `--html-js` | "default" | JavaScript to include |
-
-#### Markdown Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--markdown-style` | "default" | Markdown style (github, gitlab, etc.) |
-| `--markdown-toc` | false | Include table of contents |
-| `--markdown-toc-depth` | 3 | TOC depth |
-| `--markdown-code-style` | "fenced" | Code block style |
+- JSON and text reports are always written to `--output-dir`.
+- Export flags create additional artifacts in the same output directory.
 
 ### Export Format Comparison
 
-| Format | Use Case | Pros | Cons |
-|--------|----------|------|------|
-| **JSON** | API integration, programmatic analysis | Structured, machine-readable | Verbose, not human-readable |
-| **CSV** | Spreadsheet analysis, data science | Simple, widely supported | Limited structure, no metadata |
-| **XML** | Enterprise integration, complex data | Structured, extensible | Verbose, complex parsing |
-| **HTML** | Web reporting, human-readable | Rich formatting, interactive | Not machine-readable |
-| **Markdown** | Documentation, GitHub integration | Human-readable, version control friendly | Limited formatting |
-| **Text** | Simple reporting, logs | Simple, universal | Limited structure |
-
-### Export Format Comparison
-
-| Format | Use Case | Pros | Cons |
-|--------|----------|------|------|
-| **JSON** | API integration, programmatic analysis | Structured, machine-readable | Verbose, not human-readable |
-| **CSV** | Spreadsheet analysis, data science | Simple, widely supported | Limited structure, no metadata |
-| **XML** | Enterprise integration, complex data | Structured, extensible | Verbose, complex parsing |
-| **HTML** | Web reporting, human-readable | Rich formatting, interactive | Not machine-readable |
-| **Markdown** | Documentation, GitHub integration | Human-readable, version control friendly | Limited formatting |
-| **Text** | Simple reporting, logs | Simple, universal | Limited structure |
+| Format | Use Case | Notes |
+|--------|----------|-------|
+| **JSON** | Programmatic analysis | Generated automatically in the output directory |
+| **CSV** | Spreadsheet analysis | Simple tabular summary |
+| **XML** | Enterprise integration | Structured, verbose |
+| **HTML** | Web reporting | Human-readable |
+| **Markdown** | Documentation | Works well in repos and wikis |
 
 ## Famous Open Source MCP Server Fuzz Results
 
@@ -832,7 +801,6 @@ For detailed fuzzing results and security analysis of popular open source MCP se
 
 This section provides comprehensive testing results for various MCP server implementations, including vulnerability assessments, performance metrics, and security recommendations.
 
-## API Reference
 ## API Reference
 
 ## Package Layout and Fuzz Engine
@@ -865,12 +833,12 @@ mcp_fuzzer/
       watchdog.py          # ProcessWatchdog (hang detection)
       wrapper.py           # Async helpers/executor wrapper
   transport/
-    base.py                # TransportProtocol interface
-    http.py                # JSON over HTTP
-    sse.py                 # Server-Sent Events
-    stdio.py               # STDIO transport
-    streamable_http.py     # Streamable HTTP (JSON + SSE, session headers)
-    factory.py             # create_transport(...)
+    interfaces/driver.py   # TransportDriver interface
+    drivers/http_driver.py # JSON over HTTP
+    drivers/sse_driver.py  # Server-Sent Events
+    drivers/stdio_driver.py # STDIO transport
+    drivers/stream_http_driver.py # Streamable HTTP (JSON + SSE, session headers)
+    catalog/builder.py     # build_driver(...)
   reports/
     reporter/              # Aggregates results + DI plumbing
     formatters/            # Console/JSON/Text/HTML/etc. formatters
@@ -888,8 +856,9 @@ mcp_fuzzer/
       sandbox.py
       sanitizer.py
   cli/
-    args.py, main.py, runner.py
-  client.py                # UnifiedMCPFuzzerClient orchestrator
+    parser.py, entrypoint.py, validators.py, config_merge.py
+  client/
+    main.py               # UnifiedMCPFuzzerClient orchestrator
 ```
 
 ## Schema Parser
@@ -973,7 +942,7 @@ except InvariantViolation as e:
 
 ### Fuzz Engine lifecycle (high level)
 
-- Client builds a `TransportProtocol` via the factory.
+- Client builds a `TransportDriver` via the factory.
 - For tools: `ToolExecutor` orchestrates `ToolMutator` to generate args, integrates with safety system, and executes via transport.
 - For protocol: `ProtocolExecutor` orchestrates `ProtocolMutator` to generate JSON-RPC envelopes, validates invariants, and sends raw via transport.
 - All executors use `AsyncFuzzExecutor` for concurrent execution with bounded concurrency.
@@ -1008,9 +977,9 @@ The core interface for transport protocols:
 
 ```python
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional, AsyncIterator
 
-class TransportProtocol(ABC):
+class TransportDriver(ABC):
     """Abstract base class for transport protocols."""
 
     @abstractmethod
@@ -1019,7 +988,7 @@ class TransportProtocol(ABC):
         pass
 
     @abstractmethod
-    async def send_raw(self, payload: Any) -> Any:
+    async def send_raw(self, payload: Dict[str, Any]) -> Any:
         """Send raw payload to the server."""
         pass
 
@@ -1028,13 +997,22 @@ class TransportProtocol(ABC):
         """Send a JSON-RPC notification to the server."""
         pass
 
-    async def get_tools(self) -> List[Dict[str, Any]]:
-        """Get list of available tools from the server."""
-        # Implementation details...
+    async def connect(self) -> None:
+        """Connect to the transport (optional override)."""
+        pass
 
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
-        """Call a specific tool with arguments."""
-        # Implementation details...
+    async def disconnect(self) -> None:
+        """Disconnect from the transport (optional override)."""
+        pass
+
+    async def stream_request(self, payload: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:
+        """Stream a request and yield response chunks."""
+        pass
+
+    @abstractmethod
+    async def _stream_request(self, payload: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:
+        """Transport-specific streaming implementation."""
+        pass
 ```
 
 ### Fuzzer Client
@@ -1050,7 +1028,7 @@ class UnifiedMCPFuzzerClient:
 
     def __init__(
         self,
-        transport: TransportProtocol,
+        transport: TransportDriver,
         safety_system: Optional[SafetyFilter] = None,
     ):
         self.transport = transport

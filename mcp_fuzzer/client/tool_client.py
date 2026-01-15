@@ -10,6 +10,7 @@ import logging
 from typing import Any
 
 from ..auth import AuthManager
+from ..spec_guard import check_tool_result_content, check_tool_schema_fields
 from ..fuzz_engine.mutators import ToolMutator
 from ..safety_system.safety import SafetyFilter, SafetyProvider
 
@@ -21,7 +22,6 @@ from ..config.core.constants import (
     DEFAULT_FORCE_KILL_TIMEOUT,
 )
 from ..transport.interfaces import JsonRpcAdapter
-
 
 
 class ToolClient:
@@ -54,6 +54,7 @@ class ToolClient:
             self.safety_system = safety_system or SafetyFilter()
         self.tool_mutator = ToolMutator()
         self._logger = logging.getLogger(__name__)
+        self._tool_schema_checks: dict[str, list[dict[str, Any]]] = {}
 
     async def _get_tools_from_server(self) -> list[dict[str, Any]]:
         """Get tools from the server.
@@ -67,6 +68,12 @@ class ToolClient:
                 self._logger.warning("Server returned an empty list of tools.")
                 return []
             self._logger.info(f"Found {len(tools)} tools to fuzz")
+            self._tool_schema_checks.clear()
+            for tool in tools:
+                tool_name = tool.get("name", "unknown")
+                checks = check_tool_schema_fields(tool)
+                if checks:
+                    self._tool_schema_checks[tool_name] = checks
             self._logger.debug(f"Tools: {tools}")
             return tools
         except Exception as e:
@@ -178,6 +185,12 @@ class ToolClient:
                 # Call the tool with the generated arguments
                 try:
                     result = await self._rpc.call_tool(tool_name, args_for_call)
+                    spec_checks = check_tool_result_content(result)
+                    spec_payload = (
+                        {"spec_checks": spec_checks, "spec_scope": "tool_result"}
+                        if spec_checks
+                        else {}
+                    )
                     results.append(
                         {
                             "args": sanitized_args,
@@ -185,6 +198,7 @@ class ToolClient:
                             "safety_blocked": False,
                             "safety_sanitized": safety_sanitized,
                             "success": True,
+                            **spec_payload,
                         }
                     )
                 except Exception as e:
@@ -217,7 +231,7 @@ class ToolClient:
         self,
         runs_per_tool: int = DEFAULT_TOOL_RUNS,
         tool_timeout: float | None = None,
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> dict[str, dict[str, Any]]:
         """Fuzz all tools from the server."""
         tools = await self._get_tools_from_server()
         if not tools:
@@ -245,7 +259,16 @@ class ToolClient:
             results = await self._fuzz_single_tool_with_timeout(
                 tool, runs_per_tool, tool_timeout
             )
-            all_results[tool_name] = results
+            tool_entry: dict[str, Any] = {"runs": results}
+            if tool_name in self._tool_schema_checks:
+                schema_checks = self._tool_schema_checks[tool_name]
+                tool_entry["spec_checks"] = schema_checks
+                tool_entry["spec_scope"] = "tool_schema"
+                tool_entry["spec_checks_passed"] = not any(
+                    str(check.get("status", "")).upper() == "FAIL"
+                    for check in schema_checks
+                )
+            all_results[tool_name] = tool_entry
 
             # Calculate statistics
             exceptions = [r for r in results if "exception" in r]
@@ -352,7 +375,13 @@ class ToolClient:
 
             # Call the tool with the generated arguments
             try:
-                result = await self.transport.call_tool(tool_name, args_for_call)
+                result = await self._rpc.call_tool(tool_name, args_for_call)
+                spec_checks = check_tool_result_content(result)
+                spec_payload = (
+                    {"spec_checks": spec_checks, "spec_scope": "tool_result"}
+                    if spec_checks
+                    else {}
+                )
                 processed.append(
                     {
                         "args": sanitized_args,
@@ -360,6 +389,7 @@ class ToolClient:
                         "safety_blocked": False,
                         "safety_sanitized": safety_sanitized,
                         "success": True,
+                        **spec_payload,
                     }
                 )
             except Exception as e:
@@ -434,6 +464,14 @@ class ToolClient:
                 phase_results = await self._fuzz_single_tool_both_phases(
                     tool, runs_per_phase
                 )
+                if tool_name in self._tool_schema_checks:
+                    schema_checks = self._tool_schema_checks[tool_name]
+                    phase_results["spec_checks"] = schema_checks
+                    phase_results["spec_scope"] = "tool_schema"
+                    phase_results["spec_checks_passed"] = not any(
+                        str(check.get("status", "")).upper() == "FAIL"
+                        for check in schema_checks
+                    )
                 all_results[tool_name] = phase_results
 
             return all_results
