@@ -109,6 +109,72 @@ class JsonRpcAdapter:
         params = {"name": tool_name, "arguments": arguments}
         return await self._transport.send_request("tools/call", params)
 
+    async def ping(self) -> Any:
+        """Send a ping request to the server."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        return await self._transport.send_request("ping")
+
+    async def set_logging_level(self, level: str) -> Any:
+        """Set the server logging level."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        return await self._transport.send_request("logging/setLevel", {"level": level})
+
+    async def list_resources(self) -> Any:
+        """Fetch available resources."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        return await self._transport.send_request("resources/list")
+
+    async def list_resource_templates(self) -> Any:
+        """Fetch available resource templates."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        return await self._transport.send_request("resources/templates/list")
+
+    async def read_resource(self, uri: str) -> Any:
+        """Read a resource by URI."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        return await self._transport.send_request("resources/read", {"uri": uri})
+
+    async def subscribe_resource(self, uri: str) -> Any:
+        """Subscribe to resource updates."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        return await self._transport.send_request("resources/subscribe", {"uri": uri})
+
+    async def unsubscribe_resource(self, uri: str) -> Any:
+        """Unsubscribe from resource updates."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        return await self._transport.send_request("resources/unsubscribe", {"uri": uri})
+
+    async def list_prompts(self) -> Any:
+        """Fetch available prompts."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        return await self._transport.send_request("prompts/list")
+
+    async def get_prompt(
+        self, name: str, arguments: dict[str, Any] | None = None
+    ) -> Any:
+        """Get a prompt by name with optional arguments."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        params = {"name": name, "arguments": arguments or {}}
+        return await self._transport.send_request("prompts/get", params)
+
+    async def complete(
+        self, prompt: str, arguments: dict[str, Any] | None = None
+    ) -> Any:
+        """Run completion for a prompt."""
+        if not self._transport:
+            raise RuntimeError("No transport set for JsonRpcAdapter")
+        params = {"prompt": prompt, "arguments": arguments or {}}
+        return await self._transport.send_request("completion/complete", params)
+
     async def send_batch_request(
         self, batch: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:

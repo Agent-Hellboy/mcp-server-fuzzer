@@ -1,6 +1,7 @@
 import asyncio
 import types
 from typing import Any, Dict, List, Optional, Union
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from mcp_fuzzer.transport.drivers.stream_http_driver import (
@@ -154,6 +155,39 @@ async def test_streamable_http_sse_response(monkeypatch):
     # Assert
     assert result == {"ok": True}
     assert t.session_id == "sess-xyz"
+
+
+@pytest.mark.anyio("asyncio")
+async def test_streamable_http_sse_handles_server_request(monkeypatch):
+    sse_lines = [
+        "event: message",
+        (
+            'data: {"jsonrpc": "2.0", "id": "srv-1", '
+            '"method": "sampling/createMessage", '
+            '"params": {"messages": [], "maxTokens": 1}}'
+        ),
+        "",
+        "event: message",
+        'data: {"jsonrpc": "2.0", "id": "1", "result": {"ok": true}}',
+        "",
+    ]
+    resp = _DummySSEStreamResponse(lines=sse_lines)
+    fake = _FakeAsyncClient([resp])
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
+
+    t = StreamHttpDriver("http://test/mcp", timeout=1)
+    t._initialized = True
+
+    with patch.object(t, "_send_client_response", new=AsyncMock()) as mock_send:
+        result = await t.send_raw(
+            {"jsonrpc": "2.0", "id": "1", "method": "ping", "params": {}}
+        )
+
+    assert result == {"ok": True}
+    mock_send.assert_awaited_once()
 
 
 @pytest.mark.anyio("asyncio")

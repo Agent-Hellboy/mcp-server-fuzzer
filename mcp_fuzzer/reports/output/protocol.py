@@ -80,6 +80,7 @@ class OutputProtocol:
         total_tests: int,
         success_rate: float,
         safety_enabled: bool = False,
+        spec_summary: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create fuzzing results output."""
         data = {
@@ -90,6 +91,7 @@ class OutputProtocol:
             "total_protocol_types": len(protocol_results),
             "tools_tested": self._format_tool_results(tool_results),
             "protocol_types_tested": self._format_protocol_results(protocol_results),
+            "spec_summary": spec_summary or {},
         }
         metadata = {
             "execution_time": execution_time,
@@ -123,6 +125,7 @@ class OutputProtocol:
             total_tests=snapshot.total_tests(),
             success_rate=snapshot.overall_success_rate(),
             safety_enabled=safety_enabled,
+            spec_summary=snapshot.spec_summary,
         )
 
     def create_error_report_output(

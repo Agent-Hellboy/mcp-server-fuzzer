@@ -75,6 +75,27 @@ class TextFormatter:
                         f"Protocol Success Rate: {protocols['success_rate']:.1f}%\n\n"
                     )
 
+            if "spec_summary" in data:
+                spec_summary = data.get("spec_summary") or {}
+                totals = spec_summary.get("totals", {})
+                if totals:
+                    f.write("SPEC GUARD SUMMARY\n")
+                    f.write("-" * 40 + "\n")
+                    f.write(f"Total Checks: {totals.get('total', 0)}\n")
+                    f.write(f"Failed: {totals.get('failed', 0)}\n")
+                    f.write(f"Warned: {totals.get('warned', 0)}\n")
+                    f.write(f"Passed: {totals.get('passed', 0)}\n\n")
+                    by_spec = spec_summary.get("by_spec_id") or {}
+                    for spec_id, details in by_spec.items():
+                        f.write(f"{spec_id}: ")
+                        f.write(
+                            f"{details.get('failed', 0)} failed, "
+                            f"{details.get('warned', 0)} warned, "
+                            f"{details.get('passed', 0)} passed "
+                            f"({details.get('total', 0)} total)\n"
+                        )
+                    f.write("\n")
+
             if "tool_results" in data:
                 f.write("TOOL FUZZING RESULTS\n")
                 f.write("-" * 40 + "\n")

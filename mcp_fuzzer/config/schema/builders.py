@@ -67,7 +67,10 @@ def build_basic_schema() -> dict[str, Any]:
 def build_fuzzing_schema() -> dict[str, Any]:
     """Build schema for fuzzing-related configuration."""
     return {
-        "mode": {"type": "string", "enum": ["tools", "protocol", "both"]},
+        "mode": {
+            "type": "string",
+            "enum": ["tools", "protocol", "resources", "prompts", "all"],
+        },
         "phase": {"type": "string", "enum": ["realistic", "aggressive", "both"]},
         "protocol": {
             "type": "string",
@@ -87,6 +90,22 @@ def build_fuzzing_schema() -> dict[str, Any]:
         "protocol_type": {
             "type": "string",
             "description": "Specific protocol type to fuzz",
+        },
+        "spec_guard": {
+            "type": "boolean",
+            "description": "Enable deterministic spec guard checks for protocol mode",
+        },
+        "spec_resource_uri": {
+            "type": "string",
+            "description": "Resource URI used for spec guard checks",
+        },
+        "spec_prompt_name": {
+            "type": "string",
+            "description": "Prompt name used for spec guard checks",
+        },
+        "spec_prompt_args": {
+            "type": "string",
+            "description": "JSON string of prompt arguments for spec guard checks",
         },
         "max_concurrency": {
             "type": "integer",

@@ -6,6 +6,7 @@ This module provides the base client class for fuzzing MCP servers.
 """
 
 import logging
+from typing import Any
 
 from ..auth import AuthManager
 from ..reports import FuzzerReporter
@@ -13,6 +14,7 @@ from ..safety_system.safety import SafetyProvider, SafetyFilter
 
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
+from ..spec_guard import run_spec_suite
 
 
 class MCPFuzzerClient:
@@ -126,6 +128,52 @@ class MCPFuzzerClient:
         return await self.protocol_client.fuzz_all_protocol_types(
             runs_per_type=runs_per_type
         )
+
+    async def fuzz_resources(self, runs_per_type=5):
+        """Fuzz resource-related protocol endpoints."""
+        results: dict[str, list[dict[str, Any]]] = {}
+        for protocol_type in (
+            "ListResourcesRequest",
+            "ReadResourceRequest",
+            "ListResourceTemplatesRequest",
+        ):
+            results[protocol_type] = await self.protocol_client.fuzz_protocol_type(
+                protocol_type, runs=runs_per_type
+            )
+        return results
+
+    async def fuzz_prompts(self, runs_per_type=5):
+        """Fuzz prompt-related protocol endpoints."""
+        results: dict[str, list[dict[str, Any]]] = {}
+        for protocol_type in (
+            "ListPromptsRequest",
+            "GetPromptRequest",
+            "CompleteRequest",
+        ):
+            results[protocol_type] = await self.protocol_client.fuzz_protocol_type(
+                protocol_type, runs=runs_per_type
+            )
+        return results
+
+    # ============================================================================
+    # Spec Guard Methods
+    # ============================================================================
+
+    async def run_spec_suite(
+        self,
+        resource_uri: str | None = None,
+        prompt_name: str | None = None,
+        prompt_args: str | None = None,
+    ):
+        """Run spec guard checks against core MCP endpoints."""
+        checks = await run_spec_suite(
+            self.transport,
+            resource_uri=resource_uri,
+            prompt_name=prompt_name,
+            prompt_args=prompt_args,
+        )
+        self._reporter.add_spec_checks(checks)
+        return checks
 
     # ============================================================================
     # Summary Methods - Delegate to Reporter

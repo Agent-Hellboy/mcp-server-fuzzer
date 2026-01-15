@@ -140,6 +140,7 @@ class ReportSnapshot:
     tool_results: dict[str, list[RunRecord]]
     protocol_results: dict[str, list[RunRecord]]
     summary: SummaryStats
+    spec_summary: dict[str, Any] = field(default_factory=dict)
     safety_data: dict[str, Any] = field(default_factory=dict)
     runtime_data: dict[str, Any] = field(default_factory=dict)
 
@@ -179,6 +180,7 @@ class ReportSnapshot:
             "tool_results": tool_dict,
             "protocol_results": protocol_dict,
             "summary": self.summary.to_dict(),
+            "spec_summary": self.spec_summary,
             "safety": self.safety_data,
             "runtime": self.runtime_data,
         }

@@ -232,6 +232,36 @@ class TestStdioDriver:
                     assert mock_receive.call_count == 1
 
     @pytest.mark.asyncio
+    async def test_send_request_handles_sampling_request(self):
+        """send_request should reply to sampling/createMessage requests."""
+        with patch.object(
+            self.transport, "_send_message", new=AsyncMock()
+        ) as mock_send:
+            with patch("mcp_fuzzer.transport.drivers.stdio_driver.uuid") as mock_uuid:
+                mock_uuid.uuid4.return_value = "client-id"
+                server_request = {
+                    "jsonrpc": "2.0",
+                    "id": "srv-id",
+                    "method": "sampling/createMessage",
+                    "params": {"messages": [], "maxTokens": 1},
+                }
+                response = {"id": "client-id", "result": {"ok": True}}
+                with patch.object(
+                    self.transport,
+                    "_receive_message",
+                    new=AsyncMock(side_effect=[server_request, response]),
+                ):
+                    result = await self.transport.send_request(
+                        "test_method", {"param": "value"}
+                    )
+
+                assert result == {"ok": True}
+                assert mock_send.call_count == 2
+                sampling_reply = mock_send.call_args_list[1][0][0]
+                assert sampling_reply["id"] == "srv-id"
+                assert sampling_reply["result"]["role"] == "assistant"
+
+    @pytest.mark.asyncio
     async def test_send_request_error_response(self):
         """Test send_request method with error response."""
         with patch.object(
@@ -289,6 +319,32 @@ class TestStdioDriver:
                 assert result == {"success": True}
                 mock_send.assert_awaited_once_with({"raw": "data"})
                 mock_receive.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_send_raw_handles_sampling_request(self):
+        """send_raw should reply to sampling/createMessage requests."""
+        with patch.object(
+            self.transport, "_send_message", new=AsyncMock()
+        ) as mock_send:
+            server_request = {
+                "jsonrpc": "2.0",
+                "id": "srv-id",
+                "method": "sampling/createMessage",
+                "params": {"messages": [], "maxTokens": 1},
+            }
+            response = {"result": {"ok": True}}
+            with patch.object(
+                self.transport,
+                "_receive_message",
+                new=AsyncMock(side_effect=[server_request, response]),
+            ):
+                result = await self.transport.send_raw({"raw": "data"})
+
+            assert result == {"ok": True}
+            assert mock_send.call_count == 2
+            sampling_reply = mock_send.call_args_list[1][0][0]
+            assert sampling_reply["id"] == "srv-id"
+            assert sampling_reply["result"]["role"] == "assistant"
 
     @pytest.mark.asyncio
     async def test_send_raw_error_response(self):

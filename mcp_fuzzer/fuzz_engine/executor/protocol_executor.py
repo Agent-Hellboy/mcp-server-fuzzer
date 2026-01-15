@@ -18,6 +18,14 @@ from .invariants import (
 )
 from ..mutators import ProtocolMutator, BatchMutator
 from ..fuzzerreporter import ResultBuilder, ResultCollector
+from ...spec_guard import (
+    check_tool_result_content,
+    check_resources_list,
+    check_resources_read,
+    check_resource_templates_list,
+    check_prompts_list,
+    check_prompts_get,
+)
 
 
 class ProtocolExecutor:
@@ -264,6 +272,32 @@ class ProtocolExecutor:
                         e,
                     )
 
+            spec_checks: list[dict[str, Any]] = []
+            spec_scope: str | None = None
+            if isinstance(server_response, dict) and not generate_only:
+                payload = server_response.get("result", server_response)
+                method = (
+                    fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
+                )
+                if method == "tools/call":
+                    spec_checks = check_tool_result_content(payload)
+                    spec_scope = "tools/call"
+                elif method == "resources/list":
+                    spec_checks = check_resources_list(payload)
+                    spec_scope = "resources/list"
+                elif method == "resources/read":
+                    spec_checks = check_resources_read(payload)
+                    spec_scope = "resources/read"
+                elif method == "resources/templates/list":
+                    spec_checks = check_resource_templates_list(payload)
+                    spec_scope = "resources/templates/list"
+                elif method == "prompts/list":
+                    spec_checks = check_prompts_list(payload)
+                    spec_scope = "prompts/list"
+                elif method == "prompts/get":
+                    spec_checks = check_prompts_get(payload)
+                    spec_scope = "prompts/get"
+
             # Create the result
             result = self.result_builder.build_protocol_result(
                 protocol_type=protocol_type,
@@ -272,6 +306,8 @@ class ProtocolExecutor:
                 server_response=server_response,
                 server_error=server_error,
                 invariant_violations=invariant_violations,
+                spec_checks=spec_checks,
+                spec_scope=spec_scope,
             )
 
             self._logger.debug(f"Fuzzed {protocol_type} run {run_index + 1}")

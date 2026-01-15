@@ -163,6 +163,10 @@ class FuzzerReporter:
         """Add protocol fuzzing results to the reporter."""
         self.collector.add_protocol_results(protocol_type, results)
 
+    def add_spec_checks(self, checks: list[dict[str, Any]]):
+        """Add spec guard checks to the reporter."""
+        self.collector.add_spec_checks(checks)
+
     def add_safety_data(self, safety_data: dict[str, Any]):
         """Add safety system data to the reporter."""
         self.collector.update_safety_data(safety_data)

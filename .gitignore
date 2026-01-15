@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 testing-servers/
+explore/
 *.py[cod]
 *$py.class
 *$py.pyc

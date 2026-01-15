@@ -115,6 +115,7 @@ def test_unified_client_main_protocol_and_both_modes():
     settings = _settings(mode="protocol", runs_per_type=2)
     client_instance = MagicMock()
     client_instance.fuzz_all_protocol_types = AsyncMock()
+    client_instance.run_spec_suite = AsyncMock(return_value=[])
     client_instance.cleanup = AsyncMock()
     with (
         patch(
@@ -129,10 +130,11 @@ def test_unified_client_main_protocol_and_both_modes():
     client_instance.fuzz_all_protocol_types.assert_awaited()
 
     # Both mode with phase both and protocol_type set
-    settings_both = _settings(mode="both", phase="both", protocol_type="Init")
+    settings_both = _settings(mode="all", phase="both", protocol_type="Init")
     client_instance2 = MagicMock()
     client_instance2.fuzz_all_tools_both_phases = AsyncMock()
     client_instance2.fuzz_protocol_type = AsyncMock()
+    client_instance2.run_spec_suite = AsyncMock(return_value=[])
     client_instance2.cleanup = AsyncMock()
     with (
         patch(
@@ -150,7 +152,7 @@ def test_unified_client_main_protocol_and_both_modes():
 
 def test_unified_client_main_exports_reports_and_handles_errors():
     settings = _settings(
-        mode="tool",
+        mode="tools",
         tool="x",
         export_csv="out.csv",
         export_markdown="md.md",
@@ -177,7 +179,7 @@ def test_unified_client_main_exports_reports_and_handles_errors():
 
 def test_unified_client_main_exports_html_xml():
     settings = _settings(
-        mode="tool",
+        mode="tools",
         tool="x",
         export_html="out.html",
         export_xml="out.xml",

@@ -78,49 +78,130 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
     try:
         tool_results: dict[str, Any] = {}
-        if config["mode"] == "tools":
+        protocol_results: dict[str, Any] = {}
+        mode = config["mode"]
+        if mode == "tools":
             if config.get("phase") == "both":
-                tool_results = await client.fuzz_all_tools_both_phases(
-                    runs_per_phase=config.get("runs", 10)
-                )
+                if config.get("tool"):
+                    tool_results = await client.fuzz_tool_both_phases(
+                        config["tool"], runs_per_phase=config.get("runs", 10)
+                    )
+                else:
+                    tool_results = await client.fuzz_all_tools_both_phases(
+                        runs_per_phase=config.get("runs", 10)
+                    )
             else:
-                tool_results = await client.fuzz_all_tools(
-                    runs_per_tool=config.get("runs", 10)
+                if config.get("tool"):
+                    tool_results = await client.fuzz_tool(
+                        config["tool"], runs=config.get("runs", 10)
+                    )
+                else:
+                    tool_results = await client.fuzz_all_tools(
+                        runs_per_tool=config.get("runs", 10)
+                    )
+        elif mode == "protocol":
+            if config.get("spec_guard", True):
+                checks = await client.run_spec_suite(
+                    resource_uri=config.get("spec_resource_uri"),
+                    prompt_name=config.get("spec_prompt_name"),
+                    prompt_args=config.get("spec_prompt_args"),
                 )
-        elif config["mode"] == "tool":
-            if config.get("phase") == "both":
-                tool_results = await client.fuzz_tool_both_phases(
-                    config["tool"], runs_per_phase=config.get("runs", 10)
+                failed = [
+                    c for c in checks if str(c.get("status", "")).upper() == "FAIL"
+                ]
+                logging.info(
+                    "Spec guard checks completed: %d total, %d failed",
+                    len(checks),
+                    len(failed),
                 )
-            else:
-                tool_results = await client.fuzz_tool(
-                    config["tool"], runs=config.get("runs", 10)
-                )
-        elif config["mode"] == "protocol":
             if config.get("protocol_type"):
-                await client.fuzz_protocol_type(
-                    config["protocol_type"], runs=config.get("runs_per_type", 10)
+                protocol_type = config["protocol_type"]
+                protocol_results[protocol_type] = await client.fuzz_protocol_type(
+                    protocol_type,
+                    runs=config.get("runs_per_type", 10),
                 )
             else:
-                await client.fuzz_all_protocol_types(
+                protocol_results = await client.fuzz_all_protocol_types(
                     runs_per_type=config.get("runs_per_type", 10)
                 )
-        elif config["mode"] == "both":
+        elif mode == "resources":
+            if config.get("spec_guard", True):
+                checks = await client.run_spec_suite(
+                    resource_uri=config.get("spec_resource_uri"),
+                    prompt_name=config.get("spec_prompt_name"),
+                    prompt_args=config.get("spec_prompt_args"),
+                )
+                failed = [
+                    c for c in checks if str(c.get("status", "")).upper() == "FAIL"
+                ]
+                logging.info(
+                    "Spec guard checks completed: %d total, %d failed",
+                    len(checks),
+                    len(failed),
+                )
+            protocol_results = await client.fuzz_resources(
+                runs_per_type=config.get("runs_per_type", 10)
+            )
+        elif mode == "prompts":
+            if config.get("spec_guard", True):
+                checks = await client.run_spec_suite(
+                    resource_uri=config.get("spec_resource_uri"),
+                    prompt_name=config.get("spec_prompt_name"),
+                    prompt_args=config.get("spec_prompt_args"),
+                )
+                failed = [
+                    c for c in checks if str(c.get("status", "")).upper() == "FAIL"
+                ]
+                logging.info(
+                    "Spec guard checks completed: %d total, %d failed",
+                    len(checks),
+                    len(failed),
+                )
+            protocol_results = await client.fuzz_prompts(
+                runs_per_type=config.get("runs_per_type", 10)
+            )
+        elif mode == "all":
             logging.info("Running both tools and protocol fuzzing")  # pragma: no cover
             if config.get("phase") == "both":
-                tool_results = await client.fuzz_all_tools_both_phases(
-                    runs_per_phase=config.get("runs", 10)
-                )
+                if config.get("tool"):
+                    tool_results = await client.fuzz_tool_both_phases(
+                        config["tool"], runs_per_phase=config.get("runs", 10)
+                    )
+                else:
+                    tool_results = await client.fuzz_all_tools_both_phases(
+                        runs_per_phase=config.get("runs", 10)
+                    )
             else:
-                tool_results = await client.fuzz_all_tools(
-                    runs_per_tool=config.get("runs", 10)
+                if config.get("tool"):
+                    tool_results = await client.fuzz_tool(
+                        config["tool"], runs=config.get("runs", 10)
+                    )
+                else:
+                    tool_results = await client.fuzz_all_tools(
+                        runs_per_tool=config.get("runs", 10)
+                    )
+            if config.get("spec_guard", True):
+                checks = await client.run_spec_suite(
+                    resource_uri=config.get("spec_resource_uri"),
+                    prompt_name=config.get("spec_prompt_name"),
+                    prompt_args=config.get("spec_prompt_args"),
+                )
+                failed = [
+                    c for c in checks if str(c.get("status", "")).upper() == "FAIL"
+                ]
+                logging.info(
+                    "Spec guard checks completed: %d total, %d failed",
+                    len(checks),
+                    len(failed),
                 )
             if config.get("protocol_type"):
-                await client.fuzz_protocol_type(
-                    config["protocol_type"], runs=config.get("runs_per_type", 10)
+                protocol_type = config["protocol_type"]
+                protocol_results[protocol_type] = await client.fuzz_protocol_type(
+                    protocol_type,
+                    runs=config.get("runs_per_type", 10),
                 )
             else:
-                await client.fuzz_all_protocol_types(
+                protocol_results = await client.fuzz_all_protocol_types(
                     runs_per_type=config.get("runs_per_type", 10)
                 )
         else:
@@ -128,7 +209,11 @@ async def unified_client_main(settings: ClientSettings) -> int:
             return 1
 
         try:  # pragma: no cover
-            if (config["mode"] in ["tools", "tool", "both"]) and tool_results:
+            if (
+                mode in ["tools", "all"]
+                and isinstance(tool_results, dict)
+                and tool_results
+            ):
                 print("\n" + "=" * 80)
                 print(f"{emoji.emojize(':bullseye:')} MCP FUZZER TOOL RESULTS SUMMARY")
                 print("=" * 80)
@@ -178,6 +263,10 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display table summary: {exc}")
+
+        if isinstance(protocol_results, dict) and protocol_results:
+            for protocol_type, results in protocol_results.items():
+                client.reporter.add_protocol_results(protocol_type, results)
 
         try:  # pragma: no cover
             output_types = config.get("output_types")
