@@ -56,9 +56,11 @@ The modularity improvements (dependency injection, registries) make it maintaine
 # Install from PyPI
 pip install mcp-fuzzer
 
-# Or install from source
-git clone https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
+# Or install from source (includes MCP spec submodule)
+git clone --recursive https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
 cd mcp-server-fuzzer
+# If you already cloned without submodules, run:
+git submodule update --init --recursive
 pip install -e .
 ```
 
@@ -285,8 +287,10 @@ We welcome contributions! Please see our [Contributing Guide](https://agent-hell
 
 **Quick Start for Contributors:**
 ```bash
-git clone https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
+git clone --recursive https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
 cd mcp-server-fuzzer
+# If you already cloned without submodules, run:
+git submodule update --init --recursive
 pip install -e .[dev]
 pytest tests/
 ```

@@ -13,8 +13,10 @@ pip install mcp-fuzzer
 ### From Source
 
 ```bash
-git clone https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
+git clone --recursive https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
 cd mcp-server-fuzzer
+# If you already cloned without submodules, run:
+git submodule update --init --recursive
 pip install -e .
 ```
 

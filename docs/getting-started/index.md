@@ -18,9 +18,11 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 # Basic installation
 pip install mcp-fuzzer
 
-# From source
-git clone https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
+# From source (includes MCP spec submodule)
+git clone --recursive https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
 cd mcp-server-fuzzer
+# If you already cloned without submodules, run:
+git submodule update --init --recursive
 pip install -e .
 ```
 

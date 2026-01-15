@@ -446,7 +446,6 @@ def check_prompts_list(result: Any) -> list[SpecCheck]:
                     _PROMPTS_SPEC,
                 )
             )
-
     return checks
 
 

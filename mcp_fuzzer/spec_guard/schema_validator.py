@@ -9,11 +9,12 @@ from typing import Any
 from .helpers import SpecCheck
 
 try:
-    from jsonschema import Draft7Validator
+    from jsonschema import Draft202012Validator, validators
 
     HAVE_JSONSCHEMA = True
 except Exception:  # noqa: BLE001 - optional dependency
-    Draft7Validator = None
+    Draft202012Validator = None
+    validators = None
     HAVE_JSONSCHEMA = False
 
 _SCHEMA_SPEC = {
@@ -90,7 +91,18 @@ def validate_definition(
         "definitions": definitions,
     }
 
-    validator = Draft7Validator(wrapper)
+    try:
+        validator_cls = validators.validator_for(wrapper, default=Draft202012Validator)
+    except Exception as exc:  # noqa: BLE001 - unknown schema dialect
+        return [
+            _make_check(
+                "WARN",
+                f"Schema dialect not recognized: {exc}",
+                {"definition": definition_name},
+            )
+        ]
+
+    validator = validator_cls(wrapper)
     errors = sorted(validator.iter_errors(instance), key=lambda e: e.path)
     if errors:
         return [
