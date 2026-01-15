@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from .common import calculate_tool_success_rate, normalize_report_data
+from .common import (
+    calculate_tool_success_rate,
+    extract_tool_runs,
+    normalize_report_data,
+)
 
 
 def _result_has_failure(result: dict[str, Any]) -> bool:
@@ -100,19 +104,20 @@ class TextFormatter:
                 f.write("TOOL FUZZING RESULTS\n")
                 f.write("-" * 40 + "\n")
                 for tool_name, results in data["tool_results"].items():
+                    runs, _ = extract_tool_runs(results)
                     f.write(f"\nTool: {tool_name}\n")
-                    f.write(f"  Total Runs: {len(results)}\n")
+                    f.write(f"  Total Runs: {len(runs)}\n")
 
-                    exceptions = sum(1 for r in results if "exception" in r)
+                    exceptions = sum(1 for r in runs if "exception" in r)
                     safety_blocked = sum(
-                        1 for r in results if r.get("safety_blocked", False)
+                        1 for r in runs if r.get("safety_blocked", False)
                     )
                     f.write(f"  Exceptions: {exceptions}\n")
                     f.write(f"  Safety Blocked: {safety_blocked}\n")
 
-                    if results:
+                    if runs:
                         success_rate = calculate_tool_success_rate(
-                            len(results), exceptions, safety_blocked
+                            len(runs), exceptions, safety_blocked
                         )
                         f.write(f"  Success Rate: {success_rate:.1f}%\n")
 

@@ -88,6 +88,8 @@ class ResultBuilder:
             server_response: Response from server, if any
             server_error: Error from server, if any
             invariant_violations: List of invariant violations, if any
+            spec_checks: List of spec guard check results, if any
+            spec_scope: Scope identifier for spec checks, if any
 
         Returns:
             Standardized protocol result dictionary

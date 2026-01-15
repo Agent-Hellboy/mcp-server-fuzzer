@@ -58,10 +58,10 @@ npm run build
 python3 -m mcp_fuzzer --mode tools --protocol stdio --endpoint "node /path/to/chrome-devtools-mcp/build/src/index.js" --runs 5 --verbose --enable-safety-system --timeout 60
 
 # Comprehensive testing with both tools and protocol
-python3 -m mcp_fuzzer --mode both --protocol stdio --endpoint "node /path/to/chrome-devtools-mcp/build/src/index.js" --runs 5 --runs-per-type 3 --verbose --enable-safety-system --timeout 60
+python3 -m mcp_fuzzer --mode all --protocol stdio --endpoint "node /path/to/chrome-devtools-mcp/build/src/index.js" --runs 5 --runs-per-type 3 --verbose --enable-safety-system --timeout 60
 
 # Protocol-specific testing
-python3 -m mcp_fuzzer --mode protocol --protocol stdio --endpoint "node /path/to/chrome-devtools-mcp/build/src/index.js" --runs 10 --verbose --enable-safety-system --timeout 60
+python3 -m mcp_fuzzer --mode protocol --protocol-type InitializeRequest --protocol stdio --endpoint "node /path/to/chrome-devtools-mcp/build/src/index.js" --runs 10 --verbose --enable-safety-system --timeout 60
 ```
 
 #### Test Results
@@ -189,7 +189,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "node DesktopCommanderMCP/di
 mcp-fuzzer --mode tools --protocol stdio --endpoint "node DesktopCommanderMCP/dist/index.js" --runs 10 --phase realistic --enable-safety-system --output-dir /tmp
 
 # Full testing (tools + protocol)
-mcp-fuzzer --mode both --protocol stdio --endpoint "node DesktopCommanderMCP/dist/index.js" --runs 10 --verbose --enable-safety-system --output-dir /tmp
+mcp-fuzzer --mode all --protocol stdio --endpoint "node DesktopCommanderMCP/dist/index.js" --runs 10 --verbose --enable-safety-system --output-dir /tmp
 ```
 
 #### Test Results
@@ -294,14 +294,14 @@ npm run build
 mcp-fuzzer --protocol stdio --endpoint "node /path/to/mcp-server-chart/build/index.js" --mode tools --runs 5 --verbose --enable-safety-system --output-dir /tmp
 
 # Comprehensive testing with both tools and protocol
-mcp-fuzzer --protocol stdio --endpoint "node /path/to/mcp-server-chart/build/index.js" --mode both --runs 10 --verbose --enable-safety-system --output-dir /tmp
+mcp-fuzzer --protocol stdio --endpoint "node /path/to/mcp-server-chart/build/index.js" --mode all --runs 10 --verbose --enable-safety-system --output-dir /tmp
 
 # Protocol-specific testing
-mcp-fuzzer --protocol stdio --endpoint "node /path/to/mcp-server-chart/build/index.js" --mode protocol --runs 10 --verbose --enable-safety-system --output-dir /tmp
+mcp-fuzzer --protocol stdio --endpoint "node /path/to/mcp-server-chart/build/index.js" --mode protocol --protocol-type InitializeRequest --runs 10 --verbose --enable-safety-system --output-dir /tmp
 
 # From within server directory
 cd /path/to/mcp-server-chart
-python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode both --runs 5 --verbose --enable-safety-system --output-dir /tmp
+python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode all --runs 5 --verbose --enable-safety-system --output-dir /tmp
 ```
 
 #### Test Results
@@ -404,10 +404,10 @@ npm run build
 python3 -m mcp_fuzzer --mode tools --protocol stdio --endpoint "node build/src/index.js" --runs 5 --verbose --enable-safety-system --timeout 60
 
 # Comprehensive test (tools + protocol)
-python3 -m mcp_fuzzer --mode both --protocol stdio --endpoint "node build/src/index.js" --runs 5 --runs-per-type 3 --verbose --enable-safety-system --timeout 60
+python3 -m mcp_fuzzer --mode all --protocol stdio --endpoint "node build/src/index.js" --runs 5 --runs-per-type 3 --verbose --enable-safety-system --timeout 60
 
 # Protocol-specific test
-python3 -m mcp_fuzzer --mode protocol --protocol stdio --endpoint "node build/src/index.js" --runs 10 --verbose --enable-safety-system --timeout 60
+python3 -m mcp_fuzzer --mode protocol --protocol-type InitializeRequest --protocol stdio --endpoint "node build/src/index.js" --runs 10 --verbose --enable-safety-system --timeout 60
 ```
 
 ### Testing DesktopCommanderMCP
@@ -439,17 +439,17 @@ npm install
 npm run build
 
 # Test both tools and protocol modes (from project root)
-mcp-fuzzer --protocol stdio --endpoint "node /path/to/your/mcp-server-chart/build/index.js" --mode both --runs 5 --verbose --enable-safety-system --output-dir /tmp
+mcp-fuzzer --protocol stdio --endpoint "node /path/to/your/mcp-server-chart/build/index.js" --mode all --runs 5 --verbose --enable-safety-system --output-dir /tmp
 
 # Protocol-specific testing
-mcp-fuzzer --protocol stdio --endpoint "node /path/to/your/mcp-server-chart/build/index.js" --mode protocol --runs 10 --verbose --enable-safety-system --output-dir /tmp
+mcp-fuzzer --protocol stdio --endpoint "node /path/to/your/mcp-server-chart/build/index.js" --mode protocol --protocol-type InitializeRequest --runs 10 --verbose --enable-safety-system --output-dir /tmp
 
 # Tool-specific testing
 mcp-fuzzer --protocol stdio --endpoint "node /path/to/your/mcp-server-chart/build/index.js" --mode tools --runs 10 --verbose --enable-safety-system --output-dir /tmp
 
 # Alternative: If running from within the server directory
 cd /path/to/your/mcp-server-chart
-python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode both --runs 5 --verbose --enable-safety-system --output-dir /tmp
+python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode all --runs 5 --verbose --enable-safety-system --output-dir /tmp
 ```
 
 ### General Testing Commands
@@ -459,10 +459,10 @@ python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode bo
 pip install mcp-fuzzer
 
 # Aggressive testing with all safety features
-mcp-fuzzer --protocol stdio --endpoint "node YOUR_SERVER/index.js" --mode both --runs 10 --phase aggressive --enable-safety-system --output-dir /tmp
+mcp-fuzzer --protocol stdio --endpoint "node YOUR_SERVER/index.js" --mode all --runs 10 --phase aggressive --enable-safety-system --output-dir /tmp
 
 # Test with custom configuration
-mcp-fuzzer --config config.yaml --mode both --runs 5 --verbose
+mcp-fuzzer --config config.yaml --mode all --runs 5 --verbose
 ```
 
 **Note:** Use `--output-dir /tmp` to avoid cluttering your workspace. Some output might still go to "reports" folder, so you might need to clean that up: `rm -rf reports/`

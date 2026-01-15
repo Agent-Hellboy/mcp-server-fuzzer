@@ -6,6 +6,7 @@ from typing import Any
 
 from .common import (
     calculate_tool_success_rate,
+    extract_tool_runs,
     normalize_report_data,
 )
 
@@ -13,9 +14,7 @@ from .common import (
 class JSONFormatter:
     """Handles JSON formatting for reports."""
 
-    def format_tool_results(
-        self, results: dict[str, list[dict[str, Any]]]
-    ) -> dict[str, Any]:
+    def format_tool_results(self, results: dict[str, Any]) -> dict[str, Any]:
         return {
             "tool_results": results,
             "summary": self._generate_tool_summary(results),
@@ -41,19 +40,16 @@ class JSONFormatter:
         with open(filename, "w") as handle:
             json.dump(data, handle, indent=2, default=str)
 
-    def _generate_tool_summary(
-        self, results: dict[str, list[dict[str, Any]]]
-    ) -> dict[str, Any]:
+    def _generate_tool_summary(self, results: dict[str, Any]) -> dict[str, Any]:
         if not results:
             return {}
 
         summary = {}
         for tool_name, tool_results in results.items():
-            total_runs = len(tool_results)
-            exceptions = sum(1 for r in tool_results if "exception" in r)
-            safety_blocked = sum(
-                1 for r in tool_results if r.get("safety_blocked", False)
-            )
+            runs, _ = extract_tool_runs(tool_results)
+            total_runs = len(runs)
+            exceptions = sum(1 for r in runs if "exception" in r)
+            safety_blocked = sum(1 for r in runs if r.get("safety_blocked", False))
             success_rate = calculate_tool_success_rate(
                 total_runs, exceptions, safety_blocked
             )

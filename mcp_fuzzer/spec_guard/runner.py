@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .helpers import SpecCheck, fail as _fail, warn as _warn
 from .schema_validator import validate_definition
 from .spec_checks import (
-    SpecCheck,
     check_resources_list,
     check_resources_read,
     check_resource_templates_list,
@@ -35,26 +35,6 @@ _PROMPTS_SPEC = {
     "spec_id": "MCP-Prompts",
     "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/server/prompts",
 }
-
-
-def _fail(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
-    return {
-        "id": check_id,
-        "status": "FAIL",
-        "message": message,
-        "spec_id": spec.get("spec_id", ""),
-        "spec_url": spec.get("spec_url", ""),
-    }
-
-
-def _warn(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
-    return {
-        "id": check_id,
-        "status": "WARN",
-        "message": message,
-        "spec_id": spec.get("spec_id", ""),
-        "spec_url": spec.get("spec_url", ""),
-    }
 
 
 def _parse_prompt_args(raw: str | None) -> dict[str, Any] | None:
@@ -103,41 +83,47 @@ async def run_spec_suite(
         checks.append(_fail("ping", f"ping failed: {exc}", _SCHEMA_SPEC))
 
     if isinstance(capabilities, dict) and capabilities.get("tools") is not None:
+        tools: list[Any] = []
         try:
             result = await transport.send_request("tools/list")
             checks.extend(validate_definition("ListToolsResult", result))
-            tools = []
             if isinstance(result, dict):
                 tools = result.get("tools") or []
             for tool in tools:
                 checks.extend(check_tool_schema_fields(tool))
+        except Exception as exc:
+            checks.append(_fail("tools-list", f"tools/list failed: {exc}", _TOOLS_SPEC))
+            tools = []
 
-            callable_tool = None
-            for tool in tools:
-                if not isinstance(tool, dict):
-                    continue
-                schema = tool.get("inputSchema") or {}
-                required = schema.get("required") if isinstance(schema, dict) else []
-                if not required:
-                    callable_tool = tool
-                    break
+        callable_tool = None
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            schema = tool.get("inputSchema") or {}
+            required = schema.get("required") if isinstance(schema, dict) else []
+            if not required:
+                callable_tool = tool
+                break
 
-            if callable_tool:
+        if callable_tool:
+            try:
                 result = await transport.send_request(
                     "tools/call",
                     {"name": callable_tool.get("name"), "arguments": {}},
                 )
                 checks.extend(validate_definition("CallToolResult", result))
-            else:
+            except Exception as exc:
                 checks.append(
-                    _warn(
-                        "tools-call",
-                        "No tool found without required arguments; skipping tools/call",
-                        _TOOLS_SPEC,
-                    )
+                    _fail("tools-call", f"tools/call failed: {exc}", _TOOLS_SPEC)
                 )
-        except Exception as exc:
-            checks.append(_fail("tools-list", f"tools/list failed: {exc}", _TOOLS_SPEC))
+        elif tools:
+            checks.append(
+                _warn(
+                    "tools-call",
+                    "No tool found without required arguments; skipping tools/call",
+                    _TOOLS_SPEC,
+                )
+            )
 
     if isinstance(capabilities, dict) and capabilities.get("resources") is not None:
         try:

@@ -18,15 +18,15 @@ The transport layer had significant code duplication and inconsistencies across 
 - Error handling patterns
 
 **After**: Shared functionality through mixins:
-- `BaseTransportMixin`: Core JSON-RPC functionality
-- `NetworkTransportMixin`: Network-specific operations
-- `ResponseParsingMixin`: Response parsing utilities
+- `DriverBaseBehavior`: Core JSON-RPC functionality
+- `HttpClientBehavior`: Network-specific operations
+- `ResponseParserBehavior`: Response parsing utilities
 
 ### 2. Standardized Error Handling
 
 **Before**: Inconsistent error handling across transports:
 ```python
-# HTTPTransport - logs before raising
+# HttpDriver - logs before raising
 logging.error("Server returned error: %s", data["error"])
 raise Exception(f"Server error: {data['error']}")
 
@@ -148,7 +148,7 @@ def _validate_jsonrpc_payload(self, payload: Dict[str, Any], strict: bool = Fals
 The new architecture uses Python mixins to provide shared functionality:
 
 ```python
-class HTTPTransport(TransportProtocol, NetworkTransportMixin, ResponseParsingMixin):
+class HttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
     """HTTP transport implementation with reduced code duplication."""
 
     async def send_request(self, method: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -235,7 +235,7 @@ Existing code continues to work without changes:
 
 ```python
 # This still works exactly the same
-transport = HTTPTransport("https://example.com/api")
+transport = HttpDriver("https://example.com/api")
 result = await transport.send_request("tools/list")
 ```
 
@@ -247,7 +247,7 @@ New code can take advantage of the improved features:
 # Use type hints for better IDE support
 from mcp_fuzzer.transport.mixins import JSONRPCRequest
 
-async def send_validated_request(transport: HTTPTransport, method: str) -> Dict[str, Any]:
+async def send_validated_request(transport: HttpDriver, method: str) -> Dict[str, Any]:
     # Create validated request
     payload: JSONRPCRequest = transport._create_jsonrpc_request(method)
 

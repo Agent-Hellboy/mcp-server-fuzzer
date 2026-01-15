@@ -39,7 +39,7 @@ Next steps:
 - **Patterns Used:** Strategy for choosing HTTP/SSE/Stdio transports, Adapter
   to normalize differing protocol semantics, Abstract Factory for wiring the
   right transport + auth combo.
-- **Strengths:** `create_transport` hides instantiation logic, and adapters
+- **Strengths:** `build_driver` hides instantiation logic, and adapters
   expose uniform `send/receive` APIs. Test doubles are easy to swap in.
 - **Gaps & Ideas:** Some transports share retry/backoff logic that could live in
   a Decorator for clarity.

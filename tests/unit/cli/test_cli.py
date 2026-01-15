@@ -237,6 +237,23 @@ def test_validate_arguments_protocol_type_wrong_mode_with_endpoint():
         validator.validate_arguments(args)
 
 
+def test_validate_arguments_protocol_mode_requires_protocol_type():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="protocol",
+        protocol="http",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=5,
+        timeout=10,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
+
+
 def test_validate_arguments_runs_not_int():
     validator = ValidationManager()
     args = argparse.Namespace(
@@ -307,6 +324,7 @@ def test_prepare_inner_argv_roundtrip():
     assert "abc" in argv
     assert "--export-safety-data" in argv
     assert "--spec-prompt-name" in argv
+    assert "--spec-prompt-args" in argv
 
 
 def test_transport_factory_applies_auth_headers():

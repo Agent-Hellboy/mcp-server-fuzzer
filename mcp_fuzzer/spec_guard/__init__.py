@@ -1,7 +1,7 @@
 """Spec guard helpers for MCP Fuzzer."""
 
+from .helpers import SpecCheck
 from .spec_checks import (
-    SpecCheck,
     check_tool_result_content,
     check_tool_schema_fields,
     check_logging_notification,
@@ -14,6 +14,12 @@ from .spec_checks import (
 )
 from .runner import run_spec_suite
 from .schema_validator import validate_definition
+from .mappings import (
+    METHOD_CHECK_MAP,
+    PROTOCOL_TYPE_TO_METHOD,
+    get_spec_checks_for_method,
+    get_spec_checks_for_protocol_type,
+)
 
 __all__ = [
     "SpecCheck",
@@ -28,4 +34,8 @@ __all__ = [
     "check_sse_event_text",
     "run_spec_suite",
     "validate_definition",
+    "METHOD_CHECK_MAP",
+    "PROTOCOL_TYPE_TO_METHOD",
+    "get_spec_checks_for_method",
+    "get_spec_checks_for_protocol_type",
 ]

@@ -13,14 +13,7 @@ from typing import Any
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
 
 from ..fuzz_engine.mutators import ProtocolMutator
-from ..spec_guard import (
-    check_tool_result_content,
-    check_resources_list,
-    check_resources_read,
-    check_resource_templates_list,
-    check_prompts_list,
-    check_prompts_get,
-)
+from ..spec_guard import get_spec_checks_for_protocol_type
 from ..fuzz_engine.executor import ProtocolExecutor
 from ..safety_system.safety import SafetyProvider
 
@@ -186,58 +179,24 @@ class ProtocolClient:
             # Check for safety metadata
             safety_blocked = safety_result["blocked"]
             safety_sanitized = safety_result["sanitized"]
-            spec_checks = []
-            spec_scope = None
+            spec_checks: list[dict[str, Any]] = []
+            spec_scope: str | None = None
             if isinstance(server_response, dict):
                 payload = server_response.get("result", server_response)
-                if protocol_type == "ListResourcesRequest":
-                    spec_checks = check_resources_list(payload)
-                    spec_scope = "resources/list"
-                elif protocol_type == "ReadResourceRequest":
-                    spec_checks = check_resources_read(payload)
-                    spec_scope = "resources/read"
-                elif protocol_type == "ListResourceTemplatesRequest":
-                    spec_checks = check_resource_templates_list(payload)
-                    spec_scope = "resources/templates/list"
-                elif protocol_type == "ListPromptsRequest":
-                    spec_checks = check_prompts_list(payload)
-                    spec_scope = "prompts/list"
-                elif protocol_type == "GetPromptRequest":
-                    spec_checks = check_prompts_get(payload)
-                    spec_scope = "prompts/get"
-                elif protocol_type == "GenericJSONRPCRequest":
-                    method = (
-                        fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
-                    )
-                    if method == "tools/call":
-                        spec_checks = check_tool_result_content(payload)
-                        spec_scope = "tools/call"
-                    elif method == "resources/list":
-                        spec_checks = check_resources_list(payload)
-                        spec_scope = "resources/list"
-                    elif method == "resources/read":
-                        spec_checks = check_resources_read(payload)
-                        spec_scope = "resources/read"
-                    elif method == "resources/templates/list":
-                        spec_checks = check_resource_templates_list(payload)
-                        spec_scope = "resources/templates/list"
-                    elif method == "prompts/list":
-                        spec_checks = check_prompts_list(payload)
-                        spec_scope = "prompts/list"
-                    elif method == "prompts/get":
-                        spec_checks = check_prompts_get(payload)
-                        spec_scope = "prompts/get"
+                method = (
+                    fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
+                )
+                spec_checks, spec_scope = get_spec_checks_for_protocol_type(
+                    protocol_type, payload, method=method
+                )
 
             return {
                 "fuzz_data": fuzz_data,
                 "result": result,
                 "safety_blocked": safety_blocked,
                 "safety_sanitized": safety_sanitized,
-                **(
-                    {"spec_checks": spec_checks, "spec_scope": spec_scope}
-                    if spec_checks
-                    else {}
-                ),
+                "spec_checks": spec_checks,
+                "spec_scope": spec_scope,
                 "success": success,
             }
 

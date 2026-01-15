@@ -18,13 +18,14 @@ The MCP Server Fuzzer is built with a modular, layered architecture that separat
 ```mermaid
 flowchart TB
   subgraph CLI_Layer
-    A1[Args Parser]
-    A2[Main CLI]
-    A3[Runner]
+    A1[Parser (cli/parser.py)]
+    A2[Config Merge (cli/config_merge.py)]
+    A3[Validation Manager (cli/validators.py)]
+    A4[Entrypoint runner (cli/entrypoint.py)]
   end
 
   subgraph Client
-    B1[UnifiedMCPFuzzerClient]
+    B1[UnifiedMCPFuzzerClient (client/main.py)]
     B2[Safety Integration]
     B3[Reporting Integration]
   end
@@ -33,6 +34,7 @@ flowchart TB
     C1[HTTP]
     C2[SSE]
     C3[STDIO]
+    C4[Custom Drivers]
   end
 
   subgraph Fuzz_Engine
@@ -62,13 +64,13 @@ flowchart TB
     F3[SafetyReporter]
   end
 
-  A1 --> B1
-  A2 --> B1
-  A3 --> B1
+  A1 --> A2 --> A3 --> A4
+  A4 --> B1
 
   B1 --> C1
   B1 --> C2
   B1 --> C3
+  B1 --> C4
   B1 --> D1
   B1 --> D2
   B1 --> F1
@@ -96,30 +98,32 @@ flowchart TB
 ```mermaid
 graph TD
     A[CLI] --> B[Parse Arguments]
-    B --> C[Create Transport]
-    C --> D[Init Client + Reporter]
-    D --> E[Discover Tools]
-    E --> F{Mode}
+    B --> C[Merge CLI + Config]
+    C --> D[Validate Args/Env/Transport]
+    D --> E[Create Transport (build_driver)]
+    E --> F[Init Client + Reporter]
+    F --> G[Discover Tools]
+    G --> H{Mode}
 
-    F -->|Tools| G[ToolExecutor]
-    F -->|Protocol| H[ProtocolExecutor]
+    H -->|Tools| I[ToolExecutor]
+    H -->|Protocol| J[Spec Guard] --> K[ProtocolExecutor]
 
-    G --> I[ToolMutator]
-    H --> J[ProtocolMutator]
+    I --> L[ToolMutator]
+    K --> M[ProtocolMutator]
 
-    I --> K1[AsyncFuzzExecutor]
-    J --> K1
-    K1 --> K[Send via Transport]
+    L --> N[AsyncFuzzExecutor]
+    M --> N
+    N --> O[Send via Transport]
 
-    K --> L{SafetyFilter}
-    L -->|Block| M[Log + Mock Response]
-    L -->|Allow/Sanitize| N[Execute Request]
+    O --> P{SafetyFilter}
+    P -->|Block| Q[Log + Mock Response]
+    P -->|Allow/Sanitize| R[Execute Request]
 
-    N --> O[Collect Results]
-    M --> O
+    R --> S[Collect Results]
+    Q --> S
 
-    O --> P[Reporter Formats + Writes]
-    P --> Q[Console/Files]
+    S --> T[Reporter Formats + Writes]
+    T --> U[Console/Files]
 ```
 
 ### Safety System Flow
@@ -141,110 +145,15 @@ graph TD
 
 ```text
 mcp_fuzzer/
-├── __init__.py              # Package initialization and exports
-├── __main__.py              # Entry point for module execution
-├── exceptions.py            # Custom exception classes
-├── types.py                 # Type definitions and protocols
-├── auth/                    # Authentication system
-│   ├── __init__.py
-│   ├── loaders.py           # Configuration loading
-│   ├── manager.py           # Authentication management
-│   └── providers.py         # Auth provider implementations
-├── cli/                     # Command-line interface
-│   ├── __init__.py
-│   ├── args.py              # Argument parsing and validation
-│   ├── main.py              # Main CLI entry point
-│   └── runner.py            # CLI execution logic
-├── client/                  # MCP client implementations
-│   ├── __init__.py
-│   ├── base.py              # Main MCPFuzzerClient
-│   ├── protocol_client.py   # Protocol-level client
-│   ├── tool_client.py       # Tool-level client
-│   └── utils.py             # Shared utilities
-├── config/                  # Configuration subsystem
-│   ├── __init__.py
-│   ├── constants.py         # Default values and shared constants
-│   ├── loader.py            # Config file/env loaders
-│   └── manager.py           # Runtime config manager
-├── fuzz_engine/             # Core fuzzing engine
-│   ├── __init__.py
-│   ├── mutators/            # Data generation and mutation
-│   │   ├── __init__.py
-│   │   ├── base.py          # Base mutator interface
-│   │   ├── tool_mutator.py  # Tool argument mutation
-│   │   ├── protocol_mutator.py # Protocol message mutation
-│   │   ├── batch_mutator.py # Batch request generation
-│   │   └── strategies/      # Fuzzing strategies
-│   │       ├── __init__.py
-│   │       ├── schema_parser.py # JSON Schema parsing
-│   │       ├── strategy_manager.py # Strategy orchestration
-│   │       ├── aggressive/  # Aggressive attack vectors
-│   │       │   ├── __init__.py
-│   │       │   ├── protocol_type_strategy.py
-│   │       │   └── tool_strategy.py
-│   │       └── realistic/   # Realistic data generation
-│   │           ├── __init__.py
-│   │           ├── protocol_type_strategy.py
-│   │           └── tool_strategy.py
-│   ├── executor/            # Execution orchestration
-│   │   ├── __init__.py
-│   │   ├── async_executor.py # Async execution framework
-│   │   ├── tool_executor.py # Tool fuzzing orchestration
-│   │   ├── protocol_executor.py # Protocol fuzzing orchestration
-│   │   ├── batch_executor.py # Batch fuzzing orchestration
-│   │   └── invariants.py    # Property-based testing invariants
-│   ├── fuzzerreporter/      # Result collection and reporting
-│   │   ├── __init__.py
-│   │   ├── result_builder.py # Standardized result creation
-│   │   ├── collector.py     # Result aggregation
-│   │   └── metrics.py       # Metrics calculation
-│   └── runtime/             # Process management and runtime
-│       ├── __init__.py
-│       ├── manager.py       # Async process manager
-│       ├── watchdog.py      # Process monitoring
-│       ├── lifecycle.py     # Process lifecycle
-│       ├── monitor.py       # Runtime monitoring
-│       ├── config.py        # Runtime configuration
-│       ├── registry.py      # Process registry
-│       └── signals.py       # Signal handling
-├── reports/                 # Reporting and output system
-│   ├── __init__.py
-│   ├── formatters/         # Output formatters
-│   ├── output/              # Standardized output protocol + manager
-│   │   ├── __init__.py
-│   │   ├── protocol.py
-│   │   └── manager.py
-│   ├── reporter/            # Main reporting coordinator package
-│   └── safety_reporter.py   # Safety system reporting
-├── safety_system/           # Safety and protection
-│   ├── __init__.py
-│   ├── policy.py            # Network policy and host normalization
-│   ├── safety.py            # Core safety logic with SafetyProvider protocol
-│   ├── blocking/            # PATH shim command blocking
-│   │   ├── __init__.py
-│   │   ├── command_blocker.py
-│   │   └── shims/
-│   ├── detection/           # Dangerous pattern detection
-│   │   ├── __init__.py
-│   │   ├── detector.py
-│   │   └── patterns.py
-│   └── filesystem/          # Filesystem sandboxing helpers
-│       ├── __init__.py
-│       ├── sandbox.py
-│       └── sanitizer.py
-└── transport/               # Transport layer implementations
-    ├── __init__.py
-    ├── base.py              # Abstract transport protocol
-    ├── custom.py            # Custom transport implementations
-    ├── factory.py           # Transport factory
-    ├── http.py              # HTTP/HTTPS transport
-    ├── mixins.py            # Transport mixins and utilities
-    ├── sse.py               # Server-Sent Events transport
-    ├── stdio.py             # Standard I/O transport
-    └── streamable_http.py   # Streamable HTTP transport
+├── cli/           # CLI parsing, validation, config merge, entrypoint
+├── client/        # Unified client orchestration and runtime wiring
+├── config/        # Config loader, schema validation, custom transport hooks
+├── fuzz_engine/   # Mutators, executors, runtime, reporting
+├── transport/     # Drivers, interfaces, catalogs, controllers
+├── safety_system/ # Safety filter, sandboxing, command blocking
+├── reports/       # Reporting + standardized output
+└── auth/          # Authentication providers and manager
 ```
-
-## Component Details
 
 ### 1. CLI Layer
 
@@ -252,14 +161,15 @@ The CLI layer provides the user interface and handles argument parsing, validati
 
 **Key Components:**
 
-- `args.py`: Defines and validates command-line arguments
-- `main.py`: Main entry point that orchestrates the CLI
-- `runner.py`: Executes the fuzzing logic based on parsed arguments
+- `cli/parser.py`: Defines command-line arguments and help text
+- `cli/entrypoint.py`: Main CLI entry point that orchestrates execution
+- `cli/validators.py`: Validates arguments and environment variables
+- `cli/config_merge.py`: Merges CLI args with configuration files
 
 **Responsibilities:**
 
 - Parse and validate user input
-- Create appropriate transport instances
+- Load configuration defaults
 - Initialize the fuzzing client
 - Handle errors and display results
 
@@ -269,29 +179,27 @@ The transport layer abstracts communication with MCP servers, supporting multipl
 
 **Key Components:**
 
-- `base.py`: Abstract TransportProtocol class with safety integration
-- `factory.py`: Factory function for creating transport instances
-- `http.py`: HTTP/HTTPS transport implementation
-- `streamable_http.py`: Streamable HTTP transport for real-time communication
-- `sse.py`: Server-Sent Events transport implementation
-- `stdio.py`: Standard I/O transport for local processes
-- `mixins.py`: Reusable transport mixins and utilities
-- `custom.py`: Custom transport implementations
+- `interfaces/driver.py`: Abstract TransportDriver interface
+- `catalog/builder.py`: Factory function for creating transport instances
+- `catalog/catalog.py`: DriverCatalog registry
+- `drivers/http_driver.py`: HTTP/HTTPS transport implementation
+- `drivers/stream_http_driver.py`: Streamable HTTP transport implementation
+- `drivers/sse_driver.py`: Server-Sent Events transport implementation
+- `drivers/stdio_driver.py`: Standard I/O transport implementation
+- `interfaces/behaviors.py`: Reusable transport behaviors and utilities
+- `catalog/custom_catalog.py`: Custom transport registry helpers
 
-**Transport Protocol Interface:**
+**Transport Driver Interface:**
 
 ```python
-class TransportProtocol(ABC):
+class TransportDriver(ABC):
     async def send_request(self, method: str, params=None) -> Any
-    async def send_raw(self, payload: Any) -> Any
+    async def send_raw(self, payload: dict[str, Any]) -> Any
     async def send_notification(self, method: str, params=None) -> None
     async def connect(self) -> None
     async def disconnect(self) -> None
-    async def stream_request(self, payload: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]
-    async def get_tools(self) -> List[Dict[str, Any]]
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any
-    async def send_batch_request(self, batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]
-    def collate_batch_responses(self, requests: List[Dict[str, Any]], responses: List[Dict[str, Any]]) -> Dict[Any, Dict[str, Any]]
+    async def stream_request(self, payload: dict[str, Any]) -> AsyncIterator[dict[str, Any]]
+    async def _stream_request(self, payload: dict[str, Any]) -> AsyncIterator[dict[str, Any]]
 ```
 
 ### 3. Fuzzing Engine
@@ -961,7 +869,7 @@ The MCP Fuzzer is designed as a modular system with clear integration points:
 
 ### Component Integration
 
-- **Transport Abstraction**: All communication is abstracted through the TransportProtocol interface, allowing any transport to work with the system.
+- **Transport Abstraction**: All communication is abstracted through the TransportDriver interface, allowing any transport to work with the system.
 - **Safety Providers**: The safety system uses a provider interface allowing customization of safety features.
 - **Strategy Extensions**: Fuzzing strategies can be extended with new generators for different data types.
 - **Runtime Management**: The async runtime provides process isolation and management for all components.

@@ -57,23 +57,23 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --ru
 
 ```bash
 # Fuzz only a specific tool
-mcp-fuzzer --mode tool --tool analyze_repository --protocol http --endpoint http://localhost:8000 --runs 20
+mcp-fuzzer --mode tools --tool analyze_repository --protocol http --endpoint http://localhost:8000 --runs 20
 
 # Fuzz a specific tool with both phases
-mcp-fuzzer --mode tool --tool generate_terraform --phase both --protocol http --endpoint http://localhost:8000 --runs 15
+mcp-fuzzer --mode tools --tool generate_terraform --phase both --protocol http --endpoint http://localhost:8000 --runs 15
 ```
 
 #### Protocol Fuzzing
 
 ```bash
 # Basic protocol fuzzing
-mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --runs-per-type 5
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5
 
 # Fuzz specific protocol type
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000
 
 # With verbose output
-mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --runs-per-type 5 --verbose
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5 --verbose
 ```
 
 ### 3. View Results
@@ -111,7 +111,7 @@ Each fuzzing session creates timestamped reports:
 
 ## Configuration
 
-MCP Fuzzer can be configured using environment variables, configuration files (YAML or TOML), or command-line arguments.
+MCP Fuzzer can be configured using environment variables, configuration files (YAML), or command-line arguments.
 
 For detailed configuration information, see the [Configuration Guide](../configuration/configuration.md).
 
@@ -169,16 +169,16 @@ Tests MCP protocol types with various message structures:
 
 ```bash
 # Basic protocol fuzzing
-mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --runs-per-type 5
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5
 
 # Fuzz specific protocol type
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000
 
 # Realistic protocol fuzzing
-mcp-fuzzer --mode protocol --phase realistic --protocol http --endpoint http://localhost:8000
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase realistic --protocol http --endpoint http://localhost:8000
 
 # Aggressive protocol fuzzing
-mcp-fuzzer --mode protocol --phase aggressive --protocol http --endpoint http://localhost:8000
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000
 ```
 
 ## Authentication
@@ -318,7 +318,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --ru
 mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api.example.com --runs 15
 
 # Test protocol compliance
-mcp-fuzzer --mode protocol --phase realistic --protocol http --endpoint https://api.example.com --runs-per-type 8
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase realistic --protocol http --endpoint https://api.example.com --runs-per-type 8
 ```
 
 ### Security Testing
@@ -328,7 +328,7 @@ mcp-fuzzer --mode protocol --phase realistic --protocol http --endpoint https://
 mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 25
 
 # Protocol security testing
-mcp-fuzzer --mode protocol --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
 ```
 
 ## Troubleshooting

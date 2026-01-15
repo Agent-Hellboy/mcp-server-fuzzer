@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .common import normalize_report_data
+from .common import extract_tool_runs, normalize_report_data
 
 
 class XMLFormatter:
@@ -33,8 +33,9 @@ class XMLFormatter:
         if "tool_results" in data:
             tools_elem = SubElement(root, "tool-results")
             for tool_name, results in data["tool_results"].items():
+                runs, _ = extract_tool_runs(results)
                 tool_elem = SubElement(tools_elem, "tool", name=tool_name)
-                for result in results:
+                for result in runs:
                     result_elem = SubElement(tool_elem, "result")
                     add_fields(result_elem, result)
 

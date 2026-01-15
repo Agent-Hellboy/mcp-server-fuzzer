@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .spec_checks import SpecCheck
+from .helpers import SpecCheck
 
 try:
     from jsonschema import Draft7Validator
@@ -21,6 +21,9 @@ _SCHEMA_SPEC = {
     "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/schema",
 }
 
+SCHEMA_BASE_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "schemas" / "mcp-spec" / "schema"
+)
 _SCHEMA_CACHE: dict[str, dict[str, Any]] = {}
 
 
@@ -39,14 +42,7 @@ def _load_schema(version: str) -> dict[str, Any]:
     if version in _SCHEMA_CACHE:
         return _SCHEMA_CACHE[version]
 
-    schema_path = (
-        Path(__file__).resolve().parent.parent.parent
-        / "schemas"
-        / "mcp-spec"
-        / "schema"
-        / version
-        / "schema.json"
-    )
+    schema_path = SCHEMA_BASE_PATH / version / "schema.json"
     data = json.loads(schema_path.read_text(encoding="utf-8"))
     _SCHEMA_CACHE[version] = data
     return data

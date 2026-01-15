@@ -33,7 +33,7 @@ pip install -e .
    mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
 
    # Fuzz protocol types on an SSE server
-   mcp-fuzzer --mode protocol --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 5
+   mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 5
 
    # Fuzz with safety system enabled
    mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 5 --enable-safety-system
@@ -126,7 +126,7 @@ See [Architecture Overview](architecture/architecture.md) and [Fuzz Engine Archi
 
 ### Configuration
 
-- **[Configuration](configuration/configuration.md)** - Configuration options and file formats (YAML/TOML)
+- **[Configuration](configuration/configuration.md)** - Configuration options and file formats (YAML)
 - **[Network Policy](configuration/network-policy.md)** - Network access control
 
 ### Components

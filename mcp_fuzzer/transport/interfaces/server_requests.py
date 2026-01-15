@@ -6,9 +6,10 @@ from typing import Any
 
 
 def is_server_request(payload: Any) -> bool:
-    """Return True when payload looks like a server->client request."""
+    """Return True when payload looks like a JSON-RPC 2.0 server->client request."""
     return (
         isinstance(payload, dict)
+        and payload.get("jsonrpc") == "2.0"
         and "method" in payload
         and "id" in payload
         and "result" not in payload

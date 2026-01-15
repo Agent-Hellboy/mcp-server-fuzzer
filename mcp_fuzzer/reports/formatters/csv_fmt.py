@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .common import SupportsToDict, normalize_report_data
+from .common import SupportsToDict, extract_tool_runs, normalize_report_data
 
 
 class CSVFormatter:
@@ -34,7 +34,8 @@ class CSVFormatter:
 
             if "tool_results" in data:
                 for tool_name, results in data["tool_results"].items():
-                    for i, result in enumerate(results):
+                    runs, _ = extract_tool_runs(results)
+                    for i, result in enumerate(runs):
                         writer.writerow(
                             [
                                 tool_name,

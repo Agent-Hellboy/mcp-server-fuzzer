@@ -64,7 +64,7 @@ Fuzz protocol types
 To fuzz protocol types instead of tools:
 
 ```
-python3 -m mcp_fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 --runs-per-type 2 --timeout 5
+python3 -m mcp_fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 2 --timeout 5
 ```
 
 Notes
@@ -110,12 +110,12 @@ Custom transports allow you to extend MCP Server Fuzzer to work with MCP servers
 
 #### 1. Implement Your Transport
 
-Create a transport class that inherits from `TransportProtocol`:
+Create a transport class that inherits from `TransportDriver`:
 
 ```python
-from mcp_fuzzer.transport.base import TransportProtocol
+from mcp_fuzzer.transport import TransportDriver
 
-class MyCustomTransport(TransportProtocol):
+class MyCustomTransport(TransportDriver):
     def __init__(self, endpoint: str, **kwargs):
         # Initialize your transport
         pass
@@ -140,9 +140,9 @@ class MyCustomTransport(TransportProtocol):
 #### 2. Register Your Transport
 
 ```python
-from mcp_fuzzer.transport import register_custom_transport
+from mcp_fuzzer.transport import register_custom_driver
 
-register_custom_transport(
+register_custom_driver(
     name="mytransport",
     transport_class=MyCustomTransport,
     description="My custom transport"
@@ -152,9 +152,9 @@ register_custom_transport(
 #### 3. Use Your Transport
 
 ```python
-from mcp_fuzzer.transport import create_transport
+from mcp_fuzzer.transport import build_driver
 
-transport = create_transport("mytransport://endpoint")
+transport = build_driver("mytransport://endpoint")
 ```
 
 ### WebSocket Transport Example
@@ -176,8 +176,8 @@ pip install websockets
 
 # Register in your app's process (import triggers registration) then use it
 from examples import custom_websocket_transport  # noqa: F401 – ensures registration
-from mcp_fuzzer.transport import create_transport
-transport = create_transport("websocket://localhost:8080/mcp")
+from mcp_fuzzer.transport import build_driver
+transport = build_driver("websocket://localhost:8080/mcp")
 ```
 
 ### Configuration
@@ -186,7 +186,7 @@ See `config/custom-transport-config.yaml` for an example of how to configure cus
 
 ### Best Practices
 
-1. **Inherit from TransportProtocol**: Ensure all abstract methods are implemented
+1. **Inherit from TransportDriver**: Ensure all abstract methods are implemented
 2. **Handle Connections Properly**: Implement connect/disconnect for resource management
 3. **Use Timeouts**: Always implement appropriate timeouts
 4. **Validate Input**: Check method names, parameters, and payloads
@@ -210,10 +210,10 @@ Test your custom transport thoroughly:
 
 ```python
 import pytest
-from mcp_fuzzer.transport import create_transport
+from mcp_fuzzer.transport import build_driver
 
 def test_custom_transport():
-    transport = create_transport("mytransport://test")
+    transport = build_driver("mytransport://test")
     # Test your transport implementation
 ```
 
@@ -222,7 +222,7 @@ def test_custom_transport():
 #### Common Issues
 
 1. **Import Errors**: Ensure your transport module is on the Python path.
-2. **Registration Failures**: Verify your class inherits from `TransportProtocol`.
+2. **Registration Failures**: Verify your class inherits from `TransportDriver`.
 3. **Connection Issues**: Check endpoints and network connectivity.
 4. **Configuration Errors**: Validate YAML configuration syntax
 

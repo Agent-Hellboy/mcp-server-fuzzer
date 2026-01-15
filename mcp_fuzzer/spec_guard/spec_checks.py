@@ -1,17 +1,8 @@
 """Lightweight MCP spec checks for fuzzing results."""
 
-from typing import Any, TypedDict
+from typing import Any
 
-
-class SpecCheck(TypedDict, total=False):
-    """Minimal spec check record for reporting."""
-
-    id: str
-    status: str
-    message: str
-    spec_id: str
-    spec_url: str
-    details: dict[str, Any]
+from .helpers import SpecCheck, fail as _fail, warn as _warn
 
 
 _TOOLS_SPEC = {
@@ -43,26 +34,6 @@ _SSE_SPEC = {
     "spec_id": "MCP-SSE",
     "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#sse-transport",
 }
-
-
-def _fail(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
-    return {
-        "id": check_id,
-        "status": "FAIL",
-        "message": message,
-        "spec_id": spec.get("spec_id", ""),
-        "spec_url": spec.get("spec_url", ""),
-    }
-
-
-def _warn(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
-    return {
-        "id": check_id,
-        "status": "WARN",
-        "message": message,
-        "spec_id": spec.get("spec_id", ""),
-        "spec_url": spec.get("spec_url", ""),
-    }
 
 
 def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
@@ -124,7 +95,6 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
         checks.append(
             _fail("tools-content-empty", "Tool content array is empty", _TOOLS_SPEC)
         )
-        return checks
 
     for idx, item in enumerate(content):
         if not isinstance(item, dict):

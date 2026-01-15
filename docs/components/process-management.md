@@ -43,10 +43,15 @@ The executor's concurrency can be configured in several ways:
    )
    ```
 
-3. **Future CLI integration**:
+3. **CLI flags**:
    ```bash
-   # Planned feature - not yet implemented
-   python -m mcp_fuzzer run --max-concurrency=10
+   # Limit concurrent client operations
+   mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+     --max-concurrency 10
+
+   # Limit concurrent process operations
+   mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" \
+     --process-max-concurrency 10
    ```
 
 ```python

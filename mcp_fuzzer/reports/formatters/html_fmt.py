@@ -5,7 +5,7 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
-from .common import normalize_report_data
+from .common import extract_tool_runs, normalize_report_data
 
 
 class HTMLFormatter:
@@ -89,7 +89,8 @@ class HTMLFormatter:
             )
 
             for tool_name, results in data["tool_results"].items():
-                for i, result in enumerate(results):
+                runs, _ = extract_tool_runs(results)
+                for i, result in enumerate(runs):
                     success = result.get("success", False)
                     success_class = "success" if success else "error"
                     html_content += f"""

@@ -18,14 +18,7 @@ from .invariants import (
 )
 from ..mutators import ProtocolMutator, BatchMutator
 from ..fuzzerreporter import ResultBuilder, ResultCollector
-from ...spec_guard import (
-    check_tool_result_content,
-    check_resources_list,
-    check_resources_read,
-    check_resource_templates_list,
-    check_prompts_list,
-    check_prompts_get,
-)
+from ...spec_guard import get_spec_checks_for_method
 
 
 class ProtocolExecutor:
@@ -279,24 +272,7 @@ class ProtocolExecutor:
                 method = (
                     fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
                 )
-                if method == "tools/call":
-                    spec_checks = check_tool_result_content(payload)
-                    spec_scope = "tools/call"
-                elif method == "resources/list":
-                    spec_checks = check_resources_list(payload)
-                    spec_scope = "resources/list"
-                elif method == "resources/read":
-                    spec_checks = check_resources_read(payload)
-                    spec_scope = "resources/read"
-                elif method == "resources/templates/list":
-                    spec_checks = check_resource_templates_list(payload)
-                    spec_scope = "resources/templates/list"
-                elif method == "prompts/list":
-                    spec_checks = check_prompts_list(payload)
-                    spec_scope = "prompts/list"
-                elif method == "prompts/get":
-                    spec_checks = check_prompts_get(payload)
-                    spec_scope = "prompts/get"
+                spec_checks, spec_scope = get_spec_checks_for_method(method, payload)
 
             # Create the result
             result = self.result_builder.build_protocol_result(

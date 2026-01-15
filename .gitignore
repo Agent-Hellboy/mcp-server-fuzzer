@@ -1,7 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 testing-servers/
-explore/
 *.py[cod]
 *$py.class
 *$py.pyc
@@ -16,6 +15,8 @@ issues
 test.py
 sdks/
 doc_ref/
+# Project exploration directory
+explore/
 # C extensions
 *REDESIGN*.md
 *FLOW.md

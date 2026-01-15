@@ -231,7 +231,7 @@ class ToolClient:
         self,
         runs_per_tool: int = DEFAULT_TOOL_RUNS,
         tool_timeout: float | None = None,
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> dict[str, dict[str, Any]]:
         """Fuzz all tools from the server."""
         tools = await self._get_tools_from_server()
         if not tools:
@@ -259,7 +259,16 @@ class ToolClient:
             results = await self._fuzz_single_tool_with_timeout(
                 tool, runs_per_tool, tool_timeout
             )
-            all_results[tool_name] = results
+            tool_entry: dict[str, Any] = {"runs": results}
+            if tool_name in self._tool_schema_checks:
+                schema_checks = self._tool_schema_checks[tool_name]
+                tool_entry["spec_checks"] = schema_checks
+                tool_entry["spec_scope"] = "tool_schema"
+                tool_entry["spec_checks_passed"] = not any(
+                    str(check.get("status", "")).upper() == "FAIL"
+                    for check in schema_checks
+                )
+            all_results[tool_name] = tool_entry
 
             # Calculate statistics
             exceptions = [r for r in results if "exception" in r]
@@ -269,14 +278,6 @@ class ToolClient:
                 len(exceptions),
                 runs_per_tool,
             )
-            if tool_name in self._tool_schema_checks:
-                all_results[tool_name].append(
-                    {
-                        "success": True,
-                        "spec_scope": "tool_schema",
-                        "spec_checks": self._tool_schema_checks[tool_name],
-                    }
-                )
 
         return all_results
 
@@ -375,6 +376,7 @@ class ToolClient:
             # Call the tool with the generated arguments
             try:
                 result = await self.transport.call_tool(tool_name, args_for_call)
+                spec_checks = check_tool_result_content(result)
                 processed.append(
                     {
                         "args": sanitized_args,
@@ -384,7 +386,7 @@ class ToolClient:
                         "success": True,
                         **(
                             {"spec_checks": spec_checks, "spec_scope": "tool_result"}
-                            if (spec_checks := check_tool_result_content(result))
+                            if spec_checks
                             else {}
                         ),
                     }

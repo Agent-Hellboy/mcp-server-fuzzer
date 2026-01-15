@@ -97,7 +97,10 @@ def build_fuzzing_schema() -> dict[str, Any]:
         },
         "spec_resource_uri": {
             "type": "string",
-            "description": "Resource URI used for spec guard checks",
+            "format": "uri",
+            "description": (
+                "Resource URI used for spec guard checks (must be a valid URI)"
+            ),
         },
         "spec_prompt_name": {
             "type": "string",

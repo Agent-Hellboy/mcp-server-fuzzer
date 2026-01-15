@@ -188,6 +188,10 @@ async def test_streamable_http_sse_handles_server_request(monkeypatch):
 
     assert result == {"ok": True}
     mock_send.assert_awaited_once()
+    sent_payload = mock_send.await_args.args[0]
+    assert sent_payload["id"] == "srv-1"
+    assert sent_payload["jsonrpc"] == "2.0"
+    assert "result" in sent_payload
 
 
 @pytest.mark.anyio("asyncio")

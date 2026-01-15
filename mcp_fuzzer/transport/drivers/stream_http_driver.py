@@ -494,7 +494,6 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 "capabilities": {
                     "elicitation": {},
                     "experimental": {},
-                    "roots": {"listChanged": True},
                     "sampling": {},
                 },
                 "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},

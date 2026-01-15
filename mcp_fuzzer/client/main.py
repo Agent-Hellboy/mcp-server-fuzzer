@@ -19,6 +19,49 @@ from .transport import build_driver_with_auth
 UnifiedMCPFuzzerClient = MCPFuzzerClient
 
 
+def _tool_runs_from_entry(entry: Any) -> list[dict[str, Any]]:
+    if isinstance(entry, dict):
+        runs = entry.get("runs", [])
+        if isinstance(runs, list):
+            return runs
+        realistic = entry.get("realistic")
+        aggressive = entry.get("aggressive")
+        if isinstance(realistic, list) or isinstance(aggressive, list):
+            combined: list[dict[str, Any]] = []
+            if isinstance(realistic, list):
+                combined.extend(realistic)
+            if isinstance(aggressive, list):
+                combined.extend(aggressive)
+            return combined
+        return []
+    if isinstance(entry, list):
+        return entry
+    return []
+
+
+async def _run_spec_guard_if_enabled(
+    client: MCPFuzzerClient,
+    config: dict[str, Any],
+    reporter: FuzzerReporter | None,
+) -> list[dict[str, Any]]:
+    if not config.get("spec_guard", True):
+        return []
+    checks = await client.run_spec_suite(
+        resource_uri=config.get("spec_resource_uri"),
+        prompt_name=config.get("spec_prompt_name"),
+        prompt_args=config.get("spec_prompt_args"),
+    )
+    failed = [c for c in checks if str(c.get("status", "")).upper() == "FAIL"]
+    logging.info(
+        "Spec guard checks completed: %d total, %d failed",
+        len(checks),
+        len(failed),
+    )
+    if reporter:
+        reporter.add_spec_checks(checks)
+    return checks
+
+
 async def unified_client_main(settings: ClientSettings) -> int:
     """Run the fuzzing workflow using merged client settings."""
     config = settings.data
@@ -100,20 +143,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
                         runs_per_tool=config.get("runs", 10)
                     )
         elif mode == "protocol":
-            if config.get("spec_guard", True):
-                checks = await client.run_spec_suite(
-                    resource_uri=config.get("spec_resource_uri"),
-                    prompt_name=config.get("spec_prompt_name"),
-                    prompt_args=config.get("spec_prompt_args"),
-                )
-                failed = [
-                    c for c in checks if str(c.get("status", "")).upper() == "FAIL"
-                ]
-                logging.info(
-                    "Spec guard checks completed: %d total, %d failed",
-                    len(checks),
-                    len(failed),
-                )
+            await _run_spec_guard_if_enabled(client, config, reporter)
             if config.get("protocol_type"):
                 protocol_type = config["protocol_type"]
                 protocol_results[protocol_type] = await client.fuzz_protocol_type(
@@ -125,38 +155,12 @@ async def unified_client_main(settings: ClientSettings) -> int:
                     runs_per_type=config.get("runs_per_type", 10)
                 )
         elif mode == "resources":
-            if config.get("spec_guard", True):
-                checks = await client.run_spec_suite(
-                    resource_uri=config.get("spec_resource_uri"),
-                    prompt_name=config.get("spec_prompt_name"),
-                    prompt_args=config.get("spec_prompt_args"),
-                )
-                failed = [
-                    c for c in checks if str(c.get("status", "")).upper() == "FAIL"
-                ]
-                logging.info(
-                    "Spec guard checks completed: %d total, %d failed",
-                    len(checks),
-                    len(failed),
-                )
+            await _run_spec_guard_if_enabled(client, config, reporter)
             protocol_results = await client.fuzz_resources(
                 runs_per_type=config.get("runs_per_type", 10)
             )
         elif mode == "prompts":
-            if config.get("spec_guard", True):
-                checks = await client.run_spec_suite(
-                    resource_uri=config.get("spec_resource_uri"),
-                    prompt_name=config.get("spec_prompt_name"),
-                    prompt_args=config.get("spec_prompt_args"),
-                )
-                failed = [
-                    c for c in checks if str(c.get("status", "")).upper() == "FAIL"
-                ]
-                logging.info(
-                    "Spec guard checks completed: %d total, %d failed",
-                    len(checks),
-                    len(failed),
-                )
+            await _run_spec_guard_if_enabled(client, config, reporter)
             protocol_results = await client.fuzz_prompts(
                 runs_per_type=config.get("runs_per_type", 10)
             )
@@ -180,20 +184,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
                     tool_results = await client.fuzz_all_tools(
                         runs_per_tool=config.get("runs", 10)
                     )
-            if config.get("spec_guard", True):
-                checks = await client.run_spec_suite(
-                    resource_uri=config.get("spec_resource_uri"),
-                    prompt_name=config.get("spec_prompt_name"),
-                    prompt_args=config.get("spec_prompt_args"),
-                )
-                failed = [
-                    c for c in checks if str(c.get("status", "")).upper() == "FAIL"
-                ]
-                logging.info(
-                    "Spec guard checks completed: %d total, %d failed",
-                    len(checks),
-                    len(failed),
-                )
+            await _run_spec_guard_if_enabled(client, config, reporter)
             if config.get("protocol_type"):
                 protocol_type = config["protocol_type"]
                 protocol_results[protocol_type] = await client.fuzz_protocol_type(
@@ -220,9 +211,11 @@ async def unified_client_main(settings: ClientSettings) -> int:
                 client.print_tool_summary(tool_results)
 
                 total_tools = len(tool_results)
-                total_runs = sum(len(runs) for runs in tool_results.values())
+                total_runs = sum(
+                    len(_tool_runs_from_entry(runs)) for runs in tool_results.values()
+                )
                 total_exceptions = sum(
-                    len([r for r in runs if r.get("exception")])
+                    len([r for r in _tool_runs_from_entry(runs) if r.get("exception")])
                     for runs in tool_results.values()
                 )
 
@@ -241,9 +234,12 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
                 vulnerable_tools = []
                 for tool_name, runs in tool_results.items():
-                    exceptions = len([r for r in runs if r.get("exception")])
+                    run_entries = _tool_runs_from_entry(runs)
+                    exceptions = len([r for r in run_entries if r.get("exception")])
                     if exceptions > 0:
-                        vulnerable_tools.append((tool_name, exceptions, len(runs)))
+                        vulnerable_tools.append(
+                            (tool_name, exceptions, len(run_entries))
+                        )
 
                 if vulnerable_tools:
                     print(

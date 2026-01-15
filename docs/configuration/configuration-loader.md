@@ -36,7 +36,7 @@ sse_timeout: 30.0
 stdio_timeout: 30.0
 
 # Fuzzing settings
-mode: "both"
+mode: "all"
 phase: "aggressive"
 protocol: "http"
 endpoint: "http://localhost:8000/mcp/"
@@ -91,7 +91,7 @@ stdio_timeout: 30.0
 
 ```yaml
 # Fuzzing behavior
-mode: "tools"                   # tools, protocol, both
+mode: "tools"                   # tools, protocol, resources, prompts, all
 phase: "aggressive"             # realistic, aggressive, both
 protocol: "http"                # http, https, sse, stdio, streamablehttp
 endpoint: "http://localhost:8000"
@@ -217,7 +217,7 @@ safety:
 timeout: 30.0
 log_level: "WARNING"
 safety_enabled: true
-mode: "both"
+mode: "all"
 phase: "aggressive"
 protocol: "https"
 endpoint: "https://api.production.com/mcp/"
@@ -382,7 +382,7 @@ mcp-fuzzer --config config.yaml
 
 3. **Custom transport errors**:
    - Ensure module is in Python path
-   - Verify class exists and inherits from TransportProtocol
+   - Verify class exists and inherits from TransportDriver
    - Check factory function signature
 
 ### Debug Mode

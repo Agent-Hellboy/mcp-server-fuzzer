@@ -56,7 +56,7 @@ Contains comprehensive fuzzing results including tool and protocol test outcomes
   "session_id": "550e8400-e29b-41d4-a716-446655440000",
   "output_type": "fuzzing_results",
   "data": {
-    "mode": "tools|protocol|both",
+    "mode": "tools|protocol|resources|prompts|all",
     "protocol": "http|sse|stdio|streamablehttp",
     "endpoint": "server_endpoint_url",
     "total_tools": 5,
@@ -320,7 +320,7 @@ if protocol.validate_output(output):
 ```bash
 #!/bin/bash
 # Run fuzzing and generate standardized output
-mcp-fuzzer --mode both --output-types fuzzing_results,error_report --output-format json
+mcp-fuzzer --mode all --output-types fuzzing_results,error_report --output-format json
 
 # Parse results in CI/CD
 python -c "
