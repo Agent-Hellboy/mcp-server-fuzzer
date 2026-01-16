@@ -10,14 +10,13 @@ echo "================================================"
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DOCKERFILE="$PROJECT_ROOT/tests/e2e/Dockerfile"
 IMAGE_NAME="mcp-fuzzer-e2e:latest"
-SCHEMA_VERSION="2025-11-25"
+SCHEMA_VERSION="${MCP_SPEC_SCHEMA_VERSION:-2025-11-25}"
 
 if ! command -v docker >/dev/null 2>&1; then
     echo -e "${RED}❌ Docker is not available in PATH${NC}"

@@ -254,7 +254,6 @@ def fuzz_initialize_request_aggressive() -> dict[str, Any]:
                 "capabilities": {
                     "elicitation": generate_structured_object(),
                     "experimental": generate_experimental_payload(),
-                    "roots": {"listChanged": random.choice([True, False])},
                     "sampling": generate_structured_object(),
                 },
                 "clientInfo": {

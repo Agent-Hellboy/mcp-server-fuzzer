@@ -14,11 +14,12 @@ The e2e tests automatically:
 ## Available Tests
 
 ### `test_everything_server_docker.sh`
+
 - **Server**: Everything MCP Server (Reference server covering prompts, resources, and tools)
 - **Test Type**: Combined tools + protocol fuzzing
 - **Expected**: High success rate with broad feature coverage
 - **Duration**: ~2-4 minutes
- - **Environment**: Docker
+- **Environment**: Docker
 
 ### `test_mcp_server_chart.sh`
 - **Server**: MCP Server Chart (Data visualization)

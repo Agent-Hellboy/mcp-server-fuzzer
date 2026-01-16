@@ -93,7 +93,7 @@ async def test_process_single_protocol_fuzz_success_with_spec_checks():
     client._send_protocol_request = AsyncMock(return_value={"result": {"ok": True}})
 
     with patch(
-        "mcp_fuzzer.client.protocol_client.get_spec_checks_for_protocol_type",
+        "mcp_fuzzer.spec_guard.get_spec_checks_for_protocol_type",
         return_value=([{"id": "spec"}], "protocol"),
     ):
         result = await client._process_single_protocol_fuzz("ListPromptsRequest", 0, 1)

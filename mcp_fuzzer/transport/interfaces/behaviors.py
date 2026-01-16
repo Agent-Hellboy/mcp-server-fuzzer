@@ -24,8 +24,8 @@ except ImportError:  # pragma: no cover
     from typing_extensions import NotRequired
 
 from ...exceptions import TransportError, NetworkError, PayloadValidationError
-from ...spec_guard import check_sse_event_text
-from ...safety_system.policy import is_host_allowed, sanitize_headers
+from ... import spec_guard
+from ...safety_system import policy as safety_policy
 from .states import DriverState
 
 
@@ -278,7 +278,7 @@ class HttpClientBehavior(DriverBaseBehavior):
         Raises:
             NetworkError: If URL violates safety policies
         """
-        if not is_host_allowed(url):
+        if not safety_policy.is_host_allowed(url):
             raise NetworkError(
                 "Network to non-local host is disallowed by safety policy"
             )
@@ -292,7 +292,7 @@ class HttpClientBehavior(DriverBaseBehavior):
         Returns:
             Sanitized headers safe for network transmission
         """
-        return sanitize_headers(headers)
+        return safety_policy.sanitize_headers(headers)
 
     def _create_http_client(self, timeout: float) -> httpx.AsyncClient:
         """Create configured HTTP client.
@@ -395,7 +395,7 @@ class ResponseParserBehavior(DriverBaseBehavior):
             return None
 
         data_parts = []
-        warnings = check_sse_event_text(event_text)
+        warnings = spec_guard.check_sse_event_text(event_text)
         if warnings:
             logger = logging.getLogger(self.__class__.__name__)
             for warning in warnings:

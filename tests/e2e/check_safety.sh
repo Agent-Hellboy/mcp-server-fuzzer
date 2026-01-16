@@ -77,8 +77,12 @@ fi
 
 # Check Docker availability (required for e2e)
 if command -v docker &> /dev/null; then
-    DOCKER_VERSION=$(docker --version 2>/dev/null || echo "unknown")
-    check_pass "Docker available ($DOCKER_VERSION)"
+    if docker info &> /dev/null; then
+        DOCKER_VERSION=$(docker --version 2>/dev/null || echo "unknown")
+        check_pass "Docker available ($DOCKER_VERSION)"
+    else
+        check_fail "Docker daemon not reachable (service down or permission issue)"
+    fi
 else
     check_fail "Docker not available"
 fi

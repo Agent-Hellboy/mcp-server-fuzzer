@@ -107,11 +107,11 @@ def _edge_array(
 ) -> list[Any]:
     min_items = schema.get("minItems", 0)
     max_items = schema.get("maxItems")
-    length = (
-        max_items
-        if isinstance(max_items, int) and max_items > 0
-        else max(min_items, 3)
-    )
+    if isinstance(max_items, int):
+        # Honor maxItems even when it is 0
+        length = max(0, min(max_items, max(min_items, 0)))
+    else:
+        length = max(min_items, 3)
     if max_items is None and length < min_items:
         length = min_items
 
@@ -258,18 +258,22 @@ def _edge_number(schema: dict[str, Any], integer: bool) -> int | float:
         return bound
 
     value: float | None = None
-    if maximum is not None:
-        adjusted = adjust(maximum, exc_max, 1)
-        value = adjusted if adjusted is not None else maximum
-    elif minimum is not None:
-        adjusted = adjust(minimum, exc_min, -1)
-        value = adjusted if adjusted is not None else minimum
+    eff_max = adjust(maximum, exc_max, 1) if maximum is not None else None
+    eff_min = adjust(minimum, exc_min, -1) if minimum is not None else None
+    if eff_max is not None:
+        value = eff_max
+    elif eff_min is not None:
+        value = eff_min
     else:
         value = -2**63 if integer else -1e9
 
     multiple_of = schema.get("multipleOf")
     if isinstance(multiple_of, (int, float)) and multiple_of != 0:
         value = math.floor(value / multiple_of) * multiple_of
+        if eff_min is not None and value < eff_min:
+            value = math.ceil(eff_min / multiple_of) * multiple_of
+        if eff_max is not None and value > eff_max:
+            value = math.floor(eff_max / multiple_of) * multiple_of
 
     return int(value) if integer else float(value)
 

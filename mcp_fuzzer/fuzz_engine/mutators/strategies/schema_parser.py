@@ -439,6 +439,17 @@ def _handle_string_format(format_type: str, phase: str) -> str:
 
         return _ipv6()
 
+    elif format_type == "hostname":
+        # Hostname format (RFC 1123)
+        domains = [
+            "example.com",
+            "test.org",
+            "localhost",
+            "api.example.com",
+            "subdomain.test.org",
+        ]
+        return random.choice(domains)
+
     # Default: treat as regular string
     return _handle_string_type({"type": "string"}, phase)
 

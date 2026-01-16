@@ -301,19 +301,19 @@ class TestApplySemanticOverrides:
     def test_apply_semantic_overrides_uri_override(self):
         """Test URI override."""
         params = {"uri": "http://example.com"}
-        result = _apply_semantic_overrides(params, "realistic")
+        result = _apply_semantic_overrides(params, "aggressive")
         assert "file://" in result.get("uri", "")
 
     def test_apply_semantic_overrides_cursor_override(self):
         """Test cursor override."""
         params = {"cursor": "normal_cursor"}
-        result = _apply_semantic_overrides(params, "realistic")
+        result = _apply_semantic_overrides(params, "aggressive")
         assert "cursor_" in result.get("cursor", "")
 
     def test_apply_semantic_overrides_name_override(self):
         """Test name override."""
         params = {"name": "test"}
-        result = _apply_semantic_overrides(params, "realistic")
+        result = _apply_semantic_overrides(params, "aggressive")
         assert "_A" in result.get("name", "")
 
 

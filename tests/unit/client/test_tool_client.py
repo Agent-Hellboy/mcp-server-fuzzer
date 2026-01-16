@@ -25,7 +25,7 @@ async def test_get_tools_from_server_records_schema_checks():
     )
 
     with patch(
-        "mcp_fuzzer.client.tool_client.check_tool_schema_fields",
+        "mcp_fuzzer.spec_guard.check_tool_schema_fields",
         side_effect=[[{"status": "FAIL"}], []],
     ):
         tools = await client._get_tools_from_server()
@@ -74,7 +74,7 @@ async def test_fuzz_tool_success_with_auth_and_spec_checks():
     client.tool_mutator.mutate = AsyncMock(return_value={"x": "dirty"})
 
     with patch(
-        "mcp_fuzzer.client.tool_client.check_tool_result_content",
+        "mcp_fuzzer.spec_guard.check_tool_result_content",
         return_value=[{"id": "spec"}],
     ):
         results = await client.fuzz_tool({"name": "alpha"}, runs=1)
@@ -158,7 +158,7 @@ async def test_process_fuzz_results_success_and_spec_checks():
     client._rpc.call_tool = AsyncMock(return_value={"content": []})
 
     with patch(
-        "mcp_fuzzer.client.tool_client.check_tool_result_content",
+        "mcp_fuzzer.spec_guard.check_tool_result_content",
         return_value=[{"id": "spec"}],
     ):
         results = await client._process_fuzz_results("alpha", [{"args": {"x": 1}}])

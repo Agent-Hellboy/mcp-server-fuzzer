@@ -179,15 +179,17 @@ def _apply_semantic_overrides(params: dict[str, Any], phase: str) -> dict[str, A
     if not isinstance(params, dict):
         return params
     patched = dict(params)
-    if "uri" in patched and isinstance(patched["uri"], str):
-        patched["uri"] = "file:///tmp/mcp-fuzzer/../../etc/passwd"
-    if "cursor" in patched and isinstance(patched["cursor"], str):
-        patched["cursor"] = "cursor_" + ("A" * 256)
-    if "name" in patched and isinstance(patched["name"], str):
-        patched["name"] = patched["name"] + ("_A" * 32)
-    apply_semantic_combos(patched)
     if phase == "aggressive":
+        # Apply aggressive mutation first
         patched = _mutate_aggressive_params(patched)
+        # Then apply semantic overrides (these take precedence)
+        if "uri" in patched and isinstance(patched["uri"], str):
+            patched["uri"] = "file:///tmp/mcp-fuzzer/../../etc/passwd"
+        if "cursor" in patched and isinstance(patched["cursor"], str):
+            patched["cursor"] = "cursor_" + ("A" * 256)
+        if "name" in patched and isinstance(patched["name"], str):
+            patched["name"] = patched["name"] + ("_A" * 32)
+        apply_semantic_combos(patched)
     return patched
 
 
@@ -195,10 +197,11 @@ def _prepare_schema_params_from_definition(
     definition: dict[str, Any], phase: str, overrides: dict[str, Any] | None
 ) -> dict[str, Any]:
     params, params_schema = _generate_params(definition, phase)
+    params = apply_schema_edge_cases(params, params_schema, phase=phase, key="params")
+    params = _apply_semantic_overrides(params, phase)
     if overrides:
         params = {**params, **overrides}
-    params = apply_schema_edge_cases(params, params_schema, phase=phase, key="params")
-    return _apply_semantic_overrides(params, phase)
+    return params
 
 
 def _prepare_schema_params(

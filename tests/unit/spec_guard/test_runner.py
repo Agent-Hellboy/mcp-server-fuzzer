@@ -12,7 +12,9 @@ class DummyTransport:
         self.notifications: list[str] = []
 
     async def send_request(self, method: str, params: object | None = None) -> object:
-        response = self.responses.get(method)
+        if method not in self.responses:
+            raise AssertionError(f"Unexpected request: {method}")
+        response = self.responses[method]
         if isinstance(response, Exception):
             raise response
         return response

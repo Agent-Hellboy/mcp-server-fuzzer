@@ -48,8 +48,8 @@ async def unified_client_main(settings: ClientSettings) -> int:
     config = settings.data
 
     schema_version = config.get("spec_schema_version")
-    if schema_version:
-        os.environ["MCP_SPEC_SCHEMA_VERSION"] = schema_version
+    if schema_version is not None:
+        os.environ["MCP_SPEC_SCHEMA_VERSION"] = str(schema_version)
 
     logging.info(  # pragma: no cover
         "Client received config with export flags: "

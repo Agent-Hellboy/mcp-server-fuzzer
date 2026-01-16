@@ -142,6 +142,7 @@ def test_load_config_file_output_dir_invalid_output_section(tmp_path, caplog):
     assert "output" in result
     assert isinstance(result["output"], dict)
     assert result["output"]["directory"] == "/tmp"
+    assert "must be a mapping" in caplog.text.lower()
 
 
 def test_load_config_file_unexpected_exception(tmp_path):

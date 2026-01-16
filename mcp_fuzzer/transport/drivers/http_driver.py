@@ -18,9 +18,7 @@ from ...config import (
     JSON_CONTENT_TYPE,
     DEFAULT_HTTP_ACCEPT,
 )
-from ...safety_system.policy import (
-    resolve_redirect_safely,
-)
+from ...safety_system import policy as safety_policy
 
 
 class HttpDriver(
@@ -114,7 +112,7 @@ class HttpDriver(
         location = response.headers.get("location")
         if not location:
             return None
-        resolved = resolve_redirect_safely(self.url, location)
+        resolved = safety_policy.resolve_redirect_safely(self.url, location)
         if not resolved:
             logging.warning("Refusing redirect that violates policy from %s", self.url)
         return resolved

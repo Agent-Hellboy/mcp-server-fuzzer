@@ -14,7 +14,7 @@ from ..safety_system.safety import SafetyProvider, SafetyFilter
 
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
-from ..spec_guard import run_spec_suite
+from .. import spec_guard
 
 
 class MCPFuzzerClient:
@@ -176,7 +176,7 @@ class MCPFuzzerClient:
         prompt_args: str | None = None,
     ):
         """Run spec guard checks against core MCP endpoints."""
-        checks = await run_spec_suite(
+        checks = await spec_guard.run_spec_suite(
             self.transport,
             resource_uri=resource_uri,
             prompt_name=prompt_name,

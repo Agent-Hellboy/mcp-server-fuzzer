@@ -93,6 +93,7 @@ echo "🐍 Ensuring MCP Fuzzer is installed..."
 python3 -m pip install -e "$PROJECT_ROOT"
 
 echo "🧪 Running comprehensive fuzzing test (tools + protocol)..."
+set +e
 python3 -m mcp_fuzzer \
     --protocol stdio \
     --endpoint "node $SERVER_DIR/dist/index.js stdio" \
@@ -105,6 +106,7 @@ python3 -m mcp_fuzzer \
     --output-dir "$FUZZ_OUTPUT_DIR"
 
 FUZZ_EXIT_CODE=$?
+set -e
 echo "Fuzzing test completed with exit code: $FUZZ_EXIT_CODE"
 
 # Check if fuzzing produced expected output
@@ -115,6 +117,11 @@ if [ -d "$FUZZ_OUTPUT_DIR" ] && [ "$(ls -A "$FUZZ_OUTPUT_DIR")" ]; then
 else
     echo -e "${RED}❌ Fuzzing test failed to generate output${NC}"
     exit 1
+fi
+
+if [ "$FUZZ_EXIT_CODE" -ne 0 ]; then
+    echo -e "${RED}❌ Fuzzing exited with code $FUZZ_EXIT_CODE${NC}"
+    exit "$FUZZ_EXIT_CODE"
 fi
 
 echo ""

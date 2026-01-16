@@ -13,9 +13,33 @@ from typing import Any
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
 
 from ..fuzz_engine.mutators import ProtocolMutator
-from ..spec_guard import get_spec_checks_for_protocol_type
+from .. import spec_guard
 from ..fuzz_engine.executor import ProtocolExecutor
 from ..safety_system.safety import SafetyProvider
+
+# Centralized allow-list for protocol types that can be fuzzed
+# This should stay in sync with ProtocolExecutor.PROTOCOL_TYPES
+ALLOWED_PROTOCOL_TYPES = frozenset(
+    {
+        "InitializeRequest",
+        "ProgressNotification",
+        "CancelNotification",
+        "ListResourcesRequest",
+        "ReadResourceRequest",
+        "ListResourceTemplatesRequest",
+        "SetLevelRequest",
+        "CreateMessageRequest",
+        "ListPromptsRequest",
+        "GetPromptRequest",
+        "ListRootsRequest",
+        "SubscribeRequest",
+        "UnsubscribeRequest",
+        "CompleteRequest",
+        "ElicitRequest",
+        "PingRequest",
+        "GenericJSONRPCRequest",
+    }
+)
 
 
 class ProtocolClient:
@@ -188,7 +212,7 @@ class ProtocolClient:
                 method = (
                     fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
                 )
-                spec_checks, spec_scope = get_spec_checks_for_protocol_type(
+                spec_checks, spec_scope = spec_guard.get_spec_checks_for_protocol_type(
                     protocol_type, payload, method=method
                 )
 
@@ -233,29 +257,11 @@ class ProtocolClient:
         """
         try:
             # Use the class-level protocol type list from ProtocolExecutor
-            allowed = {
-                "InitializeRequest",
-                "ProgressNotification",
-                "CancelNotification",
-                "ListResourcesRequest",
-                "ReadResourceRequest",
-                "ListResourceTemplatesRequest",
-                "SetLevelRequest",
-                "CreateMessageRequest",
-                "ListPromptsRequest",
-                "GetPromptRequest",
-                "ListRootsRequest",
-                "SubscribeRequest",
-                "UnsubscribeRequest",
-                "CompleteRequest",
-                "ElicitRequest",
-                "PingRequest",
-                "GenericJSONRPCRequest",
-            }
+            # Filter to only request/notification types (exclude result types)
             return [
                 pt
                 for pt in getattr(ProtocolExecutor, "PROTOCOL_TYPES", ())
-                if pt in allowed
+                if pt in ALLOWED_PROTOCOL_TYPES
             ]
         except Exception as e:
             self._logger.error(f"Failed to get protocol types: {e}")

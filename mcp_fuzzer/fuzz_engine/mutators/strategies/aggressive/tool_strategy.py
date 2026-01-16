@@ -337,25 +337,27 @@ def fuzz_tool_arguments_aggressive(tool: dict[str, Any]) -> dict[str, Any]:
     used_fallback = not parsed_args
 
     # Ensure we have at least some arguments
+    def _fallback_value(prop_spec: Any) -> Any:
+        if not isinstance(prop_spec, dict):
+            return generate_aggressive_text()
+        prop_type = prop_spec.get("type")
+        if prop_type == "integer":
+            min_v = prop_spec.get("minimum", -1000000)
+            max_v = prop_spec.get("maximum", 1000000)
+            return _generate_aggressive_integer(min_v, max_v)
+        if prop_type == "number":
+            return _generate_aggressive_float()
+        if prop_type == "boolean":
+            return random.choice([True, False])
+        if prop_type == "array":
+            return []
+        if prop_type == "object":
+            return {}
+        return generate_aggressive_text()
+
     if not args and schema.get("properties"):
         # Fallback to basic property handling
         properties = schema.get("properties", {})
-
-        def _fallback_value(prop_spec: Any) -> Any:
-            if not isinstance(prop_spec, dict):
-                return generate_aggressive_text()
-            prop_type = prop_spec.get("type")
-            if prop_type == "integer":
-                return _generate_aggressive_integer(prop_spec)
-            if prop_type == "number":
-                return _generate_aggressive_float()
-            if prop_type == "boolean":
-                return random.choice([True, False])
-            if prop_type == "array":
-                return []
-            if prop_type == "object":
-                return {}
-            return generate_aggressive_text()
 
         for prop_name, prop_spec in properties.items():
             if random.random() < 0.8:  # 80% chance to include each property
