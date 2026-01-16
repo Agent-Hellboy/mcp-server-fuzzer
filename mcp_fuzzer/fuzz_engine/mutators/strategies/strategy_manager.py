@@ -27,6 +27,7 @@ from .aggressive import (
     fuzz_initialize_request_aggressive,
     get_protocol_fuzzer_method as get_aggressive_fuzzer_method,
 )
+from .spec_protocol import get_spec_protocol_fuzzer_method
 
 
 class ProtocolStrategies:
@@ -98,6 +99,10 @@ class ProtocolStrategies:
             strategy_config = ProtocolStrategies.PROTOCOL_STRATEGIES[protocol_type]
             if phase in strategy_config:
                 return strategy_config[phase]
+
+        spec_method = get_spec_protocol_fuzzer_method(protocol_type, phase)
+        if spec_method:
+            return spec_method
 
         # Fallback to aggressive strategies for any remaining protocol types
         return get_aggressive_fuzzer_method(protocol_type)

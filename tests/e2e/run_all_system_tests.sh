@@ -57,7 +57,7 @@ run_test() {
 }
 
 # Run individual e2e tests
-run_test "DesktopCommanderMCP Test" "$SCRIPT_DIR/test_desktop_commander_mcp.sh"
+run_test "Everything Server Test (Docker)" "$SCRIPT_DIR/test_everything_server_docker.sh"
 run_test "MCP Server Chart Test" "$SCRIPT_DIR/test_mcp_server_chart.sh"
 
 # Summary

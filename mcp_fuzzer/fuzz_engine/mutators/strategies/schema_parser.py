@@ -193,15 +193,7 @@ def make_fuzz_strategy_from_jsonschema(
     # Handle const values
     if "const" in schema:
         const_val = schema["const"]
-        if phase == "realistic" or random.random() < 0.7:
-            return const_val
-        # Aggressive: sometimes violate const intentionally
-        alt = None
-        for _ in range(5):
-            alt = _generate_default_value("aggressive")
-            if alt is not None and alt != const_val:
-                return alt
-        return 0 if const_val != 0 else ""
+        return const_val
 
     # Handle different types
     if schema_type == "object" or "properties" in schema:
@@ -235,36 +227,7 @@ def make_fuzz_strategy_from_jsonschema(
 
 def _handle_enum(enum_values: list[Any], phase: str) -> Any:
     """Handle enum values in schema."""
-    if phase == "realistic":
-        # In realistic mode, simply choose from the enum values
-        return random.choice(enum_values)
-    else:
-        # In aggressive mode, sometimes return valid enum values,
-        # sometimes return invalid values to test validation
-        if random.random() < 0.7:  # 70% chance of valid value
-            return random.choice(enum_values)
-        else:
-            # Generate an invalid value based on the type of the first enum value
-            if enum_values and isinstance(enum_values[0], str):
-                # Generate a realistic-looking invalid string
-                invalid_options = [
-                    "INVALID_" + "".join(random.choices(string.ascii_letters, k=8)),
-                    "not-a-valid-option",
-                    "unknown_value",
-                    "",  # Empty string
-                    " " * random.randint(1, 10),  # Whitespace
-                    "123invalid",  # Mixed alphanumeric
-                ]
-                return random.choice(invalid_options)
-            elif enum_values and isinstance(enum_values[0], int):
-                # Generate a number not in the enum
-                all_values = set(enum_values)
-                value = random.randint(-1000000, 1000000)
-                while value in all_values:
-                    value = random.randint(-1000000, 1000000)
-                return value
-            else:
-                return "INVALID_ENUM_VALUE"
+    return random.choice(enum_values)
 
 
 def _handle_object_type(
@@ -302,24 +265,6 @@ def _handle_object_type(
                 prop_name = f"additional_prop_{i}"
                 result[prop_name] = _generate_default_value(phase)
 
-    # In aggressive mode, sometimes add extra properties (if allowed)
-    if (
-        phase == "aggressive"
-        and random.random() < 0.3
-        and schema.get("additionalProperties", True) is not False
-    ):
-        # Add some potentially problematic properties
-        extra_props = {
-            "__proto__": {"isAdmin": True},
-            "constructor": {"prototype": {"isAdmin": True}},
-            "eval": "console.log('code injection')",
-        }
-        result.update(
-            random.sample(
-                extra_props.items(), k=min(len(extra_props), random.randint(1, 3))
-            )
-        )
-
     return result
 
 
@@ -354,19 +299,12 @@ def _handle_array_type(
         hi = max(min(max_items, 3), min_items)
         array_size = random.randint(min_items, hi)
     else:
-        # In aggressive mode, sometimes use edge cases
+        # In aggressive mode, stay within schema bounds but use edges
+        max_items_cap = min(max_items, 100)
         if random.random() < 0.7:
-            array_size = random.randint(min_items, min(max_items, 10))
+            array_size = random.randint(min_items, max_items_cap)
         else:
-            # Edge cases: empty, minimum, maximum, or very large
-            array_size = random.choice(
-                [
-                    0,  # Empty (might violate minItems)
-                    min_items,  # Minimum allowed
-                    max_items,  # Maximum allowed
-                    min(max_items, 1000),  # Potentially large array
-                ]
-            )
+            array_size = random.choice([min_items, max_items_cap])
 
     # Generate array items
     result = []
@@ -418,7 +356,7 @@ def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
         return _handle_string_format(format_type, phase)
 
     # Handle pattern constraint
-    if pattern and phase == "realistic":
+    if pattern:
         try:
             # Try to generate a string matching the pattern
             # This is a simplified approach - for complex patterns,
@@ -428,6 +366,13 @@ def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
             # Fallback if pattern generation fails
             pass
 
+    def _enforce_length(value: str) -> str:
+        if len(value) < min_length:
+            value = value + ("A" * (min_length - len(value)))
+        if len(value) > max_length:
+            value = value[:max_length]
+        return value
+
     # Generate string based on phase
     if phase == "realistic":
         # Generate a reasonable string with only printable ASCII characters
@@ -436,148 +381,55 @@ def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
         chars = "".join(chr(i) for i in range(32, 127))  # Printable ASCII
         return "".join(random.choice(chars) for _ in range(length))
     else:
-        # In aggressive mode, sometimes use edge cases
+        # In aggressive mode, stay within length constraints
         if random.random() < 0.7:
-            # Normal string with potential edge cases
             length = random.randint(min_length, min(max_length, 100))
             chars = string.ascii_letters + string.digits + string.punctuation
             return "".join(random.choice(chars) for _ in range(length))
-        else:
-            # Edge cases with safer character sets
-            edge_cases = [
-                "",  # Empty string (might violate minLength)
-                "A" * min_length,  # Minimum length
-                "A" * min(max_length, 1000),  # Maximum length (capped)
-                "A" * 1000,  # Very long string (reasonable limit)
-                "<script>alert('xss')</script>",  # XSS payload
-                "' OR '1'='1",  # SQL injection
-                "../../../etc/passwd",  # Path traversal
-                "\x00\x01\x02\x03",  # Null bytes
-                " " * min_length,  # Whitespace
-                "mixed123!@#",  # Special characters
-            ]
-            return random.choice(edge_cases)
+        edge_cases = [
+            "<script>alert('xss')</script>",
+            "' OR '1'='1",
+            "../../../etc/passwd",
+            "\x00\x01\x02\x03",
+            "mixed123!@#",
+        ]
+        return _enforce_length(random.choice(edge_cases))
 
 
 def _handle_string_format(format_type: str, phase: str) -> str:
     """Handle specific string formats."""
     if format_type == "date-time":
         # ISO-8601 date-time format
-        if phase == "realistic":
-            return datetime.now(timezone.utc).isoformat()
-        else:
-            # Sometimes invalid date-time
-            if random.random() < 0.7:
-                return datetime.now(timezone.utc).isoformat()
-            else:
-                return random.choice(
-                    [
-                        "not-a-date-time",
-                        "2024-13-40T25:70:99Z",  # Invalid date/time
-                        "2024/01/01 12:00:00",  # Wrong format
-                    ]
-                )
+        return datetime.now(timezone.utc).isoformat()
 
     elif format_type == "uuid":
         # UUID format
-        if phase == "realistic":
-            import uuid
+        import uuid
 
-            return str(uuid.uuid4())
-        else:
-            # Sometimes invalid UUID
-            if random.random() < 0.7:
-                import uuid
-
-                return str(uuid.uuid4())
-            else:
-                return random.choice(
-                    [
-                        "not-a-uuid",
-                        "12345678-1234-1234-1234-123456789012345",  # Too long
-                        "1234-5678-1234-1234-123456789012",  # Wrong format
-                    ]
-                )
+        return str(uuid.uuid4())
 
     elif format_type == "email":
         # Email format
-        if phase == "realistic":
-            domains = ["example.com", "test.org", "mail.net", "domain.io"]
-            username = "".join(random.choices(string.ascii_lowercase, k=8))
-            domain = random.choice(domains)
-            return f"{username}@{domain}"
-        else:
-            # Sometimes invalid email
-            if random.random() < 0.7:
-                domains = ["example.com", "test.org", "mail.net", "domain.io"]
-                username = "".join(random.choices(string.ascii_lowercase, k=8))
-                domain = random.choice(domains)
-                return f"{username}@{domain}"
-            else:
-                return random.choice(
-                    [
-                        "not-an-email",
-                        "missing-at-sign.com",
-                        "@missing-username.com",
-                        "user@",
-                        "user@.com",
-                        "user@domain@domain.com",
-                    ]
-                )
+        domains = ["example.com", "test.org", "mail.net", "domain.io"]
+        username = "".join(random.choices(string.ascii_lowercase, k=12))
+        domain = random.choice(domains)
+        return f"{username}@{domain}"
 
     elif format_type == "uri":
         # URI format
-        if phase == "realistic":
-            schemes = ["http", "https"]
-            domains = ["example.com", "test.org", "api.domain.io"]
-            paths = ["", "/api", "/v1/resources", "/users/123"]
-            scheme = random.choice(schemes)
-            domain = random.choice(domains)
-            path = random.choice(paths)
-            return f"{scheme}://{domain}{path}"
-        else:
-            # Sometimes invalid URI
-            if random.random() < 0.7:
-                schemes = ["http", "https"]
-                domains = ["example.com", "test.org", "api.domain.io"]
-                paths = ["", "/api", "/v1/resources", "/users/123"]
-                scheme = random.choice(schemes)
-                domain = random.choice(domains)
-                path = random.choice(paths)
-                return f"{scheme}://{domain}{path}"
-            else:
-                return random.choice(
-                    [
-                        "not-a-uri",
-                        "http://",
-                        "https://user@:password@",
-                        "http://example.com:port",
-                        "://missing-scheme.com",
-                        "http://<script>alert('xss')</script>",
-                    ]
-                )
+        schemes = ["http", "https"]
+        domains = ["example.com", "test.org", "api.domain.io"]
+        paths = ["", "/api", "/v1/resources", "/users/123", "/a" * 10]
+        scheme = random.choice(schemes)
+        domain = random.choice(domains)
+        path = random.choice(paths)
+        return f"{scheme}://{domain}{path}"
     elif format_type == "ipv4":
         # IPv4 format
         def _ipv4() -> str:
             return ".".join(str(random.randint(0, 255)) for _ in range(4))
 
-        if phase == "realistic":
-            return _ipv4()
-        if random.random() < 0.7:
-            return _ipv4()
-        return random.choice(
-            [
-                "999.999.999.999",
-                "abc.def.ghi.jkl",
-                "256.256.256.256",
-                "-1.0.0.0",
-                "1.2.3",
-                "01.02.03.04",
-                "300.1.2.3",
-                "1.2.3.4.5",
-                "1..2.3",
-            ]
-        )
+        return _ipv4()
 
     elif format_type == "ipv6":
         # IPv6 format
@@ -585,23 +437,7 @@ def _handle_string_format(format_type: str, phase: str) -> str:
             groups = [f"{random.randint(0, 0xFFFF):x}" for _ in range(8)]
             return ":".join(groups)
 
-        if phase == "realistic":
-            return _ipv6()
-        if random.random() < 0.7:
-            return _ipv6()
-        return random.choice(
-            [
-                "gggg::1",
-                "12345::",
-                ":::",
-                "1::1::1",
-                "fe80%",
-                "::ffff:192.0.2.256",
-                "2001:db8::g",
-                "",
-                "2001:db8:::1",
-            ]
-        )
+        return _ipv6()
 
     # Default: treat as regular string
     return _handle_string_type({"type": "string"}, phase)
@@ -684,7 +520,7 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
         # In aggressive mode, sometimes use edge cases
         if random.random() < 0.7:
             # Normal value
-            return random.randint(minimum, maximum)
+            value = random.randint(minimum, maximum)
         else:
             # Edge cases
             edge_cases = [
@@ -703,9 +539,21 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
             valid_edge_cases = [v for v in edge_cases if minimum <= v <= maximum]
 
             if valid_edge_cases:
-                return random.choice(valid_edge_cases)
+                value = random.choice(valid_edge_cases)
             else:
-                return random.randint(minimum, maximum)
+                value = random.randint(minimum, maximum)
+
+        if multiple_of:
+            try:
+                m = int(multiple_of)
+                if m > 0:
+                    start = ((minimum + (m - 1)) // m) * m
+                    if start <= maximum:
+                        kmax = (maximum - start) // m
+                        value = start + m * random.randint(0, kmax)
+            except Exception:
+                pass
+        return int(value)
 
 
 def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
@@ -756,7 +604,7 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
         # In aggressive mode, sometimes use edge cases
         if random.random() < 0.7:
             # Normal value
-            return random.uniform(minimum, maximum)
+            value = random.uniform(minimum, maximum)
         else:
             # Edge cases
             edge_cases = [
@@ -764,9 +612,6 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
                 maximum,  # Maximum value
                 0.0,  # Zero
                 -0.0,  # Negative zero
-                float("inf"),  # Infinity
-                float("-inf"),  # Negative infinity
-                float("nan"),  # Not a number
             ]
 
             # Filter out values outside the allowed range
@@ -780,58 +625,31 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
                     pass
 
             if valid_edge_cases:
-                return random.choice(valid_edge_cases)
+                value = random.choice(valid_edge_cases)
             else:
-                return random.uniform(minimum, maximum)
+                value = random.uniform(minimum, maximum)
+
+        if multiple_of:
+            try:
+                m = float(multiple_of)
+                if m > 0:
+                    import math
+
+                    k = round(value / m)
+                    candidate = k * m
+                    if minimum <= candidate <= maximum:
+                        value = candidate
+            except Exception:
+                pass
+
+        return float(value)
 
 
 def _handle_boolean_type(phase: str) -> bool:
     """Handle boolean type schema."""
-    if phase == "realistic":
-        # Just a normal boolean
-        return random.choice([True, False])
-    else:
-        # In aggressive mode, sometimes use non-boolean values
-        if random.random() < 0.7:
-            return random.choice([True, False])
-        else:
-            return random.choice(
-                [
-                    None,
-                    0,
-                    1,
-                    "true",
-                    "false",
-                    "yes",
-                    "no",
-                ]
-            )
+    return random.choice([True, False])
 
 
 def _generate_default_value(phase: str) -> Any:
     """Generate a default value when schema type is unknown."""
-    if phase == "realistic":
-        # Generate a reasonable default value
-        return random.choice(
-            [
-                "default_value",
-                123,
-                True,
-                [],
-                {},
-            ]
-        )
-    else:
-        # In aggressive mode, use more varied values
-        return random.choice(
-            [
-                None,
-                "",
-                0,
-                -1,
-                "INVALID_VALUE",
-                [],
-                {},
-                "<script>alert('xss')</script>",
-            ]
-        )
+    return random.choice(["default_value", 123, True, [], {}])

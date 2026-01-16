@@ -11,6 +11,7 @@ from typing import Any
 
 from hypothesis import strategies as st
 from .....config import DEFAULT_PROTOCOL_VERSION
+from ..spec_protocol import get_spec_protocol_fuzzer_method
 
 # Helper to keep URIs local-only
 SAFE_FILE_URIS = [
@@ -36,6 +37,13 @@ def pick_safe_uri(prefix_only: bool = False) -> str:
         u for u in SAFE_FILE_URIS if (u.endswith("/") if prefix_only else True)
     ]
     return random.choice(candidates)
+
+
+def _spec_request(protocol_type: str, phase: str) -> dict[str, Any] | None:
+    method = get_spec_protocol_fuzzer_method(protocol_type, phase)
+    if not method:
+        return None
+    return method()
 
 
 def protocol_version_strings() -> st.SearchStrategy[str]:
@@ -165,6 +173,9 @@ def fuzz_initialize_request_realistic() -> dict[str, Any]:
 
 def fuzz_list_resources_request_realistic() -> dict[str, Any]:
     """Generate realistic ListResourcesRequest for testing valid behavior."""
+    spec_request = _spec_request("ListResourcesRequest", "realistic")
+    if spec_request:
+        return spec_request
     cursor_options = [
         None,  # No cursor
         "cursor-123",
@@ -184,6 +195,9 @@ def fuzz_list_resources_request_realistic() -> dict[str, Any]:
 
 def fuzz_read_resource_request_realistic() -> dict[str, Any]:
     """Generate realistic ReadResourceRequest for testing valid behavior."""
+    spec_request = _spec_request("ReadResourceRequest", "realistic")
+    if spec_request:
+        return spec_request
     return {
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
@@ -196,6 +210,9 @@ def fuzz_read_resource_request_realistic() -> dict[str, Any]:
 
 def fuzz_subscribe_request_realistic() -> dict[str, Any]:
     """Generate realistic SubscribeRequest for testing valid behavior."""
+    spec_request = _spec_request("SubscribeRequest", "realistic")
+    if spec_request:
+        return spec_request
     return {
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
@@ -208,6 +225,9 @@ def fuzz_subscribe_request_realistic() -> dict[str, Any]:
 
 def fuzz_unsubscribe_request_realistic() -> dict[str, Any]:
     """Generate realistic UnsubscribeRequest for testing valid behavior."""
+    spec_request = _spec_request("UnsubscribeRequest", "realistic")
+    if spec_request:
+        return spec_request
     return {
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
@@ -220,6 +240,9 @@ def fuzz_unsubscribe_request_realistic() -> dict[str, Any]:
 
 def fuzz_list_prompts_request_realistic() -> dict[str, Any]:
     """Generate realistic ListPromptsRequest for testing valid behavior."""
+    spec_request = _spec_request("ListPromptsRequest", "realistic")
+    if spec_request:
+        return spec_request
     cursor_options = [
         None,
         "prompt-cursor-456",
@@ -238,6 +261,9 @@ def fuzz_list_prompts_request_realistic() -> dict[str, Any]:
 
 def fuzz_get_prompt_request_realistic() -> dict[str, Any]:
     """Generate realistic GetPromptRequest for testing valid behavior."""
+    spec_request = _spec_request("GetPromptRequest", "realistic")
+    if spec_request:
+        return spec_request
     name_options = [
         "code-review",
         "documentation",
@@ -269,6 +295,9 @@ def fuzz_get_prompt_request_realistic() -> dict[str, Any]:
 
 def fuzz_list_roots_request_realistic() -> dict[str, Any]:
     """Generate realistic ListRootsRequest for testing valid behavior."""
+    spec_request = _spec_request("ListRootsRequest", "realistic")
+    if spec_request:
+        return spec_request
     return {
         "jsonrpc": "2.0",
         "id": random.randint(1, 1000),
@@ -279,6 +308,9 @@ def fuzz_list_roots_request_realistic() -> dict[str, Any]:
 
 def fuzz_set_level_request_realistic() -> dict[str, Any]:
     """Generate realistic SetLevelRequest for testing valid behavior."""
+    spec_request = _spec_request("SetLevelRequest", "realistic")
+    if spec_request:
+        return spec_request
     level_options = [
         "debug",
         "info",
@@ -302,6 +334,9 @@ def fuzz_set_level_request_realistic() -> dict[str, Any]:
 
 def fuzz_complete_request_realistic() -> dict[str, Any]:
     """Generate realistic CompleteRequest for testing valid behavior."""
+    spec_request = _spec_request("CompleteRequest", "realistic")
+    if spec_request:
+        return spec_request
     ref_options = [
         {"type": "ref/prompt", "name": "code-review"},
         {"type": "ref/resource", "uri": pick_safe_uri(prefix_only=True)},

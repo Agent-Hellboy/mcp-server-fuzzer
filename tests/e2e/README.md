@@ -13,12 +13,12 @@ The e2e tests automatically:
 
 ## Available Tests
 
-### `test_desktop_commander_mcp.sh`
-- **Server**: DesktopCommanderMCP (File system and process management)
-- **Tools**: 23 file system and process management tools
-- **Test Type**: Tool fuzzing only
-- **Expected**: High success rate (96.5%)
-- **Duration**: ~2-3 minutes
+### `test_everything_server_docker.sh`
+- **Server**: Everything MCP Server (Reference server covering prompts, resources, and tools)
+- **Test Type**: Combined tools + protocol fuzzing
+- **Expected**: High success rate with broad feature coverage
+- **Duration**: ~2-4 minutes
+ - **Environment**: Docker
 
 ### `test_mcp_server_chart.sh`
 - **Server**: MCP Server Chart (Data visualization)
@@ -32,8 +32,8 @@ The e2e tests automatically:
 ### Run Individual Tests
 
 ```bash
-# Test DesktopCommanderMCP
-./tests/e2e/test_desktop_commander_mcp.sh
+# Test Everything Server (Docker)
+./tests/e2e/test_everything_server_docker.sh
 
 # Test MCP Server Chart
 ./tests/e2e/test_mcp_server_chart.sh
@@ -60,7 +60,7 @@ These tests are designed to run in CI environments. They include:
 
 ### Expected Behavior
 
-- **DesktopCommanderMCP**: Should pass with high success rate
+- **Everything MCP Server**: Should pass with high success rate
 - **MCP Server Chart**: Should detect multiple vulnerabilities and exceptions
 
 ### Output
@@ -108,7 +108,7 @@ To add a new MCP server to the e2e tests:
 
 Run with verbose output:
 ```bash
-bash -x ./tests/e2e/test_desktop_commander_mcp.sh
+bash -x ./tests/e2e/test_everything_server_docker.sh
 ```
 
 ## Contributing

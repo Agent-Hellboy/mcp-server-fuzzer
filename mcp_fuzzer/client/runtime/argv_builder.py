@@ -37,6 +37,7 @@ def prepare_inner_argv(args: Any) -> list[str]:
 
     _add_value("--mode", _get_attr("mode"))
     _add_value("--phase", _get_attr("phase", None))
+    _add_value("--protocol-phase", _get_attr("protocol_phase", None))
     _add_value("--protocol", _get_attr("protocol"))
     _add_value("--endpoint", _get_attr("endpoint"))
 

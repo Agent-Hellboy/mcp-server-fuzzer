@@ -295,6 +295,13 @@ async def fuzz_tool_arguments_realistic(tool: dict[str, Any]) -> dict[str, Any]:
                         args[prop_name] = str(uuid.uuid4())
                     else:
                         args[prop_name] = await generate_realistic_text()
+            # Always generate a fallback value for unknown property types
+            elif (
+                prop_name not in args
+                and prop_spec.get("type")
+                not in {"string", "integer", "number", "boolean", "array", "object"}
+            ):
+                args[prop_name] = await generate_realistic_text()
             # In realistic mode, only generate required properties and some
             # optional ones
             # But only if the property has a simple string schema without enum/format

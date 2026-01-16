@@ -106,7 +106,11 @@ class ProtocolClient:
         }
 
     async def _process_single_protocol_fuzz(
-        self, protocol_type: str, run_index: int, total_runs: int
+        self,
+        protocol_type: str,
+        run_index: int,
+        total_runs: int,
+        phase: str = "realistic",
     ) -> ProtocolFuzzResult:
         """Process a single protocol fuzzing run.
 
@@ -120,9 +124,7 @@ class ProtocolClient:
         """
         try:
             # Generate fuzz data using mutator (no send); client handles safety + send
-            fuzz_data = await self.protocol_mutator.mutate(
-                protocol_type, phase="aggressive"
-            )
+            fuzz_data = await self.protocol_mutator.mutate(protocol_type, phase=phase)
 
             if fuzz_data is None:
                 raise ValueError(f"No fuzz_data returned for {protocol_type}")
@@ -210,13 +212,15 @@ class ProtocolClient:
             }
 
     async def fuzz_protocol_type(
-        self, protocol_type: str, runs: int = 10
+        self, protocol_type: str, runs: int = 10, phase: str = "realistic"
     ) -> list[ProtocolFuzzResult]:
         """Fuzz a specific protocol type."""
         results = []
 
         for i in range(runs):
-            result = await self._process_single_protocol_fuzz(protocol_type, i, runs)
+            result = await self._process_single_protocol_fuzz(
+                protocol_type, i, runs, phase
+            )
             results.append(result)
 
         return results
@@ -229,13 +233,36 @@ class ProtocolClient:
         """
         try:
             # Use the class-level protocol type list from ProtocolExecutor
-            return list(getattr(ProtocolExecutor, "PROTOCOL_TYPES", ()))
+            allowed = {
+                "InitializeRequest",
+                "ProgressNotification",
+                "CancelNotification",
+                "ListResourcesRequest",
+                "ReadResourceRequest",
+                "ListResourceTemplatesRequest",
+                "SetLevelRequest",
+                "CreateMessageRequest",
+                "ListPromptsRequest",
+                "GetPromptRequest",
+                "ListRootsRequest",
+                "SubscribeRequest",
+                "UnsubscribeRequest",
+                "CompleteRequest",
+                "ElicitRequest",
+                "PingRequest",
+                "GenericJSONRPCRequest",
+            }
+            return [
+                pt
+                for pt in getattr(ProtocolExecutor, "PROTOCOL_TYPES", ())
+                if pt in allowed
+            ]
         except Exception as e:
             self._logger.error(f"Failed to get protocol types: {e}")
             return []
 
     async def fuzz_all_protocol_types(
-        self, runs_per_type: int = 5
+        self, runs_per_type: int = 5, phase: str = "realistic"
     ) -> dict[str, list[ProtocolFuzzResult]]:
         """Fuzz all protocol types using ProtocolClient safety + sending."""
         try:
@@ -248,7 +275,9 @@ class ProtocolClient:
                 per_type: list[dict[str, Any]] = []
                 for i in range(runs_per_type):
                     per_type.append(
-                        await self._process_single_protocol_fuzz(pt, i, runs_per_type)
+                        await self._process_single_protocol_fuzz(
+                            pt, i, runs_per_type, phase
+                        )
                     )
                 all_results[pt] = per_type
             return all_results

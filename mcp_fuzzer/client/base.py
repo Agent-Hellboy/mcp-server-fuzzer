@@ -119,17 +119,27 @@ class MCPFuzzerClient:
     # Protocol Fuzzing Methods - Delegate to ProtocolClient
     # ============================================================================
 
-    async def fuzz_protocol_type(self, protocol_type, runs=10):
+    async def fuzz_protocol_type(self, protocol_type, runs=10, phase=None):
         """Fuzz a specific protocol type."""
-        return await self.protocol_client.fuzz_protocol_type(protocol_type, runs=runs)
-
-    async def fuzz_all_protocol_types(self, runs_per_type=5):
-        """Fuzz all protocol types."""
-        return await self.protocol_client.fuzz_all_protocol_types(
-            runs_per_type=runs_per_type
+        if phase is None:
+            return await self.protocol_client.fuzz_protocol_type(
+                protocol_type, runs=runs
+            )
+        return await self.protocol_client.fuzz_protocol_type(
+            protocol_type, runs=runs, phase=phase
         )
 
-    async def fuzz_resources(self, runs_per_type=5):
+    async def fuzz_all_protocol_types(self, runs_per_type=5, phase=None):
+        """Fuzz all protocol types."""
+        if phase is None:
+            return await self.protocol_client.fuzz_all_protocol_types(
+                runs_per_type=runs_per_type
+            )
+        return await self.protocol_client.fuzz_all_protocol_types(
+            runs_per_type=runs_per_type, phase=phase
+        )
+
+    async def fuzz_resources(self, runs_per_type=5, phase="realistic"):
         """Fuzz resource-related protocol endpoints."""
         results: dict[str, list[dict[str, Any]]] = {}
         for protocol_type in (
@@ -138,11 +148,11 @@ class MCPFuzzerClient:
             "ListResourceTemplatesRequest",
         ):
             results[protocol_type] = await self.protocol_client.fuzz_protocol_type(
-                protocol_type, runs=runs_per_type
+                protocol_type, runs=runs_per_type, phase=phase
             )
         return results
 
-    async def fuzz_prompts(self, runs_per_type=5):
+    async def fuzz_prompts(self, runs_per_type=5, phase="realistic"):
         """Fuzz prompt-related protocol endpoints."""
         results: dict[str, list[dict[str, Any]]] = {}
         for protocol_type in (
@@ -151,7 +161,7 @@ class MCPFuzzerClient:
             "CompleteRequest",
         ):
             results[protocol_type] = await self.protocol_client.fuzz_protocol_type(
-                protocol_type, runs=runs_per_type
+                protocol_type, runs=runs_per_type, phase=phase
             )
         return results
 

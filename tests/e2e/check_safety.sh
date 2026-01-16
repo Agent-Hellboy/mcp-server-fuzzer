@@ -41,18 +41,23 @@ else
     check_fail "Safety system module not available"
 fi
 
-# Check if DesktopCommanderMCP exists
-if [ -d "testing-servers/DesktopCommanderMCP" ]; then
-    check_pass "DesktopCommanderMCP test server exists"
+# Check if Everything server repo exists (optional; test can clone if missing)
+EVERYTHING_REPO_DIR="explore/servers"
+EVERYTHING_SERVER_DIR="$EVERYTHING_REPO_DIR/src/everything"
+
+if [ -d "$EVERYTHING_SERVER_DIR" ]; then
+    check_pass "Everything server repo exists"
 else
-    check_fail "DesktopCommanderMCP test server missing"
+    check_warn "Everything server repo missing (test will clone)"
 fi
 
-# Check if DesktopCommanderMCP is built
-if [ -f "testing-servers/DesktopCommanderMCP/dist/index.js" ]; then
-    check_pass "DesktopCommanderMCP is built"
-else
-    check_fail "DesktopCommanderMCP not built (run: cd testing-servers/DesktopCommanderMCP && npm run build)"
+# Check if Everything server is built when repo exists
+if [ -d "$EVERYTHING_SERVER_DIR" ]; then
+    if [ -f "$EVERYTHING_SERVER_DIR/dist/index.js" ]; then
+        check_pass "Everything server is built"
+    else
+        check_warn "Everything server not built (test will build)"
+    fi
 fi
 
 # Check Python environment
@@ -68,6 +73,14 @@ if command -v node &> /dev/null; then
     check_pass "Node.js available ($NODE_VERSION)"
 else
     check_fail "Node.js not available"
+fi
+
+# Check Docker availability (required for e2e)
+if command -v docker &> /dev/null; then
+    DOCKER_VERSION=$(docker --version 2>/dev/null || echo "unknown")
+    check_pass "Docker available ($DOCKER_VERSION)"
+else
+    check_fail "Docker not available"
 fi
 
 # Check if we're in CI environment

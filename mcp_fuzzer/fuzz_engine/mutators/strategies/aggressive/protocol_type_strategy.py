@@ -10,6 +10,8 @@ robustness with attack vectors.
 import random
 from typing import Any
 
+from ..spec_protocol import get_spec_protocol_fuzzer_method
+
 # Track how often experimental payloads are requested so we can deterministically
 # force `None` values often enough for unit tests that expect them.
 _experimental_payload_call_count = 0
@@ -83,6 +85,80 @@ def generate_malicious_string() -> str:
 
     return random.choice(strategies)()
 
+
+def generate_structured_string() -> str:
+    """Generate a malicious string while preserving string type."""
+    return random.choice(
+        [
+            random.choice(SQL_INJECTION),
+            random.choice(XSS_PAYLOADS),
+            random.choice(PATH_TRAVERSAL),
+            "A" * random.randint(256, 4096),
+            "\x00" * random.randint(1, 64),
+        ]
+    )
+
+
+def generate_structured_number() -> int | float:
+    """Generate an aggressive numeric value without NaN/Infinity."""
+    return random.choice(
+        [
+            -1,
+            0,
+            1,
+            2**31 - 1,
+            2**63 - 1,
+            -2**63,
+            10**9,
+            -10**9,
+            3.14159,
+            -3.14159,
+        ]
+    )
+
+
+def generate_structured_id() -> int | str:
+    """Generate a JSON-RPC id that remains valid (string or number)."""
+    return random.choice(
+        [
+            1,
+            2,
+            42,
+            999999999,
+            "req-001",
+            "req-002",
+            "id-" + ("A" * 32),
+        ]
+    )
+
+
+def generate_structured_meta() -> dict[str, Any]:
+    """Generate a structured _meta object with aggressive values."""
+    return {
+        "trace": generate_structured_string(),
+        "tags": [generate_structured_string() for _ in range(random.randint(1, 3))],
+        "flags": {"experimental": random.choice([True, False])},
+    }
+
+
+def generate_structured_object() -> dict[str, Any]:
+    """Generate a structured object with malicious strings/values."""
+    return {
+        "value": generate_structured_string(),
+        "count": generate_structured_number(),
+        "enabled": random.choice([True, False]),
+    }
+
+def _aggressive_spec_request(
+    protocol_type: str, overrides: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    method = get_spec_protocol_fuzzer_method(protocol_type, "aggressive")
+    if not method:
+        return None
+    request = method()
+    if overrides and isinstance(request.get("params"), dict):
+        request["params"].update(overrides)
+    return request
 
 def choice_lazy(options):
     """Lazy choice that only evaluates the selected option."""
@@ -163,142 +239,32 @@ def generate_experimental_payload():
 
 def fuzz_initialize_request_aggressive() -> dict[str, Any]:
     """Generate aggressive InitializeRequest for security/robustness testing."""
-    # Malicious protocol versions
-    malicious_versions = [
-        generate_malicious_string(),
-        None,
-        "",
-        "999.999.999",
-        "-1.0.0",
-        random.choice(SQL_INJECTION),
-        random.choice(XSS_PAYLOADS),
-        random.choice(PATH_TRAVERSAL),
-        "A" * 1000,  # Overflow
-        "\x00\x01\x02",  # Null bytes
-    ]
-
-    # Malicious JSON-RPC IDs
-    malicious_ids = [
-        generate_malicious_value(),
-        {"evil": "object_as_id"},
-        [1, 2, 3],  # Array as ID
-        float("inf"),
-        float("-inf"),
-        2**63,  # Large number
-        -(2**63),  # Large negative number
-    ]
-
-    # Malicious method names
-    malicious_methods = [
-        generate_malicious_string(),
-        None,
-        "",
-        random.choice(PATH_TRAVERSAL),
-        "eval()",
-        "system('rm -rf /')",
-        "__proto__",
-        "constructor",
-        "prototype",
-        "\x00null\x00",
-    ]
-
-    # Build malicious request
     base_request = {
-        "jsonrpc": random.choice(
-            [
-                "2.0",  # Valid
-                "1.0",  # Invalid version
-                "3.0",  # Future version
-                None,  # Missing
-                "",  # Empty
-                generate_malicious_string(),  # Malicious
-            ]
-        ),
-        "id": random.choice(malicious_ids),
-        "method": random.choice(malicious_methods),
+        "jsonrpc": "2.0",
+        "id": generate_structured_id(),
+        "method": "initialize",
     }
 
-    # Malicious params
     malicious_params = choice_lazy(
         [
-            None,  # Missing params
-            "",  # Empty string instead of object
-            [],  # Array instead of object
-            lambda: generate_malicious_string(),  # String instead of object
+            None,
+            generate_structured_object(),
             lambda: {
-                "protocolVersion": random.choice(malicious_versions),
-                "capabilities": choice_lazy(
-                    [
-                        None,
-                        "",
-                        [],
-                        lambda: generate_malicious_string(),
-                        {"__proto__": {"isAdmin": True}},
-                        {"constructor": {"prototype": {"isAdmin": True}}},
-                        lambda: {"evil": generate_malicious_string()},
-                        # Add more capabilities structures that include
-                        # experimental field.
-                        lambda: {"experimental": generate_experimental_payload()},
-                        # Add more capabilities with experimental field for
-                        # better variety.
-                        lambda: {
-                            "experimental": generate_malicious_value(),
-                            "other_capability": generate_malicious_string(),
-                        },
-                        lambda: {
-                            "experimental": random.choice(
-                                [True, False, "enabled", "disabled"]
-                            ),
-                            "logging": {"level": generate_malicious_string()},
-                        },
-                        lambda: {
-                            "experimental": {"feature": "test", "enabled": True},
-                            "resources": {"listChanged": True},
-                        },
-                        lambda: {
-                            "experimental": [1, 2, 3, "mixed"],
-                            "tools": {"listChanged": True},
-                        },
-                    ]
-                ),
-                "clientInfo": random.choice(
-                    [
-                        None,
-                        "",
-                        [],
-                        lambda: generate_malicious_string(),
-                        lambda: {
-                            "name": generate_malicious_string(),
-                            "version": generate_malicious_string(),
-                            "__proto__": {"isAdmin": True},
-                            "evil": generate_malicious_string(),
-                        },
-                    ]
-                ),
-                "experimental": random.choice(
-                    [
-                        None,
-                        "",
-                        [],
-                        lambda: generate_malicious_string(),
-                        lambda: {
-                            "customCapability": generate_malicious_value(),
-                            "extendedFeature": {
-                                "enabled": generate_malicious_value(),
-                                "config": generate_malicious_value(),
-                            },
-                            "__proto__": {"isAdmin": True},
-                            "evil": generate_malicious_string(),
-                        },
-                        lambda: {
-                            "maliciousExtension": {
-                                "payload": generate_malicious_string(),
-                                "injection": random.choice(SQL_INJECTION),
-                                "xss": random.choice(XSS_PAYLOADS),
-                            }
-                        },
-                    ]
-                ),
+                "protocolVersion": generate_structured_string(),
+                "capabilities": {
+                    "elicitation": generate_structured_object(),
+                    "experimental": generate_experimental_payload(),
+                    "roots": {"listChanged": random.choice([True, False])},
+                    "sampling": generate_structured_object(),
+                },
+                "clientInfo": {
+                    "name": generate_structured_string(),
+                    "version": generate_structured_string(),
+                },
+                "locale": generate_structured_string(),
+                "rootUri": generate_structured_string(),
+                "clientVersion": generate_structured_string(),
+                "features": generate_structured_object(),
                 # Add extra malicious fields
                 "__proto__": {"isAdmin": True},
                 "constructor": {"prototype": {"isAdmin": True}},
@@ -337,19 +303,10 @@ def fuzz_initialize_request_aggressive() -> dict[str, Any]:
 
 def fuzz_progress_notification() -> dict[str, Any]:
     """Fuzz ProgressNotification with edge cases."""
-    # Generate AGGRESSIVE progress tokens to break things
     progress_token_options = [
-        generate_malicious_value(),
-        "",
-        None,
-        "\U0001f680\U0001f525\U0001f4af",
+        generate_structured_string(),
         "A" * 1000,
-        float("inf"),
-        float("nan"),
-        "' OR 1=1; --",
-        "<script>alert('xss')</script>",
-        "../../../etc/passwd",
-        "\x00\x01\x02\x03",  # Null bytes
+        "progress-" + ("A" * 128),
     ]
 
     return {
@@ -357,8 +314,8 @@ def fuzz_progress_notification() -> dict[str, Any]:
         "method": "notifications/progress",
         "params": {
             "progressToken": random.choice(progress_token_options),
-            "progress": generate_malicious_value(),
-            "total": generate_malicious_value(),
+            "progress": generate_structured_number(),
+            "total": generate_structured_number(),
         },
     }
 
@@ -369,27 +326,34 @@ def fuzz_cancel_notification() -> dict[str, Any]:
         "jsonrpc": "2.0",
         "method": "notifications/cancelled",
         "params": {
-            "requestId": generate_malicious_value(),
-            "reason": generate_malicious_string(),
+            "requestId": generate_structured_id(),
+            "reason": generate_structured_string(),
         },
     }
 
 
 def fuzz_list_resources_request() -> dict[str, Any]:
     """Fuzz ListResourcesRequest with edge cases."""
+    spec_request = _aggressive_spec_request("ListResourcesRequest")
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        params = spec_request["params"]
+        params.setdefault("_meta", generate_structured_meta())
+        params["cursor"] = generate_structured_string()
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "resources/list",
         "params": {
-            "cursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
+            "cursor": generate_structured_string(),
+            "_meta": generate_structured_meta(),
         },
     }
 
 
 def fuzz_read_resource_request() -> dict[str, Any]:
     """Fuzz ReadResourceRequest with edge cases."""
+    spec_request = _aggressive_spec_request("ReadResourceRequest")
     malicious_uris = [
         "file:///etc/passwd",
         "file:///c:/windows/system32/config/sam",
@@ -400,34 +364,42 @@ def fuzz_read_resource_request() -> dict[str, Any]:
         "file://" + "A" * 1000,
         "\x00\x01\x02\x03",
     ]
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        params = spec_request["params"]
+        params["uri"] = random.choice(malicious_uris + [generate_structured_string()])
+        return spec_request
 
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "resources/read",
         "params": {
-            "uri": random.choice(malicious_uris + [generate_malicious_string()])
+            "uri": random.choice(malicious_uris + [generate_structured_string()])
         },
     }
 
 
 def fuzz_set_level_request() -> dict[str, Any]:
     """Fuzz SetLevelRequest with edge cases."""
+    spec_request = _aggressive_spec_request("SetLevelRequest")
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        spec_request["params"]["level"] = generate_structured_string()
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "logging/setLevel",
-        "params": {"level": generate_malicious_value()},
+        "params": {"level": generate_structured_string()},
     }
 
 
 def fuzz_generic_jsonrpc_request() -> dict[str, Any]:
     """Fuzz generic JSON-RPC requests with edge cases."""
     return {
-        "jsonrpc": random.choice(["2.0", "1.0", "3.0", "invalid", "", None]),
-        "id": generate_malicious_value(),
-        "method": generate_malicious_string(),
-        "params": generate_malicious_value(),
+        "jsonrpc": "2.0",
+        "id": generate_structured_id(),
+        "method": generate_structured_string(),
+        "params": generate_structured_object(),
     }
 
 
@@ -466,123 +438,167 @@ def fuzz_create_message_request() -> dict[str, Any]:
     """Fuzz CreateMessageRequest with edge cases."""
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "sampling/createMessage",
         "params": {
             "messages": [fuzz_sampling_message() for _ in range(random.randint(0, 5))],
-            "modelPreferences": generate_malicious_value(),
-            "systemPrompt": generate_malicious_string(),
-            "includeContext": generate_malicious_string(),
-            "temperature": generate_malicious_value(),
-            "maxTokens": generate_malicious_value(),
-            "stopSequences": generate_malicious_value(),
-            "metadata": generate_malicious_value(),
+            "modelPreferences": generate_structured_object(),
+            "systemPrompt": generate_structured_string(),
+            "includeContext": random.choice(["none", "system", "all", "invalid"]),
+            "temperature": generate_structured_number(),
+            "maxTokens": int(abs(generate_structured_number())),
+            "stopSequences": [
+                generate_structured_string() for _ in range(random.randint(0, 3))
+            ],
+            "metadata": generate_structured_object(),
         },
     }
 
 
 def fuzz_list_prompts_request() -> dict[str, Any]:
     """Fuzz ListPromptsRequest with edge cases."""
+    spec_request = _aggressive_spec_request("ListPromptsRequest")
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        params = spec_request["params"]
+        params.setdefault("_meta", generate_structured_meta())
+        params["cursor"] = generate_structured_string()
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "prompts/list",
         "params": {
-            "cursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
+            "cursor": generate_structured_string(),
+            "_meta": generate_structured_meta(),
         },
     }
 
 
 def fuzz_get_prompt_request() -> dict[str, Any]:
     """Fuzz GetPromptRequest with edge cases."""
+    spec_request = _aggressive_spec_request("GetPromptRequest")
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        params = spec_request["params"]
+        params.setdefault("name", generate_structured_string())
+        params["arguments"] = generate_structured_object()
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "prompts/get",
         "params": {
-            "name": generate_malicious_string(),
-            "arguments": generate_malicious_value(),
+            "name": generate_structured_string(),
+            "arguments": generate_structured_object(),
         },
     }
 
 
 def fuzz_list_roots_request() -> dict[str, Any]:
     """Fuzz ListRootsRequest with edge cases."""
+    spec_request = _aggressive_spec_request("ListRootsRequest")
+    if spec_request:
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "roots/list",
-        "params": {"_meta": generate_malicious_value()},
+        "params": {"_meta": generate_structured_meta()},
     }
 
 
 def fuzz_subscribe_request() -> dict[str, Any]:
     """Fuzz SubscribeRequest with edge cases."""
+    spec_request = _aggressive_spec_request("SubscribeRequest")
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        spec_request["params"]["uri"] = generate_structured_string()
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "resources/subscribe",
-        "params": {"uri": generate_malicious_string()},
+        "params": {"uri": generate_structured_string()},
     }
 
 
 def fuzz_unsubscribe_request() -> dict[str, Any]:
     """Fuzz UnsubscribeRequest with edge cases."""
+    spec_request = _aggressive_spec_request("UnsubscribeRequest")
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        spec_request["params"]["uri"] = generate_structured_string()
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "resources/unsubscribe",
-        "params": {"uri": generate_malicious_string()},
+        "params": {"uri": generate_structured_string()},
     }
 
 
 def fuzz_complete_request() -> dict[str, Any]:
     """Fuzz CompleteRequest with edge cases."""
+    spec_request = _aggressive_spec_request("CompleteRequest")
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        params = spec_request["params"]
+        params["ref"] = {"type": "ref/prompt", "name": generate_structured_string()}
+        params["argument"] = generate_structured_string()
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "completion/complete",
         "params": {
-            "ref": generate_malicious_value(),
-            "argument": generate_malicious_value(),
+            "ref": {"name": generate_structured_string()},
+            "argument": generate_structured_string(),
         },
     }
 
 
 def fuzz_list_resource_templates_request() -> dict[str, Any]:
     """Fuzz ListResourceTemplatesRequest with edge cases."""
+    spec_request = _aggressive_spec_request("ListResourceTemplatesRequest")
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        spec_request["params"].setdefault("_meta", generate_structured_meta())
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "resources/templates/list",
         "params": {
-            "cursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
+            "cursor": generate_structured_string(),
+            "_meta": generate_structured_meta(),
         },
     }
 
 
 def fuzz_elicit_request() -> dict[str, Any]:
     """Fuzz ElicitRequest with edge cases."""
+    spec_request = _aggressive_spec_request("ElicitRequest")
+    if spec_request and isinstance(spec_request.get("params"), dict):
+        params = spec_request["params"]
+        params["message"] = generate_structured_string()
+        params["requestedSchema"] = generate_structured_object()
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "elicitation/create",
         "params": {
-            "message": generate_malicious_string(),
-            "requestedSchema": generate_malicious_value(),
+            "message": generate_structured_string(),
+            "requestedSchema": generate_structured_object(),
         },
     }
 
 
 def fuzz_ping_request() -> dict[str, Any]:
     """Fuzz PingRequest with edge cases."""
+    spec_request = _aggressive_spec_request("PingRequest")
+    if spec_request:
+        return spec_request
     return {
         "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
+        "id": generate_structured_id(),
         "method": "ping",
-        "params": generate_malicious_value(),
+        "params": generate_structured_object(),
     }
 
 
@@ -763,10 +779,10 @@ def fuzz_logging_message_notification() -> dict[str, Any]:
         "jsonrpc": "2.0",
         "method": "notifications/message",
         "params": {
-            "level": generate_malicious_value(),
-            "logger": generate_malicious_string(),
-            "data": generate_malicious_value(),
-            "_meta": generate_malicious_value(),
+            "level": generate_structured_string(),
+            "logger": generate_structured_string(),
+            "data": generate_structured_object(),
+            "_meta": generate_structured_meta(),
         },
     }
 
@@ -777,7 +793,7 @@ def fuzz_resource_list_changed_notification() -> dict[str, Any]:
         "jsonrpc": "2.0",
         "method": "notifications/resources/list_changed",
         "params": {
-            "_meta": generate_malicious_value(),
+            "_meta": generate_structured_meta(),
         },
     }
 
@@ -788,7 +804,7 @@ def fuzz_resource_updated_notification() -> dict[str, Any]:
         "jsonrpc": "2.0",
         "method": "notifications/resources/updated",
         "params": {
-            "uri": generate_malicious_string(),
+            "uri": generate_structured_string(),
         },
     }
 
@@ -799,7 +815,7 @@ def fuzz_prompt_list_changed_notification() -> dict[str, Any]:
         "jsonrpc": "2.0",
         "method": "notifications/prompts/list_changed",
         "params": {
-            "_meta": generate_malicious_value(),
+            "_meta": generate_structured_meta(),
         },
     }
 
@@ -810,7 +826,7 @@ def fuzz_tool_list_changed_notification() -> dict[str, Any]:
         "jsonrpc": "2.0",
         "method": "notifications/tools/list_changed",
         "params": {
-            "_meta": generate_malicious_value(),
+            "_meta": generate_structured_meta(),
         },
     }
 
@@ -821,7 +837,7 @@ def fuzz_roots_list_changed_notification() -> dict[str, Any]:
         "jsonrpc": "2.0",
         "method": "notifications/roots/list_changed",
         "params": {
-            "_meta": generate_malicious_value(),
+            "_meta": generate_structured_meta(),
         },
     }
 

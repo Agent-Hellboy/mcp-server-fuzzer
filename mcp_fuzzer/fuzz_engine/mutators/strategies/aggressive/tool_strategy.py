@@ -11,6 +11,8 @@ import random
 import string
 from typing import Any
 
+from ..schema_helpers import apply_schema_edge_cases
+
 # Attack payloads and malicious data
 SQL_INJECTION = [
     "' OR '1'='1",
@@ -211,7 +213,7 @@ def _generate_aggressive_integer(
 def _generate_aggressive_float() -> float:
     """Generate aggressive random float with extreme values and edge cases."""
     strategy = random.choice(
-        ["normal", "extreme", "zero", "negative", "infinity", "tiny", "huge"]
+        ["normal", "extreme", "zero", "negative", "tiny", "huge", "infinity"]
     )
 
     if strategy == "normal":
@@ -230,14 +232,87 @@ def _generate_aggressive_float() -> float:
         return 0.0
     elif strategy == "negative":
         return random.uniform(-1000.0, -0.001)
-    elif strategy == "infinity":
-        return random.choice([float("inf"), float("-inf")])
     elif strategy == "tiny":
         return random.uniform(1e-10, 1e-5)
     elif strategy == "huge":
         return random.uniform(1e10, 1e15)
+    elif strategy == "infinity":
+        return random.choice([float("inf"), float("-inf")])
     else:
         return random.uniform(-1000.0, 1000.0)
+
+
+def _clamp_string(value: str, min_length: int | None, max_length: int | None) -> str:
+    min_len = min_length or 0
+    if max_length is not None and len(value) > max_length:
+        value = value[:max_length]
+    if len(value) < min_len:
+        value = value + ("A" * (min_len - len(value)))
+    return value
+
+
+def _pick_semantic_string(name: str) -> str:
+    lowered = name.lower()
+    if any(token in lowered for token in ("uri", "url", "href")):
+        return "file:///tmp/mcp-fuzzer/../../etc/passwd"
+    if any(token in lowered for token in ("path", "file", "dir", "folder")):
+        return "/tmp/mcp-fuzzer/../../etc/passwd"
+    if "cursor" in lowered:
+        return "cursor_" + ("A" * 256)
+    if any(token in lowered for token in ("id", "name", "key")):
+        return "id_" + ("A" * 128)
+    if any(token in lowered for token in ("query", "search", "filter")):
+        return "q=" + ("A" * 512)
+    return "A" * 256
+
+
+def _pick_semantic_number(name: str, spec: dict[str, Any]) -> int | float:
+    lowered = name.lower()
+    minimum = spec.get("minimum")
+    maximum = spec.get("maximum")
+    if (
+        any(token in lowered for token in ("min", "lower", "start"))
+        and minimum is not None
+    ):
+        return minimum
+    if (
+        any(
+            token in lowered
+            for token in ("max", "upper", "limit", "size", "count", "timeout")
+        )
+        and maximum is not None
+    ):
+        return maximum
+    return maximum if maximum is not None else (
+        minimum if minimum is not None else 2**31 - 1
+    )
+
+
+def _apply_semantic_edge_cases(args: dict[str, Any], schema: dict[str, Any]) -> None:
+    properties = schema.get("properties", {})
+    for key, value in list(args.items()):
+        spec = properties.get(key)
+        if not isinstance(spec, dict):
+            continue
+
+        if "enum" in spec or "const" in spec or "pattern" in spec:
+            continue
+
+        prop_type = spec.get("type")
+        if isinstance(prop_type, list):
+            prop_type = prop_type[0] if prop_type else None
+
+        if prop_type == "string" and isinstance(value, str):
+            candidate = _pick_semantic_string(key)
+            if spec.get("format") == "email":
+                candidate = "fuzzer+" + ("a" * 24) + "@example.com"
+            elif spec.get("format") == "uuid":
+                candidate = "00000000-0000-0000-0000-000000000000"
+            min_length = spec.get("minLength")
+            max_length = spec.get("maxLength")
+            args[key] = _clamp_string(candidate, min_length, max_length)
+        elif prop_type in ("integer", "number") and isinstance(value, (int, float)):
+            args[key] = _pick_semantic_number(key, spec)
 
 
 def fuzz_tool_arguments_aggressive(tool: dict[str, Any]) -> dict[str, Any]:
@@ -250,63 +325,56 @@ def fuzz_tool_arguments_aggressive(tool: dict[str, Any]) -> dict[str, Any]:
 
     # Use the enhanced schema parser to generate aggressive values
     try:
-        args = make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
+        parsed_args = make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
     except Exception:
-        args = {}
+        parsed_args = {}
 
     # If the schema parser returned something other than a dict, create a default dict
-    if not isinstance(args, dict):
-        args = {}
+    if not isinstance(parsed_args, dict):
+        parsed_args = {}
+
+    args = parsed_args
+    used_fallback = not parsed_args
 
     # Ensure we have at least some arguments
     if not args and schema.get("properties"):
         # Fallback to basic property handling
         properties = schema.get("properties", {})
 
+        def _fallback_value(prop_spec: Any) -> Any:
+            if not isinstance(prop_spec, dict):
+                return generate_aggressive_text()
+            prop_type = prop_spec.get("type")
+            if prop_type == "integer":
+                return _generate_aggressive_integer(prop_spec)
+            if prop_type == "number":
+                return _generate_aggressive_float()
+            if prop_type == "boolean":
+                return random.choice([True, False])
+            if prop_type == "array":
+                return []
+            if prop_type == "object":
+                return {}
+            return generate_aggressive_text()
+
         for prop_name, prop_spec in properties.items():
             if random.random() < 0.8:  # 80% chance to include each property
-                prop_type = prop_spec.get("type", "string")
-
-                # Generate aggressive values based on type
-                if prop_type == "string":
-                    args[prop_name] = generate_aggressive_text()
-                elif prop_type == "integer":
-                    args[prop_name] = _generate_aggressive_integer()
-                elif prop_type == "number":
-                    args[prop_name] = _generate_aggressive_float()
-                elif prop_type == "boolean":
-                    args[prop_name] = random.choice(
-                        [None, "", "true", "false", 0, 1, -1, 42, [], {}, "yes", "no"]
-                    )
-                elif prop_type == "array":
-                    args[prop_name] = [
-                        generate_aggressive_text() for _ in range(random.randint(0, 5))
-                    ]
-                elif prop_type == "object":
-                    args[prop_name] = {
-                        generate_aggressive_text(): generate_aggressive_text()
-                    }
-                else:
-                    args[prop_name] = generate_aggressive_text()
+                args[prop_name] = _fallback_value(prop_spec)
 
     # Ensure required keys exist (values may still be adversarial)
     required = schema.get("required", [])
+    properties = schema.get("properties", {})
     for key in required or []:
         if key not in args:
-            args[key] = generate_aggressive_text()
+            prop_spec = properties.get(key)
+            args[key] = _fallback_value(prop_spec)
 
-    # Add some extra malicious fields that shouldn't be there
-    malicious_extras = {
-        "__proto__": {"isAdmin": True},
-        "constructor": {"prototype": {"isAdmin": True}},
-        "../injection": "path_traversal",
-        "eval": "console.log('code injection')",
-        "\x00null": "null_injection",
-    }
+    if not used_fallback:
+        _apply_semantic_edge_cases(args, schema)
 
-    # Randomly add some malicious fields
-    for key, value in malicious_extras.items():
-        if random.random() < 0.3:  # 30% chance
-            args[key] = value
+    if schema:
+        args = apply_schema_edge_cases(
+            args, schema, phase="aggressive", key=tool.get("name")
+        )
 
     return args
