@@ -75,11 +75,9 @@ def test_validate_payload_serializable():
 
 def test_validate_network_request_blocks(monkeypatch):
     driver = DummyHttp()
-    # Patch is_host_allowed at the module where it's imported and used
-    import mcp_fuzzer.transport.interfaces.behaviors as behaviors_module
+    # Patch is_host_allowed at the source module level
     monkeypatch.setattr(
-        behaviors_module,
-        "is_host_allowed",
+        "mcp_fuzzer.safety_system.policy.is_host_allowed",
         lambda url, **kwargs: False,
     )
     with pytest.raises(NetworkError):
