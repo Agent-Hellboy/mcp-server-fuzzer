@@ -209,7 +209,7 @@ async def test_parse_sse_response_unknown_field():
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
     response = FakeResponse(
         lines=[
-            "unknown: field",  # Unknown fields are treated as data continuation
+            "unknown: field",  # Unknown fields are ignored
             'data: {"result": {"ok": true}}',
             "",
         ]
@@ -217,9 +217,7 @@ async def test_parse_sse_response_unknown_field():
 
     result = await driver._parse_sse_response_for_result(response)
 
-    # Unknown fields are treated as data continuation, which breaks JSON parsing
-    # So the result will be None because the combined data is not valid JSON
-    assert result is None
+    assert result == {"ok": True}
 
 
 @pytest.mark.asyncio

@@ -46,7 +46,7 @@ if [ -d "$LOCAL_REPO_DIR/$SERVER_SUBDIR" ]; then
 else
     echo -e "${BLUE}📥 Local repo not found, cloning servers repo...${NC}"
     CLONED_REPO_DIR="/tmp/mcp-servers-$(date +%s)"
-    git clone "$REPO_URL" "$CLONED_REPO_DIR"
+    git clone --depth 1 "$REPO_URL" "$CLONED_REPO_DIR"
     REPO_DIR="$CLONED_REPO_DIR"
 fi
 

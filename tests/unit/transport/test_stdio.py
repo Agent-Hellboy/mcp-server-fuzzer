@@ -10,7 +10,6 @@ import pytest
 from mcp_fuzzer.transport.drivers.stdio_driver import StdioDriver
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from mcp_fuzzer.exceptions import (
-    MCPError,
     ProcessStartError,
     ServerError,
     TransportError,
@@ -535,12 +534,13 @@ class TestStdioDriver:
         self.transport.process = mock_process
         self.transport._initialized = True
 
-        # Should return immediately without locking
-        await self.transport._ensure_connection()
-
-        # Verify lock was not acquired (early return before lock)
-        # Since we're using a mock, we can't easily verify this, but the test
-        # ensures the code path works
+        with patch(
+            "mcp_fuzzer.transport.drivers.stdio_driver.asyncio.create_subprocess_exec",
+            new=AsyncMock(),
+        ) as mock_create:
+            # Should return immediately without locking
+            await self.transport._ensure_connection()
+            mock_create.assert_not_called()
 
     @pytest.mark.skipif(
         sys.platform != "win32",
@@ -576,8 +576,8 @@ class TestStdioDriver:
                         mock_kill.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_ensure_connection_fallback_termination_unix(self):
-        """Test fallback process termination on Unix when process manager fails."""
+    async def test_ensure_connection_stop_process_exception_handling(self):
+        """Test _ensure_connection handles stop_process exceptions gracefully."""
         mock_process = MagicMock()
         mock_process.pid = 12345
         self.transport.process = mock_process
