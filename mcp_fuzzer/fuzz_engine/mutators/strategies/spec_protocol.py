@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,6 +19,11 @@ from .schema_helpers import apply_schema_edge_cases, apply_semantic_combos
 from .schema_parser import make_fuzz_strategy_from_jsonschema
 
 _SCHEMA_CACHE: dict[str, dict[str, Any]] = {}
+
+
+def clear_schema_cache() -> None:
+    """Clear the in-memory schema cache."""
+    _SCHEMA_CACHE.clear()
 
 
 def _schema_version_or_env(version: str | None) -> str | None:
@@ -52,7 +58,15 @@ _PROTOCOL_TYPE_OVERRIDES = {
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[4]
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (
+            (parent / "pyproject.toml").exists()
+            or (parent / ".git").exists()
+            or (parent / "setup.cfg").exists()
+        ):
+            return parent
+    return current.parents[4] if len(current.parents) > 4 else current.parent
 
 
 def _schema_root() -> Path:
@@ -65,11 +79,15 @@ def _schema_root() -> Path:
 def _latest_schema_version(root: Path) -> str | None:
     if not root.exists():
         return None
-    versions = sorted(
-        (p.name for p in root.iterdir() if p.is_dir()),
-        reverse=True,
-    )
-    return versions[0] if versions else None
+    versions = [p.name for p in root.iterdir() if p.is_dir()]
+    if not versions:
+        return None
+
+    def _version_key(name: str) -> tuple[tuple[int, ...], str]:
+        parts = tuple(int(part) for part in re.findall(r"\d+", name))
+        return (parts, name)
+
+    return max(versions, key=_version_key)
 
 
 def _schema_path(version: str | None) -> Path:

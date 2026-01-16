@@ -424,6 +424,12 @@ def _handle_string_format(format_type: str, phase: str) -> str:
         domain = random.choice(domains)
         path = random.choice(paths)
         return f"{scheme}://{domain}{path}"
+    elif format_type == "time":
+        # RFC 3339 time format (HH:MM:SS)
+        hour = random.randint(0, 23)
+        minute = random.randint(0, 59)
+        second = random.randint(0, 59)
+        return f"{hour:02d}:{minute:02d}:{second:02d}"
     elif format_type == "ipv4":
         # IPv4 format
         def _ipv4() -> str:

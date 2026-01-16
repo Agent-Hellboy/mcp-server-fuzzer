@@ -6,7 +6,7 @@ Unit tests for spec_protocol.py module.
 import os
 import json
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 import pytest
 
 from mcp_fuzzer.fuzz_engine.mutators.strategies.spec_protocol import (

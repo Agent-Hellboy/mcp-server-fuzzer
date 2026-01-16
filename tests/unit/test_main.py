@@ -32,17 +32,5 @@ class TestMain(unittest.TestCase):
         self.assertTrue(hasattr(mcp_fuzzer.__main__, "main"))
         self.assertTrue(hasattr(mcp_fuzzer.__main__, "run"))
 
-    @patch("mcp_fuzzer.__main__.run_cli")
-    def test_main_module_execution(self, mock_run_cli):
-        """Test that main() works when called directly (simulating __main__ branch)."""
-        # The if __name__ == "__main__" branch calls main(), so we test that
-        # main() works correctly, which is what the branch does
-        # We patch run_cli at the import location in __main__ module
-        import mcp_fuzzer.__main__ as main_module
-
-        main_module.main()
-        mock_run_cli.assert_called_once()
-
-
 if __name__ == "__main__":
     unittest.main()

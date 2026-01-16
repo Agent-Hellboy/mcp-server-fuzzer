@@ -10,6 +10,7 @@ from mcp_fuzzer.safety_system.reporting.events import (
     BlockedOperation,
     DangerousArgument,
     SafetyEventLogger,
+    _truncate,
 )
 
 
@@ -203,15 +204,11 @@ class TestTruncate:
 
     def test_truncate_short_string(self):
         """Test _truncate with short string."""
-        from mcp_fuzzer.safety_system.reporting.events import _truncate
-
         result = _truncate("short")
         assert result == "short"
 
     def test_truncate_long_string(self):
         """Test _truncate truncates long strings."""
-        from mcp_fuzzer.safety_system.reporting.events import _truncate
-
         long_string = "a" * 150
         result = _truncate(long_string)
         assert len(result) == 103
@@ -220,16 +217,12 @@ class TestTruncate:
 
     def test_truncate_exact_limit(self):
         """Test _truncate with string at exact limit."""
-        from mcp_fuzzer.safety_system.reporting.events import _truncate
-
         exact_string = "a" * 100
         result = _truncate(exact_string)
         assert result == exact_string
 
     def test_truncate_custom_limit(self):
         """Test _truncate with custom limit."""
-        from mcp_fuzzer.safety_system.reporting.events import _truncate
-
         long_string = "a" * 50
         result = _truncate(long_string, limit=30)
         assert len(result) == 33

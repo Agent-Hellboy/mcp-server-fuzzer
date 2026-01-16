@@ -4,6 +4,7 @@ Unit tests for HttpDriver.
 """
 
 import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -64,11 +65,6 @@ async def test_send_request_success(monkeypatch):
     assert client.post_calls
 
 
-@pytest.mark.skip(
-    reason="Test isolation issue: passes individually but may fail in full suite. "
-    "The redirect behavior is covered by integration tests. "
-    "The design has been improved to use module namespace access for easier testing."
-)
 @pytest.mark.asyncio
 async def test_send_raw_with_redirect(monkeypatch):
     first = FakeResponse(
@@ -86,12 +82,10 @@ async def test_send_raw_with_redirect(monkeypatch):
     monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
     monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
     
-    # Patch resolve_redirect_safely through the module namespace (now much easier)
-    import mcp_fuzzer.safety_system.policy as safety_policy
-    monkeypatch.setattr(
-        safety_policy,
-        "resolve_redirect_safely",
-        lambda base, location: location,
+    monkeypatch.setitem(
+        driver._resolve_redirect_url.__globals__,
+        "safety_policy",
+        SimpleNamespace(resolve_redirect_safely=lambda base, location: location),
     )
 
     result = await driver.send_raw({"jsonrpc": "2.0", "method": "x"})

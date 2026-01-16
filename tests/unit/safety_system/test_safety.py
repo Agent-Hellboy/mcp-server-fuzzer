@@ -403,7 +403,7 @@ def test_should_skip_tool_call_with_mixed_types(safety_filter):
 
     # Fuzzing inputs should not be blocked
     result = safety_filter.should_skip_tool_call("test_tool", mixed_args)
-    assert not result  # Should be blocked due to dangerous content
+    assert not result  # Fuzzing inputs should not be blocked
 
 
 # Test cases for convenience behaviors

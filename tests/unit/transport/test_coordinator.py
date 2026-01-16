@@ -3,6 +3,7 @@
 Unit tests for TransportCoordinator.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -159,20 +160,20 @@ async def test_call_tool_uses_jsonrpc_helper():
     coordinator._jsonrpc_helper.set_transport.assert_called_once_with(transport)
 
 
-def test_list_available_transports():
+def test_list_available_transports(monkeypatch):
     coordinator = TransportCoordinator()
 
-    # Test that the method calls driver_catalog.list_transports() and returns the result
-    # We verify it returns a dict with transport information
+    expected = {"stdio": {"name": "stdio"}}
+    fake_catalog = SimpleNamespace(list_transports=lambda include_custom=True: expected)
+    monkeypatch.setitem(
+        coordinator.list_available_transports.__globals__,
+        "driver_catalog",
+        fake_catalog,
+    )
+
     result = coordinator.list_available_transports()
 
-    # Verify it returns a dictionary
-    assert isinstance(result, dict)
-    # Verify it contains at least the stdio transport (built-in)
-    assert "stdio" in result
-    # Verify the stdio transport has the expected structure
-    assert isinstance(result["stdio"], dict)
-    assert "name" in result["stdio"] or "class" in result["stdio"]
+    assert result == expected
 
 
 @pytest.mark.asyncio

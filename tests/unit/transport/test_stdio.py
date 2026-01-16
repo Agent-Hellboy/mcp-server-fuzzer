@@ -549,9 +549,7 @@ class TestStdioDriver:
     @pytest.mark.asyncio
     async def test_ensure_connection_fallback_termination_windows(self):
         """Test fallback process termination on Windows."""
-        mock_process = MagicMock()
-        # Remove pid attribute so hasattr returns False and we hit the fallback path
-        delattr(mock_process, "pid")
+        mock_process = MagicMock(spec=["send_signal", "kill"])
         self.transport.process = mock_process
         self.transport._initialized = True
         self.transport.process_manager.stop_process = AsyncMock()

@@ -22,6 +22,11 @@ class DummyTransport:
     async def send_notification(
         self, method: str, params: object | None = None
     ) -> None:
+        if method not in self.responses:
+            raise AssertionError(f"Unexpected notification: {method}")
+        response = self.responses[method]
+        if isinstance(response, Exception):
+            raise response
         self.notifications.append(method)
 
 
@@ -86,6 +91,7 @@ async def test_run_spec_suite_success_flow(monkeypatch):
             }
         },
         "ping": {},
+        "notifications/initialized": None,
         "tools/list": {"tools": [{"name": "alpha", "inputSchema": {"required": []}}]},
         "tools/call": {"result": "ok"},
         "resources/list": {"resources": []},
@@ -124,8 +130,12 @@ async def test_run_spec_suite_handles_tool_list_failure(monkeypatch):
     responses = {
         "initialize": {"capabilities": {"tools": True}},
         "ping": {},
+        "notifications/initialized": None,
         "tools/list": RuntimeError("boom"),
     }
     transport = DummyTransport(responses)
     checks = await runner.run_spec_suite(transport)
-    assert any(entry["scope"] == "tools-list" for entry in checks)
+    assert any(
+        isinstance(entry, dict) and entry.get("scope") == "tools-list"
+        for entry in checks
+    )

@@ -24,6 +24,28 @@ class FakeResponse:
             yield line
 
 
+class MockClientContext:
+    """Mock async context manager for httpx client."""
+
+    def __init__(self, client):
+        self.client = client
+
+    async def __aenter__(self):
+        return self.client
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+def create_mock_client_factory(client):
+    """Factory to create mock _create_http_client replacement."""
+
+    def mock_create_client(timeout):
+        return MockClientContext(client)
+
+    return mock_create_client
+
+
 def test_prepare_headers_with_session():
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
     driver.session_id = "sid"
@@ -53,17 +75,19 @@ def test_extract_protocol_version_from_result():
     assert driver.protocol_version == "v"
 
 
-@pytest.mark.skip(
-    reason=(
-        "Test isolation issue: resolve_redirect requires patching "
-        "resolve_redirect_safely which can be affected by test execution order. "
-        "This functionality is better covered by integration tests."
-    )
-)
 def test_resolve_redirect(monkeypatch):
     """Test resolve_redirect method."""
-    # This test is skipped - functionality is covered in integration tests
-    pass
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    response = FakeResponse(status_code=307, headers={"location": "http://redirect"})
+    monkeypatch.setitem(
+        driver._resolve_redirect.__globals__,
+        "resolve_redirect_safely",
+        lambda base, location: location,
+    )
+
+    result = driver._resolve_redirect(response)
+
+    assert result == "http://redirect"
 
 
 @pytest.mark.asyncio
@@ -243,19 +267,9 @@ async def test_send_client_response_with_redirect(monkeypatch):
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
 
-    # Create an async context manager that returns the client
-    class MockClientContext:
-        def __init__(self, client):
-            self.client = client
-        async def __aenter__(self):
-            return self.client
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    def mock_create_client(timeout):
-        return MockClientContext(client)
-
-    monkeypatch.setattr(driver, "_create_http_client", mock_create_client)
+    monkeypatch.setattr(
+        driver, "_create_http_client", create_mock_client_factory(client)
+    )
     monkeypatch.setattr(
         driver, "_resolve_redirect", lambda resp: "http://redirect"
     )
@@ -277,19 +291,9 @@ async def test_send_client_response_with_safety(monkeypatch):
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
 
-    # Create an async context manager that returns the client
-    class MockClientContext:
-        def __init__(self, client):
-            self.client = client
-        async def __aenter__(self):
-            return self.client
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-    def mock_create_client(timeout):
-        return MockClientContext(client)
-
-    monkeypatch.setattr(driver, "_create_http_client", mock_create_client)
+    monkeypatch.setattr(
+        driver, "_create_http_client", create_mock_client_factory(client)
+    )
     monkeypatch.setattr(driver, "_validate_network_request", lambda url: None)
     monkeypatch.setattr(driver, "_resolve_redirect", lambda resp: None)
     monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)

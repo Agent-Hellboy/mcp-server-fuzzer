@@ -133,7 +133,7 @@ def test_generate_aggressive_text_html_entities(monkeypatch):
     monkeypatch.setattr(ts.random, "randint", lambda a, b: 2)
 
     result = ts.generate_aggressive_text()
-    assert len(result) >= 2
+    assert result == "&lt;&gt;"
 
 
 def test_generate_aggressive_text_sql_injection(monkeypatch):
@@ -209,7 +209,7 @@ def test_generate_aggressive_text_fallback(monkeypatch):
 
 def test_generate_aggressive_integer_normal(monkeypatch):
     """Test normal integer strategy."""
-    choices = iter(["normal", 42])
+    choices = iter(["normal"])
     monkeypatch.setattr(ts.random, "choice", lambda seq: next(choices))
     monkeypatch.setattr(ts.random, "randint", lambda a, b: 42)
 
