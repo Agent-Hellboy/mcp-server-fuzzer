@@ -30,9 +30,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        # Include testing-servers submodule if it exists
-        submodules: recursive
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -49,30 +46,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .
 
-    - name: Setup DesktopCommanderMCP
-      run: |
-        # Ensure testing-servers directory exists
-        mkdir -p testing-servers
-
-        # Check if DesktopCommanderMCP exists, if not clone it
-        if [ ! -d "testing-servers/DesktopCommanderMCP" ]; then
-          echo "Cloning DesktopCommanderMCP..."
-          git clone https://github.com/wonderwhy-er/DesktopCommanderMCP.git testing-servers/DesktopCommanderMCP
-        else
-          echo "DesktopCommanderMCP already exists, using existing copy"
-        fi
-
-        # Install dependencies and build
-        cd testing-servers/DesktopCommanderMCP
-        npm install --ignore-scripts
-        npm run build
-
-        # Verify build was successful
-        if [ ! -f "dist/index.js" ]; then
-          echo "Build failed - dist/index.js not found"
-          exit 1
-        fi
-        echo "DesktopCommanderMCP built successfully"
 
     - name: Create test output directory
       run: mkdir -p test-results
@@ -95,7 +68,6 @@ jobs:
         echo "Test Mode: $TEST_MODE"
         echo "Runs per tool: $RUNS_PER_TOOL"
         echo "Working Directory: $(pwd)"
-        echo "DesktopCommanderMCP Path: $(ls -la testing-servers/DesktopCommanderMCP/dist/index.js)"
 
         # Create sandbox directory
         mkdir -p /tmp/mcp_fuzzer_sandbox
@@ -104,9 +76,9 @@ jobs:
         python --version
         node --version
 
-        # Run the e2e test
-        chmod +x tests/e2e/test_desktop_commander_mcp.sh
-        ./tests/e2e/test_desktop_commander_mcp.sh
+        # Run the everything server e2e test
+        chmod +x tests/e2e/test_everything_server.sh
+        ./tests/e2e/test_everything_server.sh
 
     - name: Ensure workspace exists
       if: always()

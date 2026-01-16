@@ -1,52 +1,41 @@
 """
-MCP Fuzzer Strategy Module
+Strategy Module
 
-This module contains all Hypothesis-based data generation strategies for fuzzing
-MCP tools and protocol types. The strategy system is organized into two phases:
-
-- realistic/: Strategies for generating valid, expected data to test functionality
-- aggressive/: Strategies for generating malicious, malformed data to test security
+This module provides unified interfaces for managing fuzzing strategies.
 """
 
-# Import main strategy classes
-from .strategy_manager import ProtocolStrategies, ToolStrategies
-
-# Import realistic strategies
 from .realistic import (
     base64_strings,
     uuid_strings,
     timestamp_strings,
-    generate_realistic_text,
-    fuzz_tool_arguments_realistic,
     json_rpc_id_values,
     method_names,
     protocol_version_strings,
-    fuzz_initialize_request_realistic,
+    generate_realistic_text,
+    fuzz_tool_arguments_realistic,
 )
 
-# Import aggressive strategies
 from .aggressive import (
-    generate_aggressive_text,
     fuzz_tool_arguments_aggressive,
-    fuzz_initialize_request_aggressive,
 )
+
+from .strategy_manager import ProtocolStrategies, ToolStrategies
+from .spec_protocol import get_spec_protocol_fuzzer_method
 
 __all__ = [
-    # Main strategy classes
-    "ProtocolStrategies",
-    "ToolStrategies",
     # Realistic strategies
     "base64_strings",
     "uuid_strings",
     "timestamp_strings",
-    "generate_realistic_text",
-    "fuzz_tool_arguments_realistic",
     "json_rpc_id_values",
     "method_names",
     "protocol_version_strings",
-    "fuzz_initialize_request_realistic",
+    "generate_realistic_text",
+    "fuzz_tool_arguments_realistic",
     # Aggressive strategies
-    "generate_aggressive_text",
     "fuzz_tool_arguments_aggressive",
-    "fuzz_initialize_request_aggressive",
+    # Unified interfaces
+    "ProtocolStrategies",
+    "ToolStrategies",
+    "get_spec_protocol_fuzzer_method",
 ]

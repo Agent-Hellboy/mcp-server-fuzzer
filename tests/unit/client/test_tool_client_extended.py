@@ -75,7 +75,7 @@ class TestGetToolsFromServer:
         )
         
         with patch(
-            "mcp_fuzzer.client.tool_client.check_tool_schema_fields"
+            "mcp_fuzzer.spec_guard.check_tool_schema_fields"
         ) as mock_check:
             mock_check.return_value = [{"status": "FAIL", "message": "Missing schema"}]
             await tool_client._get_tools_from_server()

@@ -89,3 +89,67 @@ def test_load_config_file_none_yaml_result(tmp_path):
 
     result = load_config_file(str(comment_file))
     assert result == {}
+
+
+def test_load_config_file_non_dict_top_level(tmp_path):
+    """Test that non-dict top-level config raises ConfigFileError."""
+    config_path = tmp_path / "invalid.yaml"
+    config_path.write_text("- item1\n- item2")  # List instead of dict
+
+    with pytest.raises(ConfigFileError, match="must be a mapping/object"):
+        load_config_file(str(config_path))
+
+
+def test_load_config_file_output_dir_deprecation(tmp_path, caplog):
+    """Test that output_dir key triggers deprecation warning and migration."""
+    import logging
+
+    caplog.set_level(logging.WARNING)
+    config_path = tmp_path / "deprecated.yaml"
+    config_path.write_text("output_dir: /tmp/output\nother: value")
+
+    result = load_config_file(str(config_path))
+
+    assert "output_dir" not in result
+    assert "output" in result
+    assert result["output"]["directory"] == "/tmp/output"
+    assert result["other"] == "value"
+    assert "deprecated" in caplog.text.lower()
+
+
+def test_load_config_file_output_dir_with_existing_output(tmp_path):
+    """Test output_dir migration when output section already exists."""
+    config_path = tmp_path / "migration.yaml"
+    config_path.write_text("output_dir: /old\noutput:\n  format: json")
+
+    result = load_config_file(str(config_path))
+
+    assert "output_dir" not in result
+    assert result["output"]["directory"] == "/old"
+    assert result["output"]["format"] == "json"
+
+
+def test_load_config_file_output_dir_invalid_output_section(tmp_path, caplog):
+    """Test output_dir migration when output section is not a dict."""
+    import logging
+
+    caplog.set_level(logging.WARNING)
+    config_path = tmp_path / "invalid_output.yaml"
+    config_path.write_text("output_dir: /tmp\noutput: invalid")
+
+    result = load_config_file(str(config_path))
+
+    assert "output" in result
+    assert isinstance(result["output"], dict)
+    assert result["output"]["directory"] == "/tmp"
+    assert "must be a mapping" in caplog.text.lower()
+
+
+def test_load_config_file_unexpected_exception(tmp_path):
+    """Test that unexpected exceptions are wrapped in ConfigFileError."""
+    config_path = tmp_path / "test.yaml"
+    config_path.write_text("key: value")
+
+    with patch("builtins.open", side_effect=OSError("Unexpected error")):
+        with pytest.raises(ConfigFileError, match="Unexpected error"):
+            load_config_file(str(config_path))

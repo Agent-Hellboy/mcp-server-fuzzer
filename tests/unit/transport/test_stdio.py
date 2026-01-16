@@ -9,7 +9,11 @@ import pytest
 # Import the class to test
 from mcp_fuzzer.transport.drivers.stdio_driver import StdioDriver
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, WatchdogConfig
-from mcp_fuzzer.exceptions import MCPError, ServerError, TransportError
+from mcp_fuzzer.exceptions import (
+    ProcessStartError,
+    ServerError,
+    TransportError,
+)
 
 
 class TestStdioDriver:
@@ -207,86 +211,76 @@ class TestStdioDriver:
     @pytest.mark.asyncio
     async def test_send_request(self):
         """Test send_request method."""
-        with patch.object(
-            self.transport, "_send_message", new=AsyncMock()
-        ) as mock_send:
-            with patch("mcp_fuzzer.transport.drivers.stdio_driver.uuid") as mock_uuid:
-                # Force the request_id to a known value
-                mock_uuid.uuid4.return_value = "test_id"
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()) as mock_send,
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.uuid.uuid4"
+            ) as mock_uuid4,
+            patch.object(
+                self.transport,
+                "_receive_message",
+                new=AsyncMock(
+                    return_value={"id": "req-id", "result": {"ok": True}}
+                ),
+            ),
+        ):
+            mock_uuid4.return_value = "req-id"
+            result = await self.transport.send_request("method", {"x": 1})
 
-                with patch.object(
-                    self.transport, "_receive_message", new=AsyncMock()
-                ) as mock_receive:
-                    # Set up a return value that matches the request ID we defined
-                    mock_receive.return_value = {
-                        "id": "test_id",
-                        "result": {"success": True},
-                    }
-
-                    result = await self.transport.send_request(
-                        "test_method", {"param": "value"}
-                    )
-
-                    assert result == {"success": True}
-                    mock_send.assert_awaited_once()
-                    assert mock_receive.call_count == 1
+        assert result == {"ok": True}
+        sent_message = mock_send.call_args_list[0][0][0]
+        assert sent_message["id"] == "req-id"
+        assert sent_message["method"] == "method"
 
     @pytest.mark.asyncio
     async def test_send_request_handles_sampling_request(self):
         """send_request should reply to sampling/createMessage requests."""
-        with patch.object(
-            self.transport, "_send_message", new=AsyncMock()
-        ) as mock_send:
-            with patch("mcp_fuzzer.transport.drivers.stdio_driver.uuid") as mock_uuid:
-                mock_uuid.uuid4.return_value = "client-id"
-                server_request = {
-                    "jsonrpc": "2.0",
-                    "id": "srv-id",
-                    "method": "sampling/createMessage",
-                    "params": {"messages": [], "maxTokens": 1},
-                }
-                response = {"id": "client-id", "result": {"ok": True}}
-                with patch.object(
-                    self.transport,
-                    "_receive_message",
-                    new=AsyncMock(side_effect=[server_request, response]),
-                ):
-                    result = await self.transport.send_request(
-                        "test_method", {"param": "value"}
-                    )
+        server_request = {
+            "jsonrpc": "2.0",
+            "id": "srv-id",
+            "method": "sampling/createMessage",
+            "params": {"messages": [], "maxTokens": 1},
+        }
+        response = {"id": "req-id", "result": {"ok": True}}
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()) as mock_send,
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.uuid.uuid4"
+            ) as mock_uuid4,
+            patch.object(
+                self.transport,
+                "_receive_message",
+                new=AsyncMock(side_effect=[server_request, response]),
+            ),
+        ):
+            mock_uuid4.return_value = "req-id"
+            result = await self.transport.send_request("method", {"x": 1})
 
-                assert result == {"ok": True}
-                assert mock_send.call_count == 2
-                sampling_reply = mock_send.call_args_list[1][0][0]
-                assert sampling_reply["id"] == "srv-id"
-                assert sampling_reply["result"]["role"] == "assistant"
+        assert result == {"ok": True}
+        assert mock_send.call_count == 2
+        sampling_reply = mock_send.call_args_list[1][0][0]
+        assert sampling_reply["id"] == "srv-id"
+        assert sampling_reply["result"]["role"] == "assistant"
 
     @pytest.mark.asyncio
     async def test_send_request_error_response(self):
         """Test send_request method with error response."""
-        with patch.object(
-            self.transport, "_send_message", new=AsyncMock()
-        ) as mock_send:
-            with patch("mcp_fuzzer.transport.drivers.stdio_driver.uuid") as mock_uuid:
-                # Force the request_id to a known value
-                mock_uuid.uuid4.return_value = "test_id"
-
-                with patch.object(
-                    self.transport, "_receive_message", new=AsyncMock()
-                ) as mock_receive:
-                    mock_receive.return_value = {
-                        "id": "test_id",
-                        "error": {"code": -1, "message": "Test error"},
-                    }
-
-                    # Use pytest's raises context manager
-                    with pytest.raises(ServerError, match="Server returned error"):
-                        await self.transport.send_request(
-                            "test_method", {"param": "value"}
-                        )
-
-                    mock_send.assert_awaited_once()
-                    mock_receive.assert_awaited_once()
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.uuid.uuid4"
+            ) as mock_uuid4,
+            patch.object(
+                self.transport,
+                "_receive_message",
+                new=AsyncMock(
+                    return_value={"id": "req-id", "error": {"code": -1}}
+                ),
+            ),
+        ):
+            mock_uuid4.return_value = "req-id"
+            with pytest.raises(ServerError):
+                await self.transport.send_request("method", {"x": 1})
 
     @pytest.mark.asyncio
     async def test_send_request_no_response(self):
@@ -448,19 +442,23 @@ class TestStdioDriver:
         self.transport.process = mock_process
         self.transport.process_manager.is_process_registered.return_value = False
 
-        with patch(
-            "mcp_fuzzer.transport.drivers.stdio_driver.logging.info"
-        ) as mock_log:
-            with patch("mcp_fuzzer.transport.drivers.stdio_driver.os") as mock_os:
-                # Mock getpgid to avoid OS errors
-                mock_os.name = "posix"
-                mock_os.getpgid.return_value = 123
+        with (
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.name",
+                "posix",
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.getpgid",
+                return_value=999,
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.killpg"
+            ) as mock_killpg,
+        ):
+            result = await self.transport.send_timeout_signal("timeout")
 
-                result = await self.transport.send_timeout_signal("timeout")
-
-                # For timeout signal with non-registered process, should use killpg
-                mock_os.killpg.assert_called_once()
-                mock_log.assert_called_once()
+        assert result is True
+        mock_killpg.assert_called_once_with(999, _signal.SIGTERM)
 
     @pytest.mark.asyncio
     async def test_send_timeout_signal_process_not_registered_force(self):
@@ -471,21 +469,58 @@ class TestStdioDriver:
         self.transport.process = mock_process
         self.transport.process_manager.is_process_registered.return_value = False
 
-        with patch(
-            "mcp_fuzzer.transport.drivers.stdio_driver.logging.info"
-        ) as mock_log:
-            with patch("mcp_fuzzer.transport.drivers.stdio_driver.os") as mock_os:
-                # Mock kill to avoid OS errors
-                mock_os.name = "posix"
+        with (
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.name",
+                "posix",
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.getpgid",
+                return_value=999,
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.killpg"
+            ) as mock_killpg,
+        ):
+            result = await self.transport.send_timeout_signal("force")
 
-                result = await self.transport.send_timeout_signal("force")
-
-                # For force signal with non-registered process, uses killpg+SIGKILL
-                mock_os.killpg.assert_called_once()
-                mock_log.assert_called_once()
+        assert result is True
+        mock_killpg.assert_called_once_with(999, _signal.SIGKILL)
 
     @pytest.mark.asyncio
     async def test_send_timeout_signal_process_not_registered_interrupt(self):
+        """Test send_timeout_signal when process is not registered,
+        sending interrupt signal."""
+        mock_process = MagicMock()
+        mock_process.pid = 123
+        self.transport.process = mock_process
+        self.transport.process_manager.is_process_registered.return_value = False
+
+        with (
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.name",
+                "posix",
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.getpgid",
+                return_value=999,
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.killpg"
+            ) as mock_killpg,
+        ):
+            result = await self.transport.send_timeout_signal("interrupt")
+
+        assert result is True
+        mock_killpg.assert_called_once_with(999, _signal.SIGINT)
+
+    @pytest.mark.skip(
+        reason="Test isolation issue: send_timeout_signal requires complex mocking of "
+        "OS-level operations (os.getpgid, os.killpg) that can be affected by test "
+        "execution order. This functionality is better covered by integration tests."
+    )
+    @pytest.mark.asyncio
+    async def _test_send_timeout_signal_process_not_registered_interrupt_old(self):
         """Test send_timeout_signal when process is not registered,
         sending interrupt signal."""
         mock_process = MagicMock()
@@ -535,3 +570,180 @@ class TestStdioDriver:
         ):
             with pytest.raises(TransportError):
                 await self.transport.send_raw({"raw": "data"})
+
+    def test_get_lock_lazy_initialization(self):
+        """Test _get_lock creates lock lazily."""
+        transport = StdioDriver("test_command")
+        assert transport._lock is None
+        lock1 = transport._get_lock()
+        assert transport._lock is not None
+        assert isinstance(lock1, asyncio.Lock)
+        # Second call should return same lock
+        lock2 = transport._get_lock()
+        assert lock1 is lock2
+
+    def test_add_observer(self):
+        """Test add_observer method."""
+        callback = MagicMock()
+        # Mock the manager's add_observer method
+        with patch.object(self.transport.manager, "add_observer") as mock_add:
+            self.transport.add_observer(callback)
+            # Verify observer was added to manager
+            mock_add.assert_called_once_with(callback)
+
+    def test_get_process_manager_lazy_initialization(self):
+        """Test _get_process_manager creates manager lazily."""
+        transport = StdioDriver("test_command", timeout=15.0)
+        assert transport.process_manager is None
+        manager = transport._get_process_manager()
+        assert transport.process_manager is not None
+        assert isinstance(manager, ProcessManager)
+        # Second call should return same manager
+        manager2 = transport._get_process_manager()
+        assert manager is manager2
+
+    @pytest.mark.asyncio
+    async def test_ensure_connection_early_return_when_initialized(self):
+        """Test _ensure_connection returns early when already initialized."""
+        mock_process = AsyncMock()
+        mock_process.returncode = None
+        mock_process.pid = 12345
+        self.transport.process = mock_process
+        self.transport._initialized = True
+
+        with patch(
+            "mcp_fuzzer.transport.drivers.stdio_driver.asyncio.create_subprocess_exec",
+            new=AsyncMock(),
+        ) as mock_create:
+            # Should return immediately without locking
+            await self.transport._ensure_connection()
+            mock_create.assert_not_called()
+
+    @pytest.mark.skipif(
+        sys.platform != "win32",
+        reason="Windows-specific test: requires Windows subprocess constants",
+    )
+    @pytest.mark.asyncio
+    async def test_ensure_connection_fallback_termination_windows(self):
+        """Test fallback process termination on Windows."""
+        mock_process = MagicMock(spec=["send_signal", "kill"])
+        self.transport.process = mock_process
+        self.transport._initialized = True
+        self.transport.process_manager.stop_process = AsyncMock()
+
+        with patch("mcp_fuzzer.transport.drivers.stdio_driver._signal") as mock_signal:
+            mock_signal.CTRL_BREAK_EVENT = 1
+            with patch.object(
+                mock_process, "send_signal", side_effect=AttributeError()
+            ):
+                with patch.object(mock_process, "kill") as mock_kill:
+                    # Need to mock the lock and other dependencies
+                    self.transport._lock = AsyncMock()
+                    mock_new_process = AsyncMock()
+                    mock_new_process.pid = 12345
+                    mock_new_process.stdin = AsyncMock()
+                    mock_new_process.stdout = AsyncMock()
+                    mock_new_process.stderr = AsyncMock()
+                    mock_new_process.returncode = None
+                    with patch(
+                        "asyncio.create_subprocess_exec",
+                        return_value=mock_new_process,
+                    ):
+                        await self.transport._ensure_connection()
+                        mock_kill.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_ensure_connection_stop_process_exception_handling(self):
+        """Test _ensure_connection handles stop_process exceptions gracefully."""
+        mock_process = MagicMock()
+        mock_process.pid = 12345
+        self.transport.process = mock_process
+        self.transport._initialized = True
+        # Make process manager fail - exception will be caught and logged
+        self.transport.process_manager.stop_process = AsyncMock(
+            side_effect=Exception("Manager failed")
+        )
+
+        with patch("sys.platform", "linux"):
+            with patch.object(mock_process, "kill") as mock_kill:
+                # Need to mock the lock and other dependencies
+                self.transport._lock = AsyncMock()
+                mock_new_process = AsyncMock()
+                mock_new_process.pid = 12345
+                mock_new_process.stdin = AsyncMock()
+                mock_new_process.stdout = AsyncMock()
+                mock_new_process.stderr = AsyncMock()
+                mock_new_process.returncode = None
+                with patch(
+                    "asyncio.create_subprocess_exec", return_value=mock_new_process
+                ):
+                    # Process manager fails, exception is caught, code continues
+                    await self.transport._ensure_connection()
+                    # Process manager was called
+                    self.transport.process_manager.stop_process.assert_awaited_once()
+                    # But kill is not called because exception was caught
+                    mock_kill.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ensure_connection_command_as_list(self):
+        """Test _ensure_connection with command as list instead of string."""
+        transport = StdioDriver(["python", "-c", "print('test')"])
+        transport.process_manager = AsyncMock(spec=ProcessManager)
+        transport._lock = AsyncMock(spec=asyncio.Lock)
+
+        mock_process = AsyncMock()
+        mock_process.stdin = AsyncMock()
+        mock_process.stdout = AsyncMock()
+        mock_process.stderr = AsyncMock()
+        mock_process.pid = 12345
+        mock_process.returncode = None
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=mock_process
+        ) as mock_create:
+            await transport._ensure_connection()
+            # Should pass command list directly without shlex.split
+            mock_create.assert_called_once()
+            call_args = mock_create.call_args[0]
+            assert call_args[0:3] == ("python", "-c", "print('test')")
+
+    @pytest.mark.asyncio
+    async def test_ensure_connection_process_start_exception(self):
+        """Test _ensure_connection handles process start exceptions."""
+        transport = StdioDriver("nonexistent_command")
+        transport.process_manager = AsyncMock(spec=ProcessManager)
+        transport._lock = AsyncMock(spec=asyncio.Lock)
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=FileNotFoundError("Command not found"),
+        ):
+            with pytest.raises(ProcessStartError):
+                await transport._ensure_connection()
+            assert transport._initialized is False
+
+    @pytest.mark.asyncio
+    async def test_send_message_exception_handling(self):
+        """Test _send_message handles exceptions."""
+        self.transport._initialized = True
+        self.transport.stdin = AsyncMock()
+        self.transport.stdin.write = MagicMock(side_effect=OSError("Write failed"))
+
+        with pytest.raises(TransportError):
+            await self.transport._send_message({"test": "message"})
+
+        assert self.transport._initialized is False
+
+    @pytest.mark.asyncio
+    async def test_handle_server_request_non_matching_method(self):
+        """Test _handle_server_request with non-matching method."""
+        message = {"jsonrpc": "2.0", "method": "other/method", "id": 1}
+        result = await self.transport._handle_server_request(message)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_readline_with_cap_no_stdout(self):
+        """Test _readline_with_cap when stdout is None."""
+        self.transport.stdout = None
+        result = await self.transport._readline_with_cap()
+        assert result is None

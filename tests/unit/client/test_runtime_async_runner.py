@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_fuzzer.client.runtime.async_runner import execute_inner_client
+from mcp_fuzzer.client.runtime.async_runner import execute_inner_client, AsyncRunner
 from mcp_fuzzer.client.runtime.retry import run_with_retry_on_interrupt
 from mcp_fuzzer.client.safety import SafetyController
 
@@ -71,6 +71,48 @@ def test_execute_inner_client_handles_cancel(monkeypatch):
             execute_inner_client(args, dummy, ["prog"])
         except SystemExit as exc:
             assert exc.code == 130
+    loop.close()
+
+
+def test_async_runner_disables_aiomonitor_when_missing(monkeypatch):
+    args = MagicMock(enable_aiomonitor=True)
+    runner = AsyncRunner(args, SafetyController())
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.client.runtime.async_runner.importlib.util.find_spec",
+        lambda name: None,
+    )
+
+    runner._setup_aiomonitor()
+
+    assert args.enable_aiomonitor is False
+
+
+def test_async_runner_cleanup_pending_tasks_timeout(monkeypatch):
+    args = MagicMock()
+    runner = AsyncRunner(args, SafetyController())
+    loop = asyncio.new_event_loop()
+    runner.loop = loop
+
+    mock_task = MagicMock()
+    mock_task.done.return_value = False
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.client.runtime.async_runner.asyncio.all_tasks",
+        lambda _loop: {mock_task},
+    )
+    monkeypatch.setattr(
+        "mcp_fuzzer.client.runtime.async_runner.asyncio.gather",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        "mcp_fuzzer.client.runtime.async_runner.asyncio.wait_for",
+        lambda *args, **kwargs: (_ for _ in ()).throw(asyncio.TimeoutError()),
+    )
+
+    runner._cleanup_pending_tasks()
+
+    assert mock_task.cancel.call_count >= 1
     loop.close()
 
 

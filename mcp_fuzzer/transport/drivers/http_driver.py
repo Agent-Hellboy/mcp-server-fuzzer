@@ -3,7 +3,7 @@ import logging
 import uuid
 import time
 import inspect
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, TYPE_CHECKING
 
 import httpx
 
@@ -13,14 +13,17 @@ from ..interfaces.behaviors import (
     ResponseParserBehavior,
     LifecycleBehavior,
 )
-from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+
+if TYPE_CHECKING:
+    from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+else:
+    ProcessManager = Any
+    WatchdogConfig = Any
 from ...config import (
     JSON_CONTENT_TYPE,
     DEFAULT_HTTP_ACCEPT,
 )
-from ...safety_system.policy import (
-    resolve_redirect_safely,
-)
+from ...safety_system import policy as safety_policy
 
 
 class HttpDriver(
@@ -79,6 +82,7 @@ class HttpDriver(
         # Initialize process manager for any subprocesses (like proxy servers)
         self._owns_process_manager = process_manager is None
         if process_manager is None:
+            from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
             watchdog_config = WatchdogConfig(
                 check_interval=1.0,
                 process_timeout=timeout,
@@ -114,7 +118,7 @@ class HttpDriver(
         location = response.headers.get("location")
         if not location:
             return None
-        resolved = resolve_redirect_safely(self.url, location)
+        resolved = safety_policy.resolve_redirect_safely(self.url, location)
         if not resolved:
             logging.warning("Refusing redirect that violates policy from %s", self.url)
         return resolved

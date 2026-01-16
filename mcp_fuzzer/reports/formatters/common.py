@@ -20,24 +20,21 @@ def normalize_report_data(
 def extract_tool_runs(
     tool_entry: Any,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    if isinstance(tool_entry, dict):
-        if "runs" in tool_entry:
-            runs = tool_entry.get("runs")
-            if isinstance(runs, list):
-                return runs, tool_entry
-        realistic = tool_entry.get("realistic")
-        aggressive = tool_entry.get("aggressive")
-        if isinstance(realistic, list) or isinstance(aggressive, list):
-            combined: list[dict[str, Any]] = []
-            if isinstance(realistic, list):
-                combined.extend(realistic)
-            if isinstance(aggressive, list):
-                combined.extend(aggressive)
-            return combined, tool_entry
-        return [], tool_entry
     if isinstance(tool_entry, list):
         return tool_entry, None
-    return [], None
+    if not isinstance(tool_entry, dict):
+        return [], None
+    runs = tool_entry.get("runs")
+    if isinstance(runs, list):
+        return runs, tool_entry
+    combined: list[dict[str, Any]] = []
+    realistic = tool_entry.get("realistic")
+    aggressive = tool_entry.get("aggressive")
+    if isinstance(realistic, list):
+        combined.extend(realistic)
+    if isinstance(aggressive, list):
+        combined.extend(aggressive)
+    return combined, tool_entry
 
 
 def calculate_tool_success_rate(

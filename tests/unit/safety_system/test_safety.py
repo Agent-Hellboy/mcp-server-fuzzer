@@ -98,8 +98,10 @@ def test_contains_dangerous_command_dangerous_patterns(safety_filter):
 
 
 def test_sanitize_string_argument_suspicious_detection(safety_filter):
-    """Test _sanitize_string_argument with suspicious content."""
-    # Test with suspicious argument names
+    """Test _sanitize_string_argument allows fuzzing inputs to pass through."""
+    # Test with suspicious argument names - these are fuzzing inputs and should
+    # pass through unchanged. The safety system protects against actual dangerous
+    # operations at the system level, not test data in arguments.
     suspicious_args = [
         ("url", "https://example.com"),
         ("browser", "firefox"),
@@ -109,7 +111,8 @@ def test_sanitize_string_argument_suspicious_detection(safety_filter):
 
     for arg_name, value in suspicious_args:
         result = safety_filter._sanitize_string_argument(arg_name, value)
-        assert "BLOCKED" in result
+        # Fuzzing inputs should pass through unchanged
+        assert result == value
 
 
 def test_sanitize_string_argument_safe_content(safety_filter):
@@ -137,16 +140,18 @@ def test_sanitize_value_complex_structures(safety_filter):
 
     result = safety_filter._sanitize_value("root", complex_value)
 
-    # Check that dangerous content was sanitized
-    assert result["config"]["nested"]["deep"]["url"] == "[BLOCKED_URL]"
+    # Fuzzing inputs (URLs, scripts, commands) should pass through unchanged
+    # The safety system protects against actual dangerous operations at the
+    # system level, not test data in arguments
+    assert result["config"]["nested"]["deep"]["url"] == "https://dangerous.com"
     assert result["config"]["nested"]["deep"]["safe"] == "value"
-    assert result["list"][0]["item"] == "[BLOCKED_COMMAND]"
+    assert result["list"][0]["item"] == "xdg-open file"
     assert result["list"][1] == "safe_item"
     assert result["list"][2] is None
     assert result["list"][3] == 42
     assert result["list"][4] is True
     assert result["mixed"][0] == "safe"
-    assert result["mixed"][1]["nested_url"] == "[BLOCKED_URL]"
+    assert result["mixed"][1]["nested_url"] == "http://malicious.org"
     assert result["mixed"][2] == 42
     assert result["mixed"][3] is True
 
@@ -172,14 +177,15 @@ def test_sanitize_value_simple_types(safety_filter):
 
 def test_should_skip_tool_call_complex_arguments(safety_filter):
     """Test should_skip_tool_call with complex argument structures."""
-    # Test with nested dangerous content
+    # Test with nested dangerous content - should NOT be blocked (fuzzing inputs)
     complex_args = {
         "config": {"url": "https://malicious.com", "safe": "value"},
         "commands": ["echo hello", "xdg-open file.pdf"],
         "nested": {"deep": {"dangerous": "http://evil.org"}},
     }
 
-    assert safety_filter.should_skip_tool_call("test_tool", complex_args)
+    # Fuzzing inputs should not be blocked
+    assert not safety_filter.should_skip_tool_call("test_tool", complex_args)
 
 
 def test_should_skip_tool_call_safe_arguments(safety_filter):
@@ -206,13 +212,14 @@ def test_should_skip_tool_call_empty_arguments(safety_filter):
 def test_should_skip_tool_call_with_list_arguments(safety_filter):
     """Test should_skip_tool_call with list arguments
     containing dangerous content."""
-    # Test with dangerous URL in list
+    # Test with dangerous URL in list - should NOT be blocked (fuzzing inputs)
     dangerous_list_args = {
         "urls": ["https://malicious.com", "safe_url"],
         "commands": ["echo hello", "xdg-open file.pdf"],
     }
 
-    assert safety_filter.should_skip_tool_call("test_tool", dangerous_list_args)
+    # Fuzzing inputs should not be blocked
+    assert not safety_filter.should_skip_tool_call("test_tool", dangerous_list_args)
 
     # Test with safe list arguments
     safe_list_args = {
@@ -245,10 +252,39 @@ def test_sanitize_tool_arguments_complex(safety_filter):
 
     result = safety_filter.sanitize_tool_arguments("test_tool", complex_args)
 
-    assert result["url"] == "[BLOCKED_URL]"
-    assert result["command"] == "[BLOCKED_COMMAND]"
+    # Fuzzing inputs should pass through unchanged
+    assert result["url"] == "https://dangerous.com"
+    assert result["command"] == "xdg-open file"
     assert result["safe"] == "value"
-    assert result["nested"]["dangerous"] == "[BLOCKED_URL]"
+    assert result["nested"]["dangerous"] == "http://evil.org"
+
+
+def test_set_fs_root_handles_initialize_failure():
+    """Test set_fs_root falls back to default sandbox when init fails."""
+    sandbox_provider = MagicMock()
+    sandbox_provider.initialize.side_effect = [Exception("boom"), None]
+    safety_filter = SafetyFilter(sandbox_provider=sandbox_provider)
+
+    safety_filter.set_fs_root("/tmp")
+
+    assert sandbox_provider.initialize.call_count == 2
+    sandbox_provider.initialize.assert_any_call("/tmp")
+    sandbox_provider.initialize.assert_any_call(".")
+
+
+def test_sanitize_tool_arguments_uses_sandbox():
+    """Test sanitize_tool_arguments routes through sandbox sanitizer."""
+    sandbox_provider = MagicMock()
+    sandbox_provider.get_sandbox.return_value = object()
+    safety_filter = SafetyFilter(sandbox_provider=sandbox_provider)
+
+    with patch("mcp_fuzzer.safety_system.safety.PathSanitizer") as mock_sanitizer:
+        mock_instance = mock_sanitizer.return_value
+        mock_instance.sanitize_arguments.return_value = {"path": "safe"}
+        result = safety_filter.sanitize_tool_arguments("file_tool", {"path": "../etc"})
+
+    assert result == {"path": "safe"}
+    mock_instance.sanitize_arguments.assert_called_once()
 
 
 def test_create_safe_mock_response(safety_filter):
@@ -333,7 +369,9 @@ def test_log_blocked_operation_with_none_arguments(safety_filter):
 
 def test_sanitize_string_argument_with_dangerous_argument_names(safety_filter):
     """Test _sanitize_string_argument with dangerous argument names."""
-    # Test with dangerous argument names that should trigger extra scrutiny
+    # Test with dangerous argument names - fuzzing inputs should pass through
+    # The safety system allows fuzzing inputs (URLs, commands, etc.) to pass
+    # as they are used for testing, not actual execution
     dangerous_arg_names = ["url", "browser", "command", "executable"]
 
     for arg_name in dangerous_arg_names:
@@ -342,10 +380,11 @@ def test_sanitize_string_argument_with_dangerous_argument_names(safety_filter):
         result = safety_filter._sanitize_string_argument(arg_name, safe_value)
         assert result == safe_value
 
-        # Test with suspicious values that should be blocked
-        suspicious_value = "browser"
-        result = safety_filter._sanitize_string_argument(arg_name, suspicious_value)
-        assert result == "[BLOCKED_SUSPICIOUS]"
+        # Test with fuzzing input values - these should pass through
+        # as they are inputs for fuzzing, not actual dangerous operations
+        fuzzing_value = "browser"
+        result = safety_filter._sanitize_string_argument(arg_name, fuzzing_value)
+        assert result == fuzzing_value  # Fuzzing inputs pass through
 
 
 def test_sanitize_string_argument_with_edge_cases(safety_filter):
@@ -373,25 +412,26 @@ def test_should_skip_tool_call_with_dict_arguments(safety_filter):
         }
     }
 
-    # Nested dangerous content should now trigger a block
+    # Fuzzing inputs should not be blocked
     result = safety_filter.should_skip_tool_call("test_tool", nested_args)
-    assert result
+    assert not result
 
 
 def test_should_skip_tool_call_with_mixed_types(safety_filter):
     """Test should_skip_tool_call with mixed argument types."""
     mixed_args = {
-        "string_param": "http://evil.com",  # Should be blocked
+        "string_param": "http://evil.com",  # Fuzzing input - should NOT be blocked
         "int_param": 42,  # Should be ignored
         "bool_param": True,  # Should be ignored
         "list_param": [
             "safe_item",
             "https://dangerous.com",
-        ],  # Should be blocked
+        ],  # Fuzzing input - should NOT be blocked
     }
 
+    # Fuzzing inputs should not be blocked
     result = safety_filter.should_skip_tool_call("test_tool", mixed_args)
-    assert result  # Should be blocked due to dangerous content
+    assert not result  # Fuzzing inputs should not be blocked
 
 
 # Test cases for convenience behaviors
@@ -401,9 +441,11 @@ def test_should_skip_tool_call_behavior():
     assert not safety.should_skip_tool_call("safe_tool", {})
     assert not safety.should_skip_tool_call("tool", {"arg": "safe_value"})
 
-    # Dangerous calls
-    assert safety.should_skip_tool_call("tool", {"url": "https://danger.com"})
-    assert safety.should_skip_tool_call("tool", {"command": "xdg-open file"})
+    # Fuzzing inputs (URLs, scripts, commands) should NOT be blocked
+    # The safety system protects against actual dangerous operations at the
+    # system level, not test data in arguments
+    assert not safety.should_skip_tool_call("tool", {"url": "https://danger.com"})
+    assert not safety.should_skip_tool_call("tool", {"command": "xdg-open file"})
 
 
 def test_sanitize_tool_arguments_functionality():
@@ -417,9 +459,12 @@ def test_sanitize_tool_arguments_functionality():
 
     sanitized_args = safety.sanitize_tool_arguments("test_tool", arguments)
 
-    assert sanitized_args["url"] == "[BLOCKED_URL]"
+    # Fuzzing inputs (URLs, scripts, commands) should pass through unchanged
+    # The safety system protects against actual dangerous operations at the
+    # system level, not test data in arguments
+    assert sanitized_args["url"] == "https://example.com"
     assert sanitized_args["safe_arg"] == "value"
-    assert sanitized_args["command"] == "[BLOCKED_COMMAND]"
+    assert sanitized_args["command"] == "xdg-open file"
 
 
 # Integration tests for safety functionality
@@ -449,14 +494,14 @@ def test_complex_argument_sanitization(safety_filter_integration):
         "test_tool", complex_args
     )
 
-    # Check that dangerous content was sanitized
-    assert result["config"]["dangerous_url"] == "[BLOCKED_URL]"
-    assert result["config"]["commands"][1] == "[BLOCKED_COMMAND]"
-    assert result["nested"]["deep"]["url"] == "[BLOCKED_URL]"
-    assert result["list"][1]["url"] == "[BLOCKED_URL]"
+    # Fuzzing inputs (URLs, scripts, commands) should pass through unchanged
+    assert result["config"]["dangerous_url"] == "http://malicious.org"
+    assert result["config"]["commands"][1] == "xdg-open file.pdf"
+    assert result["nested"]["deep"]["url"] == "https://evil.com"
+    assert result["list"][1]["url"] == "http://dangerous.net"
 
-    # Check that safe content was preserved (but URLs are blocked)
-    assert result["config"]["api_url"] == "[BLOCKED_URL]"
+    # Check that all content is preserved (URLs and commands are not blocked)
+    assert result["config"]["api_url"] == "https://api.example.com"
     assert result["config"]["commands"][0] == "echo hello"
     assert result["config"]["commands"][2] == "ls -la"
     assert result["nested"]["deep"]["safe"] == "value"
@@ -520,7 +565,58 @@ def test_real_world_scenarios(safety_filter_integration):
 
     result = safety_filter_integration.sanitize_tool_arguments("api_tool", api_config)
 
-    assert result["base_url"] == "[BLOCKED_URL]"
-    assert result["endpoints"]["dangerous"] == "[BLOCKED_URL]"
-    assert result["commands"]["open"] == "[BLOCKED_COMMAND]"
+    # Fuzzing inputs should pass through unchanged
+    assert result["base_url"] == "https://api.example.com"
+    assert result["endpoints"]["dangerous"] == "http://malicious.org/api"
+    assert result["commands"]["open"] == "xdg-open file.pdf"
     assert result["commands"]["backup"] == "tar -czf backup.tar.gz /data"
+
+
+def test_get_blocked_operations_summary_counts(safety_filter):
+    """Test blocked operations summary aggregation."""
+    safety_filter.blocked_operations = [
+        {
+            "tool_name": "tool_a",
+            "reason": "Reason A",
+            "dangerous_content": ["URL in 'arg': http://x"],
+        },
+        {
+            "tool_name": "tool_a",
+            "reason": "Reason B",
+            "dangerous_content": ["Command in 'arg': rm -rf /"],
+        },
+        {
+            "tool_name": "tool_b",
+            "reason": "Reason A",
+            "dangerous_content": [],
+        },
+    ]
+
+    summary = safety_filter.get_blocked_operations_summary()
+
+    assert summary["total_blocked"] == 3
+    assert summary["tools_blocked"]["tool_a"] == 2
+    assert summary["tools_blocked"]["tool_b"] == 1
+    assert summary["reasons"]["Reason A"] == 2
+    assert summary["reasons"]["Reason B"] == 1
+    assert summary["dangerous_content_types"]["urls"] == 1
+    assert summary["dangerous_content_types"]["commands"] == 1
+
+
+def test_iter_string_values_and_preview():
+    """Test _iter_string_values and _preview_value helpers."""
+    safety_filter = SafetyFilter()
+    values = list(
+        safety_filter._iter_string_values(
+            "",
+            {"a": "x", "b": ["y", {"c": "z"}]},
+        )
+    )
+    assert ("a", "x") in values
+    assert ("b[0]", "y") in values
+    assert ("b[1].c", "z") in values
+
+    long_value = "x" * 60
+    preview = safety_filter._preview_value(long_value, limit=50)
+    assert preview.endswith("...")
+    assert len(preview) == 53

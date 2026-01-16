@@ -11,10 +11,7 @@ from typing import Any, AsyncIterator
 
 from ..interfaces.driver import TransportDriver
 from ..interfaces.behaviors import HttpClientBehavior, ResponseParserBehavior
-from ..interfaces.server_requests import (
-    build_sampling_create_message_response,
-    is_server_request,
-)
+from ..interfaces import server_requests
 from ...exceptions import TransportError
 
 
@@ -119,7 +116,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                         return None
                     if data is None:
                         return None
-                    if is_server_request(data):
+                    if server_requests.is_server_request(data):
                         handled = await self._handle_server_request(data)
                         if handled:
                             return None
@@ -227,7 +224,9 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                                         event_text = "\n".join(buffer)
                                         parsed = self.parse_sse_event(event_text)
                                         if parsed is not None:
-                                            if is_server_request(parsed):
+                                            if server_requests.is_server_request(
+                                                parsed
+                                            ):
                                                 handled = (
                                                     await self._handle_server_request(
                                                         parsed
@@ -259,7 +258,9 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                                         event_text = "\n".join(buffer)
                                         parsed = self.parse_sse_event(event_text)
                                         if parsed is not None:
-                                            if is_server_request(parsed):
+                                            if server_requests.is_server_request(
+                                                parsed
+                                            ):
                                                 handled = (
                                                     await self._handle_server_request(
                                                         parsed
@@ -281,7 +282,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                         event_text = "\n".join(buffer)
                         parsed = self.parse_sse_event(event_text)
                         if parsed is not None:
-                            if is_server_request(parsed):
+                            if server_requests.is_server_request(parsed):
                                 handled = await self._handle_server_request(parsed)
                                 if handled:
                                     return
@@ -294,7 +295,9 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
         method = payload.get("method")
         request_id = payload.get("id")
         if method == "sampling/createMessage" and request_id is not None:
-            response_payload = build_sampling_create_message_response(request_id)
+            response_payload = (
+                server_requests.build_sampling_create_message_response(request_id)
+            )
             await self._send_client_response(response_payload)
             return True
         return False

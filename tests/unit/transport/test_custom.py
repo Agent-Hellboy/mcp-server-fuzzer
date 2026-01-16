@@ -5,13 +5,14 @@ from unittest.mock import Mock
 from typing import Any, Dict, Optional, AsyncIterator
 
 from mcp_fuzzer.transport.interfaces import TransportDriver, JsonRpcAdapter
-from mcp_fuzzer.transport.catalog import build_driver
-from mcp_fuzzer.transport.catalog.custom_catalog import (
-    CustomDriverCatalog,
+from mcp_fuzzer.transport.catalog import (
+    DriverCatalog,
+    build_driver,
+    driver_catalog,
     register_custom_driver,
     build_custom_driver,
     list_custom_drivers,
-    custom_driver_catalog,
+    clear_custom_drivers,
 )
 from mcp_fuzzer.exceptions import ConnectionError, TransportRegistrationError
 
@@ -42,20 +43,20 @@ class MockTransport(TransportDriver):
         yield {"result": "stream_response"}
 
 
-class TestCustomDriverCatalog:
-    """Test the custom transport registry functionality."""
+class TestDriverCatalog:
+    """Test the driver catalog registry functionality."""
 
     def setup_method(self):
-        custom_driver_catalog.clear()
+        clear_custom_drivers()
 
     def test_registry_initialization(self):
         """Test that registry initializes correctly."""
-        registry = CustomDriverCatalog()
+        registry = DriverCatalog()
         assert registry.list_transports() == {}
 
     def test_register_transport(self):
         """Test registering a custom transport."""
-        registry = CustomDriverCatalog()
+        registry = DriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -72,7 +73,7 @@ class TestCustomDriverCatalog:
 
     def test_register_duplicate_transport(self):
         """Test that registering a duplicate transport raises an error."""
-        registry = CustomDriverCatalog()
+        registry = DriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -92,7 +93,7 @@ class TestCustomDriverCatalog:
 
     def test_register_invalid_transport_class(self):
         """Test that registering an invalid transport class raises an error."""
-        registry = CustomDriverCatalog()
+        registry = DriverCatalog()
 
         class InvalidTransport:
             pass
@@ -109,7 +110,7 @@ class TestCustomDriverCatalog:
 
     def test_unregister_transport(self):
         """Test unregistering a custom transport."""
-        registry = CustomDriverCatalog()
+        registry = DriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -122,7 +123,7 @@ class TestCustomDriverCatalog:
 
     def test_unregister_nonexistent_transport(self):
         """Test that unregistering a non-existent transport raises an error."""
-        registry = CustomDriverCatalog()
+        registry = DriverCatalog()
 
         with pytest.raises(
             TransportRegistrationError,
@@ -132,7 +133,7 @@ class TestCustomDriverCatalog:
 
     def test_get_transport_class(self):
         """Test getting transport class from registry."""
-        registry = CustomDriverCatalog()
+        registry = DriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -145,7 +146,7 @@ class TestCustomDriverCatalog:
 
     def test_get_transport_info(self):
         """Test getting transport info from registry."""
-        registry = CustomDriverCatalog()
+        registry = DriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -159,7 +160,7 @@ class TestCustomDriverCatalog:
 
     def test_build_driver(self):
         """Test creating transport instance from registry."""
-        registry = CustomDriverCatalog()
+        registry = DriverCatalog()
 
         registry.register(
             name="mock_transport",
@@ -178,9 +179,7 @@ class TestCustomTransportFunctions:
 
     def setup_method(self):
         """Clear the global registry before each test."""
-        registry = custom_driver_catalog
-
-        registry.clear()
+        clear_custom_drivers()
 
     def test_register_custom_driver(self):
         """Test the global register_custom_driver function."""
@@ -211,9 +210,7 @@ class TestTransportFactoryIntegration:
 
     def setup_method(self):
         """Clear the global registry before each test."""
-        registry = custom_driver_catalog
-
-        registry.clear()
+        clear_custom_drivers()
 
     def test_custom_transport_via_factory(self):
         """Test creating custom transport via factory."""
@@ -429,13 +426,11 @@ class TestCustomTransportSelfRegistration:
 
     def setup_method(self):
         """Clear the global registry before each test."""
-        registry = custom_driver_catalog
-
-        registry.clear()
+        clear_custom_drivers()
 
     def test_self_registration_with_registry(self):
         """Test that custom transport can self-register using registry.register."""
-        registry = custom_driver_catalog
+        registry = driver_catalog
 
         class SelfRegisteringTransport(TransportDriver):
             """Transport that self-registers on import."""
@@ -467,6 +462,7 @@ class TestCustomTransportSelfRegistration:
             "self_registered",
             SelfRegisteringTransport,
             description="Self-registered transport",
+            is_custom=True,
         )
 
         # Verify it was registered
@@ -479,7 +475,7 @@ class TestCustomTransportSelfRegistration:
 
     def test_self_registration_at_module_level(self):
         """Test self-registration pattern at module level."""
-        registry = custom_driver_catalog
+        registry = driver_catalog
 
         # Simulate module-level registration
         class ModuleLevelTransport(TransportDriver):
@@ -507,7 +503,7 @@ class TestCustomTransportSelfRegistration:
                 yield {"result": "module_level"}
 
         # This would typically happen at module import time
-        registry.register("module_level", ModuleLevelTransport)
+        registry.register("module_level", ModuleLevelTransport, is_custom=True)
 
         # Verify registration succeeded
         transport_class = registry.get_transport_class("module_level")
@@ -515,7 +511,7 @@ class TestCustomTransportSelfRegistration:
 
     def test_self_registration_with_schema(self):
         """Test self-registration with configuration schema."""
-        registry = custom_driver_catalog
+        registry = driver_catalog
 
         class ConfigurableTransport(TransportDriver):
             """Transport with configuration schema."""
@@ -557,6 +553,7 @@ class TestCustomTransportSelfRegistration:
             ConfigurableTransport,
             description="Transport with configuration",
             config_schema=config_schema,
+            is_custom=True,
         )
 
         # Verify registration with schema
@@ -569,13 +566,11 @@ class TestSelfRegisteredTransportInstantiation:
 
     def setup_method(self):
         """Clear the global registry before each test."""
-        registry = custom_driver_catalog
-
-        registry.clear()
+        clear_custom_drivers()
 
     async def test_instantiate_self_registered_transport(self):
         """Test that self-registered transport can be instantiated and used."""
-        registry = custom_driver_catalog
+        registry = driver_catalog
 
         class UsableTransport(TransportDriver):
             """Fully functional self-registered transport."""
@@ -613,7 +608,9 @@ class TestSelfRegisteredTransportInstantiation:
                     yield {"chunk": i, "payload": payload}
 
         # Self-register
-        registry.register("usable", UsableTransport, description="Usable transport")
+        registry.register(
+            "usable", UsableTransport, description="Usable transport", is_custom=True
+        )
 
         # Instantiate via registry
         transport = registry.build_driver("usable", "test-server", timeout=60)
@@ -649,7 +646,7 @@ class TestSelfRegisteredTransportInstantiation:
 
     async def test_instantiate_via_factory(self):
         """Test that self-registered transport can be instantiated via factory."""
-        registry = custom_driver_catalog
+        registry = driver_catalog
 
         class FactoryUsableTransport(TransportDriver):
             """Transport usable via factory."""
@@ -677,7 +674,10 @@ class TestSelfRegisteredTransportInstantiation:
 
         # Self-register
         registry.register(
-            "factory_usable", FactoryUsableTransport, description="Factory usable"
+            "factory_usable",
+            FactoryUsableTransport,
+            description="Factory usable",
+            is_custom=True,
         )
 
         # Instantiate via factory using URL format
@@ -693,7 +693,7 @@ class TestSelfRegisteredTransportInstantiation:
 
     async def test_instantiate_with_custom_factory(self):
         """Test instantiation with custom factory function."""
-        registry = custom_driver_catalog
+        registry = driver_catalog
 
         class FactoryManagedTransport(TransportDriver):
             """Transport created via factory function."""
@@ -736,6 +736,7 @@ class TestSelfRegisteredTransportInstantiation:
             "factory_managed",
             FactoryManagedTransport,
             factory_function=custom_factory,
+            is_custom=True,
         )
 
         # Instantiate via registry with factory

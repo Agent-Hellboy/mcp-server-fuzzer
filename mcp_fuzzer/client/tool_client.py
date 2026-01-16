@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 from ..auth import AuthManager
-from ..spec_guard import check_tool_result_content, check_tool_schema_fields
+from .. import spec_guard
 from ..fuzz_engine.mutators import ToolMutator
 from ..safety_system.safety import SafetyFilter, SafetyProvider
 
@@ -71,7 +71,7 @@ class ToolClient:
             self._tool_schema_checks.clear()
             for tool in tools:
                 tool_name = tool.get("name", "unknown")
-                checks = check_tool_schema_fields(tool)
+                checks = spec_guard.check_tool_schema_fields(tool)
                 if checks:
                     self._tool_schema_checks[tool_name] = checks
             self._logger.debug(f"Tools: {tools}")
@@ -185,7 +185,7 @@ class ToolClient:
                 # Call the tool with the generated arguments
                 try:
                     result = await self._rpc.call_tool(tool_name, args_for_call)
-                    spec_checks = check_tool_result_content(result)
+                    spec_checks = spec_guard.check_tool_result_content(result)
                     spec_payload = (
                         {"spec_checks": spec_checks, "spec_scope": "tool_result"}
                         if spec_checks
@@ -376,7 +376,7 @@ class ToolClient:
             # Call the tool with the generated arguments
             try:
                 result = await self._rpc.call_tool(tool_name, args_for_call)
-                spec_checks = check_tool_result_content(result)
+                spec_checks = spec_guard.check_tool_result_content(result)
                 spec_payload = (
                     {"spec_checks": spec_checks, "spec_scope": "tool_result"}
                     if spec_checks

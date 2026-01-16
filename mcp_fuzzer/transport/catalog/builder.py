@@ -15,6 +15,17 @@ from ...exceptions import TransportRegistrationError
 endpoint_resolver = EndpointResolver(driver_catalog)
 
 
+def _unsupported_scheme_error(scheme: str) -> str:
+    builtin = list(driver_catalog.list_builtin_transports().keys())
+    custom = list(driver_catalog.list_custom_drivers().keys())
+    error_msg = f"Unsupported transport scheme: '{scheme}'"
+    if builtin:
+        error_msg += f"\nBuilt-in transports: {', '.join(builtin)}"
+    if custom:
+        error_msg += f"\nCustom transports: {', '.join(custom)}"
+    return error_msg
+
+
 def build_driver(
     url_or_protocol: str, endpoint: str | None = None, **kwargs
 ) -> TransportDriver:
@@ -53,17 +64,7 @@ def build_driver(
 
     # Check if transport is registered
     if not driver_catalog.is_registered(parsed.scheme):
-        # List available transports for error message
-        builtin = list(driver_catalog.list_builtin_transports().keys())
-        custom = list(driver_catalog.list_custom_drivers().keys())
-
-        error_msg = f"Unsupported transport scheme: '{parsed.scheme}'"
-        if builtin:
-            error_msg += f"\nBuilt-in transports: {', '.join(builtin)}"
-        if custom:
-            error_msg += f"\nCustom transports: {', '.join(custom)}"
-
-        raise TransportRegistrationError(error_msg)
+        raise TransportRegistrationError(_unsupported_scheme_error(parsed.scheme))
 
     # Create transport using registry
     try:

@@ -3,6 +3,7 @@
 Unit tests for TransportCoordinator.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -159,16 +160,20 @@ async def test_call_tool_uses_jsonrpc_helper():
     coordinator._jsonrpc_helper.set_transport.assert_called_once_with(transport)
 
 
-def test_list_available_transports():
+def test_list_available_transports(monkeypatch):
     coordinator = TransportCoordinator()
 
-    with patch(
-        "mcp_fuzzer.transport.controller.coordinator.driver_catalog.list_transports",
-        return_value={"stdio": {"name": "stdio"}},
-    ):
-        result = coordinator.list_available_transports()
+    expected = {"stdio": {"name": "stdio"}}
+    fake_catalog = SimpleNamespace(list_transports=lambda include_custom=True: expected)
+    monkeypatch.setitem(
+        coordinator.list_available_transports.__globals__,
+        "driver_catalog",
+        fake_catalog,
+    )
 
-    assert result == {"stdio": {"name": "stdio"}}
+    result = coordinator.list_available_transports()
+
+    assert result == expected
 
 
 @pytest.mark.asyncio

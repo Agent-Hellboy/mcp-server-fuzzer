@@ -72,6 +72,11 @@ def build_fuzzing_schema() -> dict[str, Any]:
             "enum": ["tools", "protocol", "resources", "prompts", "all"],
         },
         "phase": {"type": "string", "enum": ["realistic", "aggressive", "both"]},
+        "protocol_phase": {
+            "type": "string",
+            "enum": ["realistic", "aggressive"],
+            "description": "Protocol fuzzing phase (structured vs aggressive)",
+        },
         "protocol": {
             "type": "string",
             "enum": ["http", "https", "sse", "stdio", "streamablehttp"],

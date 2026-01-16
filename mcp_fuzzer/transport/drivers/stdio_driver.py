@@ -9,7 +9,7 @@ import signal as _signal
 import sys
 import inspect
 import time
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
 
 from ..interfaces.driver import TransportDriver
 from ...exceptions import (
@@ -18,14 +18,16 @@ from ...exceptions import (
     ServerError,
     TransportError,
 )
-from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+
+if TYPE_CHECKING:
+    from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+else:
+    ProcessManager = Any
+    WatchdogConfig = Any
 from ...safety_system.policy import sanitize_subprocess_env
 from ...config import PROCESS_WAIT_TIMEOUT
 from ..controller.process_supervisor import ProcessSupervisor
-from ..interfaces.server_requests import (
-    build_sampling_create_message_response,
-    is_server_request,
-)
+from ..interfaces import server_requests
 
 
 class StdioDriver(TransportDriver):
@@ -62,6 +64,7 @@ class StdioDriver(TransportDriver):
     def _get_process_manager(self):
         """Get or create the process manager lazily."""
         if self.process_manager is None:
+            from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
             # Use our new Process Management system
             watchdog_config = WatchdogConfig(
                 check_interval=1.0,
@@ -208,13 +211,15 @@ class StdioDriver(TransportDriver):
 
     async def _handle_server_request(self, message: Any) -> bool:
         """Handle server->client requests while waiting for a response."""
-        if not is_server_request(message):
+        if not server_requests.is_server_request(message):
             return False
 
         method = message.get("method")
         request_id = message.get("id")
         if method == "sampling/createMessage" and request_id is not None:
-            response = build_sampling_create_message_response(request_id)
+            response = (
+                server_requests.build_sampling_create_message_response(request_id)
+            )
             await self._send_message(response)
             return True
 
@@ -266,7 +271,11 @@ class StdioDriver(TransportDriver):
         await self._send_message(message)
 
         # Wait for response
-        while True:
+        # Safety: limit iterations to prevent infinite loops
+        max_iterations = 1000
+        iteration_count = 0
+        while iteration_count < max_iterations:
+            iteration_count += 1
             response = await self._receive_message()
             if response is None:
                 raise TransportError(
@@ -286,6 +295,12 @@ class StdioDriver(TransportDriver):
                     )
                 result = response.get("result", response)
                 return result if isinstance(result, dict) else {"result": result}
+        
+        # If we've exhausted iterations, raise an error
+        raise TransportError(
+            "Too many responses received without matching request ID",
+            context={"request_id": request_id, "iterations": iteration_count},
+        )
 
     async def send_raw(self, payload: dict[str, Any]) -> Any:
         """Send raw payload and wait for response."""

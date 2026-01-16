@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 import emoji
@@ -45,6 +46,10 @@ async def _run_spec_guard_if_enabled(
 async def unified_client_main(settings: ClientSettings) -> int:
     """Run the fuzzing workflow using merged client settings."""
     config = settings.data
+
+    schema_version = config.get("spec_schema_version")
+    if schema_version is not None:
+        os.environ["MCP_SPEC_SCHEMA_VERSION"] = str(schema_version)
 
     logging.info(  # pragma: no cover
         "Client received config with export flags: "
@@ -103,6 +108,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
         tool_results: dict[str, Any] = {}
         protocol_results: dict[str, Any] = {}
         mode = config["mode"]
+        protocol_phase = config.get("protocol_phase", "realistic")
         if mode == "tools":
             if config.get("phase") == "both":
                 if config.get("tool"):
@@ -129,20 +135,24 @@ async def unified_client_main(settings: ClientSettings) -> int:
                 protocol_results[protocol_type] = await client.fuzz_protocol_type(
                     protocol_type,
                     runs=config.get("runs_per_type", 10),
+                    phase=protocol_phase,
                 )
             else:
                 protocol_results = await client.fuzz_all_protocol_types(
-                    runs_per_type=config.get("runs_per_type", 10)
+                    runs_per_type=config.get("runs_per_type", 10),
+                    phase=protocol_phase,
                 )
         elif mode == "resources":
             await _run_spec_guard_if_enabled(client, config, reporter)
             protocol_results = await client.fuzz_resources(
-                runs_per_type=config.get("runs_per_type", 10)
+                runs_per_type=config.get("runs_per_type", 10),
+                phase=protocol_phase,
             )
         elif mode == "prompts":
             await _run_spec_guard_if_enabled(client, config, reporter)
             protocol_results = await client.fuzz_prompts(
-                runs_per_type=config.get("runs_per_type", 10)
+                runs_per_type=config.get("runs_per_type", 10),
+                phase=protocol_phase,
             )
         elif mode == "all":
             logging.info("Running both tools and protocol fuzzing")  # pragma: no cover
@@ -170,10 +180,12 @@ async def unified_client_main(settings: ClientSettings) -> int:
                 protocol_results[protocol_type] = await client.fuzz_protocol_type(
                     protocol_type,
                     runs=config.get("runs_per_type", 10),
+                    phase=protocol_phase,
                 )
             else:
                 protocol_results = await client.fuzz_all_protocol_types(
-                    runs_per_type=config.get("runs_per_type", 10)
+                    runs_per_type=config.get("runs_per_type", 10),
+                    phase=protocol_phase,
                 )
         else:
             logging.error(f"Unknown mode: {config['mode']}")

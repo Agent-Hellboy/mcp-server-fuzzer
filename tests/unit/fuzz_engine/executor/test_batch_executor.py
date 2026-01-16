@@ -31,7 +31,18 @@ def mock_transport():
 @pytest.fixture
 def batch_executor(mock_transport):
     """Fixture for BatchExecutor."""
-    return BatchExecutor(transport=mock_transport)
+    executor = BatchExecutor(transport=mock_transport)
+    executor.batch_mutator.mutate = AsyncMock(
+        return_value=[
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        ]
+    )
+    return executor
 
 
 @pytest.mark.asyncio

@@ -2,69 +2,44 @@
 """
 Aggressive Protocol Type Strategy
 
-This module provides strategies for generating malicious, malformed, and edge-case
-protocol messages. Used in the aggressive phase to test server security and
-robustness with attack vectors.
+Helper functions for generating malicious/aggressive values
+(used in tests and tool strategies).
 """
 
 import random
 from typing import Any
 
-# Track how often experimental payloads are requested so we can deterministically
-# force `None` values often enough for unit tests that expect them.
-_experimental_payload_call_count = 0
-
-# Attack payloads from tool strategy
+# Attack payloads
 SQL_INJECTION = [
-    "' OR '1'='1",
-    "'; DROP TABLE users; --",
-    "' UNION SELECT * FROM users --",
-    "'; DELETE FROM table WHERE 1=1; --",
-    "admin'--",
-    "admin'/*",
-    "' OR 1=1#",
-    "' OR 'x'='x",
-    "'; EXEC xp_cmdshell('dir'); --",
+    "' OR '1'='1", "'; DROP TABLE users; --", "' UNION SELECT * FROM users --",
+    "'; DELETE FROM table WHERE 1=1; --", "admin'--", "admin'/*",
+    "' OR 1=1#", "' OR 'x'='x", "'; EXEC xp_cmdshell('dir'); --",
 ]
 
 XSS_PAYLOADS = [
-    "<script>alert('xss')</script>",
-    "<img src=x onerror=alert('xss')>",
-    "javascript:alert('xss')",
-    "<svg/onload=alert('xss')>",
-    "<iframe src=javascript:alert('xss')>",
-    "<body onload=alert('xss')>",
-    "'><script>alert('xss')</script>",
-    "\"><script>alert('xss')</script>",
-    "<script>document.cookie</script>",
-    "<script>window.location='http://evil.com'</script>",
+    "<script>alert('xss')</script>", "<img src=x onerror=alert('xss')>",
+    "javascript:alert('xss')", "<svg/onload=alert('xss')>",
+    "<iframe src=javascript:alert('xss')>", "<body onload=alert('xss')>",
+    "'><script>alert('xss')</script>", "\"><script>alert('xss')</script>",
+    "<script>document.cookie</script>", "<script>window.location='http://evil.com'</script>",
 ]
 
 PATH_TRAVERSAL = [
-    "../../../etc/passwd",
-    "..\\..\\..\\windows\\system32\\config\\sam",
-    "..\\..\\..\\..\\..\\..\\..\\..\\..\\..\\..\\..",
-    "/etc/passwd",
-    "/etc/shadow",
-    "/etc/hosts",
-    "C:\\windows\\system32\\drivers\\etc\\hosts",
-    "file:///etc/passwd",
-    "file:///c:/windows/system32/config/sam",
+    "../../../etc/passwd", "..\\..\\..\\windows\\system32\\config\\sam",
+    "..\\..\\..\\..\\..\\..\\..\\..\\..\\..\\..\\..", "/etc/passwd",
+    "/etc/shadow", "/etc/hosts", "C:\\windows\\system32\\drivers\\etc\\hosts",
+    "file:///etc/passwd", "file:///c:/windows/system32/config/sam",
     "\\..\\..\\..\\..\\..\\..\\..\\..\\..",
 ]
 
 OVERFLOW_VALUES = [
-    "A" * 1000,
-    "A" * 10000,
-    "A" * 100000,
-    "\x00" * 1000,
-    "0" * 1000,
-    "9" * 1000,
-    " " * 1000,
-    "\n" * 1000,
-    "\t" * 1000,
-    "漢" * 1000,  # Unicode
+    "A" * 1000, "A" * 10000, "A" * 100000, "\x00" * 1000,
+    "0" * 1000, "9" * 1000, " " * 1000, "\n" * 1000,
+    "\t" * 1000, "漢" * 1000,
 ]
+
+# Track how often experimental payloads are requested for deterministic test behavior
+_experimental_payload_call_count = 0
 
 
 def generate_malicious_string() -> str:
@@ -74,14 +49,57 @@ def generate_malicious_string() -> str:
         lambda: random.choice(XSS_PAYLOADS),
         lambda: random.choice(PATH_TRAVERSAL),
         lambda: random.choice(OVERFLOW_VALUES),
-        lambda: "\x00" * random.randint(1, 100),  # Null bytes
-        lambda: "A" * random.randint(1000, 10000),  # Overflow
-        lambda: "漢字" * random.randint(100, 1000),  # Unicode overflow
-        lambda: random.choice(["", " ", "\t", "\n", "\r"]),  # Empty/whitespace
-        lambda: f"http://evil.com/{random.choice(XSS_PAYLOADS)}",  # URLs with XSS
+        lambda: "\x00" * random.randint(1, 100),
+        lambda: "A" * random.randint(1000, 10000),
+        lambda: "漢字" * random.randint(100, 1000),
+        lambda: random.choice(["", " ", "\t", "\n", "\r"]),
+        lambda: f"http://evil.com/{random.choice(XSS_PAYLOADS)}",
     ]
-
     return random.choice(strategies)()
+
+
+def generate_structured_string() -> str:
+    """Generate a malicious string while preserving string type."""
+    return random.choice([
+        random.choice(SQL_INJECTION),
+        random.choice(XSS_PAYLOADS),
+        random.choice(PATH_TRAVERSAL),
+        "A" * random.randint(256, 4096),
+        "\x00" * random.randint(1, 64),
+    ])
+
+
+def generate_structured_number() -> int | float:
+    """Generate an aggressive numeric value without NaN/Infinity."""
+    return random.choice([
+        -1, 0, 1, 2**31 - 1, 2**63 - 1, -2**63,
+        10**9, -10**9, 3.14159, -3.14159,
+    ])
+
+
+def generate_structured_id() -> int | str:
+    """Generate a JSON-RPC id that remains valid (string or number)."""
+    return random.choice([
+        1, 2, 42, 999999999, "req-001", "req-002", "id-" + ("A" * 32),
+    ])
+
+
+def generate_structured_meta() -> dict[str, Any]:
+    """Generate a structured _meta object with aggressive values."""
+    return {
+        "trace": generate_structured_string(),
+        "tags": [generate_structured_string() for _ in range(random.randint(1, 3))],
+        "flags": {"experimental": random.choice([True, False])},
+    }
+
+
+def generate_structured_object() -> dict[str, Any]:
+    """Generate a structured object with malicious strings/values."""
+    return {
+        "value": generate_structured_string(),
+        "count": generate_structured_number(),
+        "enabled": random.choice([True, False]),
+    }
 
 
 def choice_lazy(options):
@@ -92,6 +110,8 @@ def choice_lazy(options):
 
 def generate_malicious_value() -> Any:
     """Generate malicious values of various types."""
+    if random.random() < 0.2:
+        return None
     return choice_lazy(
         [
             None,
@@ -124,856 +144,32 @@ def generate_experimental_payload():
     """Generate experimental capability payloads lazily."""
     global _experimental_payload_call_count
     _experimental_payload_call_count += 1
-    # Every few calls, guarantee a None payload so tests always see the case.
     if _experimental_payload_call_count % 5 == 0:
         return None
-    return choice_lazy(
-        [
-            None,
-            "",
-            [],
-            lambda: generate_malicious_string(),
-            lambda: random.randint(-1000, 1000),
-            lambda: random.choice([True, False]),
-            lambda: {
-                "customCapability": generate_malicious_value(),
-                "extendedFeature": {
-                    "enabled": generate_malicious_value(),
-                    "config": generate_malicious_value(),
-                },
-                "__proto__": {"isAdmin": True},
-                "evil": generate_malicious_string(),
+    return choice_lazy([
+        None, "", [], lambda: generate_malicious_string(),
+        lambda: random.randint(-1000, 1000),
+        lambda: random.choice([True, False]),
+        lambda: {
+            "customCapability": generate_malicious_value(),
+            "extendedFeature": {
+                "enabled": generate_malicious_value(),
+                "config": generate_malicious_value(),
             },
-            lambda: {
-                "maliciousExtension": {
-                    "payload": generate_malicious_string(),
-                    "injection": random.choice(SQL_INJECTION),
-                    "xss": random.choice(XSS_PAYLOADS),
-                }
-            },
-            lambda: ["item1", "item2", generate_malicious_value()],
-            lambda: {"nested": {"key": generate_malicious_value()}},
-            "experimental_string_value",
-            {"feature_flag": True},
-            lambda: [1, 2, 3, "mixed_array"],
-            {"config": {"debug": False, "verbose": True}},
-        ]
-    )
-
-
-def fuzz_initialize_request_aggressive() -> dict[str, Any]:
-    """Generate aggressive InitializeRequest for security/robustness testing."""
-    # Malicious protocol versions
-    malicious_versions = [
-        generate_malicious_string(),
-        None,
-        "",
-        "999.999.999",
-        "-1.0.0",
-        random.choice(SQL_INJECTION),
-        random.choice(XSS_PAYLOADS),
-        random.choice(PATH_TRAVERSAL),
-        "A" * 1000,  # Overflow
-        "\x00\x01\x02",  # Null bytes
-    ]
-
-    # Malicious JSON-RPC IDs
-    malicious_ids = [
-        generate_malicious_value(),
-        {"evil": "object_as_id"},
-        [1, 2, 3],  # Array as ID
-        float("inf"),
-        float("-inf"),
-        2**63,  # Large number
-        -(2**63),  # Large negative number
-    ]
-
-    # Malicious method names
-    malicious_methods = [
-        generate_malicious_string(),
-        None,
-        "",
-        random.choice(PATH_TRAVERSAL),
-        "eval()",
-        "system('rm -rf /')",
-        "__proto__",
-        "constructor",
-        "prototype",
-        "\x00null\x00",
-    ]
-
-    # Build malicious request
-    base_request = {
-        "jsonrpc": random.choice(
-            [
-                "2.0",  # Valid
-                "1.0",  # Invalid version
-                "3.0",  # Future version
-                None,  # Missing
-                "",  # Empty
-                generate_malicious_string(),  # Malicious
-            ]
-        ),
-        "id": random.choice(malicious_ids),
-        "method": random.choice(malicious_methods),
-    }
-
-    # Malicious params
-    malicious_params = choice_lazy(
-        [
-            None,  # Missing params
-            "",  # Empty string instead of object
-            [],  # Array instead of object
-            lambda: generate_malicious_string(),  # String instead of object
-            lambda: {
-                "protocolVersion": random.choice(malicious_versions),
-                "capabilities": choice_lazy(
-                    [
-                        None,
-                        "",
-                        [],
-                        lambda: generate_malicious_string(),
-                        {"__proto__": {"isAdmin": True}},
-                        {"constructor": {"prototype": {"isAdmin": True}}},
-                        lambda: {"evil": generate_malicious_string()},
-                        # Add more capabilities structures that include
-                        # experimental field.
-                        lambda: {"experimental": generate_experimental_payload()},
-                        # Add more capabilities with experimental field for
-                        # better variety.
-                        lambda: {
-                            "experimental": generate_malicious_value(),
-                            "other_capability": generate_malicious_string(),
-                        },
-                        lambda: {
-                            "experimental": random.choice(
-                                [True, False, "enabled", "disabled"]
-                            ),
-                            "logging": {"level": generate_malicious_string()},
-                        },
-                        lambda: {
-                            "experimental": {"feature": "test", "enabled": True},
-                            "resources": {"listChanged": True},
-                        },
-                        lambda: {
-                            "experimental": [1, 2, 3, "mixed"],
-                            "tools": {"listChanged": True},
-                        },
-                    ]
-                ),
-                "clientInfo": random.choice(
-                    [
-                        None,
-                        "",
-                        [],
-                        lambda: generate_malicious_string(),
-                        lambda: {
-                            "name": generate_malicious_string(),
-                            "version": generate_malicious_string(),
-                            "__proto__": {"isAdmin": True},
-                            "evil": generate_malicious_string(),
-                        },
-                    ]
-                ),
-                "experimental": random.choice(
-                    [
-                        None,
-                        "",
-                        [],
-                        lambda: generate_malicious_string(),
-                        lambda: {
-                            "customCapability": generate_malicious_value(),
-                            "extendedFeature": {
-                                "enabled": generate_malicious_value(),
-                                "config": generate_malicious_value(),
-                            },
-                            "__proto__": {"isAdmin": True},
-                            "evil": generate_malicious_string(),
-                        },
-                        lambda: {
-                            "maliciousExtension": {
-                                "payload": generate_malicious_string(),
-                                "injection": random.choice(SQL_INJECTION),
-                                "xss": random.choice(XSS_PAYLOADS),
-                            }
-                        },
-                    ]
-                ),
-                # Add extra malicious fields
-                "__proto__": {"isAdmin": True},
-                "constructor": {"prototype": {"isAdmin": True}},
-                "eval": "console.log('injection')",
-                "../injection": "path_traversal",
-                "\x00null": "null_injection",
-            },
-        ]
-    )
-
-    if malicious_params is not None and isinstance(malicious_params, dict):
-        base_request["params"] = malicious_params
-
-    # Randomly add extra malicious top-level fields
-    malicious_extras = {
-        "__proto__": {"isAdmin": True},
-        "constructor": {"prototype": {"isAdmin": True}},
-        "eval": "system('echo pwned')",
-        "exec": "rm -rf /",
-        "../injection": "path_traversal",
-        "admin": True,
-        "isAdmin": True,
-        "root": True,
-        "user": "admin",
-        "password": "password123",
-        "\x00null": "null_injection",
-        "evil": generate_malicious_string(),
-    }
-
-    for key, value in malicious_extras.items():
-        if random.random() < 0.3:  # 30% chance to add each
-            base_request[key] = value
-
-    return base_request
-
-
-def fuzz_progress_notification() -> dict[str, Any]:
-    """Fuzz ProgressNotification with edge cases."""
-    # Generate AGGRESSIVE progress tokens to break things
-    progress_token_options = [
-        generate_malicious_value(),
-        "",
-        None,
-        "\U0001f680\U0001f525\U0001f4af",
-        "A" * 1000,
-        float("inf"),
-        float("nan"),
-        "' OR 1=1; --",
-        "<script>alert('xss')</script>",
-        "../../../etc/passwd",
-        "\x00\x01\x02\x03",  # Null bytes
-    ]
-
-    return {
-        "jsonrpc": "2.0",
-        "method": "notifications/progress",
-        "params": {
-            "progressToken": random.choice(progress_token_options),
-            "progress": generate_malicious_value(),
-            "total": generate_malicious_value(),
+            "__proto__": {"isAdmin": True},
+            "evil": generate_malicious_string(),
         },
-    }
-
-
-def fuzz_cancel_notification() -> dict[str, Any]:
-    """Fuzz CancelNotification with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "method": "notifications/cancelled",
-        "params": {
-            "requestId": generate_malicious_value(),
-            "reason": generate_malicious_string(),
-        },
-    }
-
-
-def fuzz_list_resources_request() -> dict[str, Any]:
-    """Fuzz ListResourcesRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "resources/list",
-        "params": {
-            "cursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_read_resource_request() -> dict[str, Any]:
-    """Fuzz ReadResourceRequest with edge cases."""
-    malicious_uris = [
-        "file:///etc/passwd",
-        "file:///c:/windows/system32/config/sam",
-        "../../../etc/passwd",
-        "javascript:alert('xss')",
-        "<script>alert('xss')</script>",
-        "data:text/html,<script>alert('xss')</script>",
-        "file://" + "A" * 1000,
-        "\x00\x01\x02\x03",
-    ]
-
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "resources/read",
-        "params": {
-            "uri": random.choice(malicious_uris + [generate_malicious_string()])
-        },
-    }
-
-
-def fuzz_set_level_request() -> dict[str, Any]:
-    """Fuzz SetLevelRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "logging/setLevel",
-        "params": {"level": generate_malicious_value()},
-    }
-
-
-def fuzz_generic_jsonrpc_request() -> dict[str, Any]:
-    """Fuzz generic JSON-RPC requests with edge cases."""
-    return {
-        "jsonrpc": random.choice(["2.0", "1.0", "3.0", "invalid", "", None]),
-        "id": generate_malicious_value(),
-        "method": generate_malicious_string(),
-        "params": generate_malicious_value(),
-    }
-
-
-def fuzz_call_tool_result() -> dict[str, Any]:
-    """Fuzz CallToolResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "content": [
-                {
-                    "type": generate_malicious_string(),
-                    "data": generate_malicious_string(),
-                }
-            ],
-            "isError": generate_malicious_value(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_sampling_message() -> dict[str, Any]:
-    """Fuzz SamplingMessage with edge cases."""
-    return {
-        "role": generate_malicious_string(),
-        "content": [
-            {
-                "type": generate_malicious_string(),
-                "data": generate_malicious_string(),
+        lambda: {
+            "maliciousExtension": {
+                "payload": generate_malicious_string(),
+                "injection": random.choice(SQL_INJECTION),
+                "xss": random.choice(XSS_PAYLOADS),
             }
-        ],
-    }
-
-
-def fuzz_create_message_request() -> dict[str, Any]:
-    """Fuzz CreateMessageRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "sampling/createMessage",
-        "params": {
-            "messages": [fuzz_sampling_message() for _ in range(random.randint(0, 5))],
-            "modelPreferences": generate_malicious_value(),
-            "systemPrompt": generate_malicious_string(),
-            "includeContext": generate_malicious_string(),
-            "temperature": generate_malicious_value(),
-            "maxTokens": generate_malicious_value(),
-            "stopSequences": generate_malicious_value(),
-            "metadata": generate_malicious_value(),
         },
-    }
-
-
-def fuzz_list_prompts_request() -> dict[str, Any]:
-    """Fuzz ListPromptsRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "prompts/list",
-        "params": {
-            "cursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_get_prompt_request() -> dict[str, Any]:
-    """Fuzz GetPromptRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "prompts/get",
-        "params": {
-            "name": generate_malicious_string(),
-            "arguments": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_list_roots_request() -> dict[str, Any]:
-    """Fuzz ListRootsRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "roots/list",
-        "params": {"_meta": generate_malicious_value()},
-    }
-
-
-def fuzz_subscribe_request() -> dict[str, Any]:
-    """Fuzz SubscribeRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "resources/subscribe",
-        "params": {"uri": generate_malicious_string()},
-    }
-
-
-def fuzz_unsubscribe_request() -> dict[str, Any]:
-    """Fuzz UnsubscribeRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "resources/unsubscribe",
-        "params": {"uri": generate_malicious_string()},
-    }
-
-
-def fuzz_complete_request() -> dict[str, Any]:
-    """Fuzz CompleteRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "completion/complete",
-        "params": {
-            "ref": generate_malicious_value(),
-            "argument": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_list_resource_templates_request() -> dict[str, Any]:
-    """Fuzz ListResourceTemplatesRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "resources/templates/list",
-        "params": {
-            "cursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_elicit_request() -> dict[str, Any]:
-    """Fuzz ElicitRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "elicitation/create",
-        "params": {
-            "message": generate_malicious_string(),
-            "requestedSchema": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_ping_request() -> dict[str, Any]:
-    """Fuzz PingRequest with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "method": "ping",
-        "params": generate_malicious_value(),
-    }
-
-
-# Result schemas for fuzzing
-def fuzz_initialize_result() -> dict[str, Any]:
-    """Fuzz InitializeResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "protocolVersion": generate_malicious_string(),
-            "capabilities": generate_malicious_value(),
-            "serverInfo": generate_malicious_value(),
-            "instructions": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_list_resources_result() -> dict[str, Any]:
-    """Fuzz ListResourcesResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "resources": [
-                generate_malicious_value() for _ in range(random.randint(0, 10))
-            ],
-            "nextCursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_list_resource_templates_result() -> dict[str, Any]:
-    """Fuzz ListResourceTemplatesResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "resourceTemplates": [
-                generate_malicious_value() for _ in range(random.randint(0, 10))
-            ],
-            "nextCursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_read_resource_result() -> dict[str, Any]:
-    """Fuzz ReadResourceResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "contents": [
-                generate_malicious_value() for _ in range(random.randint(0, 5))
-            ],
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_list_prompts_result() -> dict[str, Any]:
-    """Fuzz ListPromptsResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "prompts": [
-                generate_malicious_value() for _ in range(random.randint(0, 10))
-            ],
-            "nextCursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_get_prompt_result() -> dict[str, Any]:
-    """Fuzz GetPromptResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "description": generate_malicious_string(),
-            "messages": [
-                generate_malicious_value() for _ in range(random.randint(0, 5))
-            ],
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_list_tools_result() -> dict[str, Any]:
-    """Fuzz ListToolsResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "tools": [generate_malicious_value() for _ in range(random.randint(0, 10))],
-            "nextCursor": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_complete_result() -> dict[str, Any]:
-    """Fuzz CompleteResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "completion": {
-                "values": [
-                    generate_malicious_string() for _ in range(random.randint(0, 5))
-                ],
-                "total": generate_malicious_value(),
-                "hasMore": generate_malicious_value(),
-            },
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_create_message_result() -> dict[str, Any]:
-    """Fuzz CreateMessageResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "content": generate_malicious_value(),
-            "model": generate_malicious_string(),
-            "stopReason": generate_malicious_string(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_list_roots_result() -> dict[str, Any]:
-    """Fuzz ListRootsResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "roots": [generate_malicious_value() for _ in range(random.randint(0, 5))],
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_ping_result() -> dict[str, Any]:
-    """Fuzz PingResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": generate_malicious_value(),
-    }
-
-
-def fuzz_elicit_result() -> dict[str, Any]:
-    """Fuzz ElicitResult with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "id": generate_malicious_value(),
-        "result": {
-            "content": [
-                generate_malicious_value() for _ in range(random.randint(0, 5))
-            ],
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-# Notification schemas for fuzzing
-def fuzz_logging_message_notification() -> dict[str, Any]:
-    """Fuzz LoggingMessageNotification with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "method": "notifications/message",
-        "params": {
-            "level": generate_malicious_value(),
-            "logger": generate_malicious_string(),
-            "data": generate_malicious_value(),
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_resource_list_changed_notification() -> dict[str, Any]:
-    """Fuzz ResourceListChangedNotification with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "method": "notifications/resources/list_changed",
-        "params": {
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_resource_updated_notification() -> dict[str, Any]:
-    """Fuzz ResourceUpdatedNotification with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "method": "notifications/resources/updated",
-        "params": {
-            "uri": generate_malicious_string(),
-        },
-    }
-
-
-def fuzz_prompt_list_changed_notification() -> dict[str, Any]:
-    """Fuzz PromptListChangedNotification with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "method": "notifications/prompts/list_changed",
-        "params": {
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_tool_list_changed_notification() -> dict[str, Any]:
-    """Fuzz ToolListChangedNotification with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "method": "notifications/tools/list_changed",
-        "params": {
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-def fuzz_roots_list_changed_notification() -> dict[str, Any]:
-    """Fuzz RootsListChangedNotification with edge cases."""
-    return {
-        "jsonrpc": "2.0",
-        "method": "notifications/roots/list_changed",
-        "params": {
-            "_meta": generate_malicious_value(),
-        },
-    }
-
-
-# Content block schemas for fuzzing
-def fuzz_text_content() -> dict[str, Any]:
-    """Fuzz TextContent with edge cases."""
-    return {
-        "type": "text",
-        "text": generate_malicious_string(),
-        "_meta": generate_malicious_value(),
-        "annotations": generate_malicious_value(),
-    }
-
-
-def fuzz_image_content() -> dict[str, Any]:
-    """Fuzz ImageContent with edge cases."""
-    return {
-        "type": "image",
-        "data": generate_malicious_string(),
-        "mimeType": generate_malicious_string(),
-        "_meta": generate_malicious_value(),
-        "annotations": generate_malicious_value(),
-    }
-
-
-def fuzz_audio_content() -> dict[str, Any]:
-    """Fuzz AudioContent with edge cases."""
-    return {
-        "type": "audio",
-        "data": generate_malicious_string(),
-        "mimeType": generate_malicious_string(),
-        "_meta": generate_malicious_value(),
-        "annotations": generate_malicious_value(),
-    }
-
-
-# Resource schemas for fuzzing
-def fuzz_resource() -> dict[str, Any]:
-    """Fuzz Resource with edge cases."""
-    return {
-        "name": generate_malicious_string(),
-        "uri": generate_malicious_string(),
-        "description": generate_malicious_string(),
-        "mimeType": generate_malicious_string(),
-        "size": generate_malicious_value(),
-        "title": generate_malicious_string(),
-        "_meta": generate_malicious_value(),
-        "annotations": generate_malicious_value(),
-    }
-
-
-def fuzz_resource_template() -> dict[str, Any]:
-    """Fuzz ResourceTemplate with edge cases."""
-    return {
-        "name": generate_malicious_string(),
-        "uriTemplate": generate_malicious_string(),
-        "description": generate_malicious_string(),
-        "mimeType": generate_malicious_string(),
-        "title": generate_malicious_string(),
-        "_meta": generate_malicious_value(),
-        "annotations": generate_malicious_value(),
-    }
-
-
-def fuzz_text_resource_contents() -> dict[str, Any]:
-    """Fuzz TextResourceContents with edge cases."""
-    return {
-        "uri": generate_malicious_string(),
-        "mimeType": generate_malicious_string(),
-        "text": generate_malicious_string(),
-        "_meta": generate_malicious_value(),
-    }
-
-
-def fuzz_blob_resource_contents() -> dict[str, Any]:
-    """Fuzz BlobResourceContents with edge cases."""
-    return {
-        "uri": generate_malicious_string(),
-        "mimeType": generate_malicious_string(),
-        "blob": generate_malicious_string(),
-        "_meta": generate_malicious_value(),
-    }
-
-
-# Tool schemas for fuzzing
-def fuzz_tool() -> dict[str, Any]:
-    """Fuzz Tool with edge cases."""
-    return {
-        "name": generate_malicious_string(),
-        "description": generate_malicious_string(),
-        "inputSchema": generate_malicious_value(),
-        "outputSchema": generate_malicious_value(),
-        "title": generate_malicious_string(),
-        "_meta": generate_malicious_value(),
-        "annotations": generate_malicious_value(),
-    }
-
-
-def get_protocol_fuzzer_method(protocol_type: str):
-    """Get the fuzzer method for a specific protocol type."""
-    fuzzer_methods = {
-        "InitializeRequest": fuzz_initialize_request_aggressive,
-        "ProgressNotification": fuzz_progress_notification,
-        "CancelNotification": fuzz_cancel_notification,
-        "ListResourcesRequest": fuzz_list_resources_request,
-        "ReadResourceRequest": fuzz_read_resource_request,
-        "SetLevelRequest": fuzz_set_level_request,
-        "GenericJSONRPCRequest": fuzz_generic_jsonrpc_request,
-        "CallToolResult": fuzz_call_tool_result,
-        "SamplingMessage": fuzz_sampling_message,
-        "CreateMessageRequest": fuzz_create_message_request,
-        "ListPromptsRequest": fuzz_list_prompts_request,
-        "GetPromptRequest": fuzz_get_prompt_request,
-        "ListRootsRequest": fuzz_list_roots_request,
-        "SubscribeRequest": fuzz_subscribe_request,
-        "UnsubscribeRequest": fuzz_unsubscribe_request,
-        "CompleteRequest": fuzz_complete_request,
-        "ListResourceTemplatesRequest": fuzz_list_resource_templates_request,
-        "ElicitRequest": fuzz_elicit_request,
-        "PingRequest": fuzz_ping_request,
-        # Result schemas
-        "InitializeResult": fuzz_initialize_result,
-        "ListResourcesResult": fuzz_list_resources_result,
-        "ListResourceTemplatesResult": fuzz_list_resource_templates_result,
-        "ReadResourceResult": fuzz_read_resource_result,
-        "ListPromptsResult": fuzz_list_prompts_result,
-        "GetPromptResult": fuzz_get_prompt_result,
-        "ListToolsResult": fuzz_list_tools_result,
-        "CompleteResult": fuzz_complete_result,
-        "CreateMessageResult": fuzz_create_message_result,
-        "ListRootsResult": fuzz_list_roots_result,
-        "PingResult": fuzz_ping_result,
-        "ElicitResult": fuzz_elicit_result,
-        # Notification schemas
-        "LoggingMessageNotification": fuzz_logging_message_notification,
-        "ResourceListChangedNotification": fuzz_resource_list_changed_notification,
-        "ResourceUpdatedNotification": fuzz_resource_updated_notification,
-        "PromptListChangedNotification": fuzz_prompt_list_changed_notification,
-        "ToolListChangedNotification": fuzz_tool_list_changed_notification,
-        "RootsListChangedNotification": fuzz_roots_list_changed_notification,
-        # Content block schemas
-        "TextContent": fuzz_text_content,
-        "ImageContent": fuzz_image_content,
-        "AudioContent": fuzz_audio_content,
-        # Resource schemas
-        "Resource": fuzz_resource,
-        "ResourceTemplate": fuzz_resource_template,
-        "TextResourceContents": fuzz_text_resource_contents,
-        "BlobResourceContents": fuzz_blob_resource_contents,
-        # Tool schemas
-        "Tool": fuzz_tool,
-    }
-
-    return fuzzer_methods.get(protocol_type)
+        lambda: ["item1", "item2", generate_malicious_value()],
+        lambda: {"nested": {"key": generate_malicious_value()}},
+        "experimental_string_value",
+        {"feature_flag": True},
+        lambda: [1, 2, 3, "mixed_array"],
+        {"config": {"debug": False, "verbose": True}},
+    ])

@@ -67,16 +67,14 @@ jobs:
     - name: Install dependencies
       run: |
         pip install -e .
-        cd testing-servers/DesktopCommanderMCP
-        npm ci && npm run build
 
     - name: Run e2e test
       env:
         MCP_FUZZER_SAFETY_ENABLED: 'true'
         MCP_FUZZER_TIMEOUT: '30'
       run: |
-        chmod +x tests/e2e/test_desktop_commander_mcp.sh
-        ./tests/e2e/test_desktop_commander_mcp.sh
+        chmod +x tests/e2e/test_everything_server_docker.sh
+        ./tests/e2e/test_everything_server_docker.sh
 
     - name: Upload results
       uses: actions/upload-artifact@v4

@@ -158,15 +158,21 @@ class SafetyFilter(SafetyProvider):
     def sanitize_tool_arguments(
         self, tool_name: str, arguments: dict[str, Any]
     ) -> dict[str, Any]:
-        """Sanitize tool arguments to remove dangerous content and enforce
-        filesystem sandbox."""
+        """
+        Sanitize tool arguments to enforce filesystem sandbox.
+
+        Note: URLs, scripts, and commands in arguments are NOT sanitized - these
+        are fuzzing inputs meant to test the server. The safety system protects
+        against actual dangerous operations at the system level (command execution,
+        filesystem access, network access), not test data in arguments.
+        """
         if not arguments:
             return arguments
 
-        # First sanitize for dangerous content
-        sanitized_args = self._sanitize_value("root", arguments)
+        # Pass through arguments as-is (no URL/script/command sanitization)
+        sanitized_args = arguments
 
-        # Then sanitize filesystem paths if sandbox is enabled
+        # Sanitize filesystem paths if sandbox is enabled (prevents path traversal)
         sandbox = self.sandbox_provider.get_sandbox()
         if sandbox:
             sanitized_args = self._sanitize_filesystem_paths(sanitized_args, tool_name)
@@ -217,81 +223,45 @@ class SafetyFilter(SafetyProvider):
             return value
 
     def _sanitize_string_argument(self, arg_name: str, value: str) -> str:
-        """Sanitize a string argument."""
-        if not value:
-            return value
+        """
+        Sanitize a string argument.
 
-        # CRITICAL: Detect the first dangerous match (URL > SCRIPT > COMMAND)
-        match = self.detector.first_match(
-            value, [DangerType.URL, DangerType.SCRIPT, DangerType.COMMAND]
-        )
-        if match:
-            danger_label = match.danger_type.value.upper()
-            logging.warning(
-                "BLOCKED dangerous %s in %s: %s",
-                danger_label,
-                arg_name,
-                match.preview,
-            )
-            return {
-                DangerType.URL: "[BLOCKED_URL]",
-                DangerType.SCRIPT: "[BLOCKED_SCRIPT]",
-                DangerType.COMMAND: "[BLOCKED_COMMAND]",
-            }[match.danger_type]
+        For fuzzing purposes, we do NOT sanitize URLs, scripts, or commands in
+        arguments - these are test inputs meant to find vulnerabilities in the server.
+        The actual protection comes from:
+        - Command blocker (prevents actual command execution)
+        - Filesystem sandbox (prevents path traversal)
+        - Network policy (prevents unauthorized network access)
 
-        # Extra scrutiny for dangerous argument names
-        if arg_name.lower() in self.dangerous_argument_names:
-            # Be extra cautious with these argument names
-            if any(
-                danger in value.lower()
-                for danger in [
-                    "http",
-                    "www",
-                    "browser",
-                    "open",
-                    "launch",
-                    "start",
-                    ".exe",
-                    ".app",
-                ]
-            ):
-                logging.warning(
-                    f"BLOCKED potentially dangerous {arg_name}: {value[:50]}..."
-                )
-                return "[BLOCKED_SUSPICIOUS]"
-
+        Filesystem path sanitization is handled separately by
+        _sanitize_filesystem_paths.
+        """
+        # Don't sanitize URLs, scripts, or commands - allow them to pass through
+        # as fuzzing inputs. The safety system protects against actual dangerous
+        # operations at the system level, not test data in arguments.
         return value
 
     def should_skip_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> bool:
         """
         Determine if a tool call should be completely skipped based on
         dangerous content in arguments.
+
+        For fuzzing purposes, we do NOT block tool calls based on URLs or scripts
+        in arguments - these are test inputs meant to find vulnerabilities in the
+        server. The safety system protects against actual dangerous operations:
+        - Command execution (handled by command blocker)
+        - Filesystem path traversal (handled by filesystem sandbox)
+        - Network access (handled by network policy)
+
+        This method should only block if there's a clear indication that the tool
+        itself would execute a dangerous operation, not just because the arguments
+        contain test data.
         """
-
-        # If no arguments, allow the tool to run (we'll handle dangerous
-        # operations at execution level)
-        if not arguments:
-            return False
-
-        for key, value in arguments.items():
-            for nested_key, nested_value in self._iter_string_values(key, value):
-                if self.detector.contains(nested_value, DangerType.URL):
-                    preview = self._preview_value(nested_value)
-                    logging.warning(
-                        "BLOCKING tool call - dangerous URL in %s: %s",
-                        nested_key,
-                        preview,
-                    )
-                    return True
-                if self.detector.contains(nested_value, DangerType.COMMAND):
-                    preview = self._preview_value(nested_value)
-                    logging.warning(
-                        "BLOCKING tool call - dangerous command in %s: %s",
-                        nested_key,
-                        preview,
-                    )
-                    return True
-
+        # Don't block fuzzing inputs - allow them to be sent to the server
+        # The actual protection comes from:
+        # 1. Command blocker (prevents actual command execution)
+        # 2. Filesystem sandbox (prevents path traversal)
+        # 3. Network policy (prevents unauthorized network access)
         return False
 
     def create_safe_mock_response(self, tool_name: str) -> dict[str, Any]:

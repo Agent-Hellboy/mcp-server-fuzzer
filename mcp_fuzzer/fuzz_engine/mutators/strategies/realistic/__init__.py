@@ -17,16 +17,6 @@ from .protocol_type_strategy import (
     json_rpc_id_values,
     method_names,
     protocol_version_strings,
-    fuzz_initialize_request_realistic,
-    fuzz_list_resources_request_realistic,
-    fuzz_read_resource_request_realistic,
-    fuzz_subscribe_request_realistic,
-    fuzz_unsubscribe_request_realistic,
-    fuzz_list_prompts_request_realistic,
-    fuzz_get_prompt_request_realistic,
-    fuzz_list_roots_request_realistic,
-    fuzz_set_level_request_realistic,
-    fuzz_complete_request_realistic,
 )
 
 __all__ = [
@@ -36,18 +26,8 @@ __all__ = [
     "timestamp_strings",
     "generate_realistic_text",
     "fuzz_tool_arguments_realistic",
-    # Protocol strategies
+    # Protocol strategies (Hypothesis helpers for tests)
     "json_rpc_id_values",
     "method_names",
     "protocol_version_strings",
-    "fuzz_initialize_request_realistic",
-    "fuzz_list_resources_request_realistic",
-    "fuzz_read_resource_request_realistic",
-    "fuzz_subscribe_request_realistic",
-    "fuzz_unsubscribe_request_realistic",
-    "fuzz_list_prompts_request_realistic",
-    "fuzz_get_prompt_request_realistic",
-    "fuzz_list_roots_request_realistic",
-    "fuzz_set_level_request_realistic",
-    "fuzz_complete_request_realistic",
 ]

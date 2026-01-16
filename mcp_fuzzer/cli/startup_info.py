@@ -80,10 +80,14 @@ def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> 
     args_dict = vars(args)
 
     # Core Configuration
-    core_params = ["mode", "phase", "protocol", "endpoint"]
+    core_params = ["mode", "phase", "protocol_phase", "protocol", "endpoint"]
     for param in core_params:
         if param in args_dict and args_dict[param] is not None:
             config_table.add_row("Core", param.title(), str(args_dict[param]).upper())
+
+    spec_schema_version = args_dict.get("spec_schema_version")
+    if spec_schema_version:
+        config_table.add_row("Spec", "Schema Version", spec_schema_version)
 
     # Authentication Configuration
     if getattr(args, "auth_config", None):

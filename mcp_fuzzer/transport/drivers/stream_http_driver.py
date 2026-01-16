@@ -239,8 +239,8 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             if line.startswith("data:"):
                 event.setdefault("data", []).append(line[len("data:") :].lstrip())
                 continue
-            # Unknown field: treat as data continuation
-            event.setdefault("data", []).append(line)
+            # Unknown field: ignore per SSE spec
+            continue
 
         # If we exit loop without a response, return None
         return None

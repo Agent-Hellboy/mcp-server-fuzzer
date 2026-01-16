@@ -5,6 +5,8 @@ Unit tests for transport behaviors/mixins.
 
 import itertools
 import json
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -74,11 +76,19 @@ def test_validate_payload_serializable():
 
 
 def test_validate_network_request_blocks(monkeypatch):
+    """Test _validate_network_request raises NetworkError when host not allowed."""
     driver = DummyHttp()
-    monkeypatch.setattr(
-        "mcp_fuzzer.transport.interfaces.behaviors.is_host_allowed",
-        lambda url: False,
+
+    def deny_all(url, **kwargs):
+        return False
+
+    monkeypatch.setitem(
+        DummyHttp._validate_network_request.__globals__,
+        "safety_policy",
+        SimpleNamespace(is_host_allowed=deny_all),
     )
+
+    # Test that the method raises NetworkError
     with pytest.raises(NetworkError):
         driver._validate_network_request("http://example.com")
 

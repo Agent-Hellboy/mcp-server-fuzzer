@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from .driver import TransportDriver
 
 
+
 class JsonRpcAdapter:
     """Helper class providing JSON-RPC operations for transports.
 
@@ -90,7 +91,13 @@ class JsonRpcAdapter:
             self._logger.exception("Failed to fetch tools from server: %s", e)
             return []
 
-    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
+    async def call_tool(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
         """Call a tool on the server with the given arguments.
 
         Note: Safety checks and sanitization are handled at the client layer,
@@ -109,7 +116,8 @@ class JsonRpcAdapter:
         """
         transport = self._require_transport()
 
-        params = {"name": tool_name, "arguments": arguments}
+        if params is None:
+            params = {"name": tool_name, "arguments": arguments}
         return await transport.send_request("tools/call", params)
 
     async def ping(self) -> Any:

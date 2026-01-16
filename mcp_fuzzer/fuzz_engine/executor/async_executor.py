@@ -36,6 +36,10 @@ class AsyncFuzzExecutor:
             self._semaphore = asyncio.Semaphore(self.max_concurrency)
         return self._semaphore
 
+    @staticmethod
+    def _func_name(func: Callable) -> str:
+        return getattr(func, "__name__", "unknown")
+
     async def execute_batch(
         self, operations: list[tuple[Callable, list[Any], dict[str, Any]]]
     ) -> dict[str, list[Any]]:
@@ -52,14 +56,13 @@ class AsyncFuzzExecutor:
         errors = []
 
         # Create tasks for all operations
-        tasks = []
-        for i, (func, args, kwargs) in enumerate(operations):
-            func_name = func.__name__ if hasattr(func, "__name__") else "unknown"
-            task_name = f"fuzz_operation_{i}_{func_name}"
-            task = asyncio.create_task(
-                self._execute_single(func, args, kwargs), name=task_name
+        tasks = [
+            asyncio.create_task(
+                self._execute_single(func, args, kwargs),
+                name=f"fuzz_operation_{i}_{self._func_name(func)}",
             )
-            tasks.append(task)
+            for i, (func, args, kwargs) in enumerate(operations)
+        ]
 
         # Wait for all tasks to complete
         completed = await asyncio.gather(*tasks, return_exceptions=True)
@@ -94,13 +97,12 @@ class AsyncFuzzExecutor:
             try:
                 if asyncio.iscoroutinefunction(func):
                     return await func(*args, **kwargs)
-                else:
-                    # Run synchronous functions in thread pool (support kwargs)
-                    loop = asyncio.get_running_loop()
-                    bound = functools.partial(func, *args, **kwargs)
-                    return await loop.run_in_executor(self._thread_pool, bound)
+                # Run synchronous functions in thread pool (support kwargs)
+                loop = asyncio.get_running_loop()
+                bound = functools.partial(func, *args, **kwargs)
+                return await loop.run_in_executor(self._thread_pool, bound)
             except Exception as e:
-                self._logger.warning(f"Error executing {func.__name__}: {e}")
+                self._logger.warning(f"Error executing {self._func_name(func)}: {e}")
                 raise
 
     async def run_hypothesis_strategy(self, strategy: st.SearchStrategy) -> Any:

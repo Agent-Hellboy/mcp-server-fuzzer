@@ -23,18 +23,14 @@ class ResultCollector:
         Returns:
             List of collected results
         """
-        results = []
-
-        # Process successful results
-        for result in batch_results.get("results", []):
-            if result is not None:
-                results.append(result)
-
-        # Process errors
-        for error in batch_results.get("errors", []):
-            if error is not None:
-                results.append({"exception": str(error), "success": False})
-
+        results = [
+            result for result in batch_results.get("results", []) if result is not None
+        ]
+        results.extend(
+            {"exception": str(error), "success": False}
+            for error in batch_results.get("errors", [])
+            if error is not None
+        )
         return results
 
     def filter_results(

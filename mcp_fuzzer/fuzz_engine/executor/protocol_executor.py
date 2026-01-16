@@ -18,7 +18,7 @@ from .invariants import (
 )
 from ..mutators import ProtocolMutator, BatchMutator
 from ..fuzzerreporter import ResultBuilder, ResultCollector
-from ...spec_guard import get_spec_checks_for_method
+from ... import spec_guard
 
 
 class ProtocolExecutor:
@@ -178,10 +178,9 @@ class ProtocolExecutor:
         batch_results = await self.executor.execute_batch(operations)
 
         # Process results
-        results = []
-        for result in batch_results["results"]:
-            if result is not None:
-                results.append(result)
+        results = [
+            result for result in batch_results["results"] if result is not None
+        ]
 
         # Process errors
         for error in batch_results["errors"]:
@@ -272,7 +271,9 @@ class ProtocolExecutor:
                 method = (
                     fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
                 )
-                spec_checks, spec_scope = get_spec_checks_for_method(method, payload)
+                spec_checks, spec_scope = spec_guard.get_spec_checks_for_method(
+                    method, payload
+                )
 
             # Create the result
             result = self.result_builder.build_protocol_result(

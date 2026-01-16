@@ -12,6 +12,7 @@ from rich.console import Console
 from ...transport.catalog import build_driver as base_build_driver
 
 logger = logging.getLogger(__name__)
+AUTH_PROTOCOLS = ("http", "https", "streamablehttp", "sse")
 
 
 def build_driver_with_auth(args: Any, client_args: dict[str, Any]):
@@ -39,9 +40,9 @@ def build_driver_with_auth(args: Any, client_args: dict[str, Any]):
         factory_kwargs = {"timeout": args.timeout}
         safety_enabled = client_args.get("safety_enabled", True)
 
-        if args.protocol in ("http", "https", "streamablehttp", "sse"):
+        if args.protocol in AUTH_PROTOCOLS:
             factory_kwargs["safety_enabled"] = safety_enabled
-        if args.protocol in ("http", "https", "streamablehttp", "sse") and auth_headers:
+        if args.protocol in AUTH_PROTOCOLS and auth_headers:
             factory_kwargs["auth_headers"] = auth_headers
             logger.debug("Adding auth headers to %s transport", args.protocol.upper())
 

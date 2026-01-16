@@ -78,6 +78,16 @@ Examples:
     )
 
     parser.add_argument(
+        "--protocol-phase",
+        choices=["realistic", "aggressive"],
+        default="realistic",
+        help=(
+            "Protocol fuzzing phase: 'realistic' for structured protocol payloads, "
+            "'aggressive' for malformed/attack payloads (default: realistic)"
+        ),
+    )
+
+    parser.add_argument(
         "--protocol",
         type=str,
         choices=["http", "sse", "stdio", "streamablehttp"],
@@ -192,6 +202,13 @@ Examples:
         help=(
             "Enable system-level command blocking (fake executables on PATH) to "
             "prevent external app launches during fuzzing."
+        ),
+    )
+    parser.add_argument(
+        "--spec-schema-version",
+        help=(
+            "Use a specific MCP schema version "
+            "(e.g., 2025-06-18) for schema-driven fuzzing."
         ),
     )
     parser.add_argument(
