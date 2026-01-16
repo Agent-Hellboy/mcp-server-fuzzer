@@ -22,6 +22,14 @@ def apply_schema_edge_cases(
     if phase != "aggressive" or not isinstance(schema, dict):
         return value
 
+    # Honor const/enum before type-specific branching
+    if "const" in schema:
+        return schema["const"]
+
+    enum_values = schema.get("enum")
+    if isinstance(enum_values, list) and enum_values:
+        return enum_values[-1]
+
     schema_type = schema.get("type")
     if isinstance(schema_type, list):
         schema_type = schema_type[0]
@@ -44,13 +52,6 @@ def apply_schema_edge_cases(
         if value is not None:
             return value
         return _edge_number(schema, integer=False)
-
-    if "const" in schema:
-        return schema["const"]
-
-    enum_values = schema.get("enum")
-    if isinstance(enum_values, list) and enum_values:
-        return enum_values[-1]
 
     return value
 
@@ -145,21 +146,21 @@ def _edge_array(
             "concurrency",
             "edge-cases",
         ]
-        return focus_candidates[:length]
+        return (focus_candidates * math.ceil(length / len(focus_candidates)))[:length]
     if "point" in lowered_key:
         key_points = [
             "Ensure RFC compliance for new endpoints",
             "Highlight security token handling",
             "Document concurrency boundaries for tasks",
         ]
-        return key_points[:length]
+        return (key_points * math.ceil(length / len(key_points)))[:length]
     if "stack" in lowered_key or "solution" in lowered_key:
         stack_examples = [
             "Node.js + Express + WebSocket",
             "Rust + Tokio + Axum",
             "Spring Boot + Servlet",
         ]
-        return stack_examples[:length]
+        return (stack_examples * math.ceil(length / len(stack_examples)))[:length]
 
     return [
         apply_schema_edge_cases(None, items_schema, phase=phase, key=key)
@@ -183,8 +184,10 @@ def _edge_string(schema: dict[str, Any], key: str | None) -> str:
     max_length = schema.get("maxLength")
     if isinstance(max_length, int) and max_length < min_length:
         max_length = min_length
+    if isinstance(max_length, int) and max_length == 0:
+        return ""
     target_length = max_length if isinstance(max_length, int) else max(min_length, 64)
-    target_length = max(target_length, min_length, 1)
+    target_length = max(target_length, min_length)
     pattern = schema.get("pattern")
     format_type = schema.get("format")
 
@@ -320,7 +323,11 @@ def _semantic_string_by_key(
 
 def apply_semantic_combos(patched: dict[str, Any]) -> None:
     if patched.get("role") == "admin":
-        patched["age"] = min(int(patched.get("age", 13)), 17)
+        try:
+            age = int(patched.get("age", 13))
+        except (TypeError, ValueError):
+            age = 13
+        patched["age"] = min(age, 17)
     operation = patched.get("operation")
     if isinstance(operation, str) and operation == "divide":
         patched["second"] = 0

@@ -21,12 +21,13 @@ The e2e tests automatically:
 - **Duration**: ~2-4 minutes
 - **Environment**: Docker
 
-### `test_mcp_server_chart.sh`
-- **Server**: MCP Server Chart (Data visualization)
-- **Tools**: 25 chart generation tools
+### `test_everything_server.sh`
+
+- **Server**: Everything MCP Server (Reference server covering prompts, resources, and tools)
 - **Test Type**: Combined tools + protocol fuzzing
-- **Expected**: Low success rate with comprehensive vulnerability detection
-- **Duration**: ~3-5 minutes
+- **Expected**: High success rate with broad feature coverage
+- **Duration**: ~2-4 minutes
+- **Environment**: Local (requires Node.js and server setup)
 
 ## Usage
 
@@ -36,8 +37,8 @@ The e2e tests automatically:
 # Test Everything Server (Docker)
 ./tests/e2e/test_everything_server_docker.sh
 
-# Test MCP Server Chart
-./tests/e2e/test_mcp_server_chart.sh
+# Test Everything Server (Local)
+./tests/e2e/test_everything_server.sh
 ```
 
 ### Run All E2E Tests
@@ -62,7 +63,6 @@ These tests are designed to run in CI environments. They include:
 ### Expected Behavior
 
 - **Everything MCP Server**: Should pass with high success rate
-- **MCP Server Chart**: Should detect multiple vulnerabilities and exceptions
 
 ### Output
 

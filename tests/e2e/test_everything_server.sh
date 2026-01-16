@@ -23,7 +23,7 @@ SERVER_SUBDIR="src/everything"
 FUZZ_OUTPUT_DIR="/tmp/everything_server_fuzz_$(date +%s)"
 REPO_DIR=""
 CLONED_REPO_DIR=""
-SCHEMA_VERSION="2025-11-25"
+SCHEMA_VERSION="${MCP_SPEC_SCHEMA_VERSION:-2025-11-25}"
 export MCP_SPEC_SCHEMA_VERSION="$SCHEMA_VERSION"
 
 # Cleanup function

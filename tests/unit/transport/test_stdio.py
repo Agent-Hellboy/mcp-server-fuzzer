@@ -9,7 +9,12 @@ import pytest
 # Import the class to test
 from mcp_fuzzer.transport.drivers.stdio_driver import StdioDriver
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, WatchdogConfig
-from mcp_fuzzer.exceptions import MCPError, ServerError, TransportError
+from mcp_fuzzer.exceptions import (
+    MCPError,
+    ProcessStartError,
+    ServerError,
+    TransportError,
+)
 
 
 class TestStdioDriver:
@@ -489,3 +494,181 @@ class TestStdioDriver:
         ):
             with pytest.raises(TransportError):
                 await self.transport.send_raw({"raw": "data"})
+
+    def test_get_lock_lazy_initialization(self):
+        """Test _get_lock creates lock lazily."""
+        transport = StdioDriver("test_command")
+        assert transport._lock is None
+        lock1 = transport._get_lock()
+        assert transport._lock is not None
+        assert isinstance(lock1, asyncio.Lock)
+        # Second call should return same lock
+        lock2 = transport._get_lock()
+        assert lock1 is lock2
+
+    def test_add_observer(self):
+        """Test add_observer method."""
+        callback = MagicMock()
+        # Mock the manager's add_observer method
+        with patch.object(self.transport.manager, "add_observer") as mock_add:
+            self.transport.add_observer(callback)
+            # Verify observer was added to manager
+            mock_add.assert_called_once_with(callback)
+
+    def test_get_process_manager_lazy_initialization(self):
+        """Test _get_process_manager creates manager lazily."""
+        transport = StdioDriver("test_command", timeout=15.0)
+        assert transport.process_manager is None
+        manager = transport._get_process_manager()
+        assert transport.process_manager is not None
+        assert isinstance(manager, ProcessManager)
+        # Second call should return same manager
+        manager2 = transport._get_process_manager()
+        assert manager is manager2
+
+    @pytest.mark.asyncio
+    async def test_ensure_connection_early_return_when_initialized(self):
+        """Test _ensure_connection returns early when already initialized."""
+        mock_process = AsyncMock()
+        mock_process.returncode = None
+        mock_process.pid = 12345
+        self.transport.process = mock_process
+        self.transport._initialized = True
+
+        # Should return immediately without locking
+        await self.transport._ensure_connection()
+
+        # Verify lock was not acquired (early return before lock)
+        # Since we're using a mock, we can't easily verify this, but the test
+        # ensures the code path works
+
+    @pytest.mark.skipif(
+        sys.platform != "win32",
+        reason="Windows-specific test: requires Windows subprocess constants",
+    )
+    @pytest.mark.asyncio
+    async def test_ensure_connection_fallback_termination_windows(self):
+        """Test fallback process termination on Windows."""
+        mock_process = MagicMock()
+        # Remove pid attribute so hasattr returns False and we hit the fallback path
+        delattr(mock_process, "pid")
+        self.transport.process = mock_process
+        self.transport._initialized = True
+        self.transport.process_manager.stop_process = AsyncMock()
+
+        with patch("mcp_fuzzer.transport.drivers.stdio_driver._signal") as mock_signal:
+            mock_signal.CTRL_BREAK_EVENT = 1
+            with patch.object(
+                mock_process, "send_signal", side_effect=AttributeError()
+            ):
+                with patch.object(mock_process, "kill") as mock_kill:
+                    # Need to mock the lock and other dependencies
+                    self.transport._lock = AsyncMock()
+                    mock_new_process = AsyncMock()
+                    mock_new_process.pid = 12345
+                    mock_new_process.stdin = AsyncMock()
+                    mock_new_process.stdout = AsyncMock()
+                    mock_new_process.stderr = AsyncMock()
+                    mock_new_process.returncode = None
+                    with patch(
+                        "asyncio.create_subprocess_exec",
+                        return_value=mock_new_process,
+                    ):
+                        await self.transport._ensure_connection()
+                        mock_kill.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_ensure_connection_fallback_termination_unix(self):
+        """Test fallback process termination on Unix when process manager fails."""
+        mock_process = MagicMock()
+        mock_process.pid = 12345
+        self.transport.process = mock_process
+        self.transport._initialized = True
+        # Make process manager fail - exception will be caught and logged
+        self.transport.process_manager.stop_process = AsyncMock(
+            side_effect=Exception("Manager failed")
+        )
+
+        with patch("sys.platform", "linux"):
+            with patch.object(mock_process, "kill") as mock_kill:
+                # Need to mock the lock and other dependencies
+                self.transport._lock = AsyncMock()
+                mock_new_process = AsyncMock()
+                mock_new_process.pid = 12345
+                mock_new_process.stdin = AsyncMock()
+                mock_new_process.stdout = AsyncMock()
+                mock_new_process.stderr = AsyncMock()
+                mock_new_process.returncode = None
+                with patch(
+                    "asyncio.create_subprocess_exec", return_value=mock_new_process
+                ):
+                    # Process manager fails, exception is caught, code continues
+                    await self.transport._ensure_connection()
+                    # Process manager was called
+                    self.transport.process_manager.stop_process.assert_awaited_once()
+                    # But kill is not called because exception was caught
+                    mock_kill.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ensure_connection_command_as_list(self):
+        """Test _ensure_connection with command as list instead of string."""
+        transport = StdioDriver(["python", "-c", "print('test')"])
+        transport.process_manager = AsyncMock(spec=ProcessManager)
+        transport._lock = AsyncMock(spec=asyncio.Lock)
+
+        mock_process = AsyncMock()
+        mock_process.stdin = AsyncMock()
+        mock_process.stdout = AsyncMock()
+        mock_process.stderr = AsyncMock()
+        mock_process.pid = 12345
+        mock_process.returncode = None
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=mock_process
+        ) as mock_create:
+            await transport._ensure_connection()
+            # Should pass command list directly without shlex.split
+            mock_create.assert_called_once()
+            call_args = mock_create.call_args[0]
+            assert call_args[0:3] == ("python", "-c", "print('test')")
+
+    @pytest.mark.asyncio
+    async def test_ensure_connection_process_start_exception(self):
+        """Test _ensure_connection handles process start exceptions."""
+        transport = StdioDriver("nonexistent_command")
+        transport.process_manager = AsyncMock(spec=ProcessManager)
+        transport._lock = AsyncMock(spec=asyncio.Lock)
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=FileNotFoundError("Command not found"),
+        ):
+            with pytest.raises(ProcessStartError):
+                await transport._ensure_connection()
+            assert transport._initialized is False
+
+    @pytest.mark.asyncio
+    async def test_send_message_exception_handling(self):
+        """Test _send_message handles exceptions."""
+        self.transport._initialized = True
+        self.transport.stdin = AsyncMock()
+        self.transport.stdin.write = MagicMock(side_effect=OSError("Write failed"))
+
+        with pytest.raises(TransportError):
+            await self.transport._send_message({"test": "message"})
+
+        assert self.transport._initialized is False
+
+    @pytest.mark.asyncio
+    async def test_handle_server_request_non_matching_method(self):
+        """Test _handle_server_request with non-matching method."""
+        message = {"jsonrpc": "2.0", "method": "other/method", "id": 1}
+        result = await self.transport._handle_server_request(message)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_readline_with_cap_no_stdout(self):
+        """Test _readline_with_cap when stdout is None."""
+        self.transport.stdout = None
+        result = await self.transport._readline_with_cap()
+        assert result is None

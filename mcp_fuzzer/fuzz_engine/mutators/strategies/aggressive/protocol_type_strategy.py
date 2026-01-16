@@ -156,6 +156,8 @@ def _aggressive_spec_request(
     if not method:
         return None
     request = method()
+    if request is None:
+        return None
     if overrides and isinstance(request.get("params"), dict):
         request["params"].update(overrides)
     return request

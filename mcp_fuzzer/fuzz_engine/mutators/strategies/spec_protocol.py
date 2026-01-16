@@ -250,11 +250,11 @@ def get_spec_protocol_fuzzer_method(
     protocol_type: str,
     phase: str = "aggressive",
     schema_version: str | None = None,
-) -> Callable[[], dict[str, Any]] | None:
+) -> Callable[[], dict[str, Any] | None] | None:
     if not _definition_for(protocol_type, _schema_version_or_env(schema_version)):
         return None
 
-    def _build() -> dict[str, Any]:
+    def _build() -> dict[str, Any] | None:
         return _build_schema_request(
             protocol_type, phase, schema_version=_schema_version_or_env(schema_version)
         )

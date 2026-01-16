@@ -201,10 +201,10 @@ class TestFilesystemPathSanitization:
 
             sanitized = safety_filter.sanitize_tool_arguments("test_tool", arguments)
 
-            # Dangerous content should be blocked
-            assert sanitized["content"] == "[BLOCKED_SCRIPT]"
+            # Fuzzing inputs (scripts) should pass through unchanged
+            assert sanitized["content"] == "<script>alert('xss')</script>"
 
-            # Filesystem path should be sanitized
+            # Filesystem path should still be sanitized (prevents path traversal)
             sandbox_root = get_sandbox().get_sandbox_root()
             assert sanitized["path"].startswith(sandbox_root)
 

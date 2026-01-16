@@ -120,14 +120,27 @@ class PathSanitizer:
         if not value:
             return False
 
+        # Exclude script/HTML/URL content - these are fuzzing inputs, not paths
+        # Check this FIRST before any path detection logic
+        value_lower = value.lower().strip()
+        if value_lower.startswith(("<script", "<html", "<body", "<div", "<span")):
+            return False
+        if value_lower.startswith(("http://", "https://", "file://", "ftp://")):
+            return False
+        if "://" in value_lower:
+            return False
+        # Exclude HTML/script-like content (contains tags)
+        if "<" in value_lower and ">" in value_lower:
+            return False
+
         normalized_key = key.lower()
         if normalized_key in FILESYSTEM_ARG_NAMES:
             return True
 
+        # Only treat as path if it contains path separators
         if "/" in value or "\\" in value:
             return True
 
-        value_lower = value.lower()
         if value_lower.endswith(_COMMON_FILE_SUFFIXES):
             return True
 
