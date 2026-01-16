@@ -84,20 +84,33 @@ class MCPFuzzerClient:
         """Direct access to the reporter for advanced usage."""
         return self._reporter
 
+    def _resolve_tool_timeout(self, tool_timeout: float | None) -> float | None:
+        return tool_timeout or self.tool_timeout
+
+    async def _fuzz_protocol_group(
+        self, protocol_types: tuple[str, ...], runs_per_type: int, phase: str
+    ) -> dict[str, list[dict[str, Any]]]:
+        results: dict[str, list[dict[str, Any]]] = {}
+        for protocol_type in protocol_types:
+            results[protocol_type] = await self.protocol_client.fuzz_protocol_type(
+                protocol_type, runs=runs_per_type, phase=phase
+            )
+        return results
+
     # ============================================================================
     # Tool Fuzzing Methods - Delegate to ToolClient
     # ============================================================================
 
     async def fuzz_tool(self, tool, runs=10, tool_timeout=None):
         """Fuzz a specific tool."""
-        effective_timeout = tool_timeout or self.tool_timeout
+        effective_timeout = self._resolve_tool_timeout(tool_timeout)
         return await self.tool_client.fuzz_tool(
             tool, runs=runs, tool_timeout=effective_timeout
         )
 
     async def fuzz_all_tools(self, runs_per_tool=10, tool_timeout=None):
         """Fuzz all available tools."""
-        effective_timeout = tool_timeout or self.tool_timeout
+        effective_timeout = self._resolve_tool_timeout(tool_timeout)
         return await self.tool_client.fuzz_all_tools(
             runs_per_tool=runs_per_tool,
             tool_timeout=effective_timeout,
@@ -141,29 +154,27 @@ class MCPFuzzerClient:
 
     async def fuzz_resources(self, runs_per_type=5, phase="realistic"):
         """Fuzz resource-related protocol endpoints."""
-        results: dict[str, list[dict[str, Any]]] = {}
-        for protocol_type in (
-            "ListResourcesRequest",
-            "ReadResourceRequest",
-            "ListResourceTemplatesRequest",
-        ):
-            results[protocol_type] = await self.protocol_client.fuzz_protocol_type(
-                protocol_type, runs=runs_per_type, phase=phase
-            )
-        return results
+        return await self._fuzz_protocol_group(
+            (
+                "ListResourcesRequest",
+                "ReadResourceRequest",
+                "ListResourceTemplatesRequest",
+            ),
+            runs_per_type,
+            phase,
+        )
 
     async def fuzz_prompts(self, runs_per_type=5, phase="realistic"):
         """Fuzz prompt-related protocol endpoints."""
-        results: dict[str, list[dict[str, Any]]] = {}
-        for protocol_type in (
-            "ListPromptsRequest",
-            "GetPromptRequest",
-            "CompleteRequest",
-        ):
-            results[protocol_type] = await self.protocol_client.fuzz_protocol_type(
-                protocol_type, runs=runs_per_type, phase=phase
-            )
-        return results
+        return await self._fuzz_protocol_group(
+            (
+                "ListPromptsRequest",
+                "GetPromptRequest",
+                "CompleteRequest",
+            ),
+            runs_per_type,
+            phase,
+        )
 
     # ============================================================================
     # Spec Guard Methods

@@ -11,6 +11,7 @@ import httpx
 import pytest
 
 from mcp_fuzzer.transport.drivers.stream_http_driver import StreamHttpDriver
+from mcp_fuzzer.exceptions import TransportError
 
 
 class FakeResponse:
@@ -22,6 +23,25 @@ class FakeResponse:
     async def aiter_lines(self):
         for line in self._lines:
             yield line
+
+
+class FakeJsonResponse(FakeResponse):
+    def __init__(self, status_code=200, headers=None, lines=None, json_data=None):
+        super().__init__(status_code=status_code, headers=headers, lines=lines)
+        self._json_data = json_data
+        self.text = ""
+
+    def json(self):
+        return self._json_data
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            request = httpx.Request("POST", "http://localhost")
+            raise httpx.HTTPStatusError(
+                "error",
+                request=request,
+                response=self,
+            )
 
 
 class MockClientContext:
@@ -299,3 +319,87 @@ async def test_send_client_response_with_safety(monkeypatch):
     await driver._send_client_response({"result": "ok"})
 
     client.post.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_send_raw_json_sets_initialized_and_protocol_version(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    response = FakeJsonResponse(
+        headers={"content-type": "application/json"},
+        json_data={"result": {"protocolVersion": "v1"}},
+    )
+    client = MagicMock()
+    client.post = AsyncMock(return_value=response)
+
+    monkeypatch.setattr(
+        driver,
+        "_create_http_client",
+        create_mock_client_factory(client),
+    )
+
+    result = await driver.send_raw({"method": "initialize"})
+
+    assert result == {"protocolVersion": "v1"}
+    assert driver.protocol_version == "v1"
+    assert driver._initialized is True
+
+
+@pytest.mark.asyncio
+async def test_send_raw_not_found_raises(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    response = FakeJsonResponse(
+        status_code=404,
+        headers={"content-type": "application/json"},
+        json_data={"result": {}},
+    )
+    client = MagicMock()
+    client.post = AsyncMock(return_value=response)
+
+    monkeypatch.setattr(
+        driver,
+        "_create_http_client",
+        create_mock_client_factory(client),
+    )
+
+    with pytest.raises(TransportError):
+        await driver.send_raw({"method": "tools/list"})
+
+
+@pytest.mark.asyncio
+async def test_send_raw_unexpected_content_type(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    response = FakeJsonResponse(
+        headers={"content-type": "text/plain"},
+        json_data={"result": {}},
+    )
+    client = MagicMock()
+    client.post = AsyncMock(return_value=response)
+
+    monkeypatch.setattr(
+        driver,
+        "_create_http_client",
+        create_mock_client_factory(client),
+    )
+
+    with pytest.raises(TransportError):
+        await driver.send_raw({"method": "tools/list"})
+
+
+@pytest.mark.asyncio
+async def test_post_with_retries_unsafe_method(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    client = MagicMock()
+    client.post = AsyncMock(side_effect=httpx.ConnectError("boom"))
+    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+
+    payload = {"method": "tools/call"}
+    with pytest.raises(TransportError):
+        await driver._post_with_retries(
+            client,
+            "http://localhost",
+            payload,
+            {},
+            retries=2,
+        )
+
+    asyncio.sleep.assert_not_awaited()

@@ -259,6 +259,34 @@ def test_sanitize_tool_arguments_complex(safety_filter):
     assert result["nested"]["dangerous"] == "http://evil.org"
 
 
+def test_set_fs_root_handles_initialize_failure():
+    """Test set_fs_root falls back to default sandbox when init fails."""
+    sandbox_provider = MagicMock()
+    sandbox_provider.initialize.side_effect = [Exception("boom"), None]
+    safety_filter = SafetyFilter(sandbox_provider=sandbox_provider)
+
+    safety_filter.set_fs_root("/tmp")
+
+    assert sandbox_provider.initialize.call_count == 2
+    sandbox_provider.initialize.assert_any_call("/tmp")
+    sandbox_provider.initialize.assert_any_call(".")
+
+
+def test_sanitize_tool_arguments_uses_sandbox():
+    """Test sanitize_tool_arguments routes through sandbox sanitizer."""
+    sandbox_provider = MagicMock()
+    sandbox_provider.get_sandbox.return_value = object()
+    safety_filter = SafetyFilter(sandbox_provider=sandbox_provider)
+
+    with patch("mcp_fuzzer.safety_system.safety.PathSanitizer") as mock_sanitizer:
+        mock_instance = mock_sanitizer.return_value
+        mock_instance.sanitize_arguments.return_value = {"path": "safe"}
+        result = safety_filter.sanitize_tool_arguments("file_tool", {"path": "../etc"})
+
+    assert result == {"path": "safe"}
+    mock_instance.sanitize_arguments.assert_called_once()
+
+
 def test_create_safe_mock_response(safety_filter):
     """Test create_safe_mock_response."""
     response = safety_filter.create_safe_mock_response("test_tool")
@@ -542,3 +570,53 @@ def test_real_world_scenarios(safety_filter_integration):
     assert result["endpoints"]["dangerous"] == "http://malicious.org/api"
     assert result["commands"]["open"] == "xdg-open file.pdf"
     assert result["commands"]["backup"] == "tar -czf backup.tar.gz /data"
+
+
+def test_get_blocked_operations_summary_counts(safety_filter):
+    """Test blocked operations summary aggregation."""
+    safety_filter.blocked_operations = [
+        {
+            "tool_name": "tool_a",
+            "reason": "Reason A",
+            "dangerous_content": ["URL in 'arg': http://x"],
+        },
+        {
+            "tool_name": "tool_a",
+            "reason": "Reason B",
+            "dangerous_content": ["Command in 'arg': rm -rf /"],
+        },
+        {
+            "tool_name": "tool_b",
+            "reason": "Reason A",
+            "dangerous_content": [],
+        },
+    ]
+
+    summary = safety_filter.get_blocked_operations_summary()
+
+    assert summary["total_blocked"] == 3
+    assert summary["tools_blocked"]["tool_a"] == 2
+    assert summary["tools_blocked"]["tool_b"] == 1
+    assert summary["reasons"]["Reason A"] == 2
+    assert summary["reasons"]["Reason B"] == 1
+    assert summary["dangerous_content_types"]["urls"] == 1
+    assert summary["dangerous_content_types"]["commands"] == 1
+
+
+def test_iter_string_values_and_preview():
+    """Test _iter_string_values and _preview_value helpers."""
+    safety_filter = SafetyFilter()
+    values = list(
+        safety_filter._iter_string_values(
+            "",
+            {"a": "x", "b": ["y", {"c": "z"}]},
+        )
+    )
+    assert ("a", "x") in values
+    assert ("b[0]", "y") in values
+    assert ("b[1].c", "z") in values
+
+    long_value = "x" * 60
+    preview = safety_filter._preview_value(long_value, limit=50)
+    assert preview.endswith("...")
+    assert len(preview) == 53

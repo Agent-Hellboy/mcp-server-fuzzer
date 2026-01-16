@@ -19,6 +19,22 @@ class ProtocolStrategies:
 
     REALISTIC_PHASE = "realistic"
     AGGRESSIVE_PHASE = "aggressive"
+    DEFAULT_PROTOCOL_TYPES = (
+        "InitializeRequest",
+        "ListResourcesRequest",
+        "ReadResourceRequest",
+        "ListPromptsRequest",
+        "GetPromptRequest",
+        "ListRootsRequest",
+        "SetLevelRequest",
+        "CompleteRequest",
+        "ListResourceTemplatesRequest",
+        "ElicitRequest",
+        "PingRequest",
+        "SubscribeRequest",
+        "UnsubscribeRequest",
+        "CreateMessageRequest",
+    )
 
     @staticmethod
     def get_protocol_fuzzer_method(
@@ -38,13 +54,7 @@ class ProtocolStrategies:
     ) -> list[dict[str, Any]]:
         """Generate a batch of JSON-RPC requests/notifications."""
         if protocol_types is None:
-            protocol_types = [
-                "InitializeRequest", "ListResourcesRequest", "ReadResourceRequest",
-                "ListPromptsRequest", "GetPromptRequest", "ListRootsRequest",
-                "SetLevelRequest", "CompleteRequest", "ListResourceTemplatesRequest",
-                "ElicitRequest", "PingRequest", "SubscribeRequest",
-                "UnsubscribeRequest", "CreateMessageRequest",
-            ]
+            protocol_types = list(ProtocolStrategies.DEFAULT_PROTOCOL_TYPES)
 
         if not protocol_types:
             return []
@@ -81,8 +91,7 @@ class ProtocolStrategies:
         if batch and not any(
             "id" in req and req.get("id") is not None for req in batch
         ):
-            if batch:
-                batch[0]["id"] = random.randint(1, 1000)
+            batch[0]["id"] = random.randint(1, 1000)
 
         return batch
 

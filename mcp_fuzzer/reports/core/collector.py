@@ -142,20 +142,21 @@ class ReportCollector:
         return errors
 
     def _calculate_tool_success_rate(self, summary: ToolSummary) -> float:
-        if summary.total_runs <= 0:
-            return 0.0
         failures = summary.tools_with_errors + summary.tools_with_exceptions
-        successes = max(summary.total_runs - failures, 0)
-        return (successes / summary.total_runs) * 100
+        return self._success_rate(summary.total_runs, failures)
 
     def _calculate_protocol_success_rate(self, summary: ProtocolSummary) -> float:
-        if summary.total_runs <= 0:
-            return 0.0
         failures = (
             summary.protocol_types_with_errors + summary.protocol_types_with_exceptions
         )
-        successes = max(summary.total_runs - failures, 0)
-        return (successes / summary.total_runs) * 100
+        return self._success_rate(summary.total_runs, failures)
+
+    @staticmethod
+    def _success_rate(total_runs: int, failures: int) -> float:
+        if total_runs <= 0:
+            return 0.0
+        successes = max(total_runs - failures, 0)
+        return (successes / total_runs) * 100
 
     def _coerce_result(self, result: dict[str, Any] | RunRecord) -> RunRecord:
         if isinstance(result, RunRecord):

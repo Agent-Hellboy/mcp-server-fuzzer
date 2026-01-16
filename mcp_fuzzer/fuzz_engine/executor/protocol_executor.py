@@ -178,10 +178,9 @@ class ProtocolExecutor:
         batch_results = await self.executor.execute_batch(operations)
 
         # Process results
-        results = []
-        for result in batch_results["results"]:
-            if result is not None:
-                results.append(result)
+        results = [
+            result for result in batch_results["results"] if result is not None
+        ]
 
         # Process errors
         for error in batch_results["errors"]:

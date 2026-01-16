@@ -313,121 +313,87 @@ class ProtocolClient:
         self, protocol_type: str, data: dict[str, Any]
     ) -> dict[str, Any]:
         """Send a protocol request based on the type."""
-        if protocol_type == "InitializeRequest":
-            return await self._send_initialize_request(data)
-        elif protocol_type == "ProgressNotification":
-            return await self._send_progress_notification(data)
-        elif protocol_type == "CancelNotification":
-            return await self._send_cancel_notification(data)
-        elif protocol_type == "ListResourcesRequest":
-            return await self._send_list_resources_request(data)
-        elif protocol_type == "ReadResourceRequest":
-            return await self._send_read_resource_request(data)
-        elif protocol_type == "ListResourceTemplatesRequest":
-            return await self._send_list_resource_templates_request(data)
-        elif protocol_type == "SetLevelRequest":
-            return await self._send_set_level_request(data)
-        elif protocol_type == "CreateMessageRequest":
-            return await self._send_create_message_request(data)
-        elif protocol_type == "ListPromptsRequest":
-            return await self._send_list_prompts_request(data)
-        elif protocol_type == "GetPromptRequest":
-            return await self._send_get_prompt_request(data)
-        elif protocol_type == "ListRootsRequest":
-            return await self._send_list_roots_request(data)
-        elif protocol_type == "SubscribeRequest":
-            return await self._send_subscribe_request(data)
-        elif protocol_type == "UnsubscribeRequest":
-            return await self._send_unsubscribe_request(data)
-        elif protocol_type == "CompleteRequest":
-            return await self._send_complete_request(data)
-        else:
-            # Generic JSON-RPC request
-            return await self._send_generic_request(data)
+        handler = {
+            "InitializeRequest": self._send_initialize_request,
+            "ProgressNotification": self._send_progress_notification,
+            "CancelNotification": self._send_cancel_notification,
+            "ListResourcesRequest": self._send_list_resources_request,
+            "ReadResourceRequest": self._send_read_resource_request,
+            "ListResourceTemplatesRequest": self._send_list_resource_templates_request,
+            "SetLevelRequest": self._send_set_level_request,
+            "CreateMessageRequest": self._send_create_message_request,
+            "ListPromptsRequest": self._send_list_prompts_request,
+            "GetPromptRequest": self._send_get_prompt_request,
+            "ListRootsRequest": self._send_list_roots_request,
+            "SubscribeRequest": self._send_subscribe_request,
+            "UnsubscribeRequest": self._send_unsubscribe_request,
+            "CompleteRequest": self._send_complete_request,
+        }.get(protocol_type, self._send_generic_request)
+        return await handler(data)
+
+    async def _send_notification(self, method: str, data: Any) -> dict[str, str]:
+        params = self._extract_params(data)
+        await self.transport.send_notification(method, params)
+        return {"status": "notification_sent"}
 
     async def _send_initialize_request(self, data: Any) -> dict[str, Any]:
         """Send an initialize request."""
-        return await self.transport.send_request(
-            "initialize", self._extract_params(data)
-        )
+        return await self._send_request("initialize", data)
 
     async def _send_progress_notification(self, data: Any) -> dict[str, str]:
         """Send a progress notification as JSON-RPC notification (no id)."""
-        params = self._extract_params(data)
-        await self.transport.send_notification("notifications/progress", params)
-        return {"status": "notification_sent"}
+        return await self._send_notification("notifications/progress", data)
 
     async def _send_cancel_notification(self, data: Any) -> dict[str, str]:
         """Send a cancel notification as JSON-RPC notification (no id)."""
-        params = self._extract_params(data)
-        await self.transport.send_notification("notifications/cancelled", params)
-        return {"status": "notification_sent"}
+        return await self._send_notification("notifications/cancelled", data)
 
     async def _send_list_resources_request(self, data: Any) -> dict[str, Any]:
         """Send a list resources request."""
-        return await self.transport.send_request(
-            "resources/list", self._extract_params(data)
-        )
+        return await self._send_request("resources/list", data)
 
     async def _send_read_resource_request(self, data: Any) -> dict[str, Any]:
         """Send a read resource request."""
-        return await self.transport.send_request(
-            "resources/read", self._extract_params(data)
-        )
+        return await self._send_request("resources/read", data)
 
     async def _send_list_resource_templates_request(self, data: Any) -> dict[str, Any]:
         """Send a list resource templates request."""
-        return await self.transport.send_request(
-            "resources/templates/list", self._extract_params(data)
-        )
+        return await self._send_request("resources/templates/list", data)
 
     async def _send_set_level_request(self, data: Any) -> dict[str, Any]:
         """Send a set level request."""
-        return await self.transport.send_request(
-            "logging/setLevel", self._extract_params(data)
-        )
+        return await self._send_request("logging/setLevel", data)
 
     async def _send_create_message_request(self, data: Any) -> dict[str, Any]:
         """Send a create message request."""
-        return await self.transport.send_request(
-            "sampling/createMessage", self._extract_params(data)
-        )
+        return await self._send_request("sampling/createMessage", data)
 
     async def _send_list_prompts_request(self, data: Any) -> dict[str, Any]:
         """Send a list prompts request."""
-        return await self.transport.send_request(
-            "prompts/list", self._extract_params(data)
-        )
+        return await self._send_request("prompts/list", data)
 
     async def _send_get_prompt_request(self, data: Any) -> dict[str, Any]:
         """Send a get prompt request."""
-        return await self.transport.send_request(
-            "prompts/get", self._extract_params(data)
-        )
+        return await self._send_request("prompts/get", data)
 
     async def _send_list_roots_request(self, data: Any) -> dict[str, Any]:
         """Send a list roots request."""
-        return await self.transport.send_request(
-            "roots/list", self._extract_params(data)
-        )
+        return await self._send_request("roots/list", data)
 
     async def _send_subscribe_request(self, data: Any) -> dict[str, Any]:
         """Send a subscribe request."""
-        return await self.transport.send_request(
-            "resources/subscribe", self._extract_params(data)
-        )
+        return await self._send_request("resources/subscribe", data)
 
     async def _send_unsubscribe_request(self, data: Any) -> dict[str, Any]:
         """Send an unsubscribe request."""
-        return await self.transport.send_request(
-            "resources/unsubscribe", self._extract_params(data)
-        )
+        return await self._send_request("resources/unsubscribe", data)
 
     async def _send_complete_request(self, data: Any) -> dict[str, Any]:
         """Send a complete request."""
-        return await self.transport.send_request(
-            "completion/complete", self._extract_params(data)
-        )
+        return await self._send_request("completion/complete", data)
+
+    async def _send_request(self, method: str, data: Any) -> dict[str, Any]:
+        return await self.transport.send_request(method, self._extract_params(data))
 
     async def _send_generic_request(self, data: Any) -> dict[str, Any]:
         """Send a generic JSON-RPC request."""

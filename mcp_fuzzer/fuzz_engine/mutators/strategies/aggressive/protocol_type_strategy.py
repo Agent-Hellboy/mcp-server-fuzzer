@@ -110,15 +110,34 @@ def choice_lazy(options):
 
 def generate_malicious_value() -> Any:
     """Generate malicious values of various types."""
-    return choice_lazy([
-        None, "", "null", "undefined", "NaN", "Infinity", "-Infinity",
-        True, False, 0, -1, 999999999, -999999999, 3.14159, -3.14159,
-        [], {}, lambda: generate_malicious_string(),
-        {"__proto__": {"isAdmin": True}},
-        {"constructor": {"prototype": {"isAdmin": True}}},
-        lambda: [generate_malicious_string()],
-        lambda: {"evil": generate_malicious_string()},
-    ])
+    if random.random() < 0.2:
+        return None
+    return choice_lazy(
+        [
+            None,
+            "",
+            "null",
+            "undefined",
+            "NaN",
+            "Infinity",
+            "-Infinity",
+            True,
+            False,
+            0,
+            -1,
+            999999999,
+            -999999999,
+            3.14159,
+            -3.14159,
+            [],
+            {},
+            lambda: generate_malicious_string(),
+            {"__proto__": {"isAdmin": True}},
+            {"constructor": {"prototype": {"isAdmin": True}}},
+            lambda: [generate_malicious_string()],
+            lambda: {"evil": generate_malicious_string()},
+        ]
+    )
 
 
 def generate_experimental_payload():

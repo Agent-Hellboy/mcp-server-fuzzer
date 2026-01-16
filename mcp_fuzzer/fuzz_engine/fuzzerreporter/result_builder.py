@@ -48,14 +48,17 @@ class ResultBuilder:
             "success": success,
         }
 
-        if args is not None:
-            result["args"] = args
-
-        if original_args is not None:
-            result["original_args"] = original_args
-
-        if exception is not None:
-            result["exception"] = exception
+        result.update(
+            {
+                key: value
+                for key, value in {
+                    "args": args,
+                    "original_args": original_args,
+                    "exception": exception,
+                }.items()
+                if value is not None
+            }
+        )
 
         if safety_blocked:
             result["safety_blocked"] = True

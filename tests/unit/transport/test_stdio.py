@@ -208,47 +208,79 @@ class TestStdioDriver:
             mock_ensure.assert_awaited_once()
             assert result == {"response": "ok"}
 
-    @pytest.mark.skip(
-        reason=(
-            "Test isolation issue: send_request requires complex mocking of UUID "
-            "generation, message handling, and server request detection. This "
-            "functionality is better covered by integration tests that exercise "
-            "the full stdio transport flow."
-        )
-    )
     @pytest.mark.asyncio
     async def test_send_request(self):
         """Test send_request method."""
-        # This test is skipped - functionality is covered in integration tests
-        pass
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()) as mock_send,
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.uuid.uuid4"
+            ) as mock_uuid4,
+            patch.object(
+                self.transport,
+                "_receive_message",
+                new=AsyncMock(
+                    return_value={"id": "req-id", "result": {"ok": True}}
+                ),
+            ),
+        ):
+            mock_uuid4.return_value = "req-id"
+            result = await self.transport.send_request("method", {"x": 1})
 
-    @pytest.mark.skip(
-        reason=(
-            "Test isolation issue: send_request with server requests requires "
-            "complex mocking of message sequencing and server request handling. "
-            "This functionality is better covered by integration tests that "
-            "exercise the full stdio transport flow."
-        )
-    )
+        assert result == {"ok": True}
+        sent_message = mock_send.call_args_list[0][0][0]
+        assert sent_message["id"] == "req-id"
+        assert sent_message["method"] == "method"
+
     @pytest.mark.asyncio
     async def test_send_request_handles_sampling_request(self):
         """send_request should reply to sampling/createMessage requests."""
-        # This test is skipped - functionality is covered in integration tests
-        pass
+        server_request = {
+            "jsonrpc": "2.0",
+            "id": "srv-id",
+            "method": "sampling/createMessage",
+            "params": {"messages": [], "maxTokens": 1},
+        }
+        response = {"id": "req-id", "result": {"ok": True}}
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()) as mock_send,
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.uuid.uuid4"
+            ) as mock_uuid4,
+            patch.object(
+                self.transport,
+                "_receive_message",
+                new=AsyncMock(side_effect=[server_request, response]),
+            ),
+        ):
+            mock_uuid4.return_value = "req-id"
+            result = await self.transport.send_request("method", {"x": 1})
 
-    @pytest.mark.skip(
-        reason=(
-            "Test isolation issue: send_request error handling requires complex "
-            "mocking of UUID generation and message handling. This functionality "
-            "is better covered by integration tests that exercise the full stdio "
-            "transport flow."
-        )
-    )
+        assert result == {"ok": True}
+        assert mock_send.call_count == 2
+        sampling_reply = mock_send.call_args_list[1][0][0]
+        assert sampling_reply["id"] == "srv-id"
+        assert sampling_reply["result"]["role"] == "assistant"
+
     @pytest.mark.asyncio
     async def test_send_request_error_response(self):
         """Test send_request method with error response."""
-        # This test is skipped - functionality is covered in integration tests
-        pass
+        with (
+            patch.object(self.transport, "_send_message", new=AsyncMock()),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.uuid.uuid4"
+            ) as mock_uuid4,
+            patch.object(
+                self.transport,
+                "_receive_message",
+                new=AsyncMock(
+                    return_value={"id": "req-id", "error": {"code": -1}}
+                ),
+            ),
+        ):
+            mock_uuid4.return_value = "req-id"
+            with pytest.raises(ServerError):
+                await self.transport.send_request("method", {"x": 1})
 
     @pytest.mark.asyncio
     async def test_send_request_no_response(self):
@@ -401,41 +433,86 @@ class TestStdioDriver:
             123, "timeout"
         )
 
-    @pytest.mark.skip(
-        reason="Test isolation issue: send_timeout_signal requires complex mocking of "
-        "OS-level operations (os.getpgid, os.killpg) that can be affected by test "
-        "execution order. This functionality is better covered by integration tests."
-    )
     @pytest.mark.asyncio
     async def test_send_timeout_signal_process_not_registered_timeout(self):
         """Test send_timeout_signal when process is not registered,
         sending timeout signal."""
-        # This test is skipped - functionality is covered in integration tests
-        pass
+        mock_process = MagicMock()
+        mock_process.pid = 123
+        self.transport.process = mock_process
+        self.transport.process_manager.is_process_registered.return_value = False
 
-    @pytest.mark.skip(
-        reason="Test isolation issue: send_timeout_signal requires complex mocking of "
-        "OS-level operations (os.getpgid, os.killpg) that can be affected by test "
-        "execution order. This functionality is better covered by integration tests."
-    )
+        with (
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.name",
+                "posix",
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.getpgid",
+                return_value=999,
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.killpg"
+            ) as mock_killpg,
+        ):
+            result = await self.transport.send_timeout_signal("timeout")
+
+        assert result is True
+        mock_killpg.assert_called_once_with(999, _signal.SIGTERM)
+
     @pytest.mark.asyncio
     async def test_send_timeout_signal_process_not_registered_force(self):
         """Test send_timeout_signal when process is not registered,
         sending force signal."""
-        # This test is skipped - functionality is covered in integration tests
-        pass
+        mock_process = MagicMock()
+        mock_process.pid = 123
+        self.transport.process = mock_process
+        self.transport.process_manager.is_process_registered.return_value = False
 
-    @pytest.mark.skip(
-        reason="Test isolation issue: send_timeout_signal requires complex mocking of "
-        "OS-level operations (os.getpgid, os.killpg) that can be affected by test "
-        "execution order. This functionality is better covered by integration tests."
-    )
+        with (
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.name",
+                "posix",
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.getpgid",
+                return_value=999,
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.killpg"
+            ) as mock_killpg,
+        ):
+            result = await self.transport.send_timeout_signal("force")
+
+        assert result is True
+        mock_killpg.assert_called_once_with(999, _signal.SIGKILL)
+
     @pytest.mark.asyncio
     async def test_send_timeout_signal_process_not_registered_interrupt(self):
         """Test send_timeout_signal when process is not registered,
         sending interrupt signal."""
-        # This test is skipped - functionality is covered in integration tests
-        pass
+        mock_process = MagicMock()
+        mock_process.pid = 123
+        self.transport.process = mock_process
+        self.transport.process_manager.is_process_registered.return_value = False
+
+        with (
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.name",
+                "posix",
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.getpgid",
+                return_value=999,
+            ),
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.os.killpg"
+            ) as mock_killpg,
+        ):
+            result = await self.transport.send_timeout_signal("interrupt")
+
+        assert result is True
+        mock_killpg.assert_called_once_with(999, _signal.SIGINT)
 
     @pytest.mark.skip(
         reason="Test isolation issue: send_timeout_signal requires complex mocking of "

@@ -129,11 +129,8 @@ async def test_execute_executor_error(tool_executor):
     )
     tool = {"name": "test_tool", "inputSchema": {"properties": {}}}
     results = await tool_executor.execute(tool, runs=1)
-    # Error is added by both collector and executor, so we get 2 results
-    assert len(results) == 2
-    # Both results should indicate failure
+    assert len(results) == 1
     assert all(result["success"] is False for result in results)
-    # Both should contain the error message
     assert all("Executor error" in result["exception"] for result in results)
 
 

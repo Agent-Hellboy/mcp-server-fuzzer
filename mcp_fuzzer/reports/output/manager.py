@@ -18,6 +18,11 @@ class OutputManager:
         self.compress = compress
         self.protocol = OutputProtocol()
 
+    def _save(self, output: dict[str, Any]) -> str:
+        return self.protocol.save_output(
+            output, self.output_dir, compress=self.compress
+        )
+
     def save_fuzzing_results(
         self,
         mode: str,
@@ -42,9 +47,7 @@ class OutputManager:
             success_rate=success_rate,
             safety_enabled=safety_enabled,
         )
-        return self.protocol.save_output(
-            output, self.output_dir, compress=self.compress
-        )
+        return self._save(output)
 
     def save_fuzzing_snapshot(
         self,
@@ -56,9 +59,7 @@ class OutputManager:
             snapshot=snapshot,
             safety_enabled=safety_enabled,
         )
-        return self.protocol.save_output(
-            output, self.output_dir, compress=self.compress
-        )
+        return self._save(output)
 
     def save_error_report(
         self,
@@ -72,9 +73,7 @@ class OutputManager:
             warnings=warnings,
             execution_context=execution_context,
         )
-        return self.protocol.save_output(
-            output, self.output_dir, compress=self.compress
-        )
+        return self._save(output)
 
     def save_safety_summary(self, safety_data: dict[str, Any]) -> str:
         """Save safety summary using standardized format."""
@@ -85,9 +84,7 @@ class OutputManager:
             blocked_operations=blocked_operations,
             risk_assessment=risk_assessment,
         )
-        return self.protocol.save_output(
-            output, self.output_dir, compress=self.compress
-        )
+        return self._save(output)
 
     def get_session_directory(self, session_id: str | None = None) -> Path:
         """Get the session directory path."""

@@ -65,29 +65,16 @@ class ToolExecutor:
         tool_name = tool.get("name", "unknown")
         self._logger.info(f"Starting fuzzing for tool: {tool_name}")
 
-        # Create a list of operations to execute
-        operations = []
-        for i in range(runs):
-            operations.append((self._execute_single_run, [tool, i, phase], {}))
+        operations = [
+            (self._execute_single_run, [tool, i, phase], {}) for i in range(runs)
+        ]
 
         # Execute all operations in parallel with controlled concurrency
         batch_results = await self.executor.execute_batch(operations)
 
-        # Process results using collector
         results = self.collector.collect_results(batch_results)
-
-        # Process errors
         for error in batch_results.get("errors", []):
             self._logger.warning(f"Error during fuzzing {tool_name}: {error}")
-            results.append(
-                self.result_builder.build_tool_result(
-                    tool_name=tool_name,
-                    run_index=0,  # Error doesn't have a specific run index
-                    success=False,
-                    exception=str(error),
-                )
-            )
-
         return results
 
     async def _execute_single_run(
@@ -213,12 +200,15 @@ class ToolExecutor:
             return all_results
 
         # Create tasks for each tool
-        tasks = []
-        for tool in tools:
-            task = asyncio.create_task(
-                self._execute_single_tool(tool, runs_per_tool, phase)
+        tasks = [
+            (
+                tool.get("name", "unknown"),
+                asyncio.create_task(
+                    self._execute_single_tool(tool, runs_per_tool, phase)
+                ),
             )
-            tasks.append((tool.get("name", "unknown"), task))
+            for tool in tools
+        ]
 
         # Wait for all tasks to complete
         for tool_name, task in tasks:
@@ -254,8 +244,8 @@ class ToolExecutor:
         results = await self.execute(tool, runs_per_tool, phase)
 
         # Calculate statistics
-        successful = len([r for r in results if r.get("success", False)])
-        exceptions = len([r for r in results if not r.get("success", False)])
+        successful = sum(1 for r in results if r.get("success", False))
+        exceptions = len(results) - successful
 
         self._logger.info(
             "Completed fuzzing %s: %d successful, %d exceptions out of %d runs",

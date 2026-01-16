@@ -9,13 +9,7 @@ import json
 import logging
 import time
 from abc import ABC
-from typing import (
-    Any,
-    TypedDict,
-    Protocol,
-    Iterator,
-    Literal,
-)
+from typing import Any, TypedDict, Iterator, Literal
 import httpx
 
 try:
@@ -71,18 +65,6 @@ class JSONRPCErrorResponse(TypedDict):
 
 
 JSONRPCResponse = JSONRPCSuccessResponse | JSONRPCErrorResponse
-
-
-class ResponseParser(Protocol):
-    """Protocol for response parsing functionality."""
-
-    def parse_json_response(self, data: Any) -> dict[str, Any]:
-        """Parse JSON response and extract result."""
-        ...
-
-    def parse_sse_response(self, response_text: str) -> dict[str, Any | None]:
-        """Parse SSE response and extract JSON data."""
-        ...
 
 
 class DriverBaseBehavior(ABC):
@@ -231,11 +213,10 @@ class DriverBaseBehavior(ABC):
         Raises:
             TransportError: Always raises with the provided message
         """
-        logger = logging.getLogger(self.__class__.__name__)
         if error_data:
-            logger.error("%s: %s", message, error_data)
+            self._logger.error("%s: %s", message, error_data)
         else:
-            logger.error(message)
+            self._logger.error(message)
         raise TransportError(message)
 
     def _extract_result_from_response(
@@ -322,7 +303,7 @@ class HttpClientBehavior(DriverBaseBehavior):
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             error_msg = f"HTTP {e.response.status_code}: {e.response.text}"
-            logging.getLogger(self.__class__.__name__).error(error_msg)
+            self._logger.error(error_msg)
             raise NetworkError(error_msg)
 
     def _parse_http_response_json(
@@ -348,18 +329,14 @@ class HttpClientBehavior(DriverBaseBehavior):
                 raise TransportError("Response is not valid JSON")
 
             # Try SSE format parsing
-            logging.getLogger(self.__class__.__name__).debug(
-                "Response is not JSON, trying to parse as SSE"
-            )
+            self._logger.debug("Response is not JSON, trying to parse as SSE")
             for line in response.text.splitlines():
                 if line.startswith("data:"):
                     try:
                         data = json.loads(line[len("data:") :].strip())
                         return self._extract_result_from_response(data)
                     except json.JSONDecodeError:
-                        logging.getLogger(self.__class__.__name__).error(
-                            "Failed to parse SSE data line as JSON"
-                        )
+                        self._logger.error("Failed to parse SSE data line as JSON")
                         continue
                 elif line.strip():  # Non-empty non-data line
                     try:
@@ -373,6 +350,11 @@ class HttpClientBehavior(DriverBaseBehavior):
 
 class ResponseParserBehavior(DriverBaseBehavior):
     """Behavior providing shared response parsing functionality."""
+
+    def _flush_sse_buffer(self, buffer: list[str]) -> dict[str, Any] | None:
+        event_text = "\n".join(buffer)
+        parsed = self.parse_sse_event(event_text)
+        return parsed
 
     def parse_sse_event(self, event_text: str) -> dict[str, Any | None]:
         """Parse a single SSE event text into a JSON object.
@@ -397,9 +379,8 @@ class ResponseParserBehavior(DriverBaseBehavior):
         data_parts = []
         warnings = spec_guard.check_sse_event_text(event_text)
         if warnings:
-            logger = logging.getLogger(self.__class__.__name__)
             for warning in warnings:
-                logger.warning(
+                self._logger.warning(
                     "SSE spec warning (%s): %s",
                     warning.get("id"),
                     warning.get("message"),
@@ -437,14 +418,11 @@ class ResponseParserBehavior(DriverBaseBehavior):
                 # Empty line marks end of event
                 if buffer:
                     try:
-                        event_text = "\n".join(buffer)
-                        parsed = self.parse_sse_event(event_text)
+                        parsed = self._flush_sse_buffer(buffer)
                         if parsed is not None:
                             yield parsed
                     except json.JSONDecodeError:
-                        logging.getLogger(self.__class__.__name__).error(
-                            "Failed to parse SSE event payload as JSON"
-                        )
+                        self._logger.error("Failed to parse SSE event payload as JSON")
                     finally:
                         buffer = []
                 continue
@@ -453,22 +431,17 @@ class ResponseParserBehavior(DriverBaseBehavior):
 
             # Prevent memory issues with large buffers
             if len(buffer) > buffer_size:
-                logging.getLogger(self.__class__.__name__).warning(
-                    "Buffer size exceeded, clearing buffer"
-                )
+                self._logger.warning("Buffer size exceeded, clearing buffer")
                 buffer = []
 
         # Process any remaining buffered data
         if buffer:
             try:
-                event_text = "\n".join(buffer)
-                parsed = self.parse_sse_event(event_text)
+                parsed = self._flush_sse_buffer(buffer)
                 if parsed is not None:
                     yield parsed
             except json.JSONDecodeError:
-                logging.getLogger(self.__class__.__name__).error(
-                    "Failed to parse SSE event payload as JSON"
-                )
+                self._logger.error("Failed to parse SSE event payload as JSON")
 
 
 class LifecycleBehavior(DriverBaseBehavior):

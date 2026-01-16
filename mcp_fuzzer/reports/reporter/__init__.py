@@ -21,17 +21,11 @@ from ..formatters import (
     MarkdownFormatter,
     TextFormatter,
     XMLFormatter,
+    ConsoleFormatter,
 )
 from ..formatters.common import extract_tool_runs
 from ..output import OutputManager
 from .config import ReporterConfig
-from .contracts import (
-    ConsoleSummaryPort,
-    OutputManagerPort,
-    ReportCollectorPort,
-    SafetyReporterPort,
-)
-from .dependencies import FormatterRegistry, ReporterDependencies
 from ..safety_reporter import SafetyReporter
 
 from importlib.metadata import version, PackageNotFoundError
@@ -57,8 +51,6 @@ class FuzzerReporter:
         console: Console | None = None,
         safety_reporter: SafetyReporter | None = None,
         config: ReporterConfig | None = None,
-        dependencies: ReporterDependencies | None = None,
-        formatter_registry: FormatterRegistry | None = None,
     ):
         """
         Initialize the reporter.
@@ -91,40 +83,25 @@ class FuzzerReporter:
         self.output_dir = resolved_config.output_dir
         self.output_dir.mkdir(exist_ok=True)
 
-        deps = dependencies
-        if deps is None:
-            safety_dependency: SafetyReporterPort | None = safety_reporter
-            if safety_dependency is None:
-                if safety_system is _AUTO_FILTER:
-                    safety_dependency = SafetyReporter()
-                else:
-                    safety_dependency = SafetyReporter(safety_system)
+        self.console = console or Console()
+        self.collector = collector or ReportCollector()
+        self.output_manager = output_manager or OutputManager(
+            str(self.output_dir), self.output_compress
+        )
+        if safety_reporter is None:
+            if safety_system is _AUTO_FILTER:
+                safety_reporter = SafetyReporter()
+            else:
+                safety_reporter = SafetyReporter(safety_system)
+        self.safety_reporter = safety_reporter
 
-            deps = ReporterDependencies.build(
-                output_dir=str(self.output_dir),
-                compress_output=self.output_compress,
-                console=console,
-                collector=collector,
-                output_manager=output_manager,
-                safety_reporter=safety_dependency,
-                formatter_registry=formatter_registry,
-            )
-
-        self._deps = deps
-
-        # Shared dependencies
-        self.console = deps.console
-        self.console_formatter: ConsoleSummaryPort = deps.formatters.console
-        self.json_formatter: JSONFormatter = deps.formatters.json
-        self.text_formatter: TextFormatter = deps.formatters.text
-        self.csv_formatter: CSVFormatter = deps.formatters.csv
-        self.xml_formatter: XMLFormatter = deps.formatters.xml
-        self.html_formatter: HTMLFormatter = deps.formatters.html
-        self.markdown_formatter: MarkdownFormatter = deps.formatters.markdown
-
-        self.collector: ReportCollectorPort = deps.collector
-        self.output_manager: OutputManagerPort = deps.output_manager
-        self.safety_reporter: SafetyReporterPort = deps.safety
+        self.console_formatter = ConsoleFormatter(self.console)
+        self.json_formatter = JSONFormatter()
+        self.text_formatter = TextFormatter()
+        self.csv_formatter = CSVFormatter()
+        self.xml_formatter = XMLFormatter()
+        self.html_formatter = HTMLFormatter()
+        self.markdown_formatter = MarkdownFormatter()
 
         self._metadata: FuzzingMetadata | None = None
         self._transport: Any = None

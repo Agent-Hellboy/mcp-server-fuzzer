@@ -32,6 +32,13 @@ def _result_has_failure(result: dict[str, Any]) -> bool:
     )
 
 
+def _rate(total: int, failures: int) -> float:
+    if total <= 0:
+        return 0.0
+    successes = max(total - failures, 0)
+    return (successes / total) * 100
+
+
 class OutputProtocol:
     """Handles standardized output format with mini-protocol for MCP Fuzzer."""
 
@@ -267,7 +274,7 @@ class OutputProtocol:
             exceptions = sum(1 for r in runs if "exception" in r)
             safety_blocked = sum(1 for r in runs if r.get("safety_blocked", False))
             successful = max(total_runs - exceptions - safety_blocked, 0)
-            success_rate = (successful / total_runs * 100) if total_runs > 0 else 0
+            success_rate = _rate(total_runs, exceptions + safety_blocked)
             formatted.append(
                 {
                     "name": tool_name,
@@ -302,7 +309,7 @@ class OutputProtocol:
             total_runs = len(results)
             errors = sum(1 for r in results if _result_has_failure(r))
             successes = max(total_runs - errors, 0)
-            success_rate = (successes / total_runs * 100) if total_runs > 0 else 0
+            success_rate = _rate(total_runs, errors)
             formatted.append(
                 {
                     "type": protocol_type,

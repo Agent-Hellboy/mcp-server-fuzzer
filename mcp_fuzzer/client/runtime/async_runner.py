@@ -24,7 +24,7 @@ class AsyncRunner:
         self.old_argv = None
         self.should_exit = False
         self.loop = None
-        self._signal_notice = {"printed": False}
+        self._signal_notice_printed = False
         self.safety = safety
 
     def run(self, main_coro: Callable[[], Awaitable[object]], argv: list[str]) -> None:
@@ -96,14 +96,14 @@ class AsyncRunner:
 
     def _cancel_all_tasks(self) -> None:
         """Cancel all running tasks gracefully."""
-        if not self._signal_notice["printed"]:
+        if not self._signal_notice_printed:
             try:
                 Console().print(
                     "\n[yellow]Received Ctrl+C from user; stopping now[/yellow]"
                 )
             except Exception:
                 pass
-            self._signal_notice["printed"] = True
+            self._signal_notice_printed = True
         for task in asyncio.all_tasks(self.loop):
             task.cancel()
 

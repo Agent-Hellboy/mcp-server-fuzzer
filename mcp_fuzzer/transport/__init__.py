@@ -24,11 +24,10 @@ from .catalog import (
     driver_catalog,
     build_driver,
     EndpointResolver,
-    CustomDriverCatalog,
     register_custom_driver,
     build_custom_driver,
     list_custom_drivers,
-    custom_driver_catalog,
+    clear_custom_drivers,
 )
 from .controller.coordinator import TransportCoordinator
 from .controller.process_supervisor import ProcessSupervisor, ProcessState
@@ -53,11 +52,10 @@ __all__ = [
     "driver_catalog",
     "build_driver",
     "EndpointResolver",
-    "CustomDriverCatalog",
     "register_custom_driver",
     "build_custom_driver",
     "list_custom_drivers",
-    "custom_driver_catalog",
+    "clear_custom_drivers",
     "TransportCoordinator",
     "ProcessSupervisor",
     "ProcessState",

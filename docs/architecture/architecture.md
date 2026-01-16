@@ -187,7 +187,7 @@ The transport layer abstracts communication with MCP servers, supporting multipl
 - `drivers/sse_driver.py`: Server-Sent Events transport implementation
 - `drivers/stdio_driver.py`: Standard I/O transport implementation
 - `interfaces/behaviors.py`: Reusable transport behaviors and utilities
-- `catalog/custom_catalog.py`: Custom transport registry helpers
+- `catalog/catalog.py`: Custom transport registry helpers
 
 **Transport Driver Interface:**
 

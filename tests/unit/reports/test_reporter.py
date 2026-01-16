@@ -5,41 +5,22 @@ Tests for FuzzerReporter class.
 
 import asyncio
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from mcp_fuzzer.reports.core import ReportCollector
 from mcp_fuzzer.reports.reporter import FuzzerReporter
 from mcp_fuzzer.reports.reporter.config import ReporterConfig
-from mcp_fuzzer.reports.reporter.dependencies import (
-    FormatterRegistry,
-    ReporterDependencies,
-)
 from mcp_fuzzer.reports.safety_reporter import SafetyReporter
 
 
-def make_dependencies(
-    temp_output_dir: str, session_id: str | None = None
-) -> ReporterDependencies:
-    """Helper to build dependency bundle with controllable collaborators."""
-
-    console = MagicMock()
-    formatter_registry = FormatterRegistry(
-        console=MagicMock(),
-        json=MagicMock(),
-        text=MagicMock(),
-        csv=MagicMock(),
-        xml=MagicMock(),
-        html=MagicMock(),
-        markdown=MagicMock(),
-    )
-
-    collector = ReportCollector()
+def _make_output_manager(temp_output_dir: str, session_id: str | None = None):
     resolved_session = session_id or str(uuid4())
     output_manager = MagicMock()
     output_manager.protocol = SimpleNamespace(session_id=resolved_session)
@@ -52,16 +33,50 @@ def make_dependencies(
     output_manager.save_error_report.return_value = str(
         Path(temp_output_dir) / "error_report.json"
     )
+    return output_manager
 
-    safety = MagicMock(spec=SafetyReporter)
 
-    return ReporterDependencies(
-        console=console,
-        formatters=formatter_registry,
-        collector=collector,
-        output_manager=output_manager,
-        safety=safety,
-    )
+@contextmanager
+def _patch_formatters():
+    with (
+        patch(
+            "mcp_fuzzer.reports.reporter.ConsoleFormatter",
+            return_value=MagicMock(),
+        ) as console_formatter,
+        patch(
+            "mcp_fuzzer.reports.reporter.JSONFormatter",
+            return_value=MagicMock(),
+        ) as json_formatter,
+        patch(
+            "mcp_fuzzer.reports.reporter.TextFormatter",
+            return_value=MagicMock(),
+        ) as text_formatter,
+        patch(
+            "mcp_fuzzer.reports.reporter.CSVFormatter",
+            return_value=MagicMock(),
+        ) as csv_formatter,
+        patch(
+            "mcp_fuzzer.reports.reporter.XMLFormatter",
+            return_value=MagicMock(),
+        ) as xml_formatter,
+        patch(
+            "mcp_fuzzer.reports.reporter.HTMLFormatter",
+            return_value=MagicMock(),
+        ) as html_formatter,
+        patch(
+            "mcp_fuzzer.reports.reporter.MarkdownFormatter",
+            return_value=MagicMock(),
+        ) as markdown_formatter,
+    ):
+        yield SimpleNamespace(
+            console=console_formatter.return_value,
+            json=json_formatter.return_value,
+            text=text_formatter.return_value,
+            csv=csv_formatter.return_value,
+            xml=xml_formatter.return_value,
+            html=html_formatter.return_value,
+            markdown=markdown_formatter.return_value,
+        )
 
 
 class TestFuzzerReporter:
@@ -87,22 +102,38 @@ class TestFuzzerReporter:
     @pytest.fixture
     def reporter(self, temp_output_dir, config_stub):
         """Create a FuzzerReporter instance with injected dependencies."""
-        deps = make_dependencies(temp_output_dir)
-        with patch(
-            "mcp_fuzzer.reports.reporter.ReporterDependencies.build",
-            return_value=deps,
-        ):
+        output_manager = _make_output_manager(temp_output_dir)
+        safety = MagicMock(spec=SafetyReporter)
+        console = MagicMock()
+        collector = ReportCollector()
+
+        with _patch_formatters() as formatters:
             reporter = FuzzerReporter(
                 output_dir=temp_output_dir,
                 config_provider={"output": {}},
                 config=config_stub,
+                console=console,
+                collector=collector,
+                output_manager=output_manager,
+                safety_reporter=safety,
             )
-        reporter._test_dependencies = deps
+        reporter._test_mocks = SimpleNamespace(
+            output_manager=output_manager,
+            safety=safety,
+            console=console,
+            console_formatter=formatters.console,
+            json_formatter=formatters.json,
+            text_formatter=formatters.text,
+            csv_formatter=formatters.csv,
+            xml_formatter=formatters.xml,
+            html_formatter=formatters.html,
+            markdown_formatter=formatters.markdown,
+        )
         return reporter
 
     def test_init_default_output_dir(self):
         """Test initialization with default output directory."""
-        deps = make_dependencies("reports")
+        output_manager = _make_output_manager("reports")
         cfg = ReporterConfig(
             output_dir=Path("reports"),
             compress_output=False,
@@ -110,18 +141,19 @@ class TestFuzzerReporter:
             output_types=None,
             output_schema=None,
         )
-        with patch(
-            "mcp_fuzzer.reports.reporter.ReporterDependencies.build",
-            return_value=deps,
-        ):
+        with _patch_formatters():
             with patch("mcp_fuzzer.reports.reporter.Path.mkdir") as mock_mkdir:
-                reporter = FuzzerReporter(config_provider={"output": {}}, config=cfg)
+                reporter = FuzzerReporter(
+                    config_provider={"output": {}},
+                    config=cfg,
+                    output_manager=output_manager,
+                )
         assert reporter.output_dir == Path("reports")
         mock_mkdir.assert_called_once_with(exist_ok=True)
 
     def test_init_custom_output_dir(self, temp_output_dir):
         """Test initialization with custom output directory."""
-        deps = make_dependencies(temp_output_dir)
+        output_manager = _make_output_manager(temp_output_dir)
         cfg = ReporterConfig(
             output_dir=Path(temp_output_dir),
             compress_output=False,
@@ -129,14 +161,12 @@ class TestFuzzerReporter:
             output_types=None,
             output_schema=None,
         )
-        with patch(
-            "mcp_fuzzer.reports.reporter.ReporterDependencies.build",
-            return_value=deps,
-        ):
+        with _patch_formatters():
             reporter = FuzzerReporter(
                 output_dir=temp_output_dir,
                 config_provider={"output": {}},
                 config=cfg,
+                output_manager=output_manager,
             )
         assert reporter.output_dir == Path(temp_output_dir)
 
@@ -394,8 +424,8 @@ class TestFuzzerReporter:
 
     def test_session_id_uniqueness(self):
         """Test that session IDs are unique across instances."""
-        deps1 = make_dependencies("reports")
-        deps2 = make_dependencies("reports")
+        output_manager1 = _make_output_manager("reports")
+        output_manager2 = _make_output_manager("reports")
         cfg = ReporterConfig(
             output_dir=Path("reports"),
             compress_output=False,
@@ -403,12 +433,17 @@ class TestFuzzerReporter:
             output_types=None,
             output_schema=None,
         )
-        with patch(
-            "mcp_fuzzer.reports.reporter.ReporterDependencies.build",
-            side_effect=[deps1, deps2],
-        ):
-            reporter1 = FuzzerReporter(config_provider={"output": {}}, config=cfg)
-            reporter2 = FuzzerReporter(config_provider={"output": {}}, config=cfg)
+        with _patch_formatters():
+            reporter1 = FuzzerReporter(
+                config_provider={"output": {}},
+                config=cfg,
+                output_manager=output_manager1,
+            )
+            reporter2 = FuzzerReporter(
+                config_provider={"output": {}},
+                config=cfg,
+                output_manager=output_manager2,
+            )
 
         assert reporter1.session_id != reporter2.session_id
 
@@ -431,3 +466,94 @@ class TestFuzzerReporter:
         saved_report = reporter.json_formatter.save_report.call_args[0][0]
         assert "end_time" in saved_report["metadata"]
         assert saved_report["metadata"]["end_time"] is not None
+
+    @pytest.mark.asyncio
+    async def test_generate_standardized_report_defaults(self, reporter):
+        """Test standardized report generation defaults."""
+        reporter.set_fuzzing_metadata("tools", "stdio", "test", 10)
+        reporter.safety_reporter.has_safety_data.return_value = True
+        reporter.safety_reporter.get_comprehensive_safety_data.return_value = {
+            "blocked": 1
+        }
+
+        result = await reporter.generate_standardized_report()
+
+        assert "fuzzing_results" in result
+        assert "safety_summary" in result
+        reporter.output_manager.save_fuzzing_snapshot.assert_called_once()
+        reporter.output_manager.save_safety_summary.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_standardized_report_error_report(self, reporter):
+        """Test standardized error report generation."""
+        reporter.add_tool_results("tool_a", [{"error": "bad"}])
+        result = await reporter.generate_standardized_report(
+            output_types=["error_report"], include_safety=False
+        )
+
+        assert "error_report" in result
+        reporter.output_manager.save_error_report.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_standardized_report_handles_errors(self, reporter):
+        """Test standardized report generation handles exceptions."""
+        reporter.output_manager.save_fuzzing_snapshot.side_effect = RuntimeError("boom")
+        result = await reporter.generate_standardized_report(
+            output_types=["fuzzing_results"], include_safety=False
+        )
+
+        assert result == {}
+
+    def test_gather_safety_data_failure(self, reporter):
+        """Test safety data gathering failure returns empty dict."""
+        reporter.safety_reporter.get_comprehensive_safety_data.side_effect = Exception(
+            "boom"
+        )
+
+        data = reporter._gather_safety_data(True)
+
+        assert data == {}
+
+    @pytest.mark.asyncio
+    async def test_gather_runtime_data(self, reporter):
+        """Test runtime data collection from transport."""
+        transport = MagicMock()
+        transport.get_process_stats = AsyncMock(return_value={"active": 1})
+        reporter.set_transport(transport)
+
+        data = await reporter._gather_runtime_data()
+
+        assert data == {"process_stats": {"active": 1}}
+
+    @pytest.mark.asyncio
+    async def test_gather_runtime_data_failure(self, reporter):
+        """Test runtime data failures return empty dict."""
+        transport = MagicMock()
+        transport.get_process_stats = AsyncMock(side_effect=Exception("boom"))
+        reporter.set_transport(transport)
+
+        data = await reporter._gather_runtime_data()
+
+        assert data == {}
+
+    def test_ensure_metadata_defaults(self, reporter):
+        """Test default metadata creation when missing."""
+        reporter._metadata = None
+        metadata = reporter._ensure_metadata()
+
+        assert metadata.mode == "unknown"
+        assert metadata.protocol == "unknown"
+        assert metadata.endpoint == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_export_formatters(self, reporter, tmp_path):
+        """Test format-specific export helpers."""
+        await reporter.export_csv(str(tmp_path / "report.csv"))
+        await reporter.export_xml(str(tmp_path / "report.xml"))
+        await reporter.export_html(str(tmp_path / "report.html"))
+        await reporter.export_markdown(str(tmp_path / "report.md"))
+
+        reporter.csv_formatter.save_csv_report.assert_called_once()
+        reporter.xml_formatter.save_xml_report.assert_called_once()
+        reporter.html_formatter.save_html_report.assert_called_once()
+        reporter.markdown_formatter.save_markdown_report.assert_called_once()

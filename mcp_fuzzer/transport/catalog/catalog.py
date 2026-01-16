@@ -1,12 +1,9 @@
-"""Unified transport registry system.
-
-This module provides a single registry for both built-in and custom transports,
-replacing the previous dual registry system.
-"""
+"""Transport registry for drivers and custom registrations."""
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any, Callable, Type
 
 from ..interfaces.driver import TransportDriver
@@ -15,34 +12,36 @@ from ...exceptions import TransportRegistrationError
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
 class TransportMetadata:
     """Metadata for a registered transport."""
 
-    def __init__(
-        self,
-        transport_class: Type[TransportDriver],
-        description: str = "",
-        config_schema: dict[str, Any] | None = None,
-        factory_function: Callable | None = None,
-        is_custom: bool = False,
-    ):
-        self.transport_class = transport_class
-        self.description = description
-        self.config_schema = config_schema
-        self.factory_function = factory_function
-        self.is_custom = is_custom
+    transport_class: Type[TransportDriver]
+    description: str = ""
+    config_schema: dict[str, Any] | None = None
+    factory_function: Callable | None = None
+    is_custom: bool = False
 
 
 class DriverCatalog:
     """Unified registry for both built-in and custom transports.
 
-    This registry replaces the previous dual registry system (TransportRegistry
-    and CustomDriverCatalog) with a single, consistent interface.
+    This registry tracks both built-in and custom driver registrations.
     """
 
     def __init__(self):
         """Initialize the unified transport registry."""
         self._transports: dict[str, TransportMetadata] = {}
+
+    @staticmethod
+    def _metadata_info(metadata: TransportMetadata) -> dict[str, Any]:
+        return {
+            "class": metadata.transport_class,
+            "description": metadata.description,
+            "config_schema": metadata.config_schema,
+            "factory": metadata.factory_function,
+            "is_custom": metadata.is_custom,
+        }
 
     def register(
         self,
@@ -177,14 +176,7 @@ class DriverCatalog:
         if key not in self._transports:
             raise TransportRegistrationError(f"Transport '{name}' is not registered")
 
-        metadata = self._transports[key]
-        return {
-            "class": metadata.transport_class,
-            "description": metadata.description,
-            "config_schema": metadata.config_schema,
-            "factory": metadata.factory_function,
-            "is_custom": metadata.is_custom,
-        }
+        return self._metadata_info(self._transports[key])
 
     def list_transports(self, include_custom: bool = True) -> dict[str, dict[str, Any]]:
         """List registered transports.
@@ -199,14 +191,15 @@ class DriverCatalog:
         for name, metadata in self._transports.items():
             if not include_custom and metadata.is_custom:
                 continue
-            result[name] = {
-                "class": metadata.transport_class,
-                "description": metadata.description,
-                "config_schema": metadata.config_schema,
-                "factory": metadata.factory_function,
-                "is_custom": metadata.is_custom,
-            }
+            result[name] = self._metadata_info(metadata)
         return result
+
+    def _list_by_custom(self, is_custom: bool) -> dict[str, dict[str, Any]]:
+        return {
+            name: self._metadata_info(metadata)
+            for name, metadata in self._transports.items()
+            if metadata.is_custom == is_custom
+        }
 
     def list_builtin_transports(self) -> dict[str, dict[str, Any]]:
         """List only built-in transports.
@@ -214,20 +207,7 @@ class DriverCatalog:
         Returns:
             Dictionary mapping transport names to their information
         """
-        return {
-            name: info
-            for name, metadata in self._transports.items()
-            if not metadata.is_custom
-            for info in [
-                {
-                    "class": metadata.transport_class,
-                    "description": metadata.description,
-                    "config_schema": metadata.config_schema,
-                    "factory": metadata.factory_function,
-                    "is_custom": metadata.is_custom,
-                }
-            ]
-        }
+        return self._list_by_custom(False)
 
     def list_custom_drivers(self) -> dict[str, dict[str, Any]]:
         """List only custom transports.
@@ -235,20 +215,7 @@ class DriverCatalog:
         Returns:
             Dictionary mapping transport names to their information
         """
-        return {
-            name: info
-            for name, metadata in self._transports.items()
-            if metadata.is_custom
-            for info in [
-                {
-                    "class": metadata.transport_class,
-                    "description": metadata.description,
-                    "config_schema": metadata.config_schema,
-                    "factory": metadata.factory_function,
-                    "is_custom": metadata.is_custom,
-                }
-            ]
-        }
+        return self._list_by_custom(True)
 
     def build_driver(self, name: str, *args, **kwargs) -> TransportDriver:
         """Create an instance of a registered transport.
@@ -295,3 +262,50 @@ class DriverCatalog:
 
 # Global registry instance
 driver_catalog = DriverCatalog()
+
+
+def _require_custom_driver(name: str) -> None:
+    key = name.strip().lower()
+    if driver_catalog.is_custom_transport(key):
+        return
+    if driver_catalog.is_registered(key):
+        raise TransportRegistrationError(
+            f"Transport '{name}' is a built-in transport, not custom"
+        )
+    raise TransportRegistrationError(f"Transport '{name}' is not registered")
+
+
+def register_custom_driver(
+    name: str,
+    transport_class: Type[TransportDriver],
+    description: str = "",
+    config_schema: dict[str, Any] | None = None,
+    factory_function: Callable | None = None,
+) -> None:
+    """Register a custom transport with the global catalog."""
+    driver_catalog.register(
+        name=name,
+        transport_class=transport_class,
+        description=description or f"Custom {name} transport",
+        config_schema=config_schema,
+        factory_function=factory_function,
+        is_custom=True,
+        allow_override=False,
+    )
+
+
+def build_custom_driver(name: str, *args, **kwargs) -> TransportDriver:
+    """Create an instance of a registered custom transport."""
+    _require_custom_driver(name)
+    return driver_catalog.build_driver(name, *args, **kwargs)
+
+
+def list_custom_drivers() -> dict[str, dict[str, Any]]:
+    """List all registered custom transports."""
+    return driver_catalog.list_custom_drivers()
+
+
+def clear_custom_drivers() -> None:
+    """Clear all registered custom transports. Useful for tests."""
+    for name in list(driver_catalog.list_custom_drivers().keys()):
+        driver_catalog.unregister(name)

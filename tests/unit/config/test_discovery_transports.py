@@ -15,7 +15,7 @@ from mcp_fuzzer.config.loading.discovery import (
 from mcp_fuzzer.config.loading.search_params import ConfigSearchParams
 from mcp_fuzzer.config.extensions.transports import load_custom_transports
 from mcp_fuzzer.exceptions import ConfigFileError
-from mcp_fuzzer.transport.catalog import custom_driver_catalog, list_custom_drivers
+from mcp_fuzzer.transport.catalog import clear_custom_drivers, list_custom_drivers
 from mcp_fuzzer.transport.interfaces.driver import TransportDriver
 
 
@@ -42,9 +42,9 @@ class NonTransport:
 @pytest.fixture(autouse=True)
 def clear_registry():
     """Always clear custom transport registry before and after each test."""
-    custom_driver_catalog.clear()
+    clear_custom_drivers()
     yield
-    custom_driver_catalog.clear()
+    clear_custom_drivers()
 
 
 def test_find_config_file_prefers_explicit_path(tmp_path):
