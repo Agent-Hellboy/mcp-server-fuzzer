@@ -101,7 +101,9 @@ class TestSchemaPath:
 
     def test_with_version(self, tmp_path):
         """Test with version parameter."""
-        patch_path = "mcp_fuzzer.fuzz_engine.mutators.strategies.spec_protocol._schema_root"
+        patch_path = (
+            "mcp_fuzzer.fuzz_engine.mutators.strategies.spec_protocol._schema_root"
+        )
         with patch(patch_path, return_value=tmp_path):
             (tmp_path / "v1.0").mkdir()
             path = _schema_path("v1.0")
@@ -109,7 +111,9 @@ class TestSchemaPath:
 
     def test_without_chosen_falls_back_to_schema_json(self, tmp_path):
         """Test fallback to schema.json when no version chosen."""
-        patch_root = "mcp_fuzzer.fuzz_engine.mutators.strategies.spec_protocol._schema_root"
+        patch_root = (
+            "mcp_fuzzer.fuzz_engine.mutators.strategies.spec_protocol._schema_root"
+        )
         patch_version = (
             "mcp_fuzzer.fuzz_engine.mutators.strategies.spec_protocol"
             "._latest_schema_version"

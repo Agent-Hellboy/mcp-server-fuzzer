@@ -148,7 +148,9 @@ async def test_send_raw_fallback_to_json_parsing(monkeypatch):
     monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
     monkeypatch.setattr(driver, "parse_sse_event", lambda x: None)
     extract_result = {"result": "ok"}
-    monkeypatch.setattr(driver, "_extract_result_from_response", lambda x: extract_result)
+    monkeypatch.setattr(
+        driver, "_extract_result_from_response", lambda x: extract_result
+    )
 
     result = await driver.send_raw({"jsonrpc": "2.0", "method": "x"})
     assert result == {"result": "ok"}
