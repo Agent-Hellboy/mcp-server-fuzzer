@@ -9,7 +9,7 @@ import signal as _signal
 import sys
 import inspect
 import time
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
 
 from ..interfaces.driver import TransportDriver
 from ...exceptions import (
@@ -18,7 +18,12 @@ from ...exceptions import (
     ServerError,
     TransportError,
 )
-from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+
+if TYPE_CHECKING:
+    from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
+else:
+    ProcessManager = Any
+    WatchdogConfig = Any
 from ...safety_system.policy import sanitize_subprocess_env
 from ...config import PROCESS_WAIT_TIMEOUT
 from ..controller.process_supervisor import ProcessSupervisor
@@ -59,6 +64,7 @@ class StdioDriver(TransportDriver):
     def _get_process_manager(self):
         """Get or create the process manager lazily."""
         if self.process_manager is None:
+            from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
             # Use our new Process Management system
             watchdog_config = WatchdogConfig(
                 check_interval=1.0,

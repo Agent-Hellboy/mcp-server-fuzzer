@@ -28,7 +28,13 @@ def apply_schema_edge_cases(
 
     enum_values = schema.get("enum")
     if isinstance(enum_values, list) and enum_values:
-        return enum_values[-1]
+        schema_type = schema.get("type")
+        if isinstance(schema_type, list):
+            schema_type = schema_type[0]
+        last_enum = enum_values[-1]
+        if schema_type == "string" and not isinstance(last_enum, str):
+            return str(last_enum)
+        return last_enum
 
     schema_type = schema.get("type")
     if isinstance(schema_type, list):
@@ -250,19 +256,22 @@ def _edge_number(schema: dict[str, Any], integer: bool) -> int | float:
     exc_min = schema.get("exclusiveMinimum")
     exc_max = schema.get("exclusiveMaximum")
 
-    def adjust(bound: float | None, exclusive: Any, direction: int) -> float | None:
-        if bound is None:
-            return None
-        delta = 1 if integer else 1e-3
-        if isinstance(exclusive, bool) and exclusive:
-            return bound - delta if direction > 0 else bound + delta
-        if isinstance(exclusive, (int, float)):
-            return exclusive - delta if direction > 0 else exclusive + delta
-        return bound
+    delta = 1 if integer else 1e-3
+    if isinstance(exc_min, (int, float)):
+        eff_min = exc_min + delta
+    elif minimum is not None:
+        eff_min = minimum + delta if exc_min is True else minimum
+    else:
+        eff_min = None
+
+    if isinstance(exc_max, (int, float)):
+        eff_max = exc_max - delta
+    elif maximum is not None:
+        eff_max = maximum - delta if exc_max is True else maximum
+    else:
+        eff_max = None
 
     value: float | None = None
-    eff_max = adjust(maximum, exc_max, 1) if maximum is not None else None
-    eff_min = adjust(minimum, exc_min, -1) if minimum is not None else None
     if eff_max is not None:
         value = eff_max
     elif eff_min is not None:

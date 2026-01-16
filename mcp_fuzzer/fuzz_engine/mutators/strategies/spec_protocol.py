@@ -109,7 +109,9 @@ def _resolve_refs(
         seen = set()
     if isinstance(schema, dict):
         ref = schema.get("$ref")
-        if isinstance(ref, str) and ref.startswith("#/definitions/"):
+        if isinstance(ref, str) and (
+            ref.startswith("#/definitions/") or ref.startswith("#/$defs/")
+        ):
             name = ref.split("/", 2)[2]
             if name in seen:
                 return {}
@@ -129,7 +131,9 @@ def _definition_for(protocol_type: str, version: str | None) -> dict[str, Any] |
     schema = _load_schema(version)
     if not schema:
         return None
-    definitions = schema.get("definitions", {})
+    definitions = schema.get("definitions")
+    if not isinstance(definitions, dict):
+        definitions = schema.get("$defs", {})
     key = _PROTOCOL_TYPE_OVERRIDES.get(protocol_type, protocol_type)
     definition = definitions.get(key)
     if not isinstance(definition, dict):
@@ -246,11 +250,44 @@ def _build_schema_request(
     return envelope
 
 
+def _build_generic_jsonrpc_request(phase: str = "aggressive") -> dict[str, Any]:
+    """Build a generic JSON-RPC request without schema definitions."""
+    method = random.choice(
+        [
+            "resources/list",
+            "resources/read",
+            "tools/call",
+            "prompts/list",
+            "custom/method",
+            "unknown/method",
+        ]
+    )
+    if phase == "aggressive":
+        params: dict[str, Any] = {
+            "value": random.choice(MALICIOUS_STRINGS + MALICIOUS_NUMBERS),
+            "metadata": {"nested": random.choice(MALICIOUS_STRINGS)},
+        }
+    else:
+        params = {"value": "test", "metadata": {"nested": "ok"}}
+    return {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "id": random.randint(1, 1000000),
+    }
+
+
 def get_spec_protocol_fuzzer_method(
     protocol_type: str,
     phase: str = "aggressive",
     schema_version: str | None = None,
 ) -> Callable[[], dict[str, Any] | None] | None:
+    if protocol_type == "GenericJSONRPCRequest":
+        def _build_generic() -> dict[str, Any] | None:
+            return _build_generic_jsonrpc_request(phase)
+
+        return _build_generic
+
     if not _definition_for(protocol_type, _schema_version_or_env(schema_version)):
         return None
 

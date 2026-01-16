@@ -20,7 +20,20 @@ from .signals import ProcessSignalStrategy, SignalDispatcher
 from .watchdog import ProcessWatchdog
 
 
-class ProcessManager:
+class _ProcessManagerMeta(type):
+    def __instancecheck__(cls, instance: object) -> bool:
+        if type.__instancecheck__(cls, instance):
+            return True
+        inst_cls = getattr(instance, "__class__", None)
+        if inst_cls is None:
+            return False
+        return (
+            inst_cls.__name__ == cls.__name__
+            and inst_cls.__module__ == cls.__module__
+        )
+
+
+class ProcessManager(metaclass=_ProcessManagerMeta):
     """Fully asynchronous process manager.
 
     Events:

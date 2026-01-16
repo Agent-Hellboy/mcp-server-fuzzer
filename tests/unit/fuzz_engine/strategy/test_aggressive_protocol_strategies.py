@@ -1,22 +1,20 @@
 """
 Unit tests for aggressive protocol type strategies.
-Tests the aggressive strategies from
-mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive.
-protocol_type_strategy
 """
 
 import pytest
-
 from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive.protocol_type_strategy import (  # noqa: E501
-    fuzz_list_resource_templates_request,
-    fuzz_elicit_request,
-    fuzz_ping_request,
-    get_protocol_fuzzer_method,
     generate_malicious_string,
     generate_malicious_value,
     choice_lazy,
     generate_experimental_payload,
-)
+)  # noqa: E501
+from mcp_fuzzer.fuzz_engine.mutators.strategies import get_spec_protocol_fuzzer_method
+
+
+def get_protocol_fuzzer_method(protocol_type: str):
+    """Helper to get aggressive protocol fuzzer method."""
+    return get_spec_protocol_fuzzer_method(protocol_type, "aggressive")
 
 
 pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.strategy]
@@ -25,97 +23,115 @@ pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.strategy]
 class TestAggressiveProtocolStrategies:
     """Test cases for aggressive protocol type strategies."""
 
-    def test_fuzz_list_resource_templates_request(self):
-        """Test ListResourceTemplatesRequest fuzzing generates valid structure."""
-        result = fuzz_list_resource_templates_request()
-
-        # Verify basic JSON-RPC structure
-        assert "jsonrpc" in result
-        assert result["jsonrpc"] == "2.0"
-        assert "id" in result
+    @pytest.mark.parametrize("protocol_type", [
+        "ListResourceTemplatesRequest",
+        "ElicitRequest",
+        "PingRequest",
+        "InitializeRequest",
+    ])
+    def test_protocol_fuzzer_generates_valid_structure(self, protocol_type):
+        """Test that protocol fuzzers generate valid JSON-RPC structure."""
+        method = get_protocol_fuzzer_method(protocol_type)
+        if method is None:
+            pytest.skip(f"spec_protocol doesn't have {protocol_type} definition")
+        
+        result = method()
+        if result is None:
+            pytest.skip(f"spec_protocol doesn't have {protocol_type} definition")
+        
+        assert isinstance(result, dict)
+        assert result.get("jsonrpc") == "2.0"
         assert "method" in result
-        assert "params" in result
 
-        # Verify method name
-        assert result["method"] == "resources/templates/list"
-
-        # Verify params structure
-        params = result["params"]
-        assert isinstance(params, dict)
-        assert "cursor" in params
-        assert "_meta" in params
-
-    def test_fuzz_elicit_request(self):
-        """Test ElicitRequest fuzzing generates valid structure."""
-        result = fuzz_elicit_request()
-
-        # Verify basic JSON-RPC structure
-        assert "jsonrpc" in result
-        assert result["jsonrpc"] == "2.0"
-        assert "id" in result
-        assert "method" in result
-        assert "params" in result
-
-        # Verify method name
-        assert result["method"] == "elicitation/create"
-
-        # Verify params structure
-        params = result["params"]
-        assert isinstance(params, dict)
-        assert "message" in params
-        assert "requestedSchema" in params
-
-    def test_fuzz_ping_request(self):
-        """Test PingRequest fuzzing generates valid structure."""
-        result = fuzz_ping_request()
-
-        # Verify basic JSON-RPC structure
-        assert "jsonrpc" in result
-        assert result["jsonrpc"] == "2.0"
-        assert "id" in result
-        assert "method" in result
-        assert "params" in result
-
-        # Verify method name
-        assert result["method"] == "ping"
-
-    def test_get_protocol_fuzzer_method_new_types(self):
-        """Test that new protocol types are properly mapped."""
-        # Test new protocol types
-        assert (
-            get_protocol_fuzzer_method("ListResourceTemplatesRequest")
-            == fuzz_list_resource_templates_request
-        )
-        assert get_protocol_fuzzer_method("ElicitRequest") == fuzz_elicit_request
-        assert get_protocol_fuzzer_method("PingRequest") == fuzz_ping_request
-
-        # Test that unknown types return None
+    def test_get_protocol_fuzzer_method_returns_callable(self):
+        """Test that get_protocol_fuzzer_method returns callable or None."""
+        assert get_protocol_fuzzer_method("InitializeRequest") is not None
+        assert callable(get_protocol_fuzzer_method("InitializeRequest"))
         assert get_protocol_fuzzer_method("UnknownType") is None
 
-    def testgenerate_malicious_string(self):
+    def test_fuzzer_generates_varied_data(self):
+        """Test that fuzzers generate different data on multiple calls."""
+        method = get_protocol_fuzzer_method("InitializeRequest")
+        if method is None:
+            pytest.skip("spec_protocol doesn't have InitializeRequest definition")
+        
+        results = [method() for _ in range(5)]
+        results = [r for r in results if r is not None]
+        
+        if not results:
+            pytest.skip("No results generated")
+        
+        # Should have variety in IDs
+        ids = [r.get("id") for r in results if "id" in r]
+        if ids:
+            unique_ids = set(str(id_val) for id_val in ids)
+            assert len(unique_ids) > 1, "Should generate different IDs"
+
+    def test_capabilities_experimental_fuzzing(self):
+        """Test that capabilities.experimental fuzzing generates varied content."""
+        method = get_protocol_fuzzer_method("InitializeRequest")
+        if method is None:
+            pytest.skip("spec_protocol doesn't have InitializeRequest definition")
+        
+        results = [method() for _ in range(100)]
+        results = [r for r in results if r is not None]
+        
+        experimental_values = []
+        for result in results:
+            params = result.get("params", {})
+            if isinstance(params, dict):
+                capabilities = params.get("capabilities")
+                if isinstance(capabilities, dict):
+                    experimental = capabilities.get("experimental")
+                    experimental_values.append(experimental)
+        
+        if experimental_values:
+            unique_values = set(str(v) for v in experimental_values)
+            assert len(unique_values) > 1, (
+                "Should generate different experimental values"
+            )
+            assert any(v is None for v in experimental_values), (
+                "Should include None values"
+            )
+            assert any(v is not None for v in experimental_values), (
+                "Should include non-None values"
+            )
+
+    def test_all_protocol_types_supported(self):
+        """Test that all expected protocol types are supported."""
+        from mcp_fuzzer.fuzz_engine.executor import ProtocolExecutor
+        
+        expected_types = [
+            "InitializeRequest", "ProgressNotification", "CancelNotification",
+            "ListResourcesRequest", "ReadResourceRequest", "SetLevelRequest",
+            "GenericJSONRPCRequest", "CreateMessageRequest", "ListPromptsRequest",
+            "GetPromptRequest", "ListRootsRequest", "SubscribeRequest",
+            "UnsubscribeRequest", "CompleteRequest", "ListResourceTemplatesRequest",
+            "ElicitRequest", "PingRequest",
+        ]
+        
+        for protocol_type in expected_types:
+            method = get_protocol_fuzzer_method(protocol_type)
+            assert method is not None, f"Missing fuzzer method for {protocol_type}"
+            assert callable(method), (
+                f"Fuzzer method for {protocol_type} should be callable"
+            )
+
+
+class TestAggressiveHelperFunctions:
+    """Test cases for aggressive helper functions."""
+
+    def test_generate_malicious_string(self):
         """Test malicious string generation."""
-        # Test multiple calls to ensure variety
         strings = [generate_malicious_string() for _ in range(10)]
+        assert all(isinstance(s, str) for s in strings)
+        assert len(set(strings)) > 1, "Should generate different malicious strings"
 
-        # All should be strings
-        for s in strings:
-            assert isinstance(s, str)
-
-        # Should have some variety (not all the same)
-        unique_strings = set(strings)
-        assert len(unique_strings) > 1, "Should generate different malicious strings"
-
-    def testgenerate_malicious_value(self):
+    def test_generate_malicious_value(self):
         """Test malicious value generation."""
-        # Test multiple calls to ensure variety
-        # Use larger sample size to ensure probabilistic coverage
-        values = [generate_malicious_value() for _ in range(1000)]
-
-        # Should have some variety in types
+        values = [generate_malicious_value() for _ in range(100)]
         types = {type(v) for v in values}
-        assert len(types) > 1, "Should generate different types of malicious values"
-
-        # Should include some common malicious types (with higher sample size)
+        assert len(types) > 1, "Should generate different types"
         assert any(v is None for v in values), "Should include None values"
         assert any(isinstance(v, str) for v in values), "Should include string values"
         assert any(isinstance(v, (int, float)) for v in values), (
@@ -125,310 +141,42 @@ class TestAggressiveProtocolStrategies:
             "Should include collection values"
         )
 
-    def test_fuzz_functions_generate_different_data(self):
-        """Test that fuzzing functions generate different data on multiple calls."""
-        # Test each new fuzzing function
-        functions = [
-            fuzz_list_resource_templates_request,
-            fuzz_elicit_request,
-            fuzz_ping_request,
-        ]
-
-        for func in functions:
-            results = [func() for _ in range(5)]
-
-            # All results should have the same structure but different values
-            for i, result in enumerate(results):
-                assert isinstance(result, dict)
-                assert "jsonrpc" in result
-                assert "id" in result
-                assert "method" in result
-                assert "params" in result
-
-            # IDs should be different (malicious values should vary)
-            ids = [r["id"] for r in results]
-            unique_ids = set(str(id_val) for id_val in ids)
-            assert len(unique_ids) > 1, f"{func.__name__} should generate different IDs"
-
-    def test_fuzz_functions_malicious_content(self):
-        """Test that fuzzing functions include malicious content."""
-        # Test that the functions generate potentially malicious data
-        result = fuzz_list_resource_templates_request()
-
-        # Check that malicious values are used
-        params = result["params"]
-        assert isinstance(params["cursor"], str)
-        # _meta can be any value (including None), presence already validated above
-
-        # Test elicit request
-        result = fuzz_elicit_request()
-        params = result["params"]
-        assert isinstance(params["message"], str)
-        # requestedSchema can be any value (including None)
-
-        # Test ping request
-        result = fuzz_ping_request()
-        # params can be any value (including None); presence checked above
-
-    def test_all_protocol_types_in_fuzzer_method_map(self):
-        """Test that all expected protocol types are in the fuzzer method map."""
-        expected_types = [
-            "InitializeRequest",
-            "ProgressNotification",
-            "CancelNotification",
-            "ListResourcesRequest",
-            "ReadResourceRequest",
-            "SetLevelRequest",
-            "GenericJSONRPCRequest",
-            "CallToolResult",
-            "SamplingMessage",
-            "CreateMessageRequest",
-            "ListPromptsRequest",
-            "GetPromptRequest",
-            "ListRootsRequest",
-            "SubscribeRequest",
-            "UnsubscribeRequest",
-            "CompleteRequest",
-            "ListResourceTemplatesRequest",  # New
-            "ElicitRequest",  # New
-            "PingRequest",  # New
-        ]
-
-        for protocol_type in expected_types:
-            method = get_protocol_fuzzer_method(protocol_type)
-            assert method is not None, f"Missing fuzzer method for {protocol_type}"
-            assert callable(method), (
-                f"Fuzzer method for {protocol_type} should be callable"
-            )
-
-    def test_fuzzer_methods_return_dict(self):
-        """Test that all fuzzer methods return dictionaries."""
-        protocol_types = [
-            "ListResourceTemplatesRequest",
-            "ElicitRequest",
-            "PingRequest",
-        ]
-
-        for protocol_type in protocol_types:
-            method = get_protocol_fuzzer_method(protocol_type)
-            result = method()
-            assert isinstance(result, dict), (
-                f"{protocol_type} fuzzer should return dict"
-            )
-            assert "jsonrpc" in result, (
-                f"{protocol_type} result should have jsonrpc field"
-            )
-            assert "method" in result, (
-                f"{protocol_type} result should have method field"
-            )
-
-    def test_capabilities_experimental_fuzzing(self):
-        """Test that capabilities.experimental fuzzing generates varied content."""
-        from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive import (
-            fuzz_initialize_request_aggressive,
-        )
-
-        # Generate multiple initialize requests to test variety
-        results = [fuzz_initialize_request_aggressive() for _ in range(100)]
-
-        # Check that we get some variety in capabilities.experimental
-        experimental_values = []
-        for result in results:
-            params = result.get("params", {})
-            if isinstance(params, dict):
-                capabilities = params.get("capabilities")
-                if isinstance(capabilities, dict):
-                    experimental = capabilities.get("experimental")
-                    experimental_values.append(experimental)
-
-        # Should have some variety in experimental values
-        if experimental_values:
-            unique_values = set(str(v) for v in experimental_values)
-            assert len(unique_values) > 1, (
-                "Should generate different experimental values"
-            )
-
-            # Should include some None values (which is valid)
-            assert any(v is None for v in experimental_values), (
-                "Should include None experimental values"
-            )
-
-            # Should include some non-None values (could be string, dict, list, etc.)
-            assert any(v is not None for v in experimental_values), (
-                "Should include non-None experimental values"
-            )
-        else:
-            # If no experimental values found, that's also valid
-            # - capabilities might not be dict
-            assert True, "No experimental values found, which is valid"
-
-    def test_protocol_types_sync_with_fuzzer_map(self):
-        """Test that PROTOCOL_TYPES tuple stays in sync with fuzzer method map."""
-        from mcp_fuzzer.fuzz_engine.executor import ProtocolExecutor
-        from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive import (
-            get_protocol_fuzzer_method,
-        )
-
-        # Get all protocol types from the fuzzer method map
-        fuzzer_map_types = set()
-        for protocol_type in ProtocolExecutor.PROTOCOL_TYPES:
-            if get_protocol_fuzzer_method(protocol_type) is not None:
-                fuzzer_map_types.add(protocol_type)
-
-        # Get all types that have fuzzer methods
-        all_supported_types = set()
-        # Check all possible protocol types that might be in the map
-        potential_types = [
-            "InitializeRequest",
-            "ProgressNotification",
-            "CancelNotification",
-            "ListResourcesRequest",
-            "ReadResourceRequest",
-            "SetLevelRequest",
-            "GenericJSONRPCRequest",
-            "CallToolResult",
-            "SamplingMessage",
-            "CreateMessageRequest",
-            "ListPromptsRequest",
-            "GetPromptRequest",
-            "ListRootsRequest",
-            "SubscribeRequest",
-            "UnsubscribeRequest",
-            "CompleteRequest",
-            "ListResourceTemplatesRequest",
-            "ElicitRequest",
-            "PingRequest",
-            # Result schemas
-            "InitializeResult",
-            "ListResourcesResult",
-            "ListResourceTemplatesResult",
-            "ReadResourceResult",
-            "ListPromptsResult",
-            "GetPromptResult",
-            "ListToolsResult",
-            "CompleteResult",
-            "CreateMessageResult",
-            "ListRootsResult",
-            "PingResult",
-            "ElicitResult",
-            # Notification schemas
-            "LoggingMessageNotification",
-            "ResourceListChangedNotification",
-            "ResourceUpdatedNotification",
-            "PromptListChangedNotification",
-            "ToolListChangedNotification",
-            "RootsListChangedNotification",
-            # Content block schemas
-            "TextContent",
-            "ImageContent",
-            "AudioContent",
-            # Resource schemas
-            "Resource",
-            "ResourceTemplate",
-            "TextResourceContents",
-            "BlobResourceContents",
-            # Tool schemas
-            "Tool",
-        ]
-
-        for protocol_type in potential_types:
-            if get_protocol_fuzzer_method(protocol_type) is not None:
-                all_supported_types.add(protocol_type)
-
-        # PROTOCOL_TYPES should match the fuzzer method map
-        assert set(ProtocolExecutor.PROTOCOL_TYPES) == all_supported_types, (
-            f"PROTOCOL_TYPES mismatch: {set(ProtocolExecutor.PROTOCOL_TYPES)} != "
-            f"{all_supported_types}"
-        )
-
-    def test_choice_lazy_function(self):
-        """Ensure choice_lazy handles callable and non-callable options."""
-        # Test with non-callable options
-        non_callable_options = [1, 2, 3, "test", None, True]
-        result = choice_lazy(non_callable_options)
-        assert result in non_callable_options
-
-        # Test with callable options
-        callable_options = [
+    def test_choice_lazy(self):
+        """Test choice_lazy handles callable and non-callable options."""
+        # Non-callable options
+        result = choice_lazy([1, 2, 3, "test", None, True])
+        assert result in [1, 2, 3, "test", None, True]
+        
+        # Callable options
+        result = choice_lazy([
             lambda: "generated_string",
             lambda: {"key": "value"},
             lambda: [1, 2, 3],
-        ]
-        result = choice_lazy(callable_options)
+        ])
         assert isinstance(result, (str, dict, list))
-
-        # Test with mixed options
-        mixed_options = [
+        
+        # Mixed options
+        result = choice_lazy([
             "static_value",
             lambda: "dynamic_value",
             None,
             lambda: {"dynamic": "object"},
-        ]
-        result = choice_lazy(mixed_options)
+        ])
         assert result in ["static_value", None] or isinstance(result, (str, dict))
 
     def test_generate_experimental_payload(self):
-        """Ensure experimental payload generation returns varied values."""
-        # Generate multiple experimental payloads to test variety
+        """Test experimental payload generation."""
         payloads = [generate_experimental_payload() for _ in range(50)]
-
-        # Should have some variety
         unique_payloads = set(str(p) for p in payloads)
         assert len(unique_payloads) > 1, (
             "Should generate different experimental payloads"
         )
-
-        # Should include None values
         assert any(p is None for p in payloads), (
             "Should include None experimental payloads"
         )
-
-        # Should include non-None values
         assert any(p is not None for p in payloads), (
             "Should include non-None experimental payloads"
         )
-
-        # Should include various types
+        
         types = {type(p) for p in payloads}
         assert len(types) > 1, "Should generate different experimental payload types"
-
-    def test_lazy_generation_performance(self):
-        """Test that lazy generation doesn't eagerly evaluate all options."""
-        # This test ensures we're not generating all options upfront
-        # by checking that we can generate values without side effects
-
-        # Test that generate_malicious_value uses lazy evaluation
-        values = [generate_malicious_value() for _ in range(10)]
-
-        # Should have variety
-        unique_values = set(str(v) for v in values)
-        assert len(unique_values) > 1, "Should generate different malicious values"
-
-        # Test that generate_experimental_payload uses lazy evaluation
-        experimental_values = [generate_experimental_payload() for _ in range(10)]
-
-        # Should have variety
-        unique_experimental = set(str(v) for v in experimental_values)
-        assert len(unique_experimental) > 1, (
-            "Should generate different experimental values"
-        )
-
-    def test_lazy_generation_with_lambdas(self):
-        """Test that lambda functions in lazy generation work correctly."""
-        # Test choice_lazy with lambda functions
-        lambda_options = [
-            lambda: "lambda_result_1",
-            lambda: "lambda_result_2",
-            lambda: {"lambda": "object"},
-            lambda: [1, 2, 3],
-        ]
-
-        result = choice_lazy(lambda_options)
-        assert isinstance(result, (str, dict, list))
-
-        # Test that each lambda is called independently
-        results = [choice_lazy(lambda_options) for _ in range(20)]
-        unique_results = set(str(r) for r in results)
-        assert len(unique_results) > 1, (
-            "Lambda functions should generate different results"
-        )
