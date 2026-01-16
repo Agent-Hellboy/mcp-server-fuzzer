@@ -45,7 +45,7 @@ The e2e tests automatically:
 
 ```bash
 # From project root
-./tests/e2e/run_all_e2e_tests.sh
+./tests/e2e/test_everything_server.sh
 ```
 
 ## CI Integration
@@ -86,7 +86,7 @@ To add a new MCP server to the e2e tests:
    - Validate results
    - Clean up
 3. Update this README
-4. Add to `run_all_e2e_tests.sh`
+4. Add to CI workflow `.github/workflows/e2e-test.yml`
 
 ## Requirements
 
