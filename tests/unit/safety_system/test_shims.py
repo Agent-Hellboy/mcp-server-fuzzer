@@ -53,3 +53,34 @@ def test_strict_shim_logs_and_exits(monkeypatch, tmp_path, capsys):
     entry = json.loads(lines[0])
     assert entry["command"] == "blocked-cmd"
     assert entry["args"] == ["--flag", "value"]
+
+
+def test_default_shim_without_emoji(monkeypatch, capsys):
+    monkeypatch.setattr(default_shim, "HAS_EMOJI", False)
+    monkeypatch.setattr(default_shim, "LOG_FILE", "")
+    monkeypatch.setattr(default_shim.sys, "argv", ["blocked-cmd"])
+
+    with pytest.raises(SystemExit) as excinfo:
+        default_shim.main()
+
+    assert excinfo.value.code == 0
+    captured = capsys.readouterr()
+    assert "[X]" in captured.err
+    assert "[*]" in captured.out
+
+
+def test_strict_shim_log_write_failure(monkeypatch, capsys):
+    monkeypatch.setattr(strict_shim, "LOG_FILE", "blocked.log")
+    monkeypatch.setattr(strict_shim.sys, "argv", ["blocked-cmd"])
+
+    def _raise_open(*_args, **_kwargs):
+        raise OSError("boom")
+
+    monkeypatch.setattr("builtins.open", _raise_open)
+
+    with pytest.raises(SystemExit) as excinfo:
+        strict_shim.main()
+
+    assert excinfo.value.code == 1
+    captured = capsys.readouterr()
+    assert "[BLOCKED]" in captured.err

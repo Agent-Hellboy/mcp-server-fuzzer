@@ -78,10 +78,13 @@ def spec_variant(
     spec_url: str | None = None,
 ) -> dict[str, str]:
     """Create a shallow spec metadata variant with optional overrides."""
-    return {
+    result = {
         "spec_id": spec_id or spec.get("spec_id", ""),
         "spec_url": spec_url or spec.get("spec_url", ""),
     }
+    if "{version}" in result["spec_url"]:
+        result["spec_url"] = result["spec_url"].format(version=_spec_version())
+    return result
 
 
 def fail(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:

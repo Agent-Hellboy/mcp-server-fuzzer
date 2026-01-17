@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from types import SimpleNamespace
 
 import pytest
 
@@ -197,3 +198,68 @@ def test_load_custom_transports_logs_with_percent_formatting(monkeypatch):
     assert call_args[0][1] == "dummy"
     assert call_args[0][2] == __name__
     assert call_args[0][3] == "DummyTransport"
+
+
+def test_load_custom_transports_invalid_factory_path(monkeypatch):
+    dummy_module = SimpleNamespace(DummyTransport=DummyTransport)
+
+    def fake_import(name):
+        if name == "dummy_module":
+            return dummy_module
+        raise ImportError(name)
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.config.extensions.transports.importlib.import_module",
+        fake_import,
+    )
+    monkeypatch.setattr(
+        "mcp_fuzzer.config.extensions.transports.register_custom_driver",
+        lambda **_kwargs: None,
+    )
+
+    config_data = {
+        "custom_transports": {
+            "dummy": {
+                "module": "dummy_module",
+                "class": "DummyTransport",
+                "factory": "badpath",
+            }
+        }
+    }
+
+    with pytest.raises(ConfigFileError, match="Invalid factory path"):
+        load_custom_transports(config_data)
+
+
+def test_load_custom_transports_non_callable_factory(monkeypatch):
+    dummy_module = SimpleNamespace(DummyTransport=DummyTransport)
+    factory_module = SimpleNamespace(not_callable="nope")
+
+    def fake_import(name):
+        if name == "dummy_module":
+            return dummy_module
+        if name == "factory_module":
+            return factory_module
+        raise ImportError(name)
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.config.extensions.transports.importlib.import_module",
+        fake_import,
+    )
+    monkeypatch.setattr(
+        "mcp_fuzzer.config.extensions.transports.register_custom_driver",
+        lambda **_kwargs: None,
+    )
+
+    config_data = {
+        "custom_transports": {
+            "dummy": {
+                "module": "dummy_module",
+                "class": "DummyTransport",
+                "factory": "factory_module.not_callable",
+            }
+        }
+    }
+
+    with pytest.raises(ConfigFileError, match="not callable"):
+        load_custom_transports(config_data)

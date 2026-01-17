@@ -4,6 +4,9 @@ Unit tests for SseDriver.
 """
 
 import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
 
 from mcp_fuzzer.transport.drivers.sse_driver import SseDriver
@@ -118,6 +121,228 @@ async def test_send_raw_parse_returns_none(monkeypatch):
 
     with pytest.raises(TransportError):
         await driver.send_raw({"jsonrpc": "2.0", "method": "x"})
+
+
+@pytest.mark.asyncio
+async def test_send_raw_falls_back_to_json(monkeypatch):
+    response = FakeStreamResponse(
+        lines=['{"result": {"protocolVersion": "2025-11-25"}}']
+    )
+    client = FakeClient(response)
+    driver = SseDriver("http://localhost", safety_enabled=False)
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+    monkeypatch.setattr(driver, "parse_sse_event", lambda x: None)
+
+    seen = {}
+    monkeypatch.setitem(
+        driver.send_raw.__globals__,
+        "maybe_update_spec_version_from_result",
+        lambda result: seen.setdefault("pv", result.get("protocolVersion")),
+    )
+
+    result = await driver.send_raw({"jsonrpc": "2.0", "method": "initialize"})
+    assert result["protocolVersion"] == "2025-11-25"
+    assert seen["pv"] == "2025-11-25"
+
+
+@pytest.mark.asyncio
+async def test_send_raw_initialize_flushes_buffer(monkeypatch):
+    response = FakeStreamResponse(
+        lines=['data: {"result": {"protocolVersion": "2025-11-25"}}', ""]
+    )
+    client = FakeClient(response)
+    driver = SseDriver("http://localhost", safety_enabled=False)
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+    monkeypatch.setattr(
+        driver,
+        "parse_sse_event",
+        lambda text: {"result": {"protocolVersion": "2025-11-25"}},
+    )
+
+    seen = {}
+    monkeypatch.setitem(
+        driver.send_raw.__globals__,
+        "maybe_update_spec_version_from_result",
+        lambda result: seen.setdefault("pv", result.get("protocolVersion")),
+    )
+
+    result = await driver.send_raw({"jsonrpc": "2.0", "method": "initialize"})
+    assert result["protocolVersion"] == "2025-11-25"
+    assert seen["pv"] == "2025-11-25"
+
+
+@pytest.mark.asyncio
+async def test_stream_request_skips_empty_chunks(monkeypatch):
+    response = FakeStreamResponse(text_chunks=["", 'data: {"a": 1}\n\n'])
+    client = FakeClient(response)
+    driver = SseDriver("http://localhost", safety_enabled=False)
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+    monkeypatch.setattr(driver, "parse_sse_event", lambda text: {"a": 1})
+    monkeypatch.setitem(
+        driver._stream_request.__globals__,
+        "server_requests",
+        SimpleNamespace(is_server_request=lambda payload: False),
+    )
+
+    items = []
+    async for item in driver._stream_request({"jsonrpc": "2.0", "method": "x"}):
+        items.append(item)
+    assert items == [{"a": 1}]
+
+
+@pytest.mark.asyncio
+async def test_stream_request_handles_server_request(monkeypatch):
+    response = FakeStreamResponse(
+        text_chunks=['data: {"method": "sampling/createMessage", "id": 1}\n\n']
+    )
+    client = FakeClient(response)
+    driver = SseDriver("http://localhost", safety_enabled=False)
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+    monkeypatch.setattr(
+        driver,
+        "parse_sse_event",
+        lambda text: {"method": "sampling/createMessage", "id": 1},
+    )
+    monkeypatch.setitem(
+        driver._stream_request.__globals__,
+        "server_requests",
+        SimpleNamespace(is_server_request=lambda payload: True),
+    )
+    monkeypatch.setattr(driver, "_handle_server_request", AsyncMock(return_value=True))
+
+    items = []
+    async for item in driver._stream_request({"jsonrpc": "2.0", "method": "x"}):
+        items.append(item)
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_stream_request_sync_chunks(monkeypatch):
+    response = FakeStreamResponse(text_chunks=['data: {"a": 1}\n\n'])
+    client = FakeClient(response)
+    driver = SseDriver("http://localhost", safety_enabled=False)
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+    monkeypatch.setattr(driver, "parse_sse_event", lambda text: {"a": 1})
+    monkeypatch.setitem(
+        driver._stream_request.__globals__,
+        "server_requests",
+        SimpleNamespace(is_server_request=lambda payload: False),
+    )
+
+    items = []
+    async for item in driver._stream_request({"jsonrpc": "2.0", "method": "x"}):
+        items.append(item)
+
+    assert items == [{"a": 1}]
+
+
+@pytest.mark.asyncio
+async def test_stream_request_final_buffer_handles_server_request(monkeypatch):
+    response = FakeStreamResponse(
+        text_chunks=['data: {"method": "sampling/createMessage", "id": 1}']
+    )
+    client = FakeClient(response)
+    driver = SseDriver("http://localhost", safety_enabled=False)
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+    monkeypatch.setattr(
+        driver,
+        "parse_sse_event",
+        lambda text: {"method": "sampling/createMessage", "id": 1},
+    )
+    monkeypatch.setitem(
+        driver._stream_request.__globals__,
+        "server_requests",
+        SimpleNamespace(is_server_request=lambda payload: True),
+    )
+    driver._handle_server_request = AsyncMock(return_value=True)
+
+    items = []
+    async for item in driver._stream_request({"jsonrpc": "2.0", "method": "x"}):
+        items.append(item)
+
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_stream_request_logs_json_decode_error(monkeypatch):
+    response = FakeStreamResponse(text_chunks=['data: {bad}\n\n'])
+    client = FakeClient(response)
+    driver = SseDriver("http://localhost", safety_enabled=False)
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+
+    def _raise_json(_text):
+        raise json.JSONDecodeError("bad", "x", 0)
+
+    monkeypatch.setattr(driver, "parse_sse_event", _raise_json)
+    monkeypatch.setitem(
+        driver._stream_request.__globals__,
+        "server_requests",
+        SimpleNamespace(is_server_request=lambda payload: False),
+    )
+
+    items = []
+    async for item in driver._stream_request({"jsonrpc": "2.0", "method": "x"}):
+        items.append(item)
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_stream_request_async_server_request(monkeypatch):
+    async def _chunks():
+        yield 'data: {"method": "sampling/createMessage", "id": 2}\n\n'
+
+    response = FakeStreamResponse(text_chunks=_chunks())
+    client = FakeClient(response)
+    driver = SseDriver("http://localhost", safety_enabled=False)
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+    monkeypatch.setattr(
+        driver,
+        "parse_sse_event",
+        lambda text: {"method": "sampling/createMessage", "id": 2},
+    )
+    monkeypatch.setitem(
+        driver._stream_request.__globals__,
+        "server_requests",
+        SimpleNamespace(is_server_request=lambda payload: True),
+    )
+    monkeypatch.setattr(driver, "_handle_server_request", AsyncMock(return_value=True))
+
+    items = []
+    async for item in driver._stream_request({"jsonrpc": "2.0", "method": "x"}):
+        items.append(item)
+    assert items == []
+
+
+@pytest.mark.asyncio
+async def test_stream_request_flush_buffer_json_error(monkeypatch):
+    response = FakeStreamResponse(text_chunks=['data: {"a": 1}'])
+    client = FakeClient(response)
+    driver = SseDriver("http://localhost", safety_enabled=False)
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+
+    def _raise_json(_text):
+        raise json.JSONDecodeError("bad", "x", 0)
+
+    monkeypatch.setattr(driver, "parse_sse_event", _raise_json)
+    monkeypatch.setitem(
+        driver._stream_request.__globals__,
+        "server_requests",
+        SimpleNamespace(is_server_request=lambda payload: False),
+    )
+
+    items = []
+    async for item in driver._stream_request({"jsonrpc": "2.0", "method": "x"}):
+        items.append(item)
+    assert items == []
 
 
 @pytest.mark.asyncio

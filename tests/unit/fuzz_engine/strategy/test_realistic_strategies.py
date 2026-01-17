@@ -6,6 +6,7 @@ import base64
 import re
 import uuid
 from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
 from hypothesis import given
@@ -17,6 +18,7 @@ from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.tool_strategy import (
     generate_realistic_text,
     fuzz_tool_arguments_realistic,
 )
+from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic import tool_strategy
 from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.protocol_type_strategy import (  # noqa: E501
     json_rpc_id_values,
     method_names,
@@ -50,6 +52,11 @@ def test_uuid_strings_versions(version):
     value = strategy.example()
     parsed_uuid = uuid.UUID(value)
     assert parsed_uuid.version == version
+
+
+def test_uuid_strings_invalid_version():
+    with pytest.raises(ValueError):
+        uuid_strings(version=2)
 
 
 @given(timestamp_strings())
@@ -250,10 +257,69 @@ async def test_generate_realistic_text_fallback():
     """Test the fallback case in generate_realistic_text."""
     import random
     from unittest.mock import patch
-    
+
     with patch.object(random, "choice", return_value="invalid_strategy"):
         text = await generate_realistic_text()
         assert text == "realistic_value"
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_normal_title_branch(monkeypatch):
+    choices = iter(["normal", "Sales Performance Q4"])
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda seq: next(choices))
+    text = await generate_realistic_text(min_size=0, max_size=100)
+    assert text == "Sales Performance Q4"
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_base64_branch(monkeypatch):
+    loop = type("Loop", (), {})()
+    loop.run_in_executor = AsyncMock(return_value="b64")
+    monkeypatch.setattr(tool_strategy.asyncio, "get_running_loop", lambda: loop)
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda _seq: "base64")
+    text = await generate_realistic_text(min_size=4, max_size=2)
+    assert text == "b64"
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_uuid_branch(monkeypatch):
+    loop = type("Loop", (), {})()
+    loop.run_in_executor = AsyncMock(return_value="uuid-value")
+    monkeypatch.setattr(tool_strategy.asyncio, "get_running_loop", lambda: loop)
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda _seq: "uuid")
+    text = await generate_realistic_text()
+    assert text == "uuid-value"
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_timestamp_branch(monkeypatch):
+    loop = type("Loop", (), {})()
+    loop.run_in_executor = AsyncMock(return_value="ts-value")
+    monkeypatch.setattr(tool_strategy.asyncio, "get_running_loop", lambda: loop)
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda _seq: "timestamp")
+    text = await generate_realistic_text()
+    assert text == "ts-value"
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_numbers_branch(monkeypatch):
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda _seq: "numbers")
+    monkeypatch.setattr(tool_strategy.random, "randint", lambda *_args: 42)
+    text = await generate_realistic_text()
+    assert text == "42"
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_mixed_alphanumeric_branch(monkeypatch):
+    def _choice(seq):
+        if "mixed_alphanumeric" in seq:
+            return "mixed_alphanumeric"
+        return seq[0]
+
+    monkeypatch.setattr(tool_strategy.random, "choice", _choice)
+    monkeypatch.setattr(tool_strategy.random, "randint", lambda *_args: 5)
+    text = await generate_realistic_text()
+    assert len(text) == 5
 
 
 @pytest.mark.asyncio
@@ -274,3 +340,127 @@ async def test_fuzz_tool_arguments_exception_handling():
         result = await fuzz_tool_arguments_realistic(tool)
         assert "test" in result
         assert result["test"] is not None
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_normal_chars(monkeypatch):
+    def _choice(seq):
+        if "mixed_alphanumeric" in seq or "normal" in seq:
+            return "normal"
+        return seq[0]
+
+    monkeypatch.setattr(tool_strategy.random, "choice", _choice)
+    monkeypatch.setattr(tool_strategy.random, "randint", lambda *_args: 5)
+
+    text = await generate_realistic_text(min_size=5, max_size=5)
+
+    assert len(text) == 5
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_realistic_array_object(monkeypatch):
+    async def _fake_text(*_args, **_kwargs):
+        return "x"
+
+    monkeypatch.setattr(tool_strategy, "generate_realistic_text", _fake_text)
+    monkeypatch.setattr(tool_strategy.random, "randint", lambda *_args: 1)
+
+    def _mk(schema, phase="realistic"):
+        if schema.get("type") == "object":
+            return {"nested": "ok"}
+        return {}
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
+        _mk,
+    )
+
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "items": {"type": "array", "items": {"type": "object"}},
+            }
+        }
+    }
+    result = await fuzz_tool_arguments_realistic(tool)
+    assert result["items"] == [{"nested": "ok"}]
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_realistic_array_number(monkeypatch):
+    monkeypatch.setattr(tool_strategy.random, "randint", lambda *_args: 2)
+    monkeypatch.setattr(tool_strategy.random, "uniform", lambda *_args: 1.23)
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
+        lambda *_args, **_kwargs: {},
+    )
+
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "scores": {"type": "array", "items": {"type": "number"}},
+            }
+        }
+    }
+    result = await fuzz_tool_arguments_realistic(tool)
+    assert result["scores"] == [1.23, 1.23]
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_realistic_object_nested_exception(monkeypatch):
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
+        _boom,
+    )
+
+    tool = {"inputSchema": {"properties": {"payload": {"type": "object"}}}}
+    result = await fuzz_tool_arguments_realistic(tool)
+    assert result["payload"] == {}
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_realistic_string_formats(monkeypatch):
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        tool_strategy.random,
+        "choices",
+        lambda *_args, **_kwargs: list("username"),
+    )
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda seq: seq[0])
+
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "email": {"type": "string", "format": "email"},
+                "uri": {"type": "string", "format": "uri"},
+                "uuid": {"type": "string", "format": "uuid"},
+            }
+        }
+    }
+    result = await fuzz_tool_arguments_realistic(tool)
+    assert "@" in result["email"]
+    assert result["uri"].startswith("http")
+    assert isinstance(result["uuid"], str)
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_realistic_unknown_type(monkeypatch):
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        tool_strategy,
+        "generate_realistic_text",
+        AsyncMock(return_value="value"),
+    )
+
+    tool = {"inputSchema": {"properties": {"mystery": {"type": "null"}}}}
+    result = await fuzz_tool_arguments_realistic(tool)
+    assert result["mystery"] == "value"

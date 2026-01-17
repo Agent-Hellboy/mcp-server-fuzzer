@@ -111,6 +111,73 @@ class TestConsoleFormatter:
 
         # Verify console.print was called (once for table)
         assert console_formatter.console.print.call_count == 1
+        table = console_formatter.console.print.call_args[0][0]
+        assert table.title == "MCP Protocol Fuzzing Summary"
+
+    def test_print_protocol_summary_custom_title(self, console_formatter):
+        """Test printing protocol summary with a custom title."""
+        results = {"proto": [{"success": True}]}
+
+        console_formatter.print_protocol_summary(
+            results, title="MCP Resources Fuzzing Summary"
+        )
+
+        table = console_formatter.console.print.call_args[0][0]
+        assert table.title == "MCP Resources Fuzzing Summary"
+
+    def test_print_spec_guard_summary_no_checks(self, console_formatter):
+        """Test printing spec guard summary without checks."""
+        console_formatter.print_spec_guard_summary([])
+
+        printed = [
+            call[0][0]
+            for call in console_formatter.console.print.call_args_list
+        ]
+        assert any(
+            "No compliance checks recorded" in str(item) for item in printed
+        )
+
+    def test_print_spec_guard_summary_with_versions(self, console_formatter):
+        """Test printing spec guard summary with negotiated version info."""
+        checks = [
+            {
+                "id": "check-a",
+                "status": "FAIL",
+                "spec_id": "MCP-Resources",
+                "message": "missing resourceTemplates",
+            },
+            {
+                "id": "check-b",
+                "status": "WARN",
+                "spec_id": "MCP-Tools",
+                "message": "content empty",
+            },
+            {
+                "id": "check-c",
+                "status": "PASS",
+                "spec_id": "MCP-Schema",
+                "message": "ok",
+            },
+        ]
+
+        console_formatter.print_spec_guard_summary(
+            checks,
+            requested_version="2025-06-18",
+            negotiated_version="2025-11-25",
+        )
+
+        printed = [
+            call[0][0]
+            for call in console_formatter.console.print.call_args_list
+        ]
+        assert any(
+            "Negotiated MCP spec version 2025-11-25 (requested 2025-06-18)"
+            in str(item)
+            for item in printed
+        )
+        table = console_formatter.console.print.call_args_list[-1][0][0]
+        assert "Failed:" in str(table.caption)
+        assert "Warned:" in str(table.caption)
 
     def test_print_overall_summary_with_results(self, console_formatter):
         """Test printing overall summary with results."""

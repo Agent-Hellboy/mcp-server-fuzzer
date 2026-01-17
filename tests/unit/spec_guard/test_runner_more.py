@@ -47,6 +47,7 @@ async def test_run_spec_suite_full_paths(monkeypatch):
         calls.append(method)
         if method == "initialize":
             return {
+                "protocolVersion": "2025-11-25",
                 "capabilities": {
                     "tools": {},
                     "resources": {},

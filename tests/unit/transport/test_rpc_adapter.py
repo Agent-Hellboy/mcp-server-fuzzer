@@ -150,3 +150,50 @@ def test_collate_batch_responses():
 
     assert collated[2]["result"] is True
     assert collated[1]["error"]["message"] == "Response missing"
+
+
+@pytest.mark.asyncio
+async def test_get_tools_handles_non_dict_response():
+    transport = MagicMock()
+    transport.send_request = AsyncMock(return_value=["not-a-dict"])
+    adapter = JsonRpcAdapter(transport=transport)
+
+    assert await adapter.get_tools() == []
+
+
+@pytest.mark.asyncio
+async def test_get_tools_from_nested_result():
+    transport = MagicMock()
+    transport.send_request = AsyncMock(
+        return_value={"result": {"tools": [{"name": "x"}]}}
+    )
+    adapter = JsonRpcAdapter(transport=transport)
+
+    assert await adapter.get_tools() == [{"name": "x"}]
+
+
+@pytest.mark.asyncio
+async def test_send_batch_request_normalizes_responses():
+    transport = MagicMock()
+    transport.send_raw = AsyncMock(side_effect=["ok", {"result": "done"}])
+    adapter = JsonRpcAdapter(transport=transport)
+
+    batch = [
+        {"jsonrpc": "2.0", "method": "ping", "id": 1},
+        {"jsonrpc": "2.0", "method": "ping", "id": 2},
+    ]
+    responses = await adapter.send_batch_request(batch)
+
+    assert responses[0]["id"] == 1
+    assert responses[0]["result"] == "ok"
+
+
+def test_collate_batch_responses_handles_missing_and_unmatched():
+    adapter = JsonRpcAdapter()
+    requests = [{"id": 1}, {"id": 2}]
+    responses = [{"id": 99, "result": "extra"}]
+
+    collated = adapter.collate_batch_responses(requests, responses)
+
+    assert collated[1]["error"]["message"] == "Response missing"
+    assert collated[2]["error"]["message"] == "Response missing"

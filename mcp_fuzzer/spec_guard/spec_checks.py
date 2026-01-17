@@ -1,6 +1,7 @@
 """Lightweight MCP spec checks for fuzzing results."""
 
 import os
+from datetime import date
 from typing import Any
 
 from .helpers import (
@@ -32,7 +33,12 @@ _SSE_SPEC = SSE_SPEC
 
 
 def _spec_at_least(target: str) -> bool:
-    return os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18") >= target
+    current = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
+    try:
+        # Compare ISO dates when possible.
+        return date.fromisoformat(current) >= date.fromisoformat(target)
+    except ValueError:
+        return current >= target
 
 
 def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:

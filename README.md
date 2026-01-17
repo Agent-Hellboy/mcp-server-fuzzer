@@ -38,7 +38,7 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 - Comprehensive Reporting: Multiple output formats (JSON, CSV, HTML, Markdown)
 - Production Ready: PATH shims, sandbox defaults, and CI-friendly controls
 - Intelligent Testing: Hypothesis-based data generation with custom strategies
-- More Than Conformance: Goes beyond the checks in https://github.com/modelcontextprotocol/conformance with fuzzing, reporting, and safety tooling
+- More Than Conformance: Goes beyond the checks in [modelcontextprotocol/conformance](https://github.com/modelcontextprotocol/conformance) with fuzzing, reporting, and safety tooling
 
 ### Extensibility for Contributors
 MCP Server Fuzzer is designed for easy extension while keeping CLI usage simple:
@@ -67,11 +67,40 @@ git submodule update --init --recursive
 pip install -e .
 ```
 
+### Docker Installation
+
+The easiest way to use MCP Server Fuzzer is via Docker:
+
+```bash
+# Build the Docker image
+docker build -t mcp-fuzzer:latest .
+
+# Or pull from registry (when published)
+# docker pull mcp-fuzzer:latest
+```
+
 ### Basic Usage
 
 1. **Set up your MCP server** (HTTP, SSE, or Stdio)
 2. **Run basic fuzzing:**
 
+**Using Docker:**
+```bash
+# Fuzz HTTP server (container acts as client)
+docker run --rm -it --network host \
+  -v $(pwd)/reports:/output \
+  mcp-fuzzer:latest \
+  --mode tools --protocol http --endpoint http://localhost:8000
+
+# Fuzz stdio server (server runs in containerized environment)
+docker run --rm -it \
+  -v $(pwd)/servers:/servers:ro \
+  -v $(pwd)/reports:/output \
+  mcp-fuzzer:latest \
+  --mode tools --protocol stdio --endpoint "node /servers/my-server.js stdio"
+```
+
+**Using Local Installation:**
 ```bash
 # Fuzz tools on an HTTP server
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000
@@ -119,6 +148,24 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --en
 
 ### Stdio Server Fuzzing
 
+**Using Docker (Recommended for Isolation):**
+```bash
+# Server runs in containerized environment for safety
+docker run --rm -it \
+  -v $(pwd)/servers:/servers:ro \
+  -v $(pwd)/reports:/output \
+  mcp-fuzzer:latest \
+  --mode tools --protocol stdio --endpoint "python /servers/my_server.py" \
+  --enable-safety-system --fs-root /tmp/safe \
+  --output-dir /output
+
+# Using docker-compose (easier configuration)
+docker-compose run --rm fuzzer \
+  --mode tools --protocol stdio --endpoint "node /servers/my-server.js stdio" \
+  --runs 50 --output-dir /output
+```
+
+**Using Local Installation:**
 ```bash
 # Local server testing
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" \
@@ -147,6 +194,124 @@ output:
 ```bash
 mcp-fuzzer --config config.yaml
 ```
+
+## Docker Usage
+
+MCP Server Fuzzer can be run in a Docker container, providing isolation and easy deployment. This is especially useful for:
+
+- **Stdio Servers**: Run servers in a containerized environment for better isolation and safety
+- **HTTP/SSE Servers**: Container acts as the MCP client (server can run anywhere)
+- **CI/CD Pipelines**: Consistent testing environment across different systems
+
+### Quick Start with Docker
+
+```bash
+# Build the image
+docker build -t mcp-fuzzer:latest .
+
+# Fuzz HTTP server (server can be on host or remote)
+docker run --rm -it --network host \
+  -v $(pwd)/reports:/output \
+  mcp-fuzzer:latest \
+  --mode tools --protocol http --endpoint http://localhost:8000 --output-dir /output
+
+# Fuzz stdio server (server code mounted from host)
+docker run --rm -it \
+  -v $(pwd)/servers:/servers:ro \
+  -v $(pwd)/reports:/output \
+  mcp-fuzzer:latest \
+  --mode tools --protocol stdio --endpoint "python /servers/my_server.py" --output-dir /output
+```
+
+### Using Docker Compose
+
+For easier configuration and management, use `docker-compose.yml`:
+
+```bash
+# Set environment variables (optional)
+export SERVER_PATH=./servers
+export CONFIG_PATH=./examples/config
+export MCP_SPEC_SCHEMA_VERSION=2025-06-18
+
+# Run fuzzing (stdio server)
+docker-compose run --rm fuzzer \
+  --mode tools \
+  --protocol stdio \
+  --endpoint "node /servers/my-server.js stdio" \
+  --runs 50 \
+  --output-dir /output
+
+# For HTTP servers (macOS/Windows - uses host.docker.internal)
+docker-compose run --rm fuzzer \
+  --mode tools \
+  --protocol http \
+  --endpoint http://host.docker.internal:8000 \
+  --runs 50 \
+  --output-dir /output
+
+# For HTTP servers on Linux (use host network)
+docker-compose -f docker-compose.host-network.yml run --rm fuzzer \
+  --mode tools \
+  --protocol http \
+  --endpoint http://localhost:8000 \
+  --runs 50 \
+  --output-dir /output
+```
+
+### Docker Volume Mounts
+
+- **`/output`**: Mount your reports directory here (e.g., `-v $(pwd)/reports:/output`)
+- **`/servers`**: Mount server code/executables for stdio servers (read-only recommended)
+- **`/config`**: Mount custom configuration files if needed
+
+### Network Configuration
+
+- **HTTP/SSE Servers**: Use `--network host` to access servers on host machine, or use `host.docker.internal` (macOS/Windows) or host IP (Linux)
+- **Stdio Servers**: No network needed - server runs as subprocess in container
+
+### Example: Fuzzing a Node.js Stdio Server
+
+```bash
+# 1. Prepare your server
+mkdir -p servers
+cp my-mcp-server.js servers/
+
+# 2. Run fuzzer in Docker
+docker run --rm -it \
+  -v $(pwd)/servers:/servers:ro \
+  -v $(pwd)/reports:/output \
+  mcp-fuzzer:latest \
+  --mode all \
+  --protocol stdio \
+  --endpoint "node /servers/my-mcp-server.js stdio" \
+  --runs 100 \
+  --enable-safety-system \
+  --output-dir /output \
+  --export-json /output/results.json
+```
+
+### Example: Fuzzing an HTTP Server
+
+```bash
+# Server runs on host at localhost:8000
+# Container connects to it as client
+
+docker run --rm -it --network host \
+  -v $(pwd)/reports:/output \
+  mcp-fuzzer:latest \
+  --mode tools \
+  --protocol http \
+  --endpoint http://localhost:8000 \
+  --runs 50 \
+  --output-dir /output
+```
+
+### Security Considerations
+
+- The Docker container runs as a non-root user (`fuzzer`) for security
+- Stdio servers run in isolated container environment
+- Use read-only mounts (`:ro`) for server code when possible
+- Reports are written to mounted volume, not inside container
 
 ## Configuration
 

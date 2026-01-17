@@ -3,6 +3,7 @@
 Unit tests for ProtocolClient.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -300,3 +301,105 @@ async def test_send_generic_request_missing_method():
 
     assert result == {"ok": True}
     transport.send_request.assert_called_once_with("unknown", {"x": 1})
+
+
+@pytest.mark.asyncio
+async def test_process_single_protocol_fuzz_preview_fallback(monkeypatch):
+    transport = MagicMock()
+    transport.send_request = AsyncMock(return_value={"result": {"ok": True}})
+    client = ProtocolClient(transport=transport, safety_system=None)
+
+    monkeypatch.setattr(
+        client.protocol_mutator,
+        "mutate",
+        AsyncMock(return_value={"method": "ping", "params": {"bad": object()}}),
+    )
+    monkeypatch.setattr(client, "_send_protocol_request", AsyncMock(return_value={}))
+
+    result = await client._process_single_protocol_fuzz("PingRequest", 0, 1)
+
+    assert result["success"] is True
+    assert result["result"]["error"] is None
+
+
+def test_extract_params_non_dict():
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
+    assert client._extract_params(["not-a-dict"]) == {}
+
+
+def test_extract_list_items_inner_result():
+    result = {"result": {"resources": [{"uri": "x"}]}}
+    assert ProtocolClient._extract_list_items(result, "resources") == [{"uri": "x"}]
+
+
+@pytest.mark.asyncio
+async def test_fetch_listed_resources_handles_error():
+    transport = MagicMock()
+    transport.send_request = AsyncMock(side_effect=RuntimeError("boom"))
+    client = ProtocolClient(transport=transport, safety_system=None)
+
+    assert await client._fetch_listed_resources() == []
+
+
+@pytest.mark.asyncio
+async def test_process_protocol_request_blocked():
+    safety = SimpleNamespace(
+        should_block_protocol_message=lambda *_args, **_kwargs: True,
+        get_blocking_reason=lambda: "blocked",
+    )
+    transport = MagicMock()
+    client = ProtocolClient(transport=transport, safety_system=safety)
+
+    result = await client._process_protocol_request(
+        "ReadResourceRequest", "resources/read", {"uri": "x"}, "resource:x"
+    )
+
+    assert result["safety_blocked"] is True
+    assert result["success"] is False
+    assert result["result"]["error"] == "blocked_by_safety_system"
+
+
+@pytest.mark.asyncio
+async def test_process_protocol_request_send_error(monkeypatch):
+    transport = MagicMock()
+    client = ProtocolClient(transport=transport, safety_system=None)
+
+    async def _fail_send(*_args, **_kwargs):
+        raise RuntimeError("send failed")
+
+    monkeypatch.setattr(client, "_send_protocol_request", _fail_send)
+
+    result = await client._process_protocol_request(
+        "ReadResourceRequest", "resources/read", {"uri": "x"}, "resource:x"
+    )
+
+    assert result["success"] is False
+    assert result["result"]["error"] == "send failed"
+
+
+@pytest.mark.asyncio
+async def test_fuzz_listed_resources_filters_invalid(monkeypatch):
+    transport = MagicMock()
+    transport.send_request = AsyncMock(
+        return_value={"resources": [{"uri": "ok"}, {"uri": ""}, {"foo": "bar"}]}
+    )
+    client = ProtocolClient(transport=transport, safety_system=None)
+
+    monkeypatch.setattr(client, "_process_protocol_request", AsyncMock(return_value={}))
+    results = await client._fuzz_listed_resources()
+
+    assert len(results) == 1
+
+
+@pytest.mark.asyncio
+async def test_fuzz_listed_prompts_filters_invalid(monkeypatch):
+    transport = MagicMock()
+    transport.send_request = AsyncMock(
+        return_value={"prompts": [{"name": "ok"}, {"name": ""}, {"foo": "bar"}]}
+    )
+    client = ProtocolClient(transport=transport, safety_system=None)
+
+    monkeypatch.setattr(client, "_process_protocol_request", AsyncMock(return_value={}))
+    results = await client._fuzz_listed_prompts()
+
+    assert len(results) == 1
