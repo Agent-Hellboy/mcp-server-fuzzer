@@ -39,11 +39,6 @@ mkdocs.yml
 .gitignore
 .gitattributes
 
-# Docker
-Dockerfile
-.dockerignore
-docker-compose.yml
-
 # CI/CD
 .github/
 .gitlab-ci.yml
@@ -54,6 +49,7 @@ reports/
 *.csv
 *.html
 *.md
+!README.md
 
 # Test files
 tests/

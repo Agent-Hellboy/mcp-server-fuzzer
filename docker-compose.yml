@@ -16,7 +16,6 @@ services:
       # Mount custom configs if needed
       - ${CONFIG_PATH:-./examples/config}:/config:ro
     environment:
-      - MCP_FUZZER_IN_DOCKER=1
       # Pass through any MCP_SPEC_SCHEMA_VERSION if set
       - MCP_SPEC_SCHEMA_VERSION=${MCP_SPEC_SCHEMA_VERSION:-2025-06-18}
     # For HTTP/SSE servers, use bridge network with host access

@@ -60,13 +60,16 @@ def calculate_protocol_success_rate(total_runs: int, errors: int) -> float:
     return (successful_runs / total_runs) * 100
 
 
-def result_has_failure(result: dict[str, Any]) -> bool:
+def result_has_failure(result: dict[str, Any] | None) -> bool:
     """Return True if a protocol result represents an error condition."""
-    nested_error = (
-        result.get("result", {}).get("response", {}).get("error")
-        if isinstance(result, dict)
-        else None
-    )
+    if not isinstance(result, dict):
+        return True
+    nested_error = None
+    result_payload = result.get("result")
+    if isinstance(result_payload, dict):
+        response = result_payload.get("response")
+        if isinstance(response, dict):
+            nested_error = response.get("error")
     return bool(
         result.get("exception")
         or not result.get("success", True)
@@ -94,6 +97,8 @@ def collect_labeled_protocol_items(
     """Collect protocol results grouped by a known label prefix."""
     items: dict[str, list[dict[str, Any]]] = {}
     for result in protocol_results:
+        if not isinstance(result, dict):
+            continue
         label = result.get("label")
         parsed_prefix, name = _parse_label(label)
         if parsed_prefix != prefix or not name:

@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for MCP Server Fuzzer
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -19,8 +19,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Copy project files
 COPY . .
 
-# Install the package
-RUN pip install --no-cache-dir -e .
+# Install the package (non-editable so runtime doesn't depend on /build)
+RUN pip install --no-cache-dir .
 
 # Runtime stage
 FROM python:3.12-slim

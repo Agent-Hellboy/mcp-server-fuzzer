@@ -265,68 +265,12 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
         try:  # pragma: no cover
             if isinstance(protocol_results, dict) and protocol_results:
-                def _print_protocol_summary_only(
-                    results: dict[str, Any],
-                    title: str,
-                ) -> None:
-                    reporter = getattr(client, "reporter", None)
-                    if reporter and hasattr(reporter, "console_formatter"):
-                        reporter.console_formatter.print_protocol_summary(
-                            results, title=title
-                        )
-                    else:
-                        client.print_protocol_summary(results, title=title)
-
-                resource_types = {
-                    "ListResourcesRequest",
-                    "ReadResourceRequest",
-                    "ListResourceTemplatesRequest",
-                }
-                prompt_types = {
-                    "ListPromptsRequest",
-                    "GetPromptRequest",
-                    "CompleteRequest",
-                }
-                resource_results = {
-                    key: protocol_results[key]
-                    for key in protocol_results
-                    if key in resource_types
-                }
-                prompt_results = {
-                    key: protocol_results[key]
-                    for key in protocol_results
-                    if key in prompt_types
-                }
-
                 print("\n" + "=" * 80)
                 print(
                     f"{emoji.emojize(':rocket:')} MCP FUZZER PROTOCOL RESULTS SUMMARY"
                 )
                 print("=" * 80)
                 client.print_protocol_summary(protocol_results)
-
-                if resource_results:
-                    print("\n" + "-" * 80)
-                    print(
-                        f"{emoji.emojize(':file_folder:')} RESOURCES FUZZING SUMMARY"
-                    )
-                    print("-" * 80)
-                    _print_protocol_summary_only(
-                        resource_results,
-                        "MCP Resources Fuzzing Summary",
-                    )
-
-                if prompt_results:
-                    print("\n" + "-" * 80)
-                    summary_label = (
-                        f"{emoji.emojize(':speech_balloon:')} PROMPTS FUZZING SUMMARY"
-                    )
-                    print(summary_label)
-                    print("-" * 80)
-                    _print_protocol_summary_only(
-                        prompt_results,
-                        "MCP Prompts Fuzzing Summary",
-                    )
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display protocol summary tables: {exc}")
 
