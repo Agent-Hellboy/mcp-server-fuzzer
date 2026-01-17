@@ -137,6 +137,26 @@ class TestConsoleFormatter:
         assert "MCP Resource Item Fuzzing Summary" in titles
         assert "MCP Prompt Item Fuzzing Summary" in titles
 
+    def test_print_protocol_summary_with_single_item_table(self, console_formatter):
+        """Test printing protocol summary with one item table."""
+        results = {
+            "ReadResourceRequest": [
+                {"success": True, "label": "resource:file://only.txt"},
+            ],
+            "GetPromptRequest": [
+                {"success": True},
+            ],
+        }
+
+        console_formatter.print_protocol_summary(results)
+
+        assert console_formatter.console.print.call_count == 2
+        tables = [call[0][0] for call in console_formatter.console.print.call_args_list]
+        titles = [getattr(table, "title", "") for table in tables]
+        assert "MCP Protocol Fuzzing Summary" in titles
+        assert "MCP Resource Item Fuzzing Summary" in titles
+        assert "MCP Prompt Item Fuzzing Summary" not in titles
+
     def test_print_protocol_summary_custom_title(self, console_formatter):
         """Test printing protocol summary with a custom title."""
         results = {"proto": [{"success": True}]}

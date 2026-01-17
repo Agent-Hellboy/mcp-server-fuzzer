@@ -159,6 +159,7 @@ class ProtocolClient:
             )
             return {
                 "fuzz_data": fuzz_data,
+                "label": label,
                 "result": {"response": None, "error": "blocked_by_safety_system"},
                 "safety_blocked": True,
                 "safety_sanitized": False,
@@ -217,6 +218,7 @@ class ProtocolClient:
         Returns:
             Dictionary with fuzzing results
         """
+        label = f"run {run_index + 1}/{total_runs}"
         try:
             # Generate fuzz data using mutator (no send); client handles safety + send
             fuzz_data = await self.protocol_mutator.mutate(protocol_type, phase=phase)
@@ -224,13 +226,13 @@ class ProtocolClient:
             if fuzz_data is None:
                 raise ValueError(f"No fuzz_data returned for {protocol_type}")
 
-            label = f"run {run_index + 1}/{total_runs}"
             return await self._execute_protocol_fuzz(protocol_type, fuzz_data, label)
 
         except Exception as e:
             self._logger.warning(f"Exception during fuzzing {protocol_type}: {e}")
             return {
                 "fuzz_data": (fuzz_data if "fuzz_data" in locals() else None),
+                "label": label,
                 "exception": str(e),
                 "traceback": traceback.format_exc(),
                 "success": False,

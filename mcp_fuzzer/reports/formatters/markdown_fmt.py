@@ -18,6 +18,10 @@ from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 class MarkdownFormatter:
     """Handles Markdown formatting for reports."""
 
+    @staticmethod
+    def _escape_cell(value: str) -> str:
+        return value.replace("|", "\\|")
+
     def save_markdown_report(
         self,
         report_data: dict[str, Any] | Any,
@@ -82,11 +86,12 @@ class MarkdownFormatter:
                 "|---------------|------------|--------|--------------|\n"
             )
             for protocol_type, results in protocol_results.items():
+                protocol_label = self._escape_cell(str(protocol_type))
                 total_runs = len(results)
                 errors = sum(1 for r in results if result_has_failure(r))
                 success_rate = calculate_protocol_success_rate(total_runs, errors)
                 md_content += (
-                    f"| {protocol_type} | {total_runs} | {errors} | "
+                    f"| {protocol_label} | {total_runs} | {errors} | "
                     f"{success_rate:.1f}% |\n"
                 )
             md_content += "\n"
@@ -101,8 +106,11 @@ class MarkdownFormatter:
                     "|----------|------------|--------|--------------|\n"
                 )
                 for name, stats in resource_items.items():
+                    escaped_name = self._escape_cell(str(name))
+                    resource_runs = stats["total_runs"]
+                    resource_errors = stats["errors"]
                     md_content += (
-                        f"| {name} | {stats['total_runs']} | {stats['errors']} | "
+                        f"| {escaped_name} | {resource_runs} | {resource_errors} | "
                         f"{stats['success_rate']:.1f}% |\n"
                     )
                 md_content += "\n"
@@ -117,8 +125,11 @@ class MarkdownFormatter:
                     "|--------|------------|--------|--------------|\n"
                 )
                 for name, stats in prompt_items.items():
+                    escaped_name = self._escape_cell(str(name))
+                    prompt_runs = stats["total_runs"]
+                    prompt_errors = stats["errors"]
                     md_content += (
-                        f"| {name} | {stats['total_runs']} | {stats['errors']} | "
+                        f"| {escaped_name} | {prompt_runs} | {prompt_errors} | "
                         f"{stats['success_rate']:.1f}% |\n"
                     )
                 md_content += "\n"

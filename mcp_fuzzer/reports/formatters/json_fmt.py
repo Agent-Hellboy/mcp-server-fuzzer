@@ -10,6 +10,7 @@ from .common import (
     collect_and_summarize_protocol_items,
     extract_tool_runs,
     normalize_report_data,
+    result_has_failure,
 )
 from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
@@ -76,14 +77,7 @@ class JSONFormatter:
         summary = {}
         for protocol_type, protocol_results in results.items():
             total_runs = len(protocol_results)
-            errors = sum(
-                1
-                for r in protocol_results
-                if r.get("exception")
-                or not r.get("success", True)
-                or r.get("error")
-                or r.get("server_error")
-            )
+            errors = sum(1 for r in protocol_results if result_has_failure(r))
             success_rate = calculate_protocol_success_rate(total_runs, errors)
 
             summary[protocol_type] = {
@@ -103,12 +97,20 @@ class JSONFormatter:
         _, resources = collect_and_summarize_protocol_items(
             results.get(READ_RESOURCE_REQUEST, []), "resource"
         )
+        resources_failed = any(
+            result_has_failure(r) for r in results.get(READ_RESOURCE_REQUEST, [])
+        )
         _, prompts = collect_and_summarize_protocol_items(
             results.get(GET_PROMPT_REQUEST, []), "prompt"
+        )
+        prompts_failed = any(
+            result_has_failure(r) for r in results.get(GET_PROMPT_REQUEST, [])
         )
         summary: dict[str, Any] = {}
         if resources:
             summary["resources"] = resources
+            summary["resources_failed"] = resources_failed
         if prompts:
             summary["prompts"] = prompts
+            summary["prompts_failed"] = prompts_failed
         return summary
