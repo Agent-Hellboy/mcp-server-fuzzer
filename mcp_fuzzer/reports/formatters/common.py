@@ -46,3 +46,47 @@ def calculate_tool_success_rate(
         return 0.0
     successful_runs = max(0, total_runs - exceptions - safety_blocked)
     return (successful_runs / total_runs) * 100
+
+
+def result_has_failure(result: dict[str, Any]) -> bool:
+    """Return True if a protocol result represents an error condition."""
+    return bool(
+        result.get("exception")
+        or not result.get("success", True)
+        or result.get("error")
+        or result.get("server_error")
+    )
+
+
+def collect_labeled_protocol_items(
+    protocol_results: list[dict[str, Any]], prefix: str
+) -> dict[str, list[dict[str, Any]]]:
+    """Collect protocol results grouped by a label prefix."""
+    items: dict[str, list[dict[str, Any]]] = {}
+    for result in protocol_results:
+        label = result.get("label")
+        if not isinstance(label, str) or not label.startswith(prefix):
+            continue
+        name = label[len(prefix) :]
+        if not name:
+            continue
+        items.setdefault(name, []).append(result)
+    return items
+
+
+def summarize_protocol_items(
+    items: dict[str, list[dict[str, Any]]]
+) -> dict[str, dict[str, Any]]:
+    """Summarize grouped protocol items by runs/errors/success rate."""
+    summary: dict[str, dict[str, Any]] = {}
+    for name, item_results in items.items():
+        total_runs = len(item_results)
+        errors = sum(1 for r in item_results if result_has_failure(r))
+        successes = max(total_runs - errors, 0)
+        success_rate = (successes / total_runs * 100) if total_runs > 0 else 0
+        summary[name] = {
+            "total_runs": total_runs,
+            "errors": errors,
+            "success_rate": round(success_rate, 2),
+        }
+    return summary

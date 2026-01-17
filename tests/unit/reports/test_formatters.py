@@ -114,6 +114,29 @@ class TestConsoleFormatter:
         table = console_formatter.console.print.call_args[0][0]
         assert table.title == "MCP Protocol Fuzzing Summary"
 
+    def test_print_protocol_summary_with_item_details(self, console_formatter):
+        """Test printing protocol summary with per-item tables."""
+        results = {
+            "ReadResourceRequest": [
+                {"success": True, "label": "resource:file://foo.txt"},
+                {"success": False, "error": "oops", "label": "resource:file://foo.txt"},
+                {"success": True},
+            ],
+            "GetPromptRequest": [
+                {"success": True, "label": "prompt:make_summary"},
+                {"success": True, "label": "prompt:make_summary"},
+            ],
+        }
+
+        console_formatter.print_protocol_summary(results)
+
+        assert console_formatter.console.print.call_count == 3
+        tables = [call[0][0] for call in console_formatter.console.print.call_args_list]
+        titles = [getattr(table, "title", "") for table in tables]
+        assert "MCP Protocol Fuzzing Summary" in titles
+        assert "MCP Resource Item Fuzzing Summary" in titles
+        assert "MCP Prompt Item Fuzzing Summary" in titles
+
     def test_print_protocol_summary_custom_title(self, console_formatter):
         """Test printing protocol summary with a custom title."""
         results = {"proto": [{"success": True}]}
@@ -248,6 +271,7 @@ class TestJSONFormatter:
 
         assert result["protocol_results"] == {}
         assert result["summary"] == {}
+        assert result["item_summary"] == {}
 
     def test_format_protocol_results_with_data(self, json_formatter):
         """Test formatting protocol results with data."""
@@ -263,11 +287,35 @@ class TestJSONFormatter:
         assert formatted["protocol_results"] == results
         assert "summary" in formatted
         assert "test_protocol" in formatted["summary"]
+        assert formatted["item_summary"] == {}
 
         protocol_summary = formatted["summary"]["test_protocol"]
         assert protocol_summary["total_runs"] == 2
         assert protocol_summary["errors"] == 1
         assert protocol_summary["success_rate"] == 50.0  # (2-1)/2 * 100
+
+    def test_format_protocol_results_with_item_summary(self, json_formatter):
+        """Test formatting protocol results with item summaries."""
+        results = {
+            "ReadResourceRequest": [
+                {"success": True, "label": "resource:file://a.txt"},
+                {"success": False, "error": "boom", "label": "resource:file://a.txt"},
+                {"success": True, "label": "resource:file://b.txt"},
+            ],
+            "GetPromptRequest": [
+                {"success": True, "label": "prompt:alpha"},
+                {"success": True, "label": "prompt:alpha"},
+            ],
+        }
+
+        formatted = json_formatter.format_protocol_results(results)
+
+        item_summary = formatted["item_summary"]
+        assert "resources" in item_summary
+        assert "prompts" in item_summary
+        assert item_summary["resources"]["file://a.txt"]["total_runs"] == 2
+        assert item_summary["resources"]["file://a.txt"]["errors"] == 1
+        assert item_summary["prompts"]["alpha"]["success_rate"] == 100.0
 
     def test_generate_tool_summary_empty(self, json_formatter):
         """Test generating tool summary with empty results."""

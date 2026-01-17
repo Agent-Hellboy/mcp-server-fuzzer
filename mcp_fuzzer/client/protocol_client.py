@@ -190,6 +190,7 @@ class ProtocolClient:
 
         return {
             "fuzz_data": fuzz_data,
+            "label": label,
             "result": result,
             "safety_blocked": safety_blocked,
             "safety_sanitized": safety_sanitized,

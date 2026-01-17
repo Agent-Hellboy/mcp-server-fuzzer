@@ -5,7 +5,13 @@ from __future__ import annotations
 import emoji
 from typing import Any
 
-from .common import extract_tool_runs, normalize_report_data
+from .common import (
+    collect_labeled_protocol_items,
+    extract_tool_runs,
+    normalize_report_data,
+    result_has_failure,
+    summarize_protocol_items,
+)
 
 
 class MarkdownFormatter:
@@ -65,6 +71,61 @@ class MarkdownFormatter:
                     exception = result.get("exception", "")
                     md_content += f"| {i + 1} | {success} | {exception} |\n"
 
+                md_content += "\n"
+
+        if "protocol_results" in data:
+            protocol_results = data["protocol_results"]
+            md_content += "## Protocol Results\n\n"
+            md_content += (
+                "| Protocol Type | Total Runs | Errors | Success Rate |\n"
+                "|---------------|------------|--------|--------------|\n"
+            )
+            for protocol_type, results in protocol_results.items():
+                total_runs = len(results)
+                errors = sum(1 for r in results if result_has_failure(r))
+                success_rate = (
+                    (total_runs - errors) / total_runs * 100 if total_runs else 0
+                )
+                md_content += (
+                    f"| {protocol_type} | {total_runs} | {errors} | "
+                    f"{success_rate:.1f}% |\n"
+                )
+            md_content += "\n"
+
+            resource_items = summarize_protocol_items(
+                collect_labeled_protocol_items(
+                    protocol_results.get("ReadResourceRequest", []), "resource:"
+                )
+            )
+            if resource_items:
+                md_content += "## Resource Item Summary\n\n"
+                md_content += (
+                    "| Resource | Total Runs | Errors | Success Rate |\n"
+                    "|----------|------------|--------|--------------|\n"
+                )
+                for name, stats in resource_items.items():
+                    md_content += (
+                        f"| {name} | {stats['total_runs']} | {stats['errors']} | "
+                        f"{stats['success_rate']:.1f}% |\n"
+                    )
+                md_content += "\n"
+
+            prompt_items = summarize_protocol_items(
+                collect_labeled_protocol_items(
+                    protocol_results.get("GetPromptRequest", []), "prompt:"
+                )
+            )
+            if prompt_items:
+                md_content += "## Prompt Item Summary\n\n"
+                md_content += (
+                    "| Prompt | Total Runs | Errors | Success Rate |\n"
+                    "|--------|------------|--------|--------------|\n"
+                )
+                for name, stats in prompt_items.items():
+                    md_content += (
+                        f"| {name} | {stats['total_runs']} | {stats['errors']} | "
+                        f"{stats['success_rate']:.1f}% |\n"
+                    )
                 md_content += "\n"
 
         with open(filename, "w") as f:

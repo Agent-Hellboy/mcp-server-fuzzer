@@ -6,8 +6,10 @@ from typing import Any
 
 from .common import (
     calculate_tool_success_rate,
+    collect_labeled_protocol_items,
     extract_tool_runs,
     normalize_report_data,
+    summarize_protocol_items,
 )
 
 
@@ -26,6 +28,7 @@ class JSONFormatter:
         return {
             "protocol_results": results,
             "summary": self._generate_protocol_summary(results),
+            "item_summary": self._generate_protocol_item_summary(results),
         }
 
     def save_report(
@@ -89,4 +92,27 @@ class JSONFormatter:
                 "success_rate": round(success_rate, 2),
             }
 
+        return summary
+
+    def _generate_protocol_item_summary(
+        self, results: dict[str, list[dict[str, Any]]]
+    ) -> dict[str, Any]:
+        if not results:
+            return {}
+
+        resources = summarize_protocol_items(
+            collect_labeled_protocol_items(
+                results.get("ReadResourceRequest", []), "resource:"
+            )
+        )
+        prompts = summarize_protocol_items(
+            collect_labeled_protocol_items(
+                results.get("GetPromptRequest", []), "prompt:"
+            )
+        )
+        summary: dict[str, Any] = {}
+        if resources:
+            summary["resources"] = resources
+        if prompts:
+            summary["prompts"] = prompts
         return summary
