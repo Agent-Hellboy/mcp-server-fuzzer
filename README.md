@@ -268,7 +268,7 @@ docker-compose -f docker-compose.host-network.yml run --rm fuzzer \
 
 ### Network Configuration
 
-- **HTTP/SSE Servers**: Use `--network host` to access servers on host machine, or use `host.docker.internal` (macOS/Windows) or host IP (Linux)
+- **HTTP/SSE Servers**: Network access required. Linux: prefer `--network host` so `localhost` works. Docker Desktop (macOS/Windows): use `host.docker.internal` since host networking is limited. If neither works, use the host IP.
 - **Stdio Servers**: No network needed - server runs as subprocess in container
 
 ### Example: Fuzzing a Node.js Stdio Server
@@ -310,7 +310,7 @@ docker run --rm -it --network host \
 
 ### Security Considerations
 
-- The Docker container runs as a non-root user (`fuzzer`) for security
+- The Docker container runs as root by default; use `--user` or a custom image to run as non-root
 - Stdio servers run in isolated container environment
 - Use read-only mounts (`:ro`) for server code when possible
 - Reports are written to mounted volume, not inside container

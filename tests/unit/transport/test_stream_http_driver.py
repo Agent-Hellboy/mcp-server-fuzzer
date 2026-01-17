@@ -145,8 +145,7 @@ def test_resolve_redirect(monkeypatch):
     assert result == "http://redirect"
 
 
-@pytest.mark.asyncio
-async def test_resolve_redirect_falls_back_to_trailing_slash(monkeypatch):
+def test_resolve_redirect_falls_back_to_trailing_slash(monkeypatch):
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
     response = FakeResponse(status_code=307, headers={})
 
@@ -740,6 +739,10 @@ async def test_send_client_response_follows_redirect(monkeypatch):
         "resolve_redirect_safely",
         lambda _base, location: location,
     )
+
+    await driver._send_client_response({"result": "ok"})
+
+    assert driver._post_with_retries.call_count == 2
 
 
 @pytest.mark.asyncio

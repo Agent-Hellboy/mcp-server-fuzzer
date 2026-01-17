@@ -639,5 +639,5 @@ def test_load_auth_config_rejects_non_dict_tool_mapping(tmp_path: Path):
     path = tmp_path / "auth.json"
     path.write_text(json.dumps(config))
 
-    with pytest.raises(AuthConfigError):
+    with pytest.raises(AuthConfigError, match="tool_mapping"):
         load_auth_config(str(path))

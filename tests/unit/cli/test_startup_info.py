@@ -335,13 +335,21 @@ def test_print_startup_info_auth_providers_and_config_rows(monkeypatch, tmp_path
 
     from rich.table import Table
 
-    tables = [args[0] for args, _kwargs in calls if args and isinstance(args[0], Table)]
+    tables = [
+        call_args[0]
+        for call_args, _kwargs in calls
+        if call_args and isinstance(call_args[0], Table)
+    ]
     rows = []
     for table in tables:
         columns = getattr(table, "columns", [])
-        row_count = max((len(col._cells) for col in columns), default=0)
+        column_cells = [list(col.cells) for col in columns]
+        row_count = max((len(cells) for cells in column_cells), default=0)
         for index in range(row_count):
-            cells = [str(col._cells[index]) for col in columns]
+            cells = [
+                str(cells[index]) if index < len(cells) else ""
+                for cells in column_cells
+            ]
             rows.append(" | ".join(cells))
 
     assert any("Provider: default" in row and "Type: api-key" in row for row in rows)

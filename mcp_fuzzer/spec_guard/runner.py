@@ -61,6 +61,8 @@ async def run_spec_suite(
     capabilities: dict[str, Any] = {}
     protocol_version = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
     version_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    task_id: str | None = None
+    sampling_messages: list[dict[str, Any]] | None = None
 
     try:
         result = await transport.send_request(
@@ -318,6 +320,10 @@ async def run_spec_suite(
         if method == "resources/read" and not resource_uri:
             continue
         if method == "prompts/get" and not prompt_name:
+            continue
+        if method == "tasks/get" and not task_id:
+            continue
+        if method == "sampling/createMessage" and not sampling_messages:
             continue
         
         try:

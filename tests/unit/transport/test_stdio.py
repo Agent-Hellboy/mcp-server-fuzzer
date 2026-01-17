@@ -20,6 +20,20 @@ from mcp_fuzzer.exceptions import (
 )
 
 
+class FakeStdin:
+    def __init__(self, lines=None, async_mode=False):
+        self._lines = list(lines) if lines else []
+        self._async = async_mode
+
+    def readline(self):
+        if self._async:
+            return self._async_readline()
+        return self._lines.pop(0) if self._lines else ""
+
+    async def _async_readline(self):
+        return self._lines.pop(0) if self._lines else ""
+
+
 class TestStdioDriver:
     def setup_method(self):
         """Set up test fixtures."""
@@ -952,14 +966,7 @@ class TestStdioDriverExtended:
     async def test_send_request_reads_json(self, monkeypatch):
         transport = StdioDriver("echo")
         transport.request_id = 7
-    
-        class FakeStdin:
-            def __init__(self, lines):
-                self._lines = list(lines)
-    
-            def readline(self):
-                return self._lines.pop(0)
-    
+
         stdout = io.StringIO()
         stdin = FakeStdin([b'{"jsonrpc": "2.0", "id": 7, "result": 3}'])
         monkeypatch.setattr(
@@ -975,11 +982,7 @@ class TestStdioDriverExtended:
     @pytest.mark.asyncio
     async def test_send_request_no_line(self, monkeypatch):
         transport = StdioDriver("echo")
-    
-        class FakeStdin:
-            def readline(self):
-                return ""
-    
+
         stdout = io.StringIO()
         stdin = FakeStdin()
         monkeypatch.setattr(
@@ -995,13 +998,12 @@ class TestStdioDriverExtended:
     @pytest.mark.asyncio
     async def test_send_request_awaitable_line(self, monkeypatch):
         transport = StdioDriver("echo")
-    
-        class FakeStdin:
-            async def readline(self):
-                return '{"jsonrpc": "2.0", "id": 1, "result": "ok"}'
-    
+
         stdout = io.StringIO()
-        stdin = FakeStdin()
+        stdin = FakeStdin(
+            ['{"jsonrpc": "2.0", "id": 1, "result": "ok"}'],
+            async_mode=True,
+        )
         monkeypatch.setattr(
             stdio_driver,
             "sys",
@@ -1016,14 +1018,7 @@ class TestStdioDriverExtended:
     async def test_stream_request_skips_invalid_json(self, monkeypatch):
         transport = StdioDriver("echo")
         transport.request_id = 2
-    
-        class FakeStdin:
-            def __init__(self, lines):
-                self._lines = list(lines)
-    
-            def readline(self):
-                return self._lines.pop(0)
-    
+
         stdout = io.StringIO()
         stdin = FakeStdin(['{bad json}', '{"ok": 1}', ""])
         monkeypatch.setattr(
@@ -1042,14 +1037,7 @@ class TestStdioDriverExtended:
     async def test_stream_request_bytes(self, monkeypatch):
         transport = StdioDriver("echo")
         transport.request_id = 3
-    
-        class FakeStdin:
-            def __init__(self, lines):
-                self._lines = list(lines)
-    
-            def readline(self):
-                return self._lines.pop(0)
-    
+
         stdout = io.StringIO()
         stdin = FakeStdin([b'{"ok": 2}', b""])
         monkeypatch.setattr(
@@ -1068,13 +1056,9 @@ class TestStdioDriverExtended:
     async def test_stream_request_awaitable_line(self, monkeypatch):
         transport = StdioDriver("echo")
         transport.request_id = 4
-    
-        class FakeStdin:
-            async def readline(self):
-                return '{"ok": 4}'
-    
+
         stdout = io.StringIO()
-        stdin = FakeStdin()
+        stdin = FakeStdin(['{"ok": 4}', ""], async_mode=True)
         monkeypatch.setattr(
             stdio_driver,
             "sys",

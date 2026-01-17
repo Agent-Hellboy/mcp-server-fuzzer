@@ -276,15 +276,13 @@ async def test_execute_all_types_timeout_branch(monkeypatch):
     executor = ProtocolExecutor()
     monkeypatch.setattr(executor, "PROTOCOL_TYPES", ("PingRequest",))
     monkeypatch.setattr(executor, "_execute_single_type", AsyncMock(return_value=[]))
-    monkeypatch.setattr(
-        asyncio,
-        "wait_for",
+    with patch(
+        "mcp_fuzzer.fuzz_engine.executor.protocol_executor.asyncio.wait_for",
         AsyncMock(side_effect=asyncio.TimeoutError),
-    )
+    ):
+        result = await executor.execute_all_types(runs_per_type=1)
 
-    result = await executor.execute_all_types(runs_per_type=1)
-
-    assert result == {"PingRequest": []}
+        assert result == {"PingRequest": []}
 
 
 @pytest.mark.asyncio
