@@ -158,13 +158,32 @@ class FuzzerReporter:
             runs, _ = extract_tool_runs(tool_results)
             self.add_tool_results(tool_name, runs)
 
-    def print_protocol_summary(self, results: dict[str, list[dict[str, Any]]]):
+    def print_protocol_summary(
+        self,
+        results: dict[str, list[dict[str, Any]]],
+        *,
+        title: str = "MCP Protocol Fuzzing Summary",
+    ):
         """Print protocol fuzzing summary to console."""
-        self.console_formatter.print_protocol_summary(results)
+        self.console_formatter.print_protocol_summary(results, title=title)
 
         # Store results for final report
         for protocol_type, protocol_results in results.items():
             self.add_protocol_results(protocol_type, protocol_results)
+
+    def print_spec_guard_summary(
+        self,
+        checks: list[dict[str, Any]],
+        *,
+        requested_version: str | None = None,
+        negotiated_version: str | None = None,
+    ):
+        """Print spec guard (compliance) summary to console."""
+        self.console_formatter.print_spec_guard_summary(
+            checks,
+            requested_version=requested_version,
+            negotiated_version=negotiated_version,
+        )
 
     def print_overall_summary(
         self,

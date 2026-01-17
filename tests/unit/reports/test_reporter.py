@@ -253,7 +253,7 @@ class TestFuzzerReporter:
 
         # Verify console formatter was called
         reporter.console_formatter.print_protocol_summary.assert_called_once_with(
-            results
+            results, title="MCP Protocol Fuzzing Summary"
         )
         # Verify results were stored
         assert "test_protocol" in reporter.protocol_results

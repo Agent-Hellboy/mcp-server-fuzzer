@@ -157,7 +157,7 @@ class TestCheckToolResultContent:
         assert any(c["id"] == "tools-content-resource-uri" for c in result)
 
     def test_resource_content_missing_mimetype(self):
-        """Test resource content missing mimeType."""
+        """Test resource content missing mimeType is allowed."""
         result = check_tool_result_content(
             {
                 "content": [
@@ -168,7 +168,7 @@ class TestCheckToolResultContent:
                 ]
             }
         )
-        assert any(c["id"] == "tools-content-resource-mime" for c in result)
+        assert not any(c["id"] == "tools-content-resource-mime" for c in result)
 
     def test_resource_content_missing_body(self):
         """Test resource content missing text or blob."""
@@ -221,12 +221,12 @@ class TestCheckLoggingNotification:
     def test_no_params(self):
         """Test payload without params."""
         result = check_logging_notification({})
-        assert result == []
+        assert any(c["id"] == "logging-params-missing" for c in result)
 
     def test_params_none(self):
         """Test payload with None params."""
         result = check_logging_notification({"params": None})
-        assert result == []
+        assert any(c["id"] == "logging-params-missing" for c in result)
 
     def test_non_dict_params(self):
         """Test payload with non-dict params."""
@@ -240,14 +240,16 @@ class TestCheckLoggingNotification:
         assert any(c["id"] == "logging-level-type" for c in result)
 
     def test_invalid_message_type(self):
-        """Test payload with non-string message."""
-        result = check_logging_notification({"params": {"message": 123}})
-        assert any(c["id"] == "logging-message-type" for c in result)
+        """Test payload with non-string logger."""
+        result = check_logging_notification({"params": {"logger": 123}})
+        assert any(c["id"] == "logging-logger-type" for c in result)
+        assert any(c["id"] == "logging-level-missing" for c in result)
+        assert any(c["id"] == "logging-data-missing" for c in result)
 
     def test_valid_logging_notification(self):
         """Test valid logging notification."""
         result = check_logging_notification(
-            {"params": {"level": "INFO", "message": "Test"}}
+            {"params": {"level": "INFO", "data": "Test"}}
         )
         assert result == []
 
@@ -355,7 +357,7 @@ class TestCheckResourceTemplatesList:
     def test_no_resource_templates(self):
         """Test result without resourceTemplates key."""
         result = check_resource_templates_list({})
-        assert result == []
+        assert any(c["id"] == "resources-templates-missing" for c in result)
 
     def test_non_array_templates(self):
         """Test result with non-array resourceTemplates."""
@@ -372,8 +374,8 @@ class TestCheckResourceTemplatesList:
         )
         assert any(c["id"] == "resources-templates-item" for c in result)
 
-    def test_template_missing_uri(self):
-        """Test template missing uri."""
+    def test_template_missing_uri_template(self):
+        """Test template missing uriTemplate."""
         result = check_resource_templates_list(
             {"resourceTemplates": [{"name": "test"}]}
         )
@@ -382,7 +384,7 @@ class TestCheckResourceTemplatesList:
     def test_valid_templates(self):
         """Test valid templates."""
         result = check_resource_templates_list(
-            {"resourceTemplates": [{"uri": "file://template"}]}
+            {"resourceTemplates": [{"name": "tmpl", "uriTemplate": "file://template"}]}
         )
         assert result == []
 

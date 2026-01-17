@@ -18,6 +18,7 @@ from ...exceptions import (
     ServerError,
     TransportError,
 )
+from ...spec_version import maybe_update_spec_version_from_result
 
 if TYPE_CHECKING:
     from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
@@ -294,6 +295,8 @@ class StdioDriver(TransportDriver):
                         context={"request_id": request_id, "error": response["error"]},
                     )
                 result = response.get("result", response)
+                if method == "initialize":
+                    maybe_update_spec_version_from_result(result)
                 return result if isinstance(result, dict) else {"result": result}
         
         # If we've exhausted iterations, raise an error
@@ -326,6 +329,8 @@ class StdioDriver(TransportDriver):
                 )
 
             result = response.get("result", response)
+            if payload.get("method") == "initialize":
+                maybe_update_spec_version_from_result(result)
             return result if isinstance(result, dict) else {"result": result}
 
     async def _send_request(self, payload: dict[str, Any]) -> dict[str, Any]:

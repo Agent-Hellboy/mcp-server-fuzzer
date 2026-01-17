@@ -1,4 +1,6 @@
 
+import os
+
 from mcp_fuzzer.spec_guard import spec_checks
 
 def test_check_tool_result_content_image_missing_fields():
@@ -17,6 +19,8 @@ def test_check_tool_result_content_image_missing_fields():
     assert "tools-content-image-mime" in ids
 
 def test_check_tool_result_content_audio_missing_fields():
+    previous = os.environ.get("MCP_SPEC_SCHEMA_VERSION")
+    os.environ["MCP_SPEC_SCHEMA_VERSION"] = "2025-11-25"
     # Test audio missing data
     checks = spec_checks.check_tool_result_content(
         {"content": [{"type": "audio", "mimeType": "audio/mp3"}]}
@@ -30,6 +34,10 @@ def test_check_tool_result_content_audio_missing_fields():
     )
     ids = {check["id"] for check in checks}
     assert "tools-content-audio-mime" in ids
+    if previous is None:
+        os.environ.pop("MCP_SPEC_SCHEMA_VERSION", None)
+    else:
+        os.environ["MCP_SPEC_SCHEMA_VERSION"] = previous
 
 def test_check_tool_result_content_resource_missing_fields():
     # Test resource missing all
@@ -38,7 +46,6 @@ def test_check_tool_result_content_resource_missing_fields():
     )
     ids = {check["id"] for check in checks}
     assert "tools-content-resource-uri" in ids
-    assert "tools-content-resource-mime" in ids
     assert "tools-content-resource-body" in ids
     
     # Test resource not a dict
@@ -50,8 +57,7 @@ def test_check_tool_result_content_resource_missing_fields():
 
 def test_check_logging_notification_missing_params():
     checks = spec_checks.check_logging_notification({})
-    # It returns empty checks if params is None
-    assert checks == []
+    assert any(c["id"] == "logging-params-missing" for c in checks)
 
 def test_check_resource_templates_list_not_dict_or_list():
     checks = spec_checks.check_resource_templates_list(

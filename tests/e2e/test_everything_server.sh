@@ -90,11 +90,12 @@ echo "Output directory: $FUZZ_OUTPUT_DIR"
 echo "Project root: $PROJECT_ROOT"
 
 echo "🐍 Ensuring MCP Fuzzer is installed..."
-if [ -f "/.dockerenv" ] || [ -n "${IN_DOCKER:-}" ]; then
-    echo "MCP Fuzzer install skipped (Docker environment detected)"
-elif python3 -c "import mcp_fuzzer" >/dev/null 2>&1; then
+if python3 -c "import mcp_fuzzer" >/dev/null 2>&1; then
     echo "MCP Fuzzer already installed"
 else
+    if [ -f "/.dockerenv" ] || [ -n "${IN_DOCKER:-}" ] || [ -n "${MCP_FUZZER_IN_DOCKER:-}" ]; then
+        echo "Installing MCP Fuzzer in Docker environment..."
+    fi
     python3 -m pip install -e "$PROJECT_ROOT"
 fi
 

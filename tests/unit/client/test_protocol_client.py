@@ -157,6 +157,28 @@ async def test_fuzz_all_protocol_types_runs():
 
 
 @pytest.mark.asyncio
+async def test_fuzz_all_protocol_types_appends_listed_results():
+    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client._get_protocol_types = AsyncMock(
+        return_value=["ReadResourceRequest", "GetPromptRequest"]
+    )
+    client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
+    client._fuzz_listed_resources = AsyncMock(
+        return_value=[{"success": True, "fuzz_data": {"params": {"uri": "u"}}}]
+    )
+    client._fuzz_listed_prompts = AsyncMock(
+        return_value=[{"success": True, "fuzz_data": {"params": {"name": "p"}}}]
+    )
+
+    result = await client.fuzz_all_protocol_types(runs_per_type=1)
+
+    assert result["ReadResourceRequest"][-1]["fuzz_data"]["params"]["uri"] == "u"
+    assert result["GetPromptRequest"][-1]["fuzz_data"]["params"]["name"] == "p"
+    client._fuzz_listed_resources.assert_awaited_once()
+    client._fuzz_listed_prompts.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_fuzz_protocol_type_collects_runs():
     client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
     client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
@@ -167,12 +189,52 @@ async def test_fuzz_protocol_type_collects_runs():
     assert client._process_single_protocol_fuzz.await_count == 3
 
 
+@pytest.mark.asyncio
+async def test_fuzz_protocol_type_appends_listed_resources():
+    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
+    client._fuzz_listed_resources = AsyncMock(
+        return_value=[{"success": True, "fuzz_data": {"params": {"uri": "u"}}}]
+    )
+
+    result = await client.fuzz_protocol_type("ReadResourceRequest", runs=2)
+
+    assert result[-1]["fuzz_data"]["params"]["uri"] == "u"
+    client._fuzz_listed_resources.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_fuzz_protocol_type_appends_listed_prompts():
+    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
+    client._fuzz_listed_prompts = AsyncMock(
+        return_value=[{"success": True, "fuzz_data": {"params": {"name": "p"}}}]
+    )
+
+    result = await client.fuzz_protocol_type("GetPromptRequest", runs=1)
+
+    assert result[-1]["fuzz_data"]["params"]["name"] == "p"
+    client._fuzz_listed_prompts.assert_awaited_once()
+
+
 def test_extract_params_handles_non_dict():
     client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
 
     assert client._extract_params({"params": {"x": 1}}) == {"x": 1}
     assert client._extract_params({"params": "nope"}) == {}
     assert client._extract_params("nope") == {}
+
+
+def test_extract_list_items_handles_wrapped_results():
+    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+
+    assert client._extract_list_items({"resources": [{"uri": "u"}]}, "resources") == [
+        {"uri": "u"}
+    ]
+    assert client._extract_list_items(
+        {"result": {"prompts": [{"name": "p"}]}}, "prompts"
+    ) == [{"name": "p"}]
+    assert client._extract_list_items({"result": {}}, "resources") == []
 
 
 @pytest.mark.asyncio
