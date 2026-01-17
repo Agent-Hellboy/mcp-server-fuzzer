@@ -1,5 +1,6 @@
 """Lightweight MCP spec checks for fuzzing results."""
 
+import os
 from typing import Any
 
 from .helpers import (
@@ -28,6 +29,10 @@ _SCHEMA_SPEC = spec_variant(SCHEMA_SPEC, spec_id="MCP-JSON-Schema")
 _RESOURCES_SPEC = RESOURCES_SPEC
 _PROMPTS_SPEC = PROMPTS_SPEC
 _SSE_SPEC = SSE_SPEC
+
+
+def _spec_at_least(target: str) -> bool:
+    return os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18") >= target
 
 
 def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
@@ -89,6 +94,8 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
         checks.append(
             _warn("tools-content-empty", "Tool content array is empty", _TOOLS_SPEC)
         )
+
+    requires_resource_link_fields = _spec_at_least("2025-11-25")
 
     for idx, item in enumerate(content):
         if not isinstance(item, dict):
@@ -158,22 +165,23 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
         elif ctype == "resource":
             resource = item.get("resource")
             if resource is None:
-                if not item.get("uri"):
-                    checks.append(
-                        _fail(
-                            "tools-content-resource-uri",
-                            "Resource link missing uri field",
-                            _TOOLS_SPEC,
+                if requires_resource_link_fields:
+                    if not item.get("uri"):
+                        checks.append(
+                            _fail(
+                                "tools-content-resource-uri",
+                                "Resource link missing uri field",
+                                _TOOLS_SPEC,
+                            )
                         )
-                    )
-                if not item.get("name"):
-                    checks.append(
-                        _fail(
-                            "tools-content-resource-name",
-                            "Resource link missing name field",
-                            _TOOLS_SPEC,
+                    if not item.get("name"):
+                        checks.append(
+                            _fail(
+                                "tools-content-resource-name",
+                                "Resource link missing name field",
+                                _TOOLS_SPEC,
+                            )
                         )
-                    )
             elif not isinstance(resource, dict):
                 checks.append(
                     _fail(
@@ -274,6 +282,8 @@ def check_resources_list(result: Any) -> list[SpecCheck]:
 
     resources = result.get("resources")
     if resources is None:
+        if not _spec_at_least("2025-11-25"):
+            return checks
         checks.append(
             _fail("resources-list-missing", "Missing resources array", _RESOURCES_SPEC)
         )
@@ -295,22 +305,23 @@ def check_resources_list(result: Any) -> list[SpecCheck]:
                 )
             )
             continue
-        if not resource.get("uri"):
-            checks.append(
-                _fail(
-                    "resources-list-uri",
-                    f"Resource {idx} missing uri",
-                    _RESOURCES_SPEC,
+        if _spec_at_least("2025-11-25"):
+            if not resource.get("uri"):
+                checks.append(
+                    _fail(
+                        "resources-list-uri",
+                        f"Resource {idx} missing uri",
+                        _RESOURCES_SPEC,
+                    )
                 )
-            )
-        if not resource.get("name"):
-            checks.append(
-                _fail(
-                    "resources-list-name",
-                    f"Resource {idx} missing name",
-                    _RESOURCES_SPEC,
+            if not resource.get("name"):
+                checks.append(
+                    _fail(
+                        "resources-list-name",
+                        f"Resource {idx} missing name",
+                        _RESOURCES_SPEC,
+                    )
                 )
-            )
 
     return checks
 
@@ -323,6 +334,8 @@ def check_resources_read(result: Any) -> list[SpecCheck]:
 
     contents = result.get("contents")
     if contents is None:
+        if not _spec_at_least("2025-11-25"):
+            return checks
         checks.append(
             _fail("resources-read-missing", "Missing contents array", _RESOURCES_SPEC)
         )
@@ -342,22 +355,23 @@ def check_resources_read(result: Any) -> list[SpecCheck]:
 
     for idx, item in enumerate(contents):
         if isinstance(item, dict):
-            if not item.get("uri"):
-                checks.append(
-                    _fail(
-                        "resources-read-uri",
-                        f"Content {idx} missing uri",
-                        _RESOURCES_SPEC,
+            if _spec_at_least("2025-11-25"):
+                if not item.get("uri"):
+                    checks.append(
+                        _fail(
+                            "resources-read-uri",
+                            f"Content {idx} missing uri",
+                            _RESOURCES_SPEC,
+                        )
                     )
-                )
-            if not (item.get("text") or item.get("blob")):
-                checks.append(
-                    _fail(
-                        "resources-read-body",
-                        f"Content {idx} missing text or blob",
-                        _RESOURCES_SPEC,
+                if not (item.get("text") or item.get("blob")):
+                    checks.append(
+                        _fail(
+                            "resources-read-body",
+                            f"Content {idx} missing text or blob",
+                            _RESOURCES_SPEC,
+                        )
                     )
-                )
         else:
             checks.append(
                 _fail(
@@ -378,6 +392,15 @@ def check_resource_templates_list(result: Any) -> list[SpecCheck]:
 
     templates = result.get("resourceTemplates")
     if templates is None:
+        if not _spec_at_least("2025-11-25"):
+            return checks
+        checks.append(
+            _fail(
+                "resources-templates-missing",
+                "Missing resourceTemplates array",
+                _RESOURCES_SPEC,
+            )
+        )
         return checks
 
     if not isinstance(templates, list):
@@ -400,22 +423,23 @@ def check_resource_templates_list(result: Any) -> list[SpecCheck]:
                 )
             )
             continue
-        if not template.get("name"):
-            checks.append(
-                _fail(
-                    "resources-templates-name",
-                    f"Template {idx} missing name",
-                    _RESOURCES_SPEC,
+        if _spec_at_least("2025-11-25"):
+            if not template.get("name"):
+                checks.append(
+                    _fail(
+                        "resources-templates-name",
+                        f"Template {idx} missing name",
+                        _RESOURCES_SPEC,
+                    )
                 )
-            )
-        if not (template.get("uri") or template.get("uriTemplate")):
-            checks.append(
-                _fail(
-                    "resources-templates-uri",
-                    f"Template {idx} missing uriTemplate",
-                    _RESOURCES_SPEC,
+            if not template.get("uriTemplate"):
+                checks.append(
+                    _fail(
+                        "resources-templates-uri",
+                        f"Template {idx} missing uriTemplate",
+                        _RESOURCES_SPEC,
+                    )
                 )
-            )
 
     return checks
 
@@ -428,6 +452,8 @@ def check_prompts_list(result: Any) -> list[SpecCheck]:
 
     prompts = result.get("prompts")
     if prompts is None:
+        if not _spec_at_least("2025-11-25"):
+            return checks
         checks.append(
             _fail("prompts-list-missing", "Missing prompts array", _PROMPTS_SPEC)
         )
@@ -449,14 +475,15 @@ def check_prompts_list(result: Any) -> list[SpecCheck]:
                 )
             )
             continue
-        if not prompt.get("name"):
-            checks.append(
-                _fail(
-                    "prompts-list-name",
-                    f"Prompt {idx} missing name",
-                    _PROMPTS_SPEC,
+        if _spec_at_least("2025-11-25"):
+            if not prompt.get("name"):
+                checks.append(
+                    _fail(
+                        "prompts-list-name",
+                        f"Prompt {idx} missing name",
+                        _PROMPTS_SPEC,
+                    )
                 )
-            )
     return checks
 
 
@@ -468,6 +495,8 @@ def check_prompts_get(result: Any) -> list[SpecCheck]:
 
     messages = result.get("messages")
     if messages is None:
+        if not _spec_at_least("2025-11-25"):
+            return checks
         checks.append(
             _fail("prompts-get-missing", "Missing messages array", _PROMPTS_SPEC)
         )
@@ -495,22 +524,23 @@ def check_prompts_get(result: Any) -> list[SpecCheck]:
                 )
             )
             continue
-        if not message.get("role"):
-            checks.append(
-                _fail(
-                    "prompts-get-role",
-                    f"Message {idx} missing role",
-                    _PROMPTS_SPEC,
+        if _spec_at_least("2025-11-25"):
+            if not message.get("role"):
+                checks.append(
+                    _fail(
+                        "prompts-get-role",
+                        f"Message {idx} missing role",
+                        _PROMPTS_SPEC,
+                    )
                 )
-            )
-        if not message.get("content"):
-            checks.append(
-                _fail(
-                    "prompts-get-content",
-                    f"Message {idx} missing content",
-                    _PROMPTS_SPEC,
+            if not message.get("content"):
+                checks.append(
+                    _fail(
+                        "prompts-get-content",
+                        f"Message {idx} missing content",
+                        _PROMPTS_SPEC,
+                    )
                 )
-            )
 
     return checks
 

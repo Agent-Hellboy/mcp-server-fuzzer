@@ -68,6 +68,10 @@ async def run_spec_suite(
         checks.extend(validate_definition("InitializeResult", result))
         if isinstance(result, dict):
             capabilities = result.get("capabilities") or {}
+            server_version = result.get("protocolVersion")
+            if isinstance(server_version, str) and server_version:
+                os.environ["MCP_SPEC_SCHEMA_VERSION"] = server_version
+                protocol_version = server_version
         await transport.send_notification("notifications/initialized")
     except Exception as exc:
         checks.append(_fail("initialize", f"initialize failed: {exc}", _SCHEMA_SPEC))
