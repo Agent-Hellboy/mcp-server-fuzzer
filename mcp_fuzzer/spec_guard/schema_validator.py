@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -17,9 +18,13 @@ except Exception:  # noqa: BLE001 - optional dependency
     validators = None
     HAVE_JSONSCHEMA = False
 
+def _spec_version() -> str:
+    return os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
+
+
 _SCHEMA_SPEC = {
     "spec_id": "MCP-Schema",
-    "spec_url": "https://modelcontextprotocol.io/specification/2025-06-18/schema",
+    "spec_url": "https://modelcontextprotocol.io/specification/{version}/schema",
 }
 
 SCHEMA_BASE_PATH = (
@@ -29,12 +34,13 @@ _SCHEMA_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def _make_check(status: str, message: str, details: dict[str, Any]) -> SpecCheck:
+    spec_url = _SCHEMA_SPEC["spec_url"].format(version=_spec_version())
     return {
         "id": "schema-validate",
         "status": status,
         "message": message,
         "spec_id": _SCHEMA_SPEC["spec_id"],
-        "spec_url": _SCHEMA_SPEC["spec_url"],
+        "spec_url": spec_url,
         "details": details,
     }
 
@@ -52,9 +58,11 @@ def _load_schema(version: str) -> dict[str, Any]:
 def validate_definition(
     definition_name: str,
     instance: Any,
-    version: str = "2025-06-18",
+    version: str | None = None,
 ) -> list[SpecCheck]:
     """Validate an instance against a named definition in the MCP schema."""
+    if version is None:
+        version = _spec_version()
     if not HAVE_JSONSCHEMA:
         return [
             _make_check(

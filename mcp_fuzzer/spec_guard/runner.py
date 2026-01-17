@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from .helpers import (
@@ -53,12 +54,13 @@ async def run_spec_suite(
     """Run targeted spec guard checks against core MCP endpoints."""
     checks: list[SpecCheck] = []
     capabilities: dict[str, Any] = {}
+    protocol_version = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
 
     try:
         result = await transport.send_request(
             "initialize",
             {
-                "protocolVersion": "2025-06-18",
+                "protocolVersion": protocol_version,
                 "capabilities": {},
                 "clientInfo": {"name": "mcp-fuzzer", "version": "0.0.0"},
             },
