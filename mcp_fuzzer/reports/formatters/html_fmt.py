@@ -5,7 +5,14 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
-from .common import extract_tool_runs, normalize_report_data
+from .common import (
+    calculate_protocol_success_rate,
+    collect_and_summarize_protocol_items,
+    extract_tool_runs,
+    normalize_report_data,
+    result_has_failure,
+)
+from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 
 class HTMLFormatter:
@@ -102,6 +109,69 @@ class HTMLFormatter:
 </tr>"""
 
             html_content += "</table>"
+
+        if "protocol_results" in data:
+            protocol_results = data["protocol_results"]
+            html_content += "<h2>Protocol Results</h2><table>"
+            html_content += (
+                "<tr><th>Protocol Type</th><th>Total Runs</th>"
+                "<th>Errors</th><th>Success Rate</th></tr>"
+            )
+            for protocol_type, results in protocol_results.items():
+                total_runs = len(results)
+                errors = sum(1 for r in results if result_has_failure(r))
+                success_rate = calculate_protocol_success_rate(total_runs, errors)
+                html_content += (
+                    "<tr>"
+                    f"<td>{escape(str(protocol_type))}</td>"
+                    f"<td>{escape(str(total_runs))}</td>"
+                    f"<td>{escape(str(errors))}</td>"
+                    f"<td>{escape(f'{success_rate:.1f}%')}</td>"
+                    "</tr>"
+                )
+            html_content += "</table>"
+
+            _, resource_items = collect_and_summarize_protocol_items(
+                protocol_results.get(READ_RESOURCE_REQUEST, []), "resource"
+            )
+            if resource_items:
+                html_content += "<h2>Resource Item Summary</h2><table>"
+                html_content += (
+                    "<tr><th>Resource</th><th>Total Runs</th>"
+                    "<th>Errors</th><th>Success Rate</th></tr>"
+                )
+                for name, stats in resource_items.items():
+                    success_rate = f"{stats['success_rate']:.1f}%"
+                    html_content += (
+                        "<tr>"
+                        f"<td>{escape(str(name))}</td>"
+                        f"<td>{escape(str(stats['total_runs']))}</td>"
+                        f"<td>{escape(str(stats['errors']))}</td>"
+                        f"<td>{escape(success_rate)}</td>"
+                        "</tr>"
+                    )
+                html_content += "</table>"
+
+            _, prompt_items = collect_and_summarize_protocol_items(
+                protocol_results.get(GET_PROMPT_REQUEST, []), "prompt"
+            )
+            if prompt_items:
+                html_content += "<h2>Prompt Item Summary</h2><table>"
+                html_content += (
+                    "<tr><th>Prompt</th><th>Total Runs</th>"
+                    "<th>Errors</th><th>Success Rate</th></tr>"
+                )
+                for name, stats in prompt_items.items():
+                    success_rate = f"{stats['success_rate']:.1f}%"
+                    html_content += (
+                        "<tr>"
+                        f"<td>{escape(str(name))}</td>"
+                        f"<td>{escape(str(stats['total_runs']))}</td>"
+                        f"<td>{escape(str(stats['errors']))}</td>"
+                        f"<td>{escape(success_rate)}</td>"
+                        "</tr>"
+                    )
+                html_content += "</table>"
 
         html_content += "</body></html>"
 

@@ -5,10 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from .common import (
+    calculate_protocol_success_rate,
     calculate_tool_success_rate,
+    collect_and_summarize_protocol_items,
     extract_tool_runs,
     normalize_report_data,
+    result_has_failure,
 )
+from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 
 class JSONFormatter:
@@ -26,6 +30,7 @@ class JSONFormatter:
         return {
             "protocol_results": results,
             "summary": self._generate_protocol_summary(results),
+            "item_summary": self._generate_protocol_item_summary(results),
         }
 
     def save_report(
@@ -72,16 +77,8 @@ class JSONFormatter:
         summary = {}
         for protocol_type, protocol_results in results.items():
             total_runs = len(protocol_results)
-            errors = sum(
-                1
-                for r in protocol_results
-                if r.get("exception")
-                or not r.get("success", True)
-                or r.get("error")
-                or r.get("server_error")
-            )
-            successes = max(total_runs - errors, 0)
-            success_rate = (successes / total_runs * 100) if total_runs > 0 else 0
+            errors = sum(1 for r in protocol_results if result_has_failure(r))
+            success_rate = calculate_protocol_success_rate(total_runs, errors)
 
             summary[protocol_type] = {
                 "total_runs": total_runs,
@@ -89,4 +86,31 @@ class JSONFormatter:
                 "success_rate": round(success_rate, 2),
             }
 
+        return summary
+
+    def _generate_protocol_item_summary(
+        self, results: dict[str, list[dict[str, Any]]]
+    ) -> dict[str, Any]:
+        if not results:
+            return {}
+
+        _, resources = collect_and_summarize_protocol_items(
+            results.get(READ_RESOURCE_REQUEST, []), "resource"
+        )
+        resources_failed = any(
+            result_has_failure(r) for r in results.get(READ_RESOURCE_REQUEST, [])
+        )
+        _, prompts = collect_and_summarize_protocol_items(
+            results.get(GET_PROMPT_REQUEST, []), "prompt"
+        )
+        prompts_failed = any(
+            result_has_failure(r) for r in results.get(GET_PROMPT_REQUEST, [])
+        )
+        summary: dict[str, Any] = {}
+        if resources:
+            summary["resources"] = resources
+            summary["resources_failed"] = resources_failed
+        if prompts:
+            summary["prompts"] = prompts
+            summary["prompts_failed"] = prompts_failed
         return summary

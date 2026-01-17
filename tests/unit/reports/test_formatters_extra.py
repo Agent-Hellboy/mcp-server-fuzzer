@@ -47,7 +47,16 @@ def sample_report():
                 {"success": False, "exception": "boom"},
             ]
         },
-        "protocol_results": {"http": [{"success": True}]},
+        "protocol_results": {
+            "http": [{"success": True}],
+            "ReadResourceRequest": [
+                {"success": True, "label": "resource:file://alpha.txt"},
+                {"success": False, "error": "nope", "label": "resource:file://alpha.txt"},
+            ],
+            "GetPromptRequest": [
+                {"success": True, "label": "prompt:beta"},
+            ],
+        },
         "safety": {
             "summary": {
                 "total_blocked": 1,
@@ -68,6 +77,9 @@ def test_html_formatter_outputs_metadata_and_scores(tmp_path: Path, sample_repor
     assert "<td>demo-tool</td>" in text
     assert 'class="success">True<' in text
     assert 'class="error">False<' in text
+    assert "<h2>Protocol Results</h2>" in text
+    assert "<h2>Resource Item Summary</h2>" in text
+    assert "<h2>Prompt Item Summary</h2>" in text
 
 
 def test_markdown_formatter_generates_expected_sections(tmp_path: Path, sample_report):
@@ -80,6 +92,9 @@ def test_markdown_formatter_generates_expected_sections(tmp_path: Path, sample_r
     assert "### demo-tool" in text
     assert "✔" in text
     assert "❌" in text
+    assert "## Protocol Results" in text
+    assert "## Resource Item Summary" in text
+    assert "## Prompt Item Summary" in text
 
 
 def test_text_formatter_includes_summary_blocks(tmp_path: Path, sample_report):

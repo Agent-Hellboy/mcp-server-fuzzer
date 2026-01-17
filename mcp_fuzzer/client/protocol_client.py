@@ -11,6 +11,7 @@ import traceback
 from typing import Any
 
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
+from ..protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 from ..fuzz_engine.mutators import ProtocolMutator
 from .. import spec_guard
@@ -25,12 +26,12 @@ ALLOWED_PROTOCOL_TYPES = frozenset(
         "ProgressNotification",
         "CancelNotification",
         "ListResourcesRequest",
-        "ReadResourceRequest",
+        READ_RESOURCE_REQUEST,
         "ListResourceTemplatesRequest",
         "SetLevelRequest",
         "CreateMessageRequest",
         "ListPromptsRequest",
-        "GetPromptRequest",
+        GET_PROMPT_REQUEST,
         "ListRootsRequest",
         "SubscribeRequest",
         "UnsubscribeRequest",
@@ -158,6 +159,7 @@ class ProtocolClient:
             )
             return {
                 "fuzz_data": fuzz_data,
+                "label": label,
                 "result": {"response": None, "error": "blocked_by_safety_system"},
                 "safety_blocked": True,
                 "safety_sanitized": False,
@@ -190,6 +192,7 @@ class ProtocolClient:
 
         return {
             "fuzz_data": fuzz_data,
+            "label": label,
             "result": result,
             "safety_blocked": safety_blocked,
             "safety_sanitized": safety_sanitized,
@@ -215,6 +218,7 @@ class ProtocolClient:
         Returns:
             Dictionary with fuzzing results
         """
+        label = f"run {run_index + 1}/{total_runs}"
         try:
             # Generate fuzz data using mutator (no send); client handles safety + send
             fuzz_data = await self.protocol_mutator.mutate(protocol_type, phase=phase)
@@ -222,13 +226,13 @@ class ProtocolClient:
             if fuzz_data is None:
                 raise ValueError(f"No fuzz_data returned for {protocol_type}")
 
-            label = f"run {run_index + 1}/{total_runs}"
             return await self._execute_protocol_fuzz(protocol_type, fuzz_data, label)
 
         except Exception as e:
             self._logger.warning(f"Exception during fuzzing {protocol_type}: {e}")
             return {
                 "fuzz_data": (fuzz_data if "fuzz_data" in locals() else None),
+                "label": label,
                 "exception": str(e),
                 "traceback": traceback.format_exc(),
                 "success": False,
@@ -246,9 +250,9 @@ class ProtocolClient:
             )
             results.append(result)
 
-        if protocol_type == "ReadResourceRequest":
+        if protocol_type == READ_RESOURCE_REQUEST:
             results.extend(await self._fuzz_listed_resources())
-        elif protocol_type == "GetPromptRequest":
+        elif protocol_type == GET_PROMPT_REQUEST:
             results.extend(await self._fuzz_listed_prompts())
 
         return results
@@ -290,12 +294,12 @@ class ProtocolClient:
                         )
                     )
                 all_results[pt] = per_type
-            if "ReadResourceRequest" in all_results:
-                all_results["ReadResourceRequest"].extend(
+            if READ_RESOURCE_REQUEST in all_results:
+                all_results[READ_RESOURCE_REQUEST].extend(
                     await self._fuzz_listed_resources()
                 )
-            if "GetPromptRequest" in all_results:
-                all_results["GetPromptRequest"].extend(
+            if GET_PROMPT_REQUEST in all_results:
+                all_results[GET_PROMPT_REQUEST].extend(
                     await self._fuzz_listed_prompts()
                 )
             return all_results
@@ -369,10 +373,10 @@ class ProtocolClient:
                 continue
             results.append(
                 await self._process_protocol_request(
-                    "ReadResourceRequest",
+                    READ_RESOURCE_REQUEST,
                     "resources/read",
                     {"uri": uri},
-                    f"resource:{uri}",
+                    f"resource:{uri}",  # label format: "{prefix}:{name}"
                 )
             )
         return results
@@ -386,10 +390,10 @@ class ProtocolClient:
                 continue
             results.append(
                 await self._process_protocol_request(
-                    "GetPromptRequest",
+                    GET_PROMPT_REQUEST,
                     "prompts/get",
                     {"name": name, "arguments": {}},
-                    f"prompt:{name}",
+                    f"prompt:{name}",  # label format: "{prefix}:{name}"
                 )
             )
         return results
@@ -403,12 +407,12 @@ class ProtocolClient:
             "ProgressNotification": self._send_progress_notification,
             "CancelNotification": self._send_cancel_notification,
             "ListResourcesRequest": self._send_list_resources_request,
-            "ReadResourceRequest": self._send_read_resource_request,
+            READ_RESOURCE_REQUEST: self._send_read_resource_request,
             "ListResourceTemplatesRequest": self._send_list_resource_templates_request,
             "SetLevelRequest": self._send_set_level_request,
             "CreateMessageRequest": self._send_create_message_request,
             "ListPromptsRequest": self._send_list_prompts_request,
-            "GetPromptRequest": self._send_get_prompt_request,
+            GET_PROMPT_REQUEST: self._send_get_prompt_request,
             "ListRootsRequest": self._send_list_roots_request,
             "SubscribeRequest": self._send_subscribe_request,
             "UnsubscribeRequest": self._send_unsubscribe_request,

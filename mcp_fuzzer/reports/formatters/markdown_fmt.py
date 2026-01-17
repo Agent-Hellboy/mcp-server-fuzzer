@@ -5,11 +5,22 @@ from __future__ import annotations
 import emoji
 from typing import Any
 
-from .common import extract_tool_runs, normalize_report_data
+from .common import (
+    calculate_protocol_success_rate,
+    collect_and_summarize_protocol_items,
+    extract_tool_runs,
+    normalize_report_data,
+    result_has_failure,
+)
+from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 
 class MarkdownFormatter:
     """Handles Markdown formatting for reports."""
+
+    @staticmethod
+    def _escape_cell(value: str) -> str:
+        return value.replace("|", "\\|")
 
     def save_markdown_report(
         self,
@@ -65,6 +76,62 @@ class MarkdownFormatter:
                     exception = result.get("exception", "")
                     md_content += f"| {i + 1} | {success} | {exception} |\n"
 
+                md_content += "\n"
+
+        if "protocol_results" in data:
+            protocol_results = data["protocol_results"]
+            md_content += "## Protocol Results\n\n"
+            md_content += (
+                "| Protocol Type | Total Runs | Errors | Success Rate |\n"
+                "|---------------|------------|--------|--------------|\n"
+            )
+            for protocol_type, results in protocol_results.items():
+                protocol_label = self._escape_cell(str(protocol_type))
+                total_runs = len(results)
+                errors = sum(1 for r in results if result_has_failure(r))
+                success_rate = calculate_protocol_success_rate(total_runs, errors)
+                md_content += (
+                    f"| {protocol_label} | {total_runs} | {errors} | "
+                    f"{success_rate:.1f}% |\n"
+                )
+            md_content += "\n"
+
+            _, resource_items = collect_and_summarize_protocol_items(
+                protocol_results.get(READ_RESOURCE_REQUEST, []), "resource"
+            )
+            if resource_items:
+                md_content += "## Resource Item Summary\n\n"
+                md_content += (
+                    "| Resource | Total Runs | Errors | Success Rate |\n"
+                    "|----------|------------|--------|--------------|\n"
+                )
+                for name, stats in resource_items.items():
+                    escaped_name = self._escape_cell(str(name))
+                    resource_runs = stats["total_runs"]
+                    resource_errors = stats["errors"]
+                    md_content += (
+                        f"| {escaped_name} | {resource_runs} | {resource_errors} | "
+                        f"{stats['success_rate']:.1f}% |\n"
+                    )
+                md_content += "\n"
+
+            _, prompt_items = collect_and_summarize_protocol_items(
+                protocol_results.get(GET_PROMPT_REQUEST, []), "prompt"
+            )
+            if prompt_items:
+                md_content += "## Prompt Item Summary\n\n"
+                md_content += (
+                    "| Prompt | Total Runs | Errors | Success Rate |\n"
+                    "|--------|------------|--------|--------------|\n"
+                )
+                for name, stats in prompt_items.items():
+                    escaped_name = self._escape_cell(str(name))
+                    prompt_runs = stats["total_runs"]
+                    prompt_errors = stats["errors"]
+                    md_content += (
+                        f"| {escaped_name} | {prompt_runs} | {prompt_errors} | "
+                        f"{stats['success_rate']:.1f}% |\n"
+                    )
                 md_content += "\n"
 
         with open(filename, "w") as f:
