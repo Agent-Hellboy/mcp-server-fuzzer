@@ -63,9 +63,7 @@ def calculate_protocol_success_rate(total_runs: int, errors: int) -> float:
 def result_has_failure(result: dict[str, Any]) -> bool:
     """Return True if a protocol result represents an error condition."""
     nested_error = (
-        result.get("result", {})
-        .get("response", {})
-        .get("error")
+        result.get("result", {}).get("response", {}).get("error")
         if isinstance(result, dict)
         else None
     )

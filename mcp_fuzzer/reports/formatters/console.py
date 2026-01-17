@@ -102,7 +102,6 @@ class ConsoleFormatter:
             self._print_protocol_item_summary(
                 "MCP Prompt Item Fuzzing Summary", "Prompt", prompt_summary
             )
-
     def _print_protocol_item_summary(
         self, title: str, name_header: str, summary: dict[str, dict[str, Any]]
     ) -> None:
