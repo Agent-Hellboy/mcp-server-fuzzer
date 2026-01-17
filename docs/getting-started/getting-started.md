@@ -119,30 +119,17 @@ For detailed configuration information, see the [Configuration Guide](../configu
 
 ### Quick Configuration
 
-Set these environment variables for quick configuration:
+Create a config file for quick setup:
 
-```json
-{
-  "defaults": {
-    "timeout": 30.0,
-    "log_level": "INFO",
-    "enable_safety_system": true,
-    "fs_root": "~/.mcp_fuzzer"
-  },
-  "servers": {
-    "local_http": {
-      "protocol": "http",
-      "endpoint": "http://localhost:8000",
-      "runs": 10
-    },
-    "local_stdio": {
-      "protocol": "stdio",
-      "endpoint": "python test_server.py",
-      "runs": 5,
-      "enable_safety_system": true
-    }
-  }
-}
+```yaml
+mode: "tools"
+protocol: "http"
+endpoint: "http://localhost:8000"
+runs: 10
+timeout: 30.0
+log_level: "INFO"
+enable_safety_system: true
+fs_root: "~/.mcp_fuzzer"
 ```
 
 ## Fuzzing Modes

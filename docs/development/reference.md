@@ -797,7 +797,7 @@ Notes:
 
 ## Famous Open Source MCP Server Fuzz Results
 
-For detailed fuzzing results and security analysis of popular open source MCP servers, see the [Fuzz Results](fuzz-results.md) documentation.
+For detailed fuzzing results and security analysis of popular open source MCP servers, see the [Fuzz Results](../testing/fuzz-results.md) documentation.
 
 This section provides comprehensive testing results for various MCP server implementations, including vulnerability assessments, performance metrics, and security recommendations.
 
@@ -1293,4 +1293,4 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-
 }
 ```
 
-This reference covers all the major aspects of MCP Server Fuzzer. For more detailed information about specific components, see the [Architecture](architecture.md) and [Examples](examples.md) documentation.
+This reference covers all the major aspects of MCP Server Fuzzer. For more detailed information about specific components, see the [Architecture](../architecture/architecture.md) and [Examples](../getting-started/examples.md) documentation.

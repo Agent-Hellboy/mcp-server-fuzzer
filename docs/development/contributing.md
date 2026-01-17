@@ -329,13 +329,14 @@ mkdocs gh-deploy
 
 ```
 docs/
-| -- index.md              # Home page
-| -- getting-started.md    # Installation and basic usage
-| -- architecture.md       # System design and components
-| -- examples.md           # Working examples and configurations
-| -- reference.md          # Complete API reference
-| -- safety.md             # Safety system configuration
-| -- contributing.md       # This file
+├── getting-started/          # Getting started guides and examples
+├── architecture/             # System architecture documentation
+├── components/               # Core component documentation
+├── configuration/            # Configuration and setup docs
+├── transport/                # Transport layer documentation
+├── development/              # Development and contribution docs
+├── testing/                  # Testing and quality assurance
+└── index.md                  # Home page
 ```
 
 ## Adding New Features

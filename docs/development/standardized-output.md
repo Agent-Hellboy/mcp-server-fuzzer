@@ -446,4 +446,4 @@ mcp-fuzzer --verbose --log-level DEBUG --output-types fuzzing_results
 - `get_session_directory(session_id)`: Get session directory path
 - `list_session_outputs(session_id)`: List output files for session
 
-See the [API documentation](../reference.md) for complete method signatures and parameters.
+See the [API documentation](reference.md) for complete method signatures and parameters.

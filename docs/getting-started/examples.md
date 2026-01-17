@@ -494,4 +494,4 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 
 
 ## Summary
 
-These examples cover the most common use cases and should help you get started with MCP Server Fuzzer. For more advanced configurations and customizations, refer to the [Reference](reference.md) and [Architecture](architecture.md) documentation.
+These examples cover the most common use cases and should help you get started with MCP Server Fuzzer. For more advanced configurations and customizations, refer to the [Reference](../development/reference.md) and [Architecture](../architecture/architecture.md) documentation.

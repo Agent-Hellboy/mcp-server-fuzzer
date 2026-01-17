@@ -38,6 +38,7 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 - Comprehensive Reporting: Multiple output formats (JSON, CSV, HTML, Markdown)
 - Production Ready: PATH shims, sandbox defaults, and CI-friendly controls
 - Intelligent Testing: Hypothesis-based data generation with custom strategies
+- More Than Conformance: Goes beyond the checks in https://github.com/modelcontextprotocol/conformance with fuzzing, reporting, and safety tooling
 
 ### Extensibility for Contributors
 MCP Server Fuzzer is designed for easy extension while keeping CLI usage simple:
@@ -51,6 +52,8 @@ The modularity improvements (dependency injection, registries) make it maintaine
 ## Quick Start
 
 ### Installation
+
+Requires Python 3.10+ (editable installs from source also need a modern `pip`).
 
 ```bash
 # Install from PyPI
