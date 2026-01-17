@@ -244,6 +244,15 @@ docker run --rm -it \
   --mode tools --protocol stdio --endpoint "python /servers/my_server.py" --output-dir /output
 ```
 
+### Docker Releases
+
+Docker images are published automatically on every GitHub Release (tagged `v*`)
+via CI. The published image is:
+
+```bash
+docker pull princekrroshan01/mcp-fuzzer:latest
+```
+
 Note: The runtime image includes `curl` and `ca-certificates` so stdio servers can fetch HTTPS resources (e.g., schemas, tokens, metadata) without bundling extra tools. If your servers never make outbound HTTPS calls, you can remove them.
 
 ### Using Docker Compose
