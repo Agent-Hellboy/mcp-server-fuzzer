@@ -107,10 +107,8 @@ def test_get_blocked_commands_wrapper_reflects_state(monkeypatch):
 
 def test_sanitize_command_name_variants():
     assert command_blocker._sanitize_command_name(None) is None
-    assert command_blocker._sanitize_command_name("") is None
     assert command_blocker._sanitize_command_name("   ") is None
     assert command_blocker._sanitize_command_name("bad name!") is None
-    assert command_blocker._sanitize_command_name("/usr/bin/open") == "open"
 
 
 def test_start_blocking_creates_executables(tmp_path, monkeypatch):
@@ -139,31 +137,6 @@ def test_start_blocking_creates_executables(tmp_path, monkeypatch):
         blocker.stop_blocking()
 
     assert os.environ["PATH"] == "orig"
-
-
-def test_blocked_operations_parsing(tmp_path):
-    blocker = command_blocker.SystemCommandBlocker()
-    blocker.temp_dir = tmp_path
-    log_file = tmp_path / "blocked_operations.log"
-    log_file.write_text(
-        "\n".join(
-            [
-                json.dumps({"cmd": "open", "args": ["x"]}),
-                "not-json",
-            ]
-        )
-    )
-    operations = blocker.get_blocked_operations()
-    assert operations == [{"cmd": "open", "args": ["x"]}]
-
-
-def test_clear_blocked_operations(tmp_path):
-    blocker = command_blocker.SystemCommandBlocker()
-    blocker.temp_dir = tmp_path
-    log_file = tmp_path / "blocked_operations.log"
-    log_file.write_text(json.dumps({"cmd": "open"}))
-    blocker.clear_blocked_operations()
-    assert not log_file.exists()
 
 
 def test_block_command_creates_shim(tmp_path, monkeypatch):

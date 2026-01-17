@@ -279,6 +279,7 @@ async def test_generate_realistic_text_base64_branch(monkeypatch):
     monkeypatch.setattr(tool_strategy.random, "choice", lambda _seq: "base64")
     text = await generate_realistic_text(min_size=4, max_size=2)
     assert text == "b64"
+    loop.run_in_executor.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -289,6 +290,7 @@ async def test_generate_realistic_text_uuid_branch(monkeypatch):
     monkeypatch.setattr(tool_strategy.random, "choice", lambda _seq: "uuid")
     text = await generate_realistic_text()
     assert text == "uuid-value"
+    loop.run_in_executor.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -299,6 +301,7 @@ async def test_generate_realistic_text_timestamp_branch(monkeypatch):
     monkeypatch.setattr(tool_strategy.random, "choice", lambda _seq: "timestamp")
     text = await generate_realistic_text()
     assert text == "ts-value"
+    loop.run_in_executor.assert_awaited_once()
 
 
 @pytest.mark.asyncio

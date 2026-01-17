@@ -18,7 +18,8 @@ def test_maybe_update_spec_version_invalid():
     assert spec_version.maybe_update_spec_version("2025-1-01") is None
 
 
-def test_maybe_update_spec_version_from_result():
+def test_maybe_update_spec_version_from_result(monkeypatch):
+    monkeypatch.delenv("MCP_SPEC_SCHEMA_VERSION", raising=False)
     assert spec_version.maybe_update_spec_version_from_result("bad") is None
     assert spec_version.maybe_update_spec_version_from_result({}) is None
 

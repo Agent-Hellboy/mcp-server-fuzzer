@@ -212,9 +212,10 @@ async def test_shutdown(protocol_executor):
 
 
 @pytest.mark.asyncio
-async def test_execute_returns_empty_for_non_positive_runs():
+@pytest.mark.parametrize("runs", [0, -1])
+async def test_execute_returns_empty_for_non_positive_runs(runs):
     executor = ProtocolExecutor()
-    assert await executor.execute("PingRequest", runs=0) == []
+    assert await executor.execute("PingRequest", runs=runs) == []
 
 
 @pytest.mark.asyncio

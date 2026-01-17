@@ -621,12 +621,17 @@ def test_auth_manager_integration():
     assert "Authorization" in tool3_headers
 
 
-def test_setup_auth_from_env_handles_invalid_json(monkeypatch):
-    monkeypatch.setenv("MCP_CUSTOM_HEADERS", "{bad")
-    monkeypatch.setenv("MCP_TOOL_AUTH_MAPPING", "{bad")
-    manager = setup_auth_from_env()
+def test_setup_auth_from_env_handles_invalid_json():
+    env_vars = {
+        "MCP_CUSTOM_HEADERS": "{bad",
+        "MCP_TOOL_AUTH_MAPPING": "{bad",
+    }
+    with patch.dict(os.environ, env_vars, clear=True):
+        manager = setup_auth_from_env()
 
-    assert manager is not None
+        assert manager is not None
+        assert manager.auth_providers == {}
+        assert manager.tool_auth_mapping == {}
 
 
 def test_load_auth_config_rejects_non_dict_tool_mapping(tmp_path: Path):

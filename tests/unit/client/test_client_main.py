@@ -434,6 +434,7 @@ async def test_unified_client_main_all_with_tool(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_unified_client_main_sets_schema_env(monkeypatch):
+    monkeypatch.delenv("MCP_SPEC_SCHEMA_VERSION", raising=False)
     monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
     monkeypatch.setattr(
         client_main,

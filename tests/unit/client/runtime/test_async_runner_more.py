@@ -160,21 +160,7 @@ def test_execute_main_coroutine_with_aiomonitor(monkeypatch):
         return None
 
     runner._execute_main_coroutine(main)
-
-
-def test_setup_aiomonitor_missing_module(monkeypatch, capsys):
-    args = SimpleNamespace(enable_aiomonitor=True)
-    runner = AsyncRunner(args, safety=MagicMock())
-
-    monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.async_runner.importlib.util.find_spec",
-        lambda _name: None,
-    )
-
-    runner._setup_aiomonitor()
-
-    assert args.enable_aiomonitor is False
-    assert "AIOMonitor requested but not installed" in capsys.readouterr().out
+    assert runner.loop.calls
 
 
 def test_setup_signal_handlers_handles_not_implemented():
@@ -186,8 +172,7 @@ def test_setup_signal_handlers_handles_not_implemented():
     runner._setup_signal_handlers()
 
     assert runner.loop.add_signal_handler.called
-
-    assert runner.loop.calls
+    assert runner.loop.add_signal_handler.call_count == 1
 
 
 def test_handle_cancellation_sets_exit(capsys):

@@ -85,6 +85,7 @@ docker build -t mcp-fuzzer:latest .
 2. **Run basic fuzzing:**
 
 **Using Docker:**
+
 ```bash
 # Fuzz HTTP server (container acts as client)
 docker run --rm -it --network host \
@@ -149,6 +150,7 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --en
 ### Stdio Server Fuzzing
 
 **Using Docker (Recommended for Isolation):**
+
 ```bash
 # Server runs in containerized environment for safety
 docker run --rm -it \

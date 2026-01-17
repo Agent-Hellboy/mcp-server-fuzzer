@@ -71,9 +71,6 @@ async def run_spec_suite(
                 "clientInfo": {"name": "mcp-fuzzer", "version": "0.0.0"},
             },
         )
-        checks.extend(
-            validate_definition("InitializeResult", result, version=protocol_version)
-        )
         if isinstance(result, dict):
             capabilities = result.get("capabilities") or {}
             server_version = result.get("protocolVersion")
@@ -107,6 +104,9 @@ async def run_spec_suite(
                 )
             )
             return checks
+        checks.extend(
+            validate_definition("InitializeResult", result, version=protocol_version)
+        )
         await transport.send_notification("notifications/initialized")
     except Exception as exc:
         checks.append(_fail("initialize", f"initialize failed: {exc}", _SCHEMA_SPEC))

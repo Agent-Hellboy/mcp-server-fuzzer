@@ -90,7 +90,6 @@ def get_result_to_method_mapping() -> dict[str, tuple[str, str | None]]:
         "ListPromptsResult": ("prompts/list", "prompts"),
         "GetPromptResult": ("prompts/get", "prompts"),
         "CompleteResult": ("completion/complete", "completions"),
-        "ListRootsResult": ("roots/list", "roots"),
         "CreateTaskResult": ("tasks/create", "tasks"),
         "GetTaskResult": ("tasks/get", "tasks"),
         "GetTaskPayloadResult": ("tasks/getPayload", "tasks"),

@@ -160,7 +160,7 @@ def test_validate_definition_passes(monkeypatch):
 
 def test_load_schema_uses_cache(monkeypatch):
     cached = {"$schema": "x", "definitions": {"Thing": {}}}
-    sv._SCHEMA_CACHE["cached-version"] = cached
+    monkeypatch.setitem(sv._SCHEMA_CACHE, "cached-version", cached)
 
     result = sv._load_schema("cached-version")
 
