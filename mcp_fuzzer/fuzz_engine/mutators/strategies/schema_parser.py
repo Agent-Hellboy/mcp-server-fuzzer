@@ -352,8 +352,10 @@ def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
     format_type = schema.get("format")
 
     # Handle specific string formats
-    if format_type:
-        return _handle_string_format(format_type, phase)
+    if isinstance(format_type, str):
+        normalized = format_type.strip().lower()
+        if normalized:
+            return _handle_string_format(normalized, phase)
 
     # Handle pattern constraint
     if pattern:
