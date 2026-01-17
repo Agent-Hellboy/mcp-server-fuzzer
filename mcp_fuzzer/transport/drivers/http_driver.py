@@ -24,6 +24,7 @@ from ...config import (
     DEFAULT_HTTP_ACCEPT,
 )
 from ...safety_system import policy as safety_policy
+from ...spec_version import maybe_update_spec_version_from_result
 
 
 class HttpDriver(
@@ -166,7 +167,10 @@ class HttpDriver(
 
             # Use shared response handling
             self._handle_http_response_error(response)
-            return self._parse_http_response_json(response)
+            result = self._parse_http_response_json(response)
+            if method == "initialize":
+                maybe_update_spec_version_from_result(result)
+            return result
 
     async def send_raw(self, payload: dict[str, Any]) -> Any:
         """Send raw payload and return the response.
@@ -211,7 +215,10 @@ class HttpDriver(
 
             # Use shared response handling
             self._handle_http_response_error(response)
-            return self._parse_http_response_json(response)
+            result = self._parse_http_response_json(response)
+            if payload.get("method") == "initialize":
+                maybe_update_spec_version_from_result(result)
+            return result
 
     async def send_notification(
         self, method: str, params: dict[str, Any | None] | None = None

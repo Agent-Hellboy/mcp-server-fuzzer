@@ -1,12 +1,16 @@
 """Tests for the refactored client.main entrypoint."""
 
 import asyncio
+import os
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from mcp_fuzzer.client import main as client_main
 from mcp_fuzzer.client.main import unified_client_main
 from mcp_fuzzer.client.settings import ClientSettings
+from mcp_fuzzer.exceptions import MCPError
 
 
 def _settings(**overrides):
@@ -264,3 +268,214 @@ def test_unified_client_main_returns_one_on_exception():
     ):
         rc = asyncio.run(unified_client_main(settings))
     assert rc == 1
+
+
+class StubClient:
+    def __init__(self, **_kwargs):
+        self.reporter = None
+        self._spec_checks = []
+
+    async def fuzz_tool_both_phases(self, *_args, **_kwargs):
+        return {"tool": [{"success": True}]}
+
+    async def fuzz_all_tools_both_phases(self, *_args, **_kwargs):
+        return {"tool": [{"success": True}]}
+
+    async def fuzz_tool(self, *_args, **_kwargs):
+        return {"tool": [{"success": True}]}
+
+    async def fuzz_all_tools(self, *_args, **_kwargs):
+        return {"tool": [{"success": True}]}
+
+    async def fuzz_protocol_type(self, *_args, **_kwargs):
+        return [{"success": True}]
+
+    async def fuzz_all_protocol_types(self, *_args, **_kwargs):
+        return {"PingRequest": [{"success": True}]}
+
+    async def fuzz_resources(self, *_args, **_kwargs):
+        return {"ListResourcesRequest": [{"success": True}]}
+
+    async def fuzz_prompts(self, *_args, **_kwargs):
+        return {"ListPromptsRequest": [{"success": True}]}
+
+    async def run_spec_suite(self, *_args, **_kwargs):
+        return self._spec_checks
+
+    async def cleanup(self):
+        return None
+
+    def print_protocol_summary(self, *_args, **_kwargs):
+        return None
+
+    def print_tool_summary(self, *_args, **_kwargs):
+        return None
+
+    async def generate_standardized_reports(self, *_args, **_kwargs):
+        return {}
+
+
+@pytest.mark.asyncio
+async def test_run_spec_guard_disabled():
+    client = StubClient()
+    config = {"spec_guard": False}
+    await client_main._run_spec_guard_if_enabled(client, config, reporter=None)
+
+
+@pytest.mark.asyncio
+async def test_unified_client_main_tools_phase_both(monkeypatch):
+    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+    monkeypatch.setattr(
+        client_main,
+        "build_driver_with_auth",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    settings = SimpleNamespace(
+        data={
+            "protocol": "stdio",
+            "endpoint": "node app.js",
+            "mode": "tools",
+            "phase": "both",
+            "tool": "echo",
+            "runs": 1,
+            "spec_guard": False,
+        }
+    )
+
+    assert await client_main.unified_client_main(settings) == 0
+
+
+@pytest.mark.asyncio
+async def test_unified_client_main_protocol_type(monkeypatch):
+    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+    monkeypatch.setattr(
+        client_main,
+        "build_driver_with_auth",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    settings = SimpleNamespace(
+        data={
+            "protocol": "stdio",
+            "endpoint": "node app.js",
+            "mode": "protocol",
+            "protocol_type": "PingRequest",
+            "runs_per_type": 1,
+            "spec_guard": False,
+        }
+    )
+
+    assert await client_main.unified_client_main(settings) == 0
+
+
+@pytest.mark.asyncio
+async def test_unified_client_main_resources(monkeypatch):
+    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+    monkeypatch.setattr(
+        client_main,
+        "build_driver_with_auth",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    settings = SimpleNamespace(
+        data={
+            "protocol": "stdio",
+            "endpoint": "node app.js",
+            "mode": "resources",
+            "runs_per_type": 1,
+            "spec_guard": False,
+        }
+    )
+
+    assert await client_main.unified_client_main(settings) == 0
+
+
+@pytest.mark.asyncio
+async def test_unified_client_main_prompts(monkeypatch):
+    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+    monkeypatch.setattr(
+        client_main,
+        "build_driver_with_auth",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    settings = SimpleNamespace(
+        data={
+            "protocol": "stdio",
+            "endpoint": "node app.js",
+            "mode": "prompts",
+            "runs_per_type": 1,
+            "spec_guard": False,
+        }
+    )
+
+    assert await client_main.unified_client_main(settings) == 0
+
+
+@pytest.mark.asyncio
+async def test_unified_client_main_all_with_tool(monkeypatch):
+    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+    monkeypatch.setattr(
+        client_main,
+        "build_driver_with_auth",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    settings = SimpleNamespace(
+        data={
+            "protocol": "stdio",
+            "endpoint": "node app.js",
+            "mode": "all",
+            "tool": "echo",
+            "runs": 1,
+            "runs_per_type": 1,
+            "spec_guard": False,
+        }
+    )
+
+    assert await client_main.unified_client_main(settings) == 0
+
+
+@pytest.mark.asyncio
+async def test_unified_client_main_sets_schema_env(monkeypatch):
+    monkeypatch.delenv("MCP_SPEC_SCHEMA_VERSION", raising=False)
+    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+    monkeypatch.setattr(
+        client_main,
+        "build_driver_with_auth",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    settings = SimpleNamespace(
+        data={
+            "protocol": "stdio",
+            "endpoint": "node app.js",
+            "mode": "protocol",
+            "protocol_type": "PingRequest",
+            "spec_schema_version": "2025-11-25",
+            "spec_guard": False,
+        }
+    )
+
+    await client_main.unified_client_main(settings)
+    assert os.getenv("MCP_SPEC_SCHEMA_VERSION") == "2025-11-25"
+
+
+@pytest.mark.asyncio
+async def test_unified_client_main_raises_mcp_error(monkeypatch):
+    class ErrorClient(StubClient):
+        async def fuzz_all_tools(self, *_args, **_kwargs):
+            raise MCPError("boom")
+
+    monkeypatch.setattr(client_main, "MCPFuzzerClient", ErrorClient)
+    monkeypatch.setattr(
+        client_main,
+        "build_driver_with_auth",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    settings = SimpleNamespace(
+        data={
+            "protocol": "stdio",
+            "endpoint": "node app.js",
+            "mode": "tools",
+            "spec_guard": False,
+        }
+    )
+
+    with pytest.raises(MCPError):
+        await client_main.unified_client_main(settings)

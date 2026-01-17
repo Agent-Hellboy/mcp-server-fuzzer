@@ -28,11 +28,17 @@ async def _run_spec_guard_if_enabled(
 ) -> None:
     if not config.get("spec_guard", True):
         return
+    requested_version = (
+        str(config.get("spec_schema_version"))
+        if config.get("spec_schema_version") is not None
+        else os.getenv("MCP_SPEC_SCHEMA_VERSION")
+    )
     checks = await client.run_spec_suite(
         resource_uri=config.get("spec_resource_uri"),
         prompt_name=config.get("spec_prompt_name"),
         prompt_args=config.get("spec_prompt_args"),
     )
+    negotiated_version = os.getenv("MCP_SPEC_SCHEMA_VERSION")
     failed = [c for c in checks if str(c.get("status", "")).upper() == "FAIL"]
     logging.info(
         "Spec guard checks completed: %d total, %d failed",
@@ -41,6 +47,11 @@ async def _run_spec_guard_if_enabled(
     )
     if reporter:
         reporter.add_spec_checks(checks)
+        reporter.print_spec_guard_summary(
+            checks,
+            requested_version=requested_version,
+            negotiated_version=negotiated_version,
+        )
 
 
 async def unified_client_main(settings: ClientSettings) -> int:
@@ -252,12 +263,72 @@ async def unified_client_main(settings: ClientSettings) -> int:
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display table summary: {exc}")
 
-        if isinstance(protocol_results, dict) and protocol_results:
-            if client.reporter:
-                for protocol_type, results in protocol_results.items():
-                    client.reporter.add_protocol_results(protocol_type, results)
-            else:
-                logging.warning("No reporter available to record protocol results")
+        try:  # pragma: no cover
+            if isinstance(protocol_results, dict) and protocol_results:
+                def _print_protocol_summary_only(
+                    results: dict[str, Any],
+                    title: str,
+                ) -> None:
+                    reporter = getattr(client, "reporter", None)
+                    if reporter and hasattr(reporter, "console_formatter"):
+                        reporter.console_formatter.print_protocol_summary(
+                            results, title=title
+                        )
+                    else:
+                        client.print_protocol_summary(results, title=title)
+
+                resource_types = {
+                    "ListResourcesRequest",
+                    "ReadResourceRequest",
+                    "ListResourceTemplatesRequest",
+                }
+                prompt_types = {
+                    "ListPromptsRequest",
+                    "GetPromptRequest",
+                    "CompleteRequest",
+                }
+                resource_results = {
+                    key: protocol_results[key]
+                    for key in protocol_results
+                    if key in resource_types
+                }
+                prompt_results = {
+                    key: protocol_results[key]
+                    for key in protocol_results
+                    if key in prompt_types
+                }
+
+                print("\n" + "=" * 80)
+                print(
+                    f"{emoji.emojize(':rocket:')} MCP FUZZER PROTOCOL RESULTS SUMMARY"
+                )
+                print("=" * 80)
+                client.print_protocol_summary(protocol_results)
+
+                if resource_results:
+                    print("\n" + "-" * 80)
+                    print(
+                        f"{emoji.emojize(':file_folder:')} RESOURCES FUZZING SUMMARY"
+                    )
+                    print("-" * 80)
+                    _print_protocol_summary_only(
+                        resource_results,
+                        "MCP Resources Fuzzing Summary",
+                    )
+
+                if prompt_results:
+                    print("\n" + "-" * 80)
+                    summary_label = (
+                        f"{emoji.emojize(':speech_balloon:')} PROMPTS FUZZING SUMMARY"
+                    )
+                    print(summary_label)
+                    print("-" * 80)
+                    _print_protocol_summary_only(
+                        prompt_results,
+                        "MCP Prompts Fuzzing Summary",
+                    )
+        except Exception as exc:  # pragma: no cover
+            logging.warning(f"Failed to display protocol summary tables: {exc}")
 
         try:  # pragma: no cover
             output_types = config.get("output_types")

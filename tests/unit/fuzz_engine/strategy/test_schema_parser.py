@@ -18,6 +18,7 @@ from mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser import (
     _handle_array_type,
     _handle_object_type,
 )
+from mcp_fuzzer.fuzz_engine.mutators.strategies import schema_parser
 
 pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.strategy]
 
@@ -369,3 +370,287 @@ def test_complex_nested_schema():
                     "private",
                     "restricted",
                 ], "visibility should be a valid enum value"
+
+
+def test_make_fuzz_strategy_recursion_depth_fallback():
+    schema = {"type": ["string", "integer"]}
+    result = schema_parser.make_fuzz_strategy_from_jsonschema(
+        schema, recursion_depth=schema_parser.MAX_RECURSION_DEPTH + 1
+    )
+    assert result == ""
+
+    result = schema_parser.make_fuzz_strategy_from_jsonschema(
+        {}, recursion_depth=schema_parser.MAX_RECURSION_DEPTH + 1
+    )
+    assert result is None
+
+
+def test_allof_merge_applies_constraints():
+    schema = {
+        "allOf": [
+            {
+                "type": ["string", "number"],
+                "minLength": 2,
+                "maxLength": 10,
+                "required": ["alpha"],
+                "properties": {"alpha": {"type": "string"}},
+            },
+            {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 5,
+                "required": ["beta"],
+                "properties": {"beta": {"type": "integer"}},
+                "const": "fixed",
+            },
+        ]
+    }
+    merged = schema_parser._merge_allOf(schema["allOf"])
+    assert merged["type"] == "string"
+    assert merged["minLength"] == 3
+    assert merged["maxLength"] == 5
+    assert merged["required"] == ["alpha", "beta"]
+    assert merged["const"] == "fixed"
+    assert "alpha" in merged["properties"]
+    assert "beta" in merged["properties"]
+
+
+def test_allof_merge_keeps_multiple_types():
+    schema = {
+        "allOf": [
+            {"type": ["string", "number"]},
+            {"type": ["string", "number"]},
+        ]
+    }
+    merged = schema_parser._merge_allOf(schema["allOf"])
+    assert sorted(merged["type"]) == ["number", "string"]
+
+
+def test_oneof_anyof_selection(monkeypatch):
+    monkeypatch.setattr(schema_parser.random, "choice", lambda seq: seq[0])
+    schema = {"oneOf": [{"type": "string"}, {"type": "integer"}]}
+    result = schema_parser.make_fuzz_strategy_from_jsonschema(schema)
+    assert isinstance(result, str)
+
+    schema = {"anyOf": [{"type": "integer"}, {"type": "string"}]}
+    result = schema_parser.make_fuzz_strategy_from_jsonschema(schema)
+    assert isinstance(result, int)
+
+
+def test_object_type_min_properties_and_additional(monkeypatch):
+    schema = {
+        "type": "object",
+        "properties": {},
+        "minProperties": 2,
+    }
+    result = schema_parser._handle_object_type(schema, "realistic", 0)
+    assert sorted(result.keys()) == ["additional_prop_0", "additional_prop_1"]
+
+    schema["additionalProperties"] = False
+    result = schema_parser._handle_object_type(schema, "realistic", 0)
+    assert result == {}
+
+
+def test_array_type_tuple_and_unique(monkeypatch):
+    tuple_schema = {"type": "array", "items": [{"type": "string"}]}
+    result = schema_parser._handle_array_type(tuple_schema, "realistic", 0)
+    assert isinstance(result, list)
+    assert len(result) == 1
+
+    array_schema = {
+        "type": "array",
+        "items": {"type": "integer", "minimum": 1, "maximum": 1},
+        "minItems": 2,
+        "maxItems": 2,
+        "uniqueItems": True,
+    }
+    result = schema_parser._handle_array_type(array_schema, "realistic", 0)
+    assert len(result) == 2
+
+    empty_items_schema = {"type": "array", "items": {}}
+    result = schema_parser._handle_array_type(empty_items_schema, "realistic", 0)
+    assert len(result) >= 1
+
+    small_max_schema = {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 2,
+        "maxItems": 1,
+    }
+    monkeypatch.setattr(schema_parser.random, "randint", lambda low, high: high)
+    result = schema_parser._handle_array_type(small_max_schema, "realistic", 0)
+    assert len(result) == 2
+
+
+def test_array_unique_items_repr_fallback(monkeypatch):
+    class BadStr:
+        def __init__(self, label):
+            self.label = label
+
+        def __str__(self):
+            raise RuntimeError("bad str")
+
+        def __repr__(self):
+            return f"BadStr({self.label})"
+
+    items = [BadStr("same"), BadStr("same"), BadStr("diff")]
+
+    def _next_item(*_args, **_kwargs):
+        return items.pop(0)
+
+    monkeypatch.setattr(schema_parser, "make_fuzz_strategy_from_jsonschema", _next_item)
+    schema = {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 2,
+        "maxItems": 2,
+        "uniqueItems": True,
+    }
+    result = schema_parser._handle_array_type(schema, "realistic", 0)
+    assert len(result) == 2
+
+
+def test_string_format_handlers(monkeypatch):
+    formats = [
+        "date-time",
+        "uuid",
+        "email",
+        "uri",
+        "time",
+        "ipv4",
+        "ipv6",
+        "hostname",
+    ]
+    for fmt in formats:
+        result = schema_parser._handle_string_format(fmt, "realistic")
+        assert isinstance(result, str)
+        assert result
+
+    monkeypatch.setattr(
+        schema_parser,
+        "_handle_string_type",
+        lambda schema, phase: "fallback",
+    )
+    assert schema_parser._handle_string_format("unknown", "realistic") == "fallback"
+
+
+def test_pattern_and_string_edgecases(monkeypatch):
+    monkeypatch.setattr(
+        schema_parser,
+        "_generate_string_from_pattern",
+        lambda *args, **kwargs: "abc123",
+    )
+    result = schema_parser._handle_string_type(
+        {"type": "string", "pattern": "^[a-zA-Z0-9]+$"}, "realistic"
+    )
+    assert result == "abc123"
+
+    def _raise_pattern(*args, **kwargs):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(schema_parser, "_generate_string_from_pattern", _raise_pattern)
+    monkeypatch.setattr(schema_parser.random, "randint", lambda low, high: low)
+    result = schema_parser._handle_string_type(
+        {"type": "string", "pattern": "oops", "minLength": 5, "maxLength": 6},
+        "realistic",
+    )
+    assert len(result) == 5
+
+    monkeypatch.setattr(schema_parser.random, "random", lambda: 0.95)
+    monkeypatch.setattr(schema_parser.random, "choice", lambda seq: seq[0])
+    result = schema_parser._handle_string_type(
+        {"type": "string", "minLength": 10, "maxLength": 12}, "aggressive"
+    )
+    assert 10 <= len(result) <= 12
+
+    monkeypatch.setattr(schema_parser.random, "randint", lambda low, high: low)
+    result = schema_parser._handle_string_type(
+        {"type": "string", "minLength": 5, "maxLength": 3}, "realistic"
+    )
+    assert len(result) == 5
+
+
+def test_generate_string_from_pattern_variants(monkeypatch):
+    monkeypatch.setattr(schema_parser.random, "randint", lambda low, high: low)
+    assert schema_parser._generate_string_from_pattern(
+        "^[a-zA-Z0-9]+$", 2, 4
+    ).isalnum()
+    assert schema_parser._generate_string_from_pattern("^[0-9]+$", 2, 4).isdigit()
+    assert schema_parser._generate_string_from_pattern("^[a-zA-Z]+$", 2, 4).isalpha()
+
+
+def test_integer_type_constraints(monkeypatch):
+    monkeypatch.setattr(schema_parser.random, "randint", lambda low, high: low)
+    result = schema_parser._handle_integer_type(
+        {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 10,
+            "exclusiveMinimum": True,
+            "exclusiveMaximum": 11,
+            "multipleOf": 3,
+        },
+        "realistic",
+    )
+    assert result == 10
+
+    monkeypatch.setattr(schema_parser.random, "random", lambda: 0.9)
+    result = schema_parser._handle_integer_type(
+        {"type": "integer", "minimum": -2, "maximum": 2}, "aggressive"
+    )
+    assert -2 <= result <= 2
+
+    monkeypatch.setattr(schema_parser.random, "random", lambda: 0.5)
+    monkeypatch.setattr(schema_parser.random, "randint", lambda low, high: low)
+    result = schema_parser._handle_integer_type(
+        {
+            "type": "integer",
+            "exclusiveMinimum": 2.5,
+            "exclusiveMaximum": 9.5,
+            "multipleOf": 5,
+        },
+        "aggressive",
+    )
+    assert isinstance(result, int)
+
+    monkeypatch.setattr(schema_parser.random, "random", lambda: 0.9)
+    monkeypatch.setattr(schema_parser.random, "choice", lambda seq: seq[0])
+    result = schema_parser._handle_integer_type(
+        {"type": "integer", "minimum": 0, "maximum": 10, "multipleOf": 5},
+        "aggressive",
+    )
+    assert result % 5 == 0
+
+
+def test_number_type_multiple_of(monkeypatch):
+    monkeypatch.setattr(schema_parser.random, "uniform", lambda low, high: 1.0)
+    result = schema_parser._handle_number_type(
+        {"type": "number", "minimum": 0.0, "maximum": 10.0, "multipleOf": 2.0},
+        "realistic",
+    )
+    assert result % 2 == 0
+
+    monkeypatch.setattr(schema_parser.random, "random", lambda: 0.9)
+    monkeypatch.setattr(schema_parser.random, "choice", lambda seq: seq[0])
+    result = schema_parser._handle_number_type(
+        {"type": "number", "minimum": 0.0, "maximum": 1.0, "multipleOf": 0.5},
+        "aggressive",
+    )
+    assert 0.0 <= result <= 1.0
+
+    result = schema_parser._handle_number_type(
+        {"type": "number", "minimum": 5.0, "maximum": 1.0, "exclusiveMinimum": True},
+        "realistic",
+    )
+    assert isinstance(result, float)
+
+    result = schema_parser._handle_number_type(
+        {"type": "number", "multipleOf": "bad"},
+        "realistic",
+    )
+    assert isinstance(result, float)
+
+
+def test_generate_default_value():
+    result = schema_parser._generate_default_value("realistic")
+    assert result in ["default_value", 123, True, [], {}]

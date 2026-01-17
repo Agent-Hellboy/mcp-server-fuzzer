@@ -280,13 +280,13 @@ mcp-fuzzer --config production.yaml
 
 ## Configuration Validation
 
-The configuration loader includes built-in validation:
+The configuration loader performs basic parsing checks:
 
-- **Schema validation** against JSON Schema
-- **Type checking** for all configuration values
-- **Path validation** for file and directory paths
-- **URL validation** for endpoints
-- **Custom transport validation** for module/class existence
+- **YAML parsing** with clear errors on invalid syntax
+- **Top-level mapping** enforcement (the config must be a YAML object)
+
+Schema definitions exist in `mcp_fuzzer/config/schema/` for consumers, but they
+are not enforced automatically during config loading.
 
 ## Error Handling
 
@@ -294,8 +294,7 @@ The loader provides detailed error messages for common issues:
 
 - **File not found**: Clear indication of search paths tried
 - **YAML parsing errors**: Line numbers and context for syntax errors
-- **Validation errors**: Specific field and constraint violations
-- **Import errors**: Missing modules or classes for custom transports
+- **Type errors**: Non-mapping top-level config files
 
 ## Best Practices
 

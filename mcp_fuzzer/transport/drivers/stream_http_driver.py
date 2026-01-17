@@ -42,6 +42,7 @@ from ...types import (
 )
 from ...exceptions import TransportError
 from ...safety_system.policy import resolve_redirect_safely
+from ...spec_version import maybe_update_spec_version
 
 # Back-compat local aliases (referenced by tests)
 MCP_SESSION_ID = MCP_SESSION_ID_HEADER
@@ -135,6 +136,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         if protocol_header:
             self.protocol_version = protocol_header
             self._logger.debug("Received protocol version header: %s", protocol_header)
+            maybe_update_spec_version(protocol_header)
 
     def _maybe_extract_protocol_version_from_result(self, result: Any) -> None:
         """Extract protocol version from result.
@@ -148,6 +150,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 if pv is not None:
                     self.protocol_version = str(pv)
                     self._logger.debug("Negotiated protocol version: %s", pv)
+                    maybe_update_spec_version(pv)
         except Exception:
             pass
 

@@ -129,6 +129,75 @@ class ProtocolClient:
             "data": modified_data,
         }
 
+    async def _execute_protocol_fuzz(
+        self,
+        protocol_type: str,
+        fuzz_data: dict[str, Any],
+        label: str,
+    ) -> ProtocolFuzzResult:
+        try:
+            preview = json.dumps(fuzz_data, indent=2)[:PREVIEW_LENGTH]
+        except Exception:
+            preview_text = str(fuzz_data) if fuzz_data is not None else "null"
+            preview = preview_text[:PREVIEW_LENGTH]
+        self._logger.info(
+            "Fuzzed %s (%s) with data: %s...",
+            protocol_type,
+            label,
+            preview,
+        )
+
+        safety_result = await self._check_safety_for_protocol_message(
+            protocol_type, fuzz_data
+        )
+        if safety_result["blocked"]:
+            self._logger.warning(
+                "Blocked %s by safety system: %s",
+                protocol_type,
+                safety_result.get("blocking_reason"),
+            )
+            return {
+                "fuzz_data": fuzz_data,
+                "result": {"response": None, "error": "blocked_by_safety_system"},
+                "safety_blocked": True,
+                "safety_sanitized": False,
+                "success": False,
+            }
+
+        data_to_send = safety_result["data"]
+        try:
+            server_response = await self._send_protocol_request(
+                protocol_type, data_to_send
+            )
+            server_error = None
+            success = True
+        except Exception as send_exc:
+            server_response = None
+            server_error = str(send_exc)
+            success = False
+
+        result = {"response": server_response, "error": server_error}
+        safety_blocked = safety_result["blocked"]
+        safety_sanitized = safety_result["sanitized"]
+        spec_checks: list[dict[str, Any]] = []
+        spec_scope: str | None = None
+        if isinstance(server_response, dict):
+            payload = server_response.get("result", server_response)
+            method = fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
+            spec_checks, spec_scope = spec_guard.get_spec_checks_for_protocol_type(
+                protocol_type, payload, method=method
+            )
+
+        return {
+            "fuzz_data": fuzz_data,
+            "result": result,
+            "safety_blocked": safety_blocked,
+            "safety_sanitized": safety_sanitized,
+            "spec_checks": spec_checks,
+            "spec_scope": spec_scope,
+            "success": success,
+        }
+
     async def _process_single_protocol_fuzz(
         self,
         protocol_type: str,
@@ -153,78 +222,8 @@ class ProtocolClient:
             if fuzz_data is None:
                 raise ValueError(f"No fuzz_data returned for {protocol_type}")
 
-            # Log preview of data
-            try:
-                preview = json.dumps(fuzz_data, indent=2)[:PREVIEW_LENGTH]
-            except Exception:
-                preview_text = str(fuzz_data) if fuzz_data is not None else "null"
-                preview = preview_text[:PREVIEW_LENGTH]
-            self._logger.info(
-                "Fuzzed %s (run %d/%d) with data: %s...",
-                protocol_type,
-                run_index + 1,
-                total_runs,
-                preview,
-            )
-
-            # Safety first, then send
-            safety_result = await self._check_safety_for_protocol_message(
-                protocol_type, fuzz_data
-            )
-            if safety_result["blocked"]:
-                self._logger.warning(
-                    "Blocked %s by safety system: %s",
-                    protocol_type,
-                    safety_result.get("blocking_reason"),
-                )
-                return {
-                    "fuzz_data": fuzz_data,
-                    "result": {"response": None, "error": "blocked_by_safety_system"},
-                    "safety_blocked": True,
-                    "safety_sanitized": False,
-                    "success": False,
-                }
-
-            data_to_send = safety_result["data"]
-
-            # Route outbound via typed helpers
-            try:
-                server_response = await self._send_protocol_request(
-                    protocol_type, data_to_send
-                )
-                server_error = None
-                success = True
-            except Exception as send_exc:
-                server_response = None
-                server_error = str(send_exc)
-                success = False
-
-            # Construct our result
-            result = {"response": server_response, "error": server_error}
-
-            # Check for safety metadata
-            safety_blocked = safety_result["blocked"]
-            safety_sanitized = safety_result["sanitized"]
-            spec_checks: list[dict[str, Any]] = []
-            spec_scope: str | None = None
-            if isinstance(server_response, dict):
-                payload = server_response.get("result", server_response)
-                method = (
-                    fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
-                )
-                spec_checks, spec_scope = spec_guard.get_spec_checks_for_protocol_type(
-                    protocol_type, payload, method=method
-                )
-
-            return {
-                "fuzz_data": fuzz_data,
-                "result": result,
-                "safety_blocked": safety_blocked,
-                "safety_sanitized": safety_sanitized,
-                "spec_checks": spec_checks,
-                "spec_scope": spec_scope,
-                "success": success,
-            }
+            label = f"run {run_index + 1}/{total_runs}"
+            return await self._execute_protocol_fuzz(protocol_type, fuzz_data, label)
 
         except Exception as e:
             self._logger.warning(f"Exception during fuzzing {protocol_type}: {e}")
@@ -246,6 +245,11 @@ class ProtocolClient:
                 protocol_type, i, runs, phase
             )
             results.append(result)
+
+        if protocol_type == "ReadResourceRequest":
+            results.extend(await self._fuzz_listed_resources())
+        elif protocol_type == "GetPromptRequest":
+            results.extend(await self._fuzz_listed_prompts())
 
         return results
 
@@ -286,6 +290,14 @@ class ProtocolClient:
                         )
                     )
                 all_results[pt] = per_type
+            if "ReadResourceRequest" in all_results:
+                all_results["ReadResourceRequest"].extend(
+                    await self._fuzz_listed_resources()
+                )
+            if "GetPromptRequest" in all_results:
+                all_results["GetPromptRequest"].extend(
+                    await self._fuzz_listed_prompts()
+                )
             return all_results
         except Exception as e:
             self._logger.error(f"Failed to fuzz all protocol types: {e}")
@@ -308,6 +320,79 @@ class ProtocolClient:
             "Coercing non-dict params to empty dict for %s", type(data).__name__
         )
         return {}
+
+    @staticmethod
+    def _extract_list_items(result: Any, key: str) -> list[Any]:
+        if not isinstance(result, dict):
+            return []
+        if isinstance(result.get(key), list):
+            return result[key]
+        inner = result.get("result")
+        if isinstance(inner, dict) and isinstance(inner.get(key), list):
+            return inner[key]
+        return []
+
+    async def _fetch_listed_resources(self) -> list[dict[str, Any]]:
+        try:
+            result = await self.transport.send_request("resources/list", {})
+        except Exception as exc:
+            self._logger.warning("Failed to list resources: %s", exc)
+            return []
+        items = self._extract_list_items(result, "resources")
+        return [item for item in items if isinstance(item, dict)]
+
+    async def _fetch_listed_prompts(self) -> list[dict[str, Any]]:
+        try:
+            result = await self.transport.send_request("prompts/list", {})
+        except Exception as exc:
+            self._logger.warning("Failed to list prompts: %s", exc)
+            return []
+        items = self._extract_list_items(result, "prompts")
+        return [item for item in items if isinstance(item, dict)]
+
+    async def _process_protocol_request(
+        self,
+        protocol_type: str,
+        method: str,
+        params: dict[str, Any],
+        label: str,
+    ) -> ProtocolFuzzResult:
+        fuzz_data = {"jsonrpc": "2.0", "method": method, "params": params}
+        return await self._execute_protocol_fuzz(protocol_type, fuzz_data, label)
+
+    async def _fuzz_listed_resources(self) -> list[ProtocolFuzzResult]:
+        results: list[ProtocolFuzzResult] = []
+        resources = await self._fetch_listed_resources()
+        for resource in resources:
+            uri = resource.get("uri")
+            if not isinstance(uri, str) or not uri:
+                continue
+            results.append(
+                await self._process_protocol_request(
+                    "ReadResourceRequest",
+                    "resources/read",
+                    {"uri": uri},
+                    f"resource:{uri}",
+                )
+            )
+        return results
+
+    async def _fuzz_listed_prompts(self) -> list[ProtocolFuzzResult]:
+        results: list[ProtocolFuzzResult] = []
+        prompts = await self._fetch_listed_prompts()
+        for prompt in prompts:
+            name = prompt.get("name")
+            if not isinstance(name, str) or not name:
+                continue
+            results.append(
+                await self._process_protocol_request(
+                    "GetPromptRequest",
+                    "prompts/get",
+                    {"name": name, "arguments": {}},
+                    f"prompt:{name}",
+                )
+            )
+        return results
 
     async def _send_protocol_request(
         self, protocol_type: str, data: dict[str, Any]

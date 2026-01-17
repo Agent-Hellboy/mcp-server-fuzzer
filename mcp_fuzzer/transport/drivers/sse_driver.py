@@ -13,6 +13,7 @@ from ..interfaces.driver import TransportDriver
 from ..interfaces.behaviors import HttpClientBehavior, ResponseParserBehavior
 from ..interfaces import server_requests
 from ...exceptions import TransportError
+from ...spec_version import maybe_update_spec_version_from_result
 
 
 class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
@@ -129,6 +130,8 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                     if not line.strip():
                         result = await flush_once()
                         if result is not None:
+                            if payload.get("method") == "initialize":
+                                maybe_update_spec_version_from_result(result)
                             return result
                         continue
                     buffer.append(line)
@@ -136,6 +139,8 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                 # Flush remaining buffer
                 result = await flush_once()
                 if result is not None:
+                    if payload.get("method") == "initialize":
+                        maybe_update_spec_version_from_result(result)
                     return result
 
                 # Try parsing entire response as JSON
@@ -143,7 +148,10 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                 if raw_text:
                     try:
                         data = json.loads(raw_text)
-                        return self._extract_result_from_response(data)
+                        result = self._extract_result_from_response(data)
+                        if payload.get("method") == "initialize":
+                            maybe_update_spec_version_from_result(result)
+                        return result
                     except json.JSONDecodeError:
                         pass
 

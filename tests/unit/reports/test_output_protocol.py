@@ -6,11 +6,19 @@ Unit tests for MCP Fuzzer Output Protocol
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from mcp_fuzzer.reports.output import OutputProtocol, OutputManager
+from datetime import datetime
+
+from mcp_fuzzer.reports.core.models import (
+    FuzzingMetadata,
+    ReportSnapshot,
+    RunRecord,
+    SummaryStats,
+)
 from mcp_fuzzer.reports.output.protocol import _result_has_failure
 
 from importlib.metadata import version, PackageNotFoundError
@@ -81,6 +89,34 @@ class TestOutputProtocol:
         assert output["metadata"]["success_rate"] == 66.67
         assert output["metadata"]["safety_enabled"] is True
 
+    def test_create_fuzzing_results_from_snapshot(self):
+        start = datetime(2024, 1, 1, 0, 0, 0)
+        metadata = FuzzingMetadata(
+            session_id="snap",
+            mode="tools",
+            protocol="http",
+            endpoint="http://test.com",
+            runs=1,
+            runs_per_type=None,
+            fuzzer_version="1.0.0",
+            start_time=start,
+            end_time=start,
+        )
+        snapshot = ReportSnapshot(
+            metadata=metadata,
+            tool_results={"tool": [RunRecord({"success": True})]},
+            protocol_results={"PingRequest": [RunRecord({"success": True})]},
+            summary=SummaryStats(),
+        )
+
+        output = self.protocol.create_fuzzing_results_from_snapshot(
+            snapshot, safety_enabled=True
+        )
+
+        assert output["data"]["total_tools"] == 1
+        assert output["data"]["total_protocol_types"] == 1
+        assert output["metadata"]["safety_enabled"] is True
+
     def test_create_error_report_output(self):
         """Test creating error report output."""
         errors = [{"type": "tool_error", "message": "Test error", "severity": "high"}]
@@ -117,11 +153,34 @@ class TestOutputProtocol:
         assert output["data"]["blocked_operations"] == blocked_operations
         assert output["data"]["risk_assessment"] == "high"
 
+    def test_create_performance_metrics_output(self):
+        output = self.protocol.create_performance_metrics_output({"latency_ms": 5})
+
+        assert output["output_type"] == "performance_metrics"
+        assert output["data"]["metrics"]["latency_ms"] == 5
+        assert output["metadata"]["metrics_count"] == 1
+
+    def test_create_configuration_dump_output(self):
+        output = self.protocol.create_configuration_dump_output(
+            {"mode": "tools"}, source="config"
+        )
+
+        assert output["output_type"] == "configuration_dump"
+        assert output["data"]["source"] == "config"
+        assert output["metadata"]["config_keys_count"] == 1
+
     def test_validate_output_valid(self):
         """Test validating valid output."""
         output = self.protocol.create_base_output("fuzzing_results", {"test": "data"})
         assert self.protocol.validate_output(output) is True
 
+    def test_validate_output_version_mismatch_warns(self):
+        output = self.protocol.create_base_output("fuzzing_results", {"test": "data"})
+        output["protocol_version"] = "0.9.0"
+        self.protocol.logger = MagicMock()
+
+        assert self.protocol.validate_output(output) is True
+        self.protocol.logger.warning.assert_called_once()
     def test_validate_output_invalid_missing_field(self):
         """Test validating output with missing required field."""
         output = self.protocol.create_base_output("fuzzing_results", {"test": "data"})

@@ -7,12 +7,14 @@ import asyncio
 import json
 import os
 import tempfile
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
 # Import the class and functions to test
 from mcp_fuzzer.client.base import MCPFuzzerClient as UnifiedMCPFuzzerClient
+from mcp_fuzzer import spec_guard
 from mcp_fuzzer.reports import FuzzerReporter
 from mcp_fuzzer.auth import AuthManager
 from mcp_fuzzer.exceptions import MCPError
@@ -2140,6 +2142,196 @@ class TestUnifiedMCPFuzzerClient:
         # Verify the safety system methods were called
         mock_safety_system.get_statistics.assert_called_once()
         mock_safety_system.get_blocked_examples.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_print_blocked_operations_summary_handles_no_safety():
+    client = UnifiedMCPFuzzerClient(transport=MagicMock(), safety_enabled=False)
+    client.print_blocked_operations_summary()
+
+
+@pytest.mark.asyncio
+async def test_print_comprehensive_safety_report_collects_examples():
+    safety = SimpleNamespace(
+        get_statistics=MagicMock(),
+        get_blocked_examples=MagicMock(),
+    )
+    client = UnifiedMCPFuzzerClient(transport=MagicMock(), safety_system=safety)
+    client.print_comprehensive_safety_report()
+
+    safety.get_statistics.assert_called_once()
+    safety.get_blocked_examples.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_handles_errors(monkeypatch):
+    tool_client = SimpleNamespace(shutdown=AsyncMock(side_effect=RuntimeError("boom")))
+    protocol_client = SimpleNamespace(
+        shutdown=AsyncMock(side_effect=RuntimeError("boom"))
+    )
+    transport = SimpleNamespace(close=AsyncMock(side_effect=RuntimeError("boom")))
+
+    client = UnifiedMCPFuzzerClient(
+        transport=transport,
+        tool_client=tool_client,
+        protocol_client=protocol_client,
+    )
+
+    await client.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_fuzz_protocol_group_calls_each_type():
+    protocol_client = SimpleNamespace(
+        fuzz_protocol_type=AsyncMock(return_value=[{"ok": True}])
+    )
+    client = UnifiedMCPFuzzerClient(
+        transport=MagicMock(),
+        protocol_client=protocol_client,
+    )
+
+    results = await client._fuzz_protocol_group(
+        ("PingRequest", "ListResourcesRequest"),
+        runs_per_type=2,
+        phase="realistic",
+    )
+
+    assert protocol_client.fuzz_protocol_type.call_count == 2
+    assert results["PingRequest"] == [{"ok": True}]
+
+
+@pytest.mark.asyncio
+async def test_fuzz_protocol_type_branches():
+    protocol_client = SimpleNamespace(fuzz_protocol_type=AsyncMock(return_value="ok"))
+    client = UnifiedMCPFuzzerClient(
+        transport=MagicMock(),
+        protocol_client=protocol_client,
+    )
+
+    await client.fuzz_protocol_type("PingRequest", runs=3)
+    protocol_client.fuzz_protocol_type.assert_called_with("PingRequest", runs=3)
+
+    protocol_client.fuzz_protocol_type.reset_mock()
+    await client.fuzz_protocol_type("PingRequest", runs=4, phase="aggressive")
+    protocol_client.fuzz_protocol_type.assert_called_with(
+        "PingRequest", runs=4, phase="aggressive"
+    )
+
+
+@pytest.mark.asyncio
+async def test_fuzz_all_protocol_types_branches():
+    protocol_client = SimpleNamespace(
+        fuzz_all_protocol_types=AsyncMock(return_value="ok")
+    )
+    client = UnifiedMCPFuzzerClient(
+        transport=MagicMock(),
+        protocol_client=protocol_client,
+    )
+
+    await client.fuzz_all_protocol_types(runs_per_type=2)
+    protocol_client.fuzz_all_protocol_types.assert_called_with(runs_per_type=2)
+
+    protocol_client.fuzz_all_protocol_types.reset_mock()
+    await client.fuzz_all_protocol_types(runs_per_type=3, phase="aggressive")
+    protocol_client.fuzz_all_protocol_types.assert_called_with(
+        runs_per_type=3, phase="aggressive"
+    )
+
+
+@pytest.mark.asyncio
+async def test_fuzz_resources_and_prompts_delegate(monkeypatch):
+    client = UnifiedMCPFuzzerClient(transport=MagicMock())
+    client._fuzz_protocol_group = AsyncMock(return_value={})
+
+    await client.fuzz_resources(runs_per_type=1, phase="realistic")
+    client._fuzz_protocol_group.assert_called_with(
+        (
+            "ListResourcesRequest",
+            "ReadResourceRequest",
+            "ListResourceTemplatesRequest",
+        ),
+        1,
+        "realistic",
+    )
+
+    client._fuzz_protocol_group.reset_mock()
+    await client.fuzz_prompts(runs_per_type=2, phase="aggressive")
+    client._fuzz_protocol_group.assert_called_with(
+        ("ListPromptsRequest", "GetPromptRequest", "CompleteRequest"),
+        2,
+        "aggressive",
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_adds_checks(monkeypatch):
+    reporter = MagicMock()
+    client = UnifiedMCPFuzzerClient(transport=MagicMock(), reporter=reporter)
+    monkeypatch.setattr(
+        spec_guard,
+        "run_spec_suite",
+        AsyncMock(return_value=[{"id": "check"}]),
+    )
+
+    checks = await client.run_spec_suite(resource_uri="resource://test")
+
+    reporter.add_spec_checks.assert_called_once_with(checks)
+
+
+def test_print_summary_methods_delegate():
+    reporter = MagicMock()
+    client = UnifiedMCPFuzzerClient(
+        transport=MagicMock(),
+        reporter=reporter,
+        safety_enabled=False,
+    )
+
+    client.print_tool_summary({"tool": []})
+    client.print_protocol_summary({"PingRequest": []}, title="Title")
+    client.print_safety_statistics()
+    client.print_safety_system_summary()
+    client.print_overall_summary({}, {})
+
+    reporter.print_tool_summary.assert_called_once()
+    reporter.print_protocol_summary.assert_called_once()
+    reporter.print_safety_summary.assert_called_once()
+    reporter.print_safety_system_summary.assert_called_once()
+    reporter.print_overall_summary.assert_called_once()
+
+
+def test_print_blocked_operations_summary_collects_stats():
+    safety = SimpleNamespace(get_statistics=MagicMock())
+    reporter = MagicMock()
+    client = UnifiedMCPFuzzerClient(
+        transport=MagicMock(),
+        safety_system=safety,
+        reporter=reporter,
+    )
+
+    client.print_blocked_operations_summary()
+
+    safety.get_statistics.assert_called_once()
+    reporter.print_blocked_operations_summary.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_reports_delegate():
+    reporter = MagicMock()
+    reporter.generate_standardized_report = AsyncMock(return_value={"ok": True})
+    reporter.generate_final_report = AsyncMock(return_value={"final": True})
+    client = UnifiedMCPFuzzerClient(transport=MagicMock(), reporter=reporter)
+
+    output = await client.generate_standardized_reports(
+        output_types=["json"], include_safety=False
+    )
+    final = await client.generate_final_report(include_safety=False)
+
+    assert output == {"ok": True}
+    assert final == {"final": True}
+    reporter.generate_standardized_report.assert_called_once_with(
+        output_types=["json"], include_safety=False
+    )
+    reporter.generate_final_report.assert_called_once_with(include_safety=False)
 
 
 if __name__ == "__main__":

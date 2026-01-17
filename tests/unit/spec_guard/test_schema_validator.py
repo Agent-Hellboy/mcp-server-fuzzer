@@ -156,3 +156,12 @@ def test_validate_definition_passes(monkeypatch):
 
     assert checks[0]["status"] == "PASS"
     assert "Schema validation passed" in checks[0]["message"]
+
+
+def test_load_schema_uses_cache(monkeypatch):
+    cached = {"$schema": "x", "definitions": {"Thing": {}}}
+    monkeypatch.setitem(sv._SCHEMA_CACHE, "cached-version", cached)
+
+    result = sv._load_schema("cached-version")
+
+    assert result == cached

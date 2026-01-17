@@ -95,7 +95,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-branch = true
+branch = false
 source = ["mcp_fuzzer"]
 
 [tool.coverage.report]

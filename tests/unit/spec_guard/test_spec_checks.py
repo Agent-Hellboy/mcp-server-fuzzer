@@ -114,15 +114,16 @@ def test_check_tool_result_content_warns_unknown_content_type():
 
 def test_check_logging_notification_reports_invalid_params():
     checks = spec_checks.check_logging_notification(
-        {"params": {"level": 1, "message": ["array"]}}
+        {"params": {"level": 1, "logger": ["array"]}}
     )
     assert any(check["id"] == "logging-level-type" for check in checks)
-    assert any(check["id"] == "logging-message-type" for check in checks)
+    assert any(check["id"] == "logging-data-missing" for check in checks)
+    assert any(check["id"] == "logging-logger-type" for check in checks)
 
 
 def test_check_logging_notification_accepts_valid_data():
     checks = spec_checks.check_logging_notification(
-        {"params": {"level": "info", "message": "ok"}}
+        {"params": {"level": "info", "data": "ok"}}
     )
     assert checks == []
 
@@ -143,7 +144,7 @@ def test_check_resources_read_validates_content_items():
     assert any(check["id"] == "resources-read-empty" for check in empty_checks)
 
 
-def test_check_resource_templates_list_flag_missing_uri():
+def test_check_resource_templates_list_flag_missing_uri_template():
     checks = spec_checks.check_resource_templates_list(
         {"resourceTemplates": [{"name": "template"}]}
     )

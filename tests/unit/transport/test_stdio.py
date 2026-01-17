@@ -1,19 +1,37 @@
 import asyncio
+import io
 import json
 import os
 import sys
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock, AsyncMock
 import signal as _signal
 import pytest
 
 # Import the class to test
 from mcp_fuzzer.transport.drivers.stdio_driver import StdioDriver
+import mcp_fuzzer.transport.drivers.stdio_driver as stdio_driver
 from mcp_fuzzer.fuzz_engine.runtime import ProcessManager, WatchdogConfig
 from mcp_fuzzer.exceptions import (
     ProcessStartError,
+    ProcessSignalError,
     ServerError,
     TransportError,
 )
+
+
+class FakeStdin:
+    def __init__(self, lines=None, async_mode=False):
+        self._lines = list(lines) if lines else []
+        self._async = async_mode
+
+    def readline(self):
+        if self._async:
+            return self._async_readline()
+        return self._lines.pop(0) if self._lines else ""
+
+    async def _async_readline(self):
+        return self._lines.pop(0) if self._lines else ""
 
 
 class TestStdioDriver:
@@ -747,3 +765,433 @@ class TestStdioDriver:
         self.transport.stdout = None
         result = await self.transport._readline_with_cap()
         assert result is None
+
+
+
+class TestStdioDriverExtended:
+    @pytest.mark.asyncio
+    async def test_handle_server_request_sampling_create_message(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport._send_message = AsyncMock()
+    
+        payload = {"jsonrpc": "2.0", "id": 1, "method": "sampling/createMessage"}
+        handled = await transport._handle_server_request(payload)
+    
+        assert handled is True
+        transport._send_message.assert_called_once()
+    
+    
+    @pytest.mark.asyncio
+    async def test_receive_message_error_resets_state(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport._initialized = True
+        transport.manager = SimpleNamespace(state=MagicMock())
+        transport._readline_with_cap = AsyncMock(side_effect=ValueError("boom"))
+    
+        with pytest.raises(TransportError):
+            await transport._receive_message()
+    
+        assert transport._initialized is False
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_request_no_response_module(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport._initialized = True
+        transport._send_message = AsyncMock()
+        transport._receive_message = AsyncMock(return_value=None)
+    
+        with pytest.raises(TransportError):
+            await transport.send_request("ping")
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_request_server_error(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport._initialized = True
+        transport._send_message = AsyncMock()
+        monkeypatch.setattr(stdio_driver.uuid, "uuid4", lambda: "req")
+        transport._receive_message = AsyncMock(
+            return_value={"id": "req", "error": {"code": -1, "message": "bad"}}
+        )
+    
+        with pytest.raises(ServerError):
+            await transport.send_request("ping")
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_request_initialize_updates_spec(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport._initialized = True
+        transport._send_message = AsyncMock()
+    
+        monkeypatch.setattr(stdio_driver.uuid, "uuid4", lambda: "req")
+        transport._receive_message = AsyncMock(
+            return_value={"id": "req", "result": {"protocolVersion": "2025-11-25"}}
+        )
+    
+        seen = {}
+        monkeypatch.setattr(
+            stdio_driver,
+            "maybe_update_spec_version_from_result",
+            lambda result: seen.setdefault("pv", result.get("protocolVersion")),
+        )
+    
+        result = await transport.send_request("initialize")
+        assert result["protocolVersion"] == "2025-11-25"
+        assert seen["pv"] == "2025-11-25"
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_request_exhausts_iterations(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport._initialized = True
+        transport._send_message = AsyncMock()
+        transport._receive_message = AsyncMock(return_value={"id": "other"})
+    
+        with pytest.raises(TransportError):
+            await transport.send_request("ping")
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_raw_initialize_updates_spec(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport._initialized = True
+        transport._send_message = AsyncMock()
+        transport._receive_message = AsyncMock(
+            return_value={"result": {"protocolVersion": "2025-11-25"}}
+        )
+    
+        seen = {}
+        monkeypatch.setattr(
+            stdio_driver,
+            "maybe_update_spec_version_from_result",
+            lambda result: seen.setdefault("pv", result.get("protocolVersion")),
+        )
+    
+        result = await transport.send_raw({"method": "initialize"})
+    
+        assert result["protocolVersion"] == "2025-11-25"
+        assert seen["pv"] == "2025-11-25"
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_unknown_direct(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.process = SimpleNamespace(pid=123)
+        transport.manager = SimpleNamespace(state=MagicMock(), emit_event=MagicMock())
+    
+        pm = SimpleNamespace(
+            is_process_registered=AsyncMock(return_value=False),
+        )
+        monkeypatch.setattr(transport, "_get_process_manager", lambda: pm)
+    
+        assert await transport.send_timeout_signal("unknown") is False
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_registered(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.process = SimpleNamespace(pid=123)
+        transport.manager = SimpleNamespace(state=MagicMock(), emit_event=MagicMock())
+    
+        pm = SimpleNamespace(
+            is_process_registered=AsyncMock(return_value=True),
+            send_timeout_signal=AsyncMock(return_value=True),
+        )
+        monkeypatch.setattr(transport, "_get_process_manager", lambda: pm)
+    
+        assert await transport.send_timeout_signal("timeout") is True
+    
+    
+    @pytest.mark.asyncio
+    async def test_ensure_connection_fallback_kill(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport._initialized = True
+        transport.manager = SimpleNamespace(
+            state=MagicMock(),
+            emit_event=MagicMock(),
+            apply_backoff=AsyncMock(return_value=0.0),
+            restart_attempts=1,
+            reset_backoff=MagicMock(),
+        )
+    
+        class DeadProc:
+            def __init__(self):
+                self.returncode = 1
+                self.kill = MagicMock()
+    
+            def send_signal(self, _sig):
+                raise AttributeError("no signal")
+    
+        old_proc = DeadProc()
+        transport.process = old_proc
+        monkeypatch.setattr(stdio_driver.sys, "platform", "win32")
+        monkeypatch.setattr(
+            stdio_driver.subprocess,
+            "CREATE_NEW_PROCESS_GROUP",
+            0,
+            raising=False,
+        )
+    
+        pm = SimpleNamespace(
+            stop_process=AsyncMock(),
+            register_existing_process=AsyncMock(),
+            update_activity=AsyncMock(),
+        )
+        monkeypatch.setattr(transport, "_get_process_manager", lambda: pm)
+    
+        class NewProc:
+            def __init__(self):
+                self.pid = 123
+                self.stdin = AsyncMock()
+                self.stdout = AsyncMock()
+                self.stderr = AsyncMock()
+                self.returncode = None
+    
+        async def _create_proc(*_args, **_kwargs):
+            return NewProc()
+    
+        monkeypatch.setattr(
+            stdio_driver.asyncio,
+            "create_subprocess_exec",
+            _create_proc,
+        )
+    
+        await transport._ensure_connection()
+        old_proc.kill.assert_called_once()
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_request_reads_json(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.request_id = 7
+
+        stdout = io.StringIO()
+        stdin = FakeStdin([b'{"jsonrpc": "2.0", "id": 7, "result": 3}'])
+        monkeypatch.setattr(
+            stdio_driver,
+            "sys",
+            SimpleNamespace(stdin=stdin, stdout=stdout),
+        )
+    
+        result = await transport._send_request({"method": "ping"})
+        assert result["result"] == 3
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_request_no_line(self, monkeypatch):
+        transport = StdioDriver("echo")
+
+        stdout = io.StringIO()
+        stdin = FakeStdin()
+        monkeypatch.setattr(
+            stdio_driver,
+            "sys",
+            SimpleNamespace(stdin=stdin, stdout=stdout),
+        )
+    
+        with pytest.raises(TransportError):
+            await transport._send_request({"method": "ping"})
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_request_awaitable_line(self, monkeypatch):
+        transport = StdioDriver("echo")
+
+        stdout = io.StringIO()
+        stdin = FakeStdin(
+            ['{"jsonrpc": "2.0", "id": 1, "result": "ok"}'],
+            async_mode=True,
+        )
+        monkeypatch.setattr(
+            stdio_driver,
+            "sys",
+            SimpleNamespace(stdin=stdin, stdout=stdout),
+        )
+    
+        result = await transport._send_request({"method": "ping"})
+        assert result["result"] == "ok"
+    
+    
+    @pytest.mark.asyncio
+    async def test_stream_request_skips_invalid_json(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.request_id = 2
+
+        stdout = io.StringIO()
+        stdin = FakeStdin(['{bad json}', '{"ok": 1}', ""])
+        monkeypatch.setattr(
+            stdio_driver,
+            "sys",
+            SimpleNamespace(stdin=stdin, stdout=stdout),
+        )
+    
+        items = []
+        async for item in transport._stream_request({"method": "stream"}):
+            items.append(item)
+        assert items == [{"ok": 1}]
+    
+    
+    @pytest.mark.asyncio
+    async def test_stream_request_bytes(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.request_id = 3
+
+        stdout = io.StringIO()
+        stdin = FakeStdin([b'{"ok": 2}', b""])
+        monkeypatch.setattr(
+            stdio_driver,
+            "sys",
+            SimpleNamespace(stdin=stdin, stdout=stdout),
+        )
+    
+        items = []
+        async for item in transport._stream_request({"method": "stream"}):
+            items.append(item)
+        assert items == [{"ok": 2}]
+    
+    
+    @pytest.mark.asyncio
+    async def test_stream_request_awaitable_line(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.request_id = 4
+
+        stdout = io.StringIO()
+        stdin = FakeStdin(['{"ok": 4}', ""], async_mode=True)
+        monkeypatch.setattr(
+            stdio_driver,
+            "sys",
+            SimpleNamespace(stdin=stdin, stdout=stdout),
+        )
+    
+        items = []
+        async for item in transport._stream_request({"method": "stream"}):
+            items.append(item)
+            break
+        assert items == [{"ok": 4}]
+    
+    
+    @pytest.mark.asyncio
+    async def test_close_registers_and_waits(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.process = SimpleNamespace(pid=123, wait=AsyncMock())
+        transport.manager = SimpleNamespace(state=MagicMock(), emit_event=MagicMock())
+    
+        pm = SimpleNamespace(
+            is_process_registered=AsyncMock(return_value=False),
+            register_existing_process=AsyncMock(),
+            stop_process=AsyncMock(),
+        )
+        monkeypatch.setattr(transport, "_get_process_manager", lambda: pm)
+    
+        async def _raise_wait(*_args, **_kwargs):
+            raise asyncio.TimeoutError()
+    
+        monkeypatch.setattr(stdio_driver.asyncio, "wait_for", _raise_wait)
+    
+        await transport.close()
+        pm.register_existing_process.assert_called_once()
+    
+    
+    @pytest.mark.asyncio
+    async def test_close_fallback_without_pid(self, monkeypatch):
+        transport = StdioDriver("echo")
+        proc = SimpleNamespace(
+            send_signal=MagicMock(),
+            kill=MagicMock(),
+        )
+        transport.process = proc
+        transport.manager = SimpleNamespace(state=MagicMock(), emit_event=MagicMock())
+        monkeypatch.setattr(stdio_driver.sys, "platform", "win32")
+    
+        await transport.close()
+        proc.kill.assert_called_once()
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_timeout_direct(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.process = SimpleNamespace(
+            pid=321,
+            terminate=MagicMock(),
+            kill=MagicMock(),
+        )
+        transport.manager = SimpleNamespace(state=MagicMock(), emit_event=MagicMock())
+    
+        pm = SimpleNamespace(is_process_registered=AsyncMock(return_value=False))
+        monkeypatch.setattr(transport, "_get_process_manager", lambda: pm)
+    
+        def _raise_oserror(*_args, **_kwargs):
+            raise OSError()
+    
+        monkeypatch.setattr(stdio_driver.os, "getpgid", _raise_oserror)
+    
+        assert await transport.send_timeout_signal("timeout") is True
+        transport.process.terminate.assert_called_once()
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_force_direct(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.process = SimpleNamespace(
+            pid=321,
+            terminate=MagicMock(),
+            kill=MagicMock(),
+        )
+        transport.manager = SimpleNamespace(state=MagicMock(), emit_event=MagicMock())
+    
+        pm = SimpleNamespace(is_process_registered=AsyncMock(return_value=False))
+        monkeypatch.setattr(transport, "_get_process_manager", lambda: pm)
+    
+        def _raise_oserror(*_args, **_kwargs):
+            raise OSError()
+    
+        monkeypatch.setattr(stdio_driver.os, "getpgid", _raise_oserror)
+    
+        assert await transport.send_timeout_signal("force") is True
+        transport.process.kill.assert_called_once()
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_interrupt_direct(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport.process = SimpleNamespace(
+            pid=321,
+            terminate=MagicMock(),
+            kill=MagicMock(),
+        )
+        transport.manager = SimpleNamespace(state=MagicMock(), emit_event=MagicMock())
+    
+        pm = SimpleNamespace(is_process_registered=AsyncMock(return_value=False))
+        monkeypatch.setattr(transport, "_get_process_manager", lambda: pm)
+    
+        def _raise_oserror(*_args, **_kwargs):
+            raise OSError()
+    
+        monkeypatch.setattr(stdio_driver.os, "getpgid", _raise_oserror)
+    
+        assert await transport.send_timeout_signal("interrupt") is True
+        transport.process.terminate.assert_called_once()
+    
+    
+    @pytest.mark.asyncio
+    async def test_send_timeout_signal_direct_failure(self, monkeypatch):
+        transport = StdioDriver("echo")
+    
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("boom")
+    
+        transport.process = SimpleNamespace(pid=321, terminate=_boom, kill=_boom)
+        transport.manager = SimpleNamespace(state=MagicMock(), emit_event=MagicMock())
+    
+        pm = SimpleNamespace(is_process_registered=AsyncMock(return_value=False))
+        monkeypatch.setattr(transport, "_get_process_manager", lambda: pm)
+    
+        def _raise_oserror(*_args, **_kwargs):
+            raise OSError()
+    
+        monkeypatch.setattr(stdio_driver.os, "getpgid", _raise_oserror)
+    
+        with pytest.raises(ProcessSignalError):
+            await transport.send_timeout_signal("timeout")

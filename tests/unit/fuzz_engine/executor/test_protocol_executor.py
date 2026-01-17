@@ -209,3 +209,93 @@ async def test_shutdown(protocol_executor):
     protocol_executor.executor.shutdown = AsyncMock()
     await protocol_executor.shutdown()
     protocol_executor.executor.shutdown.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("runs", [0, -1])
+async def test_execute_returns_empty_for_non_positive_runs(runs):
+    executor = ProtocolExecutor()
+    assert await executor.execute("PingRequest", runs=runs) == []
+
+
+@pytest.mark.asyncio
+async def test_execute_returns_empty_for_missing_fuzzer_method(monkeypatch):
+    executor = ProtocolExecutor()
+    monkeypatch.setattr(
+        executor.mutator,
+        "get_fuzzer_method",
+        lambda *_args, **_kwargs: None,
+    )
+    assert await executor.execute("PingRequest", runs=1) == []
+
+
+@pytest.mark.asyncio
+async def test_execute_and_process_operations_cancelled(monkeypatch):
+    executor = ProtocolExecutor()
+    executor.executor = MagicMock()
+    executor.executor.execute_batch = AsyncMock(
+        return_value={"results": [], "errors": [asyncio.CancelledError()]}
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await executor._execute_and_process_operations([], "PingRequest")
+
+
+@pytest.mark.asyncio
+async def test_execute_single_run_exception_path(monkeypatch):
+    executor = ProtocolExecutor()
+    monkeypatch.setattr(
+        executor.mutator,
+        "mutate",
+        AsyncMock(side_effect=ValueError("boom")),
+    )
+
+    result = await executor._execute_single_run("PingRequest", 0, "realistic")
+
+    assert result["success"] is False
+    assert "boom" in result["exception"]
+
+
+@pytest.mark.asyncio
+async def test_send_fuzzed_request_batch_path():
+    transport = MagicMock()
+    transport.send_batch_request = AsyncMock(return_value=[{"id": 1, "result": "ok"}])
+    transport.collate_batch_responses = MagicMock(return_value={1: {"result": "ok"}})
+    executor = ProtocolExecutor(transport=transport)
+
+    response, error = await executor._send_fuzzed_request(
+        "BatchRequest", [{"id": 1, "method": "ping"}], generate_only=False
+    )
+
+    assert error is None
+    assert response == {1: {"result": "ok"}}
+
+
+@pytest.mark.asyncio
+async def test_execute_all_types_timeout_branch(monkeypatch):
+    executor = ProtocolExecutor()
+    monkeypatch.setattr(executor, "PROTOCOL_TYPES", ("PingRequest",))
+    monkeypatch.setattr(executor, "_execute_single_type", AsyncMock(return_value=[]))
+    with patch(
+        "mcp_fuzzer.fuzz_engine.executor.protocol_executor.asyncio.wait_for",
+        AsyncMock(side_effect=asyncio.TimeoutError),
+    ):
+        result = await executor.execute_all_types(runs_per_type=1)
+
+        assert result == {"PingRequest": []}
+
+
+@pytest.mark.asyncio
+async def test_execute_batch_requests_handles_empty_and_exception(monkeypatch):
+    executor = ProtocolExecutor()
+    executor.batch_mutator = MagicMock()
+    executor.batch_mutator.mutate = AsyncMock(side_effect=[[], RuntimeError("boom")])
+
+    executor.result_builder = MagicMock()
+    executor.result_builder.build_batch_result = MagicMock(
+        side_effect=lambda **kwargs: {"run": kwargs.get("run_index")}
+    )
+
+    results = await executor.execute_batch_requests(runs=2)
+
+    assert results == [{"run": 1}]

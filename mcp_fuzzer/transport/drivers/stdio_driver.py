@@ -18,6 +18,7 @@ from ...exceptions import (
     ServerError,
     TransportError,
 )
+from ...spec_version import maybe_update_spec_version_from_result
 
 if TYPE_CHECKING:
     from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
@@ -294,6 +295,8 @@ class StdioDriver(TransportDriver):
                         context={"request_id": request_id, "error": response["error"]},
                     )
                 result = response.get("result", response)
+                if method == "initialize":
+                    maybe_update_spec_version_from_result(result)
                 return result if isinstance(result, dict) else {"result": result}
         
         # If we've exhausted iterations, raise an error
@@ -307,7 +310,10 @@ class StdioDriver(TransportDriver):
         await self._send_message(payload)
 
         # Wait for response
-        while True:
+        max_iterations = 1000
+        iteration_count = 0
+        while iteration_count < max_iterations:
+            iteration_count += 1
             response = await self._receive_message()
             if response is None:
                 raise TransportError(
@@ -326,7 +332,14 @@ class StdioDriver(TransportDriver):
                 )
 
             result = response.get("result", response)
+            if payload.get("method") == "initialize":
+                maybe_update_spec_version_from_result(result)
             return result if isinstance(result, dict) else {"result": result}
+
+        raise TransportError(
+            "Too many responses received without matching request",
+            context={"payload": payload, "iterations": iteration_count},
+        )
 
     async def _send_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Compatibility method for tests expecting sys-based stdio behavior.

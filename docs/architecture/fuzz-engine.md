@@ -750,7 +750,6 @@ results = await protocol_executor.execute("InitializeRequest", runs=10)
 
 ## References
 
-- [FUZZ_ENGINE_REDESIGN.md](../../FUZZ_ENGINE_REDESIGN.md) - Original redesign document
 - [Architecture Overview](./architecture.md) - Overall system architecture
 - [Safety System](../components/safety.md) - Safety system integration
 - [Transport Layer](../transport/) - Transport integration

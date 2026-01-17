@@ -58,13 +58,18 @@ class ConsoleFormatter:
 
         self.console.print(table)
 
-    def print_protocol_summary(self, results: dict[str, list[dict[str, Any]]]):
+    def print_protocol_summary(
+        self,
+        results: dict[str, list[dict[str, Any]]],
+        *,
+        title: str = "MCP Protocol Fuzzing Summary",
+    ):
         """Print protocol fuzzing summary to console."""
         if not results:
             self.console.print("[yellow]No protocol results to display[/yellow]")
             return
 
-        table = Table(title="MCP Protocol Fuzzing Summary")
+        table = Table(title=title)
         table.add_column("Protocol Type", style="cyan", no_wrap=True)
         table.add_column("Total Runs", style="green")
         table.add_column("Errors", style="red")
@@ -80,6 +85,87 @@ class ConsoleFormatter:
                 protocol_type, str(total_runs), str(errors), f"{success_rate:.1f}%"
             )
 
+        self.console.print(table)
+
+    def print_spec_guard_summary(
+        self,
+        checks: list[dict[str, Any]],
+        *,
+        requested_version: str | None = None,
+        negotiated_version: str | None = None,
+    ):
+        """Print spec guard (compliance) summary to console."""
+        if negotiated_version and requested_version:
+            if negotiated_version != requested_version:
+                self.console.print(
+                    "[bold]Negotiated MCP spec version "
+                    f"{negotiated_version} (requested {requested_version}); "
+                    "compliance checks below.[/bold]"
+                )
+            else:
+                self.console.print(
+                    "[bold]Negotiated MCP spec version "
+                    f"{negotiated_version}; compliance checks below.[/bold]"
+                )
+        elif negotiated_version:
+            self.console.print(
+                "[bold]Negotiated MCP spec version "
+                f"{negotiated_version}; compliance checks below.[/bold]"
+            )
+        elif requested_version:
+            self.console.print(
+                "[bold]Compliance checks for MCP spec version "
+                f"{requested_version}.[/bold]"
+            )
+        else:
+            self.console.print("[bold]MCP compliance checks[/bold]")
+
+        if not checks:
+            self.console.print("[yellow]No compliance checks recorded[/yellow]")
+            return
+
+        totals = {"total": 0, "failed": 0, "warned": 0, "passed": 0}
+        status_order = {"FAIL": 0, "FAILURE": 0, "ERROR": 0, "WARN": 1, "WARNING": 1}
+
+        def _status_rank(status: str) -> int:
+            return status_order.get(status, 2)
+
+        table = Table(title="MCP Compliance Checks")
+        table.add_column("Status", style="cyan", no_wrap=True)
+        table.add_column("Check", style="green", no_wrap=True)
+        table.add_column("Spec", style="magenta", no_wrap=True)
+        table.add_column("Message", style="white", overflow="fold")
+
+        for check in sorted(
+            checks,
+            key=lambda c: _status_rank(str(c.get("status", "")).upper()),
+        ):
+            status = str(check.get("status", "PASS")).upper()
+            check_id = str(check.get("id", "unknown"))
+            spec_id = str(check.get("spec_id", "UNKNOWN"))
+            message = str(check.get("message", ""))
+
+            totals["total"] += 1
+            if status in ("FAIL", "FAILURE", "ERROR"):
+                totals["failed"] += 1
+                status_style = "red"
+            elif status in ("WARN", "WARNING"):
+                totals["warned"] += 1
+                status_style = "yellow"
+            else:
+                totals["passed"] += 1
+                status_style = "green"
+
+            table.add_row(
+                f"[{status_style}]{status}[/{status_style}]",
+                check_id,
+                spec_id,
+                message,
+            )
+
+        table.caption = (
+            "Total: {total} | Failed: {failed} | Warned: {warned} | Passed: {passed}"
+        ).format(**totals)
         self.console.print(table)
 
     def print_overall_summary(

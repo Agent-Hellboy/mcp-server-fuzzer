@@ -1,5 +1,7 @@
 """Lightweight MCP spec checks for fuzzing results."""
 
+import os
+from datetime import date
 from typing import Any
 
 from .helpers import (
@@ -20,7 +22,7 @@ _TOOLS_SPEC = spec_variant(
     TOOLS_SPEC,
     spec_id="MCP-Tools-Call",
     spec_url=(
-        "https://modelcontextprotocol.io/specification/2025-06-18/server/tools#calling-tools"
+        "https://modelcontextprotocol.io/specification/{version}/server/tools#calling-tools"
     ),
 )
 _LOGGING_SPEC = LOGGING_SPEC
@@ -28,6 +30,15 @@ _SCHEMA_SPEC = spec_variant(SCHEMA_SPEC, spec_id="MCP-JSON-Schema")
 _RESOURCES_SPEC = RESOURCES_SPEC
 _PROMPTS_SPEC = PROMPTS_SPEC
 _SSE_SPEC = SSE_SPEC
+
+
+def _spec_at_least(target: str) -> bool:
+    current = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
+    try:
+        # Compare ISO dates when possible.
+        return date.fromisoformat(current) >= date.fromisoformat(target)
+    except ValueError:
+        return current >= target
 
 
 def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
@@ -87,8 +98,11 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
 
     if not content:
         checks.append(
-            _fail("tools-content-empty", "Tool content array is empty", _TOOLS_SPEC)
+            _warn("tools-content-empty", "Tool content array is empty", _TOOLS_SPEC)
         )
+
+    supports_audio = _spec_at_least("2025-03-26")
+    supports_resource_link = _spec_at_least("2025-06-18")
 
     for idx, item in enumerate(content):
         if not isinstance(item, dict):
@@ -113,16 +127,17 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             continue
 
         if ctype == "text":
-            if not isinstance(item.get("text"), str) or not item.get("text"):
+            text = item.get("text")
+            if not isinstance(text, str) or not text:
                 checks.append(
                     _fail(
                         "tools-content-text",
-                        "Text content missing non-empty text field",
+                        "Text content missing text field",
                         _TOOLS_SPEC,
                     )
                 )
         elif ctype == "image":
-            if not item.get("data"):
+            if not isinstance(item.get("data"), str):
                 checks.append(
                     _fail(
                         "tools-content-image-data",
@@ -130,7 +145,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
                         _TOOLS_SPEC,
                     )
                 )
-            if not item.get("mimeType"):
+            if not isinstance(item.get("mimeType"), str):
                 checks.append(
                     _fail(
                         "tools-content-image-mime",
@@ -139,7 +154,16 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
                     )
                 )
         elif ctype == "audio":
-            if not item.get("data"):
+            if not supports_audio:
+                checks.append(
+                    _fail(
+                        "tools-content-audio-unsupported",
+                        "Audio content is not supported by this spec version",
+                        _TOOLS_SPEC,
+                    )
+                )
+                continue
+            if not isinstance(item.get("data"), str):
                 checks.append(
                     _fail(
                         "tools-content-audio-data",
@@ -147,7 +171,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
                         _TOOLS_SPEC,
                     )
                 )
-            if not item.get("mimeType"):
+            if not isinstance(item.get("mimeType"), str):
                 checks.append(
                     _fail(
                         "tools-content-audio-mime",
@@ -157,7 +181,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
                 )
         elif ctype == "resource":
             resource = item.get("resource")
-            if not isinstance(resource, dict):
+            if resource is None:
                 checks.append(
                     _fail(
                         "tools-content-resource",
@@ -165,28 +189,54 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
                         _TOOLS_SPEC,
                     )
                 )
+            elif not isinstance(resource, dict):
+                checks.append(
+                    _fail(
+                        "tools-content-resource",
+                        "Resource content missing resource object",
+                        _TOOLS_SPEC,
+                    )
+                )
+            else:
+                if not resource.get("uri"):
+                    checks.append(
+                        _fail(
+                            "tools-content-resource-uri",
+                            "Resource content missing uri field",
+                            _TOOLS_SPEC,
+                        )
+                    )
+                if not (resource.get("text") or resource.get("blob")):
+                    checks.append(
+                        _fail(
+                            "tools-content-resource-body",
+                            "Resource content missing text or blob field",
+                            _TOOLS_SPEC,
+                        )
+                    )
+        elif ctype == "resource_link":
+            if not supports_resource_link:
+                checks.append(
+                    _fail(
+                        "tools-content-resource-link-unsupported",
+                        "Resource links are not supported by this spec version",
+                        _TOOLS_SPEC,
+                    )
+                )
                 continue
-            if not resource.get("uri"):
+            if not item.get("uri"):
                 checks.append(
                     _fail(
-                        "tools-content-resource-uri",
-                        "Resource content missing uri field",
+                        "tools-content-resource-link-uri",
+                        "Resource link missing uri field",
                         _TOOLS_SPEC,
                     )
                 )
-            if not resource.get("mimeType"):
+            if not item.get("name"):
                 checks.append(
                     _fail(
-                        "tools-content-resource-mime",
-                        "Resource content missing mimeType field",
-                        _TOOLS_SPEC,
-                    )
-                )
-            if not (resource.get("text") or resource.get("blob")):
-                checks.append(
-                    _fail(
-                        "tools-content-resource-body",
-                        "Resource content missing text or blob field",
+                        "tools-content-resource-link-name",
+                        "Resource link missing name field",
                         _TOOLS_SPEC,
                     )
                 )
@@ -209,7 +259,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
         )
         if not has_text:
             checks.append(
-                _fail(
+                _warn(
                     "tools-error-text",
                     "isError=true without text error message",
                     _TOOLS_SPEC,
@@ -224,6 +274,13 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
     checks: list[SpecCheck] = []
     params = payload.get("params")
     if params is None:
+        checks.append(
+            _fail(
+                "logging-params-missing",
+                "Logging notification params missing",
+                _LOGGING_SPEC,
+            )
+        )
         return checks
 
     if not isinstance(params, dict):
@@ -236,7 +293,15 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
         )
         return checks
 
-    if "level" in params and not isinstance(params.get("level"), str):
+    if "level" not in params:
+        checks.append(
+            _fail(
+                "logging-level-missing",
+                "Logging notification level missing",
+                _LOGGING_SPEC,
+            )
+        )
+    elif not isinstance(params.get("level"), str):
         checks.append(
             _fail(
                 "logging-level-type",
@@ -245,11 +310,20 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
             )
         )
 
-    if "message" in params and not isinstance(params.get("message"), str):
+    if "data" not in params:
         checks.append(
             _fail(
-                "logging-message-type",
-                "Logging notification message is not a string",
+                "logging-data-missing",
+                "Logging notification data missing",
+                _LOGGING_SPEC,
+            )
+        )
+
+    if "logger" in params and not isinstance(params.get("logger"), str):
+        checks.append(
+            _fail(
+                "logging-logger-type",
+                "Logging notification logger is not a string",
                 _LOGGING_SPEC,
             )
         )
@@ -327,7 +401,7 @@ def check_resources_read(result: Any) -> list[SpecCheck]:
 
     if not contents:
         checks.append(
-            _fail("resources-read-empty", "contents array is empty", _RESOURCES_SPEC)
+            _warn("resources-read-empty", "contents array is empty", _RESOURCES_SPEC)
         )
         return checks
 
@@ -369,6 +443,13 @@ def check_resource_templates_list(result: Any) -> list[SpecCheck]:
 
     templates = result.get("resourceTemplates")
     if templates is None:
+        checks.append(
+            _fail(
+                "resources-templates-missing",
+                "Missing resourceTemplates array",
+                _RESOURCES_SPEC,
+            )
+        )
         return checks
 
     if not isinstance(templates, list):
@@ -391,11 +472,19 @@ def check_resource_templates_list(result: Any) -> list[SpecCheck]:
                 )
             )
             continue
-        if not template.get("uri"):
+        if not template.get("uriTemplate"):
             checks.append(
                 _fail(
                     "resources-templates-uri",
-                    f"Template {idx} missing uri",
+                    f"Template {idx} missing uriTemplate",
+                    _RESOURCES_SPEC,
+                )
+            )
+        if not template.get("name"):
+            checks.append(
+                _fail(
+                    "resources-templates-name",
+                    f"Template {idx} missing name",
                     _RESOURCES_SPEC,
                 )
             )
@@ -464,7 +553,7 @@ def check_prompts_get(result: Any) -> list[SpecCheck]:
 
     if not messages:
         checks.append(
-            _fail("prompts-get-empty", "messages array is empty", _PROMPTS_SPEC)
+            _warn("prompts-get-empty", "messages array is empty", _PROMPTS_SPEC)
         )
         return checks
 

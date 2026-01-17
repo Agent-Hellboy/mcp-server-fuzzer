@@ -214,3 +214,10 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+
+.dockerignore
+Dockerfile
+docker-compose.host-network.yml
+docker-compose.yml
+docker/

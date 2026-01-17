@@ -43,7 +43,7 @@ def test_parse_prompt_args_success_and_errors():
 async def test_run_spec_suite_success_flow(monkeypatch):
     events: list[str] = []
 
-    def fake_validate_definition(name: str, result: object) -> list[str]:
+    def fake_validate_definition(name: str, result: object, **_: object) -> list[str]:
         events.append(f"validate:{name}")
         return [name]
 
@@ -83,12 +83,13 @@ async def test_run_spec_suite_success_flow(monkeypatch):
 
     responses = {
         "initialize": {
+            "protocolVersion": "2025-11-25",
             "capabilities": {
                 "tools": True,
                 "resources": True,
                 "prompts": True,
                 "completions": True,
-            }
+            },
         },
         "ping": {},
         "notifications/initialized": None,
@@ -123,12 +124,15 @@ async def test_run_spec_suite_handles_tool_list_failure(monkeypatch):
         failure.append(scope)
         return {"scope": scope, "message": message}
 
-    monkeypatch.setattr(runner, "validate_definition", lambda name, result: [])
+    monkeypatch.setattr(runner, "validate_definition", lambda name, result, **_: [])
     monkeypatch.setattr(runner, "check_tool_schema_fields", lambda tool: [])
     monkeypatch.setattr(runner, "_fail", fake_fail)
 
     responses = {
-        "initialize": {"capabilities": {"tools": True}},
+        "initialize": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {"tools": True},
+        },
         "ping": {},
         "notifications/initialized": None,
         "tools/list": RuntimeError("boom"),
@@ -139,3 +143,160 @@ async def test_run_spec_suite_handles_tool_list_failure(monkeypatch):
         isinstance(entry, dict) and entry.get("scope") == "tools-list"
         for entry in checks
     )
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_fails_without_protocol_version():
+    responses = {
+        "initialize": {"capabilities": {"tools": True}},
+        "ping": {},
+        "notifications/initialized": None,
+    }
+    transport = DummyTransport(responses)
+
+    checks = await runner.run_spec_suite(transport)
+
+    assert any(
+        isinstance(entry, dict) and entry.get("id") == "protocol-version"
+        for entry in checks
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_rejects_invalid_protocol_version():
+    transport = DummyTransport(
+        {
+            "initialize": {
+                "protocolVersion": "bad-version",
+                "capabilities": {},
+            },
+            "notifications/initialized": None,
+            "ping": {},
+        }
+    )
+    checks = await runner.run_spec_suite(transport)
+    assert any(check.get("id") == "protocol-version" for check in checks)
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_initialize_result_non_dict():
+    transport = DummyTransport(
+        {
+            "initialize": ["not-a-dict"],
+            "notifications/initialized": None,
+            "ping": {},
+        }
+    )
+    checks = await runner.run_spec_suite(transport)
+    assert any(check.get("id") == "protocol-version" for check in checks)
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_ping_failure():
+    transport = DummyTransport(
+        {
+            "initialize": {"protocolVersion": "2025-11-25", "capabilities": {}},
+            "notifications/initialized": None,
+            "ping": RuntimeError("boom"),
+        }
+    )
+    checks = await runner.run_spec_suite(transport)
+    assert any(check.get("id") == "ping" for check in checks)
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_tools_call_failure():
+    transport = DummyTransport(
+        {
+            "initialize": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {"tools": True},
+            },
+            "notifications/initialized": None,
+            "ping": {},
+            "tools/list": {"tools": [{"name": "t", "inputSchema": {"required": []}}]},
+            "tools/call": RuntimeError("boom"),
+        }
+    )
+    checks = await runner.run_spec_suite(transport)
+    assert any(check.get("id") == "tools-call" for check in checks)
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_warns_when_no_callable_tool():
+    transport = DummyTransport(
+        {
+            "initialize": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {"tools": True},
+            },
+            "notifications/initialized": None,
+            "ping": {},
+            "tools/list": {
+                "tools": [{"name": "t", "inputSchema": {"required": ["x"]}}]
+            },
+        }
+    )
+    checks = await runner.run_spec_suite(transport)
+    assert any(
+        check.get("id") == "tools-call" and check.get("status") == "WARN"
+        for check in checks
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_resource_failures():
+    transport = DummyTransport(
+        {
+            "initialize": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {"resources": True},
+            },
+            "notifications/initialized": None,
+            "ping": {},
+            "resources/list": RuntimeError("boom"),
+            "resources/templates/list": RuntimeError("boom"),
+            "resources/read": RuntimeError("boom"),
+        }
+    )
+    checks = await runner.run_spec_suite(transport, resource_uri="resource://x")
+    ids = {check.get("id") for check in checks if isinstance(check, dict)}
+    assert "resources-list" in ids
+    assert "resources-templates-list" in ids
+    assert "resources-read" in ids
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_prompt_failures_and_completion_warning():
+    transport = DummyTransport(
+        {
+            "initialize": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {"prompts": True, "completions": True},
+            },
+            "notifications/initialized": None,
+            "ping": {},
+            "prompts/list": RuntimeError("boom"),
+            "prompts/get": RuntimeError("boom"),
+        }
+    )
+    checks = await runner.run_spec_suite(transport, prompt_name="p")
+    ids = {check.get("id") for check in checks if isinstance(check, dict)}
+    assert "prompts-list" in ids
+    assert "prompts-get" in ids
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_completion_warns_without_prompt():
+    transport = DummyTransport(
+        {
+            "initialize": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {"completions": True},
+            },
+            "notifications/initialized": None,
+            "ping": {},
+        }
+    )
+    checks = await runner.run_spec_suite(transport)
+    assert any(check.get("id") == "completion-complete" for check in checks)

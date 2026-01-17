@@ -3,6 +3,7 @@
 import argparse
 import logging
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -23,6 +24,7 @@ from mcp_fuzzer.client.runtime.async_runner import execute_inner_client
 from mcp_fuzzer.client.runtime.retry import run_with_retry_on_interrupt
 from mcp_fuzzer.client.safety import SafetyController
 from mcp_fuzzer.client.transport.factory import build_driver_with_auth
+from mcp_fuzzer.env import ValidationType
 from mcp_fuzzer.exceptions import ArgumentValidationError, ConfigFileError, MCPError
 
 
@@ -77,6 +79,14 @@ def _base_args(**overrides):
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
+
+
+class DummyConsole:
+    def __init__(self):
+        self.calls = []
+
+    def print(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
 
 
 def test_create_argument_parser_and_defaults():
@@ -604,3 +614,98 @@ def test_build_cli_config_raises_config_error():
     ):
         with pytest.raises(ConfigFileError):
             build_cli_config(args)
+
+
+def test_validate_env_var_unknown_type_returns_false():
+    manager = ValidationManager()
+
+    assert manager._validate_env_var("value", None, {}) is False
+
+
+def test_get_validation_error_msg_unknown_type():
+    manager = ValidationManager()
+
+    msg = manager._get_validation_error_msg("VAR", "x", None, {})
+    assert "invalid value" in msg
+
+
+def test_get_validation_error_msg_boolean():
+    manager = ValidationManager()
+
+    msg = manager._get_validation_error_msg(
+        "FLAG", "maybe", ValidationType.BOOLEAN, {}
+    )
+    assert "true" in msg
+
+
+def test_validate_arguments_tool_empty_raises():
+    manager = ValidationManager()
+    args = SimpleNamespace(
+        mode="tools",
+        tool=" ",
+        endpoint="server",
+        protocol_type=None,
+        runs=None,
+        runs_per_type=None,
+        timeout=None,
+    )
+
+    with pytest.raises(ArgumentValidationError):
+        manager.validate_arguments(args)
+
+
+def test_validate_arguments_runs_per_type_invalid():
+    manager = ValidationManager()
+    args = SimpleNamespace(
+        mode="tools",
+        tool=None,
+        endpoint="server",
+        protocol_type=None,
+        runs=None,
+        runs_per_type=0,
+        timeout=None,
+    )
+
+    with pytest.raises(ArgumentValidationError):
+        manager.validate_arguments(args)
+
+
+def test_check_environment_variables_raises_on_invalid(monkeypatch):
+    manager = ValidationManager()
+    manager.console = DummyConsole()
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.cli.validators.ENVIRONMENT_VARIABLES",
+        [
+            {
+                "name": "MCP_FUZZER_TIMEOUT",
+                "default": "1",
+                "validation_type": ValidationType.NUMERIC,
+                "validation_params": {},
+            }
+        ],
+    )
+    monkeypatch.setenv("MCP_FUZZER_TIMEOUT", "not-a-number")
+
+    with pytest.raises(ArgumentValidationError):
+        manager.check_environment_variables()
+
+
+def test_check_environment_variables_success(monkeypatch):
+    manager = ValidationManager()
+    manager.console = DummyConsole()
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.cli.validators.ENVIRONMENT_VARIABLES",
+        [
+            {
+                "name": "MCP_FUZZER_LOG_LEVEL",
+                "default": "INFO",
+                "validation_type": ValidationType.CHOICE,
+                "validation_params": {"choices": ["INFO", "DEBUG"]},
+            }
+        ],
+    )
+    monkeypatch.setenv("MCP_FUZZER_LOG_LEVEL", "DEBUG")
+
+    assert manager.check_environment_variables() is True

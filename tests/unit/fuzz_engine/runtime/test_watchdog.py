@@ -16,6 +16,13 @@ from mcp_fuzzer.fuzz_engine.runtime import (
     SignalDispatcher,
     WatchdogConfig,
 )
+from mcp_fuzzer.fuzz_engine.runtime.watchdog import (
+    BestEffortTerminationStrategy,
+    SignalTerminationStrategy,
+    _normalize_activity,
+    wait_for_process_exit,
+)
+from mcp_fuzzer.exceptions import ProcessStopError
 
 
 class ClockStub:
@@ -150,3 +157,245 @@ async def test_activity_callback_boolean(registry, logger):
     clock.advance(1.0)
     await watchdog.scan_once(await registry.snapshot())
     assert fake_terminator.calls == [7]
+
+
+class DummyProcess:
+    def __init__(self, returncode=None):
+        self.returncode = returncode
+        self.terminated = False
+        self.killed = False
+
+    def terminate(self):
+        self.terminated = True
+
+    def kill(self):
+        self.killed = True
+
+    def wait(self):
+        return None
+
+
+class DummyTerminator:
+    def __init__(self):
+        self.calls = []
+
+    async def terminate(self, pid, process_info, hang_duration):
+        self.calls.append((pid, hang_duration))
+        return True
+
+
+@pytest.mark.asyncio
+async def test_normalize_activity_paths():
+    now = 10.0
+    last = 5.0
+    logger = logging.getLogger("test")
+
+    assert await _normalize_activity(lambda: True, last, now, logger) == now
+    assert await _normalize_activity(lambda: False, last, now, logger) == last
+    assert await _normalize_activity(lambda: 7.0, last, now, logger) == 7.0
+    assert await _normalize_activity(lambda: -1.0, last, now, logger) == last
+
+    def _raise():
+        raise RuntimeError("boom")
+
+    assert await _normalize_activity(_raise, last, now, logger) == last
+    assert await _normalize_activity(lambda: object(), last, now, logger) == last
+
+
+@pytest.mark.asyncio
+async def test_scan_once_removes_and_kills(monkeypatch):
+    registry = ProcessRegistry()
+    terminator = DummyTerminator()
+    config = WatchdogConfig(process_timeout=1.0, extra_buffer=0.0, auto_kill=True)
+    watchdog = ProcessWatchdog(
+        registry, None, config=config, termination_strategy=terminator
+    )
+
+    done_proc = DummyProcess(returncode=0)
+    hung_proc = DummyProcess(returncode=None)
+
+    done_config = ProcessConfig(command=["echo"], name="done")
+    hung_config = ProcessConfig(command=["sleep"], name="hung")
+
+    await registry.register(1, done_proc, done_config, started_at=0.0)
+    await registry.register(2, hung_proc, hung_config, started_at=0.0)
+
+    watchdog._last_activity[2] = 0.0
+    monkeypatch.setattr(watchdog, "_clock", lambda: 10.0)
+
+    result = await watchdog.scan_once(await registry.snapshot())
+    assert 1 in result["removed"]
+    assert 2 in result["killed"]
+    assert terminator.calls
+
+
+@pytest.mark.asyncio
+async def test_get_stats_includes_metrics(monkeypatch):
+    registry = ProcessRegistry()
+    watchdog = ProcessWatchdog(
+        registry,
+        None,
+        metrics_sampler=lambda: {"cpu": 1},
+    )
+    stats = await watchdog.get_stats()
+    assert stats["system_metrics"] == {"cpu": 1}
+
+
+@pytest.mark.asyncio
+async def test_wait_for_process_exit_sync():
+    proc = DummyProcess(returncode=0)
+    assert await wait_for_process_exit(proc, timeout=0.1) is None
+
+
+@pytest.mark.asyncio
+async def test_signal_termination_strategy_escalates(monkeypatch):
+    events = []
+
+    class DummyDispatcher:
+        async def send(self, signal_type, pid, process_info):
+            events.append(signal_type)
+
+    calls = {"count": 0}
+
+    async def _wait_fn(_process, timeout=None):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise asyncio.TimeoutError()
+        return None
+
+    strategy = SignalTerminationStrategy(
+        DummyDispatcher(), logging.getLogger("test"), wait_fn=_wait_fn
+    )
+    proc = DummyProcess(returncode=None)
+    config = ProcessConfig(command=["echo"], name="p")
+    record = {"process": proc, "config": config, "started_at": 0.0, "status": "running"}
+    result = await strategy.terminate(1, record, 10.0)
+    assert result is True
+    assert events == ["timeout", "force"]
+
+
+@pytest.mark.asyncio
+async def test_signal_termination_strategy_returns_false():
+    class DummyDispatcher:
+        async def send(self, signal_type, pid, process_info):
+            return None
+
+    async def _wait_fn(_process, timeout=None):
+        raise asyncio.TimeoutError()
+
+    strategy = SignalTerminationStrategy(
+        DummyDispatcher(), logging.getLogger("test"), wait_fn=_wait_fn
+    )
+    proc = DummyProcess(returncode=None)
+    config = ProcessConfig(command=["echo"], name="p")
+    record = {"process": proc, "config": config, "started_at": 0.0, "status": "running"}
+    result = await strategy.terminate(1, record, 10.0)
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_best_effort_termination_uses_fallback(monkeypatch):
+    strategy = BestEffortTerminationStrategy(logging.getLogger("test"))
+    proc = DummyProcess(returncode=None)
+    config = ProcessConfig(command=["echo"], name="p")
+    record = {"process": proc, "config": config, "started_at": 0.0, "status": "running"}
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.runtime.watchdog.os.getpgid",
+        lambda pid: 1,
+    )
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.runtime.watchdog.os.killpg",
+        lambda *args, **kwargs: None,
+    )
+    calls = {"count": 0}
+
+    async def _await_exit(*_args, **_kwargs):
+        calls["count"] += 1
+        return calls["count"] == 2
+
+    monkeypatch.setattr(strategy, "_await_exit", _await_exit)
+
+    result = await strategy.terminate(1, record, 5.0)
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_best_effort_windows_termination(monkeypatch):
+    strategy = BestEffortTerminationStrategy(logging.getLogger("test"))
+    proc = DummyProcess(returncode=None)
+    config = ProcessConfig(command=["echo"], name="p")
+    record = {"process": proc, "config": config, "started_at": 0.0, "status": "running"}
+
+    async def _await_exit(*_args, **_kwargs):
+        return True
+
+    monkeypatch.setattr(strategy, "_await_exit", _await_exit)
+    monkeypatch.setattr("mcp_fuzzer.fuzz_engine.runtime.watchdog.sys.platform", "win32")
+
+    result = await strategy.terminate(1, record, 5.0)
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_best_effort_termination_raises(monkeypatch):
+    strategy = BestEffortTerminationStrategy(logging.getLogger("test"))
+    proc = DummyProcess(returncode=None)
+    config = ProcessConfig(command=["echo"], name="p")
+    record = {"process": proc, "config": config, "started_at": 0.0, "status": "running"}
+
+    def _raise_error(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.runtime.watchdog.os.getpgid",
+        _raise_error,
+    )
+
+    with pytest.raises(ProcessStopError):
+        await strategy.terminate(1, record, 5.0)
+
+
+@pytest.mark.asyncio
+async def test_best_effort_windows_force_kill(monkeypatch):
+    strategy = BestEffortTerminationStrategy(logging.getLogger("test"))
+    proc = DummyProcess(returncode=None)
+    config = ProcessConfig(command=["echo"], name="p")
+    record = {"process": proc, "config": config, "started_at": 0.0, "status": "running"}
+
+    calls = {"count": 0}
+
+    async def _await_exit(*_args, **_kwargs):
+        calls["count"] += 1
+        return calls["count"] == 2
+
+    monkeypatch.setattr(strategy, "_await_exit", _await_exit)
+    monkeypatch.setattr("mcp_fuzzer.fuzz_engine.runtime.watchdog.sys.platform", "win32")
+
+    result = await strategy.terminate(1, record, 5.0)
+    assert result is True
+    assert proc.killed is True
+
+
+@pytest.mark.asyncio
+async def test_best_effort_oserror_force_kill(monkeypatch):
+    strategy = BestEffortTerminationStrategy(logging.getLogger("test"))
+    proc = DummyProcess(returncode=None)
+    config = ProcessConfig(command=["echo"], name="p")
+    record = {"process": proc, "config": config, "started_at": 0.0, "status": "running"}
+
+    async def _await_exit(*_args, **_kwargs):
+        return False
+
+    monkeypatch.setattr(strategy, "_await_exit", _await_exit)
+
+    def _raise_oserror(*_args, **_kwargs):
+        raise OSError("boom")
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.runtime.watchdog.os.getpgid",
+        _raise_oserror,
+    )
+
+    result = await strategy.terminate(1, record, 5.0)
+    assert result is False
