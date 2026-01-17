@@ -74,6 +74,7 @@ def test_collect_labeled_protocol_items_filters_by_prefix():
     results = [
         {"label": "resource:file://alpha.txt", "success": True},
         {"label": "prompt:beta", "success": True},
+        {"label": "tool:echo", "success": True},
         {"label": "resource:", "success": True},
         {"label": "unknown:gamma", "success": True},
         {"label": 123, "success": True},
@@ -83,7 +84,11 @@ def test_collect_labeled_protocol_items_filters_by_prefix():
 
     assert "file://alpha.txt" in grouped
     assert "beta" not in grouped
+    assert "echo" not in grouped
     assert len(grouped["file://alpha.txt"]) == 1
+
+    tool_grouped = collect_labeled_protocol_items(results, "tool")
+    assert "echo" in tool_grouped
 
 
 def test_collect_and_summarize_protocol_items():

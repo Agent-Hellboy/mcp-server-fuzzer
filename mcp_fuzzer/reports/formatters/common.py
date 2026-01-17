@@ -9,8 +9,8 @@ class SupportsToDict(Protocol):
     def to_dict(self) -> dict[str, Any]: ...
 
 
-LabelPrefix = Literal["resource", "prompt"]
-LABEL_PREFIXES: tuple[LabelPrefix, ...] = ("resource", "prompt")
+LabelPrefix = Literal["resource", "prompt", "tool"]
+LABEL_PREFIXES: tuple[LabelPrefix, ...] = ("resource", "prompt", "tool")
 
 
 def normalize_report_data(
@@ -71,7 +71,7 @@ def result_has_failure(result: dict[str, Any]) -> bool:
 
 
 def _parse_label(label: Any) -> tuple[LabelPrefix | None, str | None]:
-    """Parse a protocol label formatted as '{prefix}:{name}'."""
+    """Parse a label formatted as '{prefix}:{name}'."""
     if not isinstance(label, str):
         return None, None
     prefix, separator, name = label.partition(":")

@@ -348,6 +348,7 @@ class ToolClient:
                 processed.append(
                     {
                         "args": args,
+                        "label": f"tool:{tool_name}",
                         "exception": "safety_blocked",
                         "safety_blocked": True,
                         "safety_sanitized": False,
@@ -385,6 +386,7 @@ class ToolClient:
                 processed.append(
                     {
                         "args": sanitized_args,
+                        "label": f"tool:{tool_name}",
                         "result": result,
                         "safety_blocked": False,
                         "safety_sanitized": safety_sanitized,
@@ -396,6 +398,7 @@ class ToolClient:
                 processed.append(
                     {
                         "args": sanitized_args,
+                        "label": f"tool:{tool_name}",
                         "exception": str(e),
                         "safety_blocked": False,
                         "safety_sanitized": safety_sanitized,
