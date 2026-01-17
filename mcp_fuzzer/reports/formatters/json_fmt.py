@@ -5,12 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from .common import (
+    calculate_protocol_success_rate,
     calculate_tool_success_rate,
-    collect_labeled_protocol_items,
+    collect_and_summarize_protocol_items,
     extract_tool_runs,
     normalize_report_data,
-    summarize_protocol_items,
 )
+from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 
 class JSONFormatter:
@@ -83,8 +84,7 @@ class JSONFormatter:
                 or r.get("error")
                 or r.get("server_error")
             )
-            successes = max(total_runs - errors, 0)
-            success_rate = (successes / total_runs * 100) if total_runs > 0 else 0
+            success_rate = calculate_protocol_success_rate(total_runs, errors)
 
             summary[protocol_type] = {
                 "total_runs": total_runs,
@@ -100,15 +100,11 @@ class JSONFormatter:
         if not results:
             return {}
 
-        resources = summarize_protocol_items(
-            collect_labeled_protocol_items(
-                results.get("ReadResourceRequest", []), "resource:"
-            )
+        _, resources = collect_and_summarize_protocol_items(
+            results.get(READ_RESOURCE_REQUEST, []), "resource"
         )
-        prompts = summarize_protocol_items(
-            collect_labeled_protocol_items(
-                results.get("GetPromptRequest", []), "prompt:"
-            )
+        _, prompts = collect_and_summarize_protocol_items(
+            results.get(GET_PROMPT_REQUEST, []), "prompt"
         )
         summary: dict[str, Any] = {}
         if resources:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .common import (
+    calculate_protocol_success_rate,
     calculate_tool_success_rate,
     extract_tool_runs,
     normalize_report_data,
@@ -132,8 +133,9 @@ class TextFormatter:
                     f.write(f"  Errors: {errors}\n")
 
                     if results:
-                        successes = max(len(results) - errors, 0)
-                        success_rate = successes / len(results) * 100
+                        success_rate = calculate_protocol_success_rate(
+                            len(results), errors
+                        )
                         f.write(f"  Success Rate: {success_rate:.1f}%\n")
 
             if "safety" in data:

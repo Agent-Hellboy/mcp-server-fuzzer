@@ -8,11 +8,13 @@ from rich.console import Console
 from rich.table import Table
 
 from .common import (
+    calculate_protocol_success_rate,
     calculate_tool_success_rate,
-    collect_labeled_protocol_items,
+    collect_and_summarize_protocol_items,
     extract_tool_runs,
     result_has_failure,
 )
+from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 
 class ConsoleFormatter:
@@ -73,8 +75,7 @@ class ConsoleFormatter:
         for protocol_type, protocol_results in results.items():
             total_runs = len(protocol_results)
             errors = sum(1 for r in protocol_results if result_has_failure(r))
-            successes = max(total_runs - errors, 0)
-            success_rate = (successes / total_runs * 100) if total_runs > 0 else 0
+            success_rate = calculate_protocol_success_rate(total_runs, errors)
 
             table.add_row(
                 protocol_type, str(total_runs), str(errors), f"{success_rate:.1f}%"
@@ -86,24 +87,24 @@ class ConsoleFormatter:
     def _print_protocol_item_summaries(
         self, results: dict[str, list[dict[str, Any]]]
     ) -> None:
-        resource_items = collect_labeled_protocol_items(
-            results.get("ReadResourceRequest", []), "resource:"
+        _, resource_summary = collect_and_summarize_protocol_items(
+            results.get(READ_RESOURCE_REQUEST, []), "resource"
         )
-        if resource_items:
+        if resource_summary:
             self._print_protocol_item_summary(
-                "MCP Resource Item Fuzzing Summary", "Resource", resource_items
+                "MCP Resource Item Fuzzing Summary", "Resource", resource_summary
             )
 
-        prompt_items = collect_labeled_protocol_items(
-            results.get("GetPromptRequest", []), "prompt:"
+        _, prompt_summary = collect_and_summarize_protocol_items(
+            results.get(GET_PROMPT_REQUEST, []), "prompt"
         )
-        if prompt_items:
+        if prompt_summary:
             self._print_protocol_item_summary(
-                "MCP Prompt Item Fuzzing Summary", "Prompt", prompt_items
+                "MCP Prompt Item Fuzzing Summary", "Prompt", prompt_summary
             )
 
     def _print_protocol_item_summary(
-        self, title: str, name_header: str, items: dict[str, list[dict[str, Any]]]
+        self, title: str, name_header: str, summary: dict[str, dict[str, Any]]
     ) -> None:
         table = Table(title=title)
         table.add_column(name_header, style="cyan", no_wrap=True)
@@ -111,11 +112,10 @@ class ConsoleFormatter:
         table.add_column("Errors", style="red")
         table.add_column("Success Rate", style="blue")
 
-        for item_name, item_results in items.items():
-            total_runs = len(item_results)
-            errors = sum(1 for r in item_results if result_has_failure(r))
-            successes = max(total_runs - errors, 0)
-            success_rate = (successes / total_runs * 100) if total_runs > 0 else 0
+        for item_name, stats in summary.items():
+            total_runs = stats.get("total_runs", 0)
+            errors = stats.get("errors", 0)
+            success_rate = calculate_protocol_success_rate(total_runs, errors)
             table.add_row(
                 item_name, str(total_runs), str(errors), f"{success_rate:.1f}%"
             )

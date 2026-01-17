@@ -11,6 +11,7 @@ import traceback
 from typing import Any
 
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
+from ..protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 from ..fuzz_engine.mutators import ProtocolMutator
 from .. import spec_guard
@@ -25,12 +26,12 @@ ALLOWED_PROTOCOL_TYPES = frozenset(
         "ProgressNotification",
         "CancelNotification",
         "ListResourcesRequest",
-        "ReadResourceRequest",
+        READ_RESOURCE_REQUEST,
         "ListResourceTemplatesRequest",
         "SetLevelRequest",
         "CreateMessageRequest",
         "ListPromptsRequest",
-        "GetPromptRequest",
+        GET_PROMPT_REQUEST,
         "ListRootsRequest",
         "SubscribeRequest",
         "UnsubscribeRequest",
@@ -247,9 +248,9 @@ class ProtocolClient:
             )
             results.append(result)
 
-        if protocol_type == "ReadResourceRequest":
+        if protocol_type == READ_RESOURCE_REQUEST:
             results.extend(await self._fuzz_listed_resources())
-        elif protocol_type == "GetPromptRequest":
+        elif protocol_type == GET_PROMPT_REQUEST:
             results.extend(await self._fuzz_listed_prompts())
 
         return results
@@ -291,12 +292,12 @@ class ProtocolClient:
                         )
                     )
                 all_results[pt] = per_type
-            if "ReadResourceRequest" in all_results:
-                all_results["ReadResourceRequest"].extend(
+            if READ_RESOURCE_REQUEST in all_results:
+                all_results[READ_RESOURCE_REQUEST].extend(
                     await self._fuzz_listed_resources()
                 )
-            if "GetPromptRequest" in all_results:
-                all_results["GetPromptRequest"].extend(
+            if GET_PROMPT_REQUEST in all_results:
+                all_results[GET_PROMPT_REQUEST].extend(
                     await self._fuzz_listed_prompts()
                 )
             return all_results
@@ -370,10 +371,10 @@ class ProtocolClient:
                 continue
             results.append(
                 await self._process_protocol_request(
-                    "ReadResourceRequest",
+                    READ_RESOURCE_REQUEST,
                     "resources/read",
                     {"uri": uri},
-                    f"resource:{uri}",
+                    f"resource:{uri}",  # label format: "{prefix}:{name}"
                 )
             )
         return results
@@ -387,10 +388,10 @@ class ProtocolClient:
                 continue
             results.append(
                 await self._process_protocol_request(
-                    "GetPromptRequest",
+                    GET_PROMPT_REQUEST,
                     "prompts/get",
                     {"name": name, "arguments": {}},
-                    f"prompt:{name}",
+                    f"prompt:{name}",  # label format: "{prefix}:{name}"
                 )
             )
         return results
@@ -404,12 +405,12 @@ class ProtocolClient:
             "ProgressNotification": self._send_progress_notification,
             "CancelNotification": self._send_cancel_notification,
             "ListResourcesRequest": self._send_list_resources_request,
-            "ReadResourceRequest": self._send_read_resource_request,
+            READ_RESOURCE_REQUEST: self._send_read_resource_request,
             "ListResourceTemplatesRequest": self._send_list_resource_templates_request,
             "SetLevelRequest": self._send_set_level_request,
             "CreateMessageRequest": self._send_create_message_request,
             "ListPromptsRequest": self._send_list_prompts_request,
-            "GetPromptRequest": self._send_get_prompt_request,
+            GET_PROMPT_REQUEST: self._send_get_prompt_request,
             "ListRootsRequest": self._send_list_roots_request,
             "SubscribeRequest": self._send_subscribe_request,
             "UnsubscribeRequest": self._send_unsubscribe_request,
