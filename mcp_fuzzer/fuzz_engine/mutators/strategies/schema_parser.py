@@ -402,6 +402,10 @@ def _handle_string_format(format_type: str, phase: str) -> str:
         # ISO-8601 date-time format
         return datetime.now(timezone.utc).isoformat()
 
+    elif format_type == "date":
+        # ISO-8601 date format
+        return datetime.now(timezone.utc).date().isoformat()
+
     elif format_type == "uuid":
         # UUID format
         import uuid
