@@ -206,7 +206,10 @@ class MCPFuzzerClient:
 
     def print_protocol_summary(self, results, title: str | None = None):
         """Print a summary of protocol fuzzing results."""
-        self._reporter.print_protocol_summary(results, title=title)
+        if title is None:
+            self._reporter.print_protocol_summary(results)
+        else:
+            self._reporter.print_protocol_summary(results, title=title)
 
     def print_safety_statistics(self):
         """Print safety statistics."""

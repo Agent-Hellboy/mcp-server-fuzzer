@@ -1,7 +1,5 @@
-
-import os
-
 from mcp_fuzzer.spec_guard import spec_checks
+
 
 def test_check_tool_result_content_image_missing_fields():
     # Test image missing data
@@ -18,9 +16,8 @@ def test_check_tool_result_content_image_missing_fields():
     ids = {check["id"] for check in checks}
     assert "tools-content-image-mime" in ids
 
-def test_check_tool_result_content_audio_missing_fields():
-    previous = os.environ.get("MCP_SPEC_SCHEMA_VERSION")
-    os.environ["MCP_SPEC_SCHEMA_VERSION"] = "2025-11-25"
+def test_check_tool_result_content_audio_missing_fields(monkeypatch):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2025-11-25")
     # Test audio missing data
     checks = spec_checks.check_tool_result_content(
         {"content": [{"type": "audio", "mimeType": "audio/mp3"}]}
@@ -34,10 +31,6 @@ def test_check_tool_result_content_audio_missing_fields():
     )
     ids = {check["id"] for check in checks}
     assert "tools-content-audio-mime" in ids
-    if previous is None:
-        os.environ.pop("MCP_SPEC_SCHEMA_VERSION", None)
-    else:
-        os.environ["MCP_SPEC_SCHEMA_VERSION"] = previous
 
 def test_check_tool_result_content_resource_missing_fields():
     # Test resource missing all

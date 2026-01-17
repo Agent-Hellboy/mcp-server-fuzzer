@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import date
 from typing import Any
 
 _SPEC_VERSION_ENV = "MCP_SPEC_SCHEMA_VERSION"
@@ -15,6 +16,10 @@ def _normalize_spec_version(value: Any) -> str | None:
         return None
     normalized = value.strip()
     if not normalized or not _SPEC_VERSION_RE.match(normalized):
+        return None
+    try:
+        date.fromisoformat(normalized)
+    except ValueError:
         return None
     return normalized
 

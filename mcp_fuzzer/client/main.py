@@ -263,15 +263,20 @@ async def unified_client_main(settings: ClientSettings) -> int:
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display table summary: {exc}")
 
-        if isinstance(protocol_results, dict) and protocol_results:
-            if client.reporter:
-                for protocol_type, results in protocol_results.items():
-                    client.reporter.add_protocol_results(protocol_type, results)
-            else:
-                logging.warning("No reporter available to record protocol results")
-
         try:  # pragma: no cover
             if isinstance(protocol_results, dict) and protocol_results:
+                def _print_protocol_summary_only(
+                    results: dict[str, Any],
+                    title: str,
+                ) -> None:
+                    reporter = getattr(client, "reporter", None)
+                    if reporter and hasattr(reporter, "console_formatter"):
+                        reporter.console_formatter.print_protocol_summary(
+                            results, title=title
+                        )
+                    else:
+                        client.print_protocol_summary(results, title=title)
+
                 resource_types = {
                     "ListResourcesRequest",
                     "ReadResourceRequest",
@@ -306,9 +311,9 @@ async def unified_client_main(settings: ClientSettings) -> int:
                         f"{emoji.emojize(':file_folder:')} RESOURCES FUZZING SUMMARY"
                     )
                     print("-" * 80)
-                    client.print_protocol_summary(
+                    _print_protocol_summary_only(
                         resource_results,
-                        title="MCP Resources Fuzzing Summary",
+                        "MCP Resources Fuzzing Summary",
                     )
 
                 if prompt_results:
@@ -318,9 +323,9 @@ async def unified_client_main(settings: ClientSettings) -> int:
                     )
                     print(summary_label)
                     print("-" * 80)
-                    client.print_protocol_summary(
+                    _print_protocol_summary_only(
                         prompt_results,
-                        title="MCP Prompts Fuzzing Summary",
+                        "MCP Prompts Fuzzing Summary",
                     )
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display protocol summary tables: {exc}")
