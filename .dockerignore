@@ -45,11 +45,10 @@ mkdocs.yml
 
 # Reports (will be mounted as volume)
 reports/
-*.json
-*.csv
-*.html
-*.md
-!README.md
+reports/*.json
+reports/*.csv
+reports/*.html
+reports/*.md
 
 # Test files
 tests/

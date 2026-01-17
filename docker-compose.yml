@@ -7,7 +7,6 @@ services:
       context: .
       dockerfile: Dockerfile
     image: mcp-fuzzer:latest
-    container_name: mcp-fuzzer
     volumes:
       # Mount output directory for reports
       - ./reports:/output
@@ -21,6 +20,7 @@ services:
     # For HTTP/SSE servers, use bridge network with host access
     # On Linux, you can use 'network_mode: host' instead
     # For macOS/Windows, use extra_hosts to access host.docker.internal
+    # NOTE: host-gateway requires Docker Engine 20.10+.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Override entrypoint to pass CLI args

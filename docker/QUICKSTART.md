@@ -85,7 +85,7 @@ docker-compose -f docker-compose.host-network.yml run --rm fuzzer \
 ## Network Explained
 
 - **`--network host`** (Linux only): Container uses host's network stack
-- **`host.docker.internal`** (macOS/Windows): Special hostname to access host machine
+- **`host.docker.internal`** (macOS/Windows): Special hostname to access host machine (Docker Engine 20.10+ for host-gateway)
 - **Bridge network** (default): Container has isolated network, use IP/domain for remote servers
 
 ## Troubleshooting
@@ -99,5 +99,7 @@ docker-compose -f docker-compose.host-network.yml run --rm fuzzer \
 - Use absolute path in endpoint: `/servers/my-server.js`
 
 **Permission denied?**
-- Ensure reports directory is writable: `chmod 777 reports/`
 - Container runs as non-root user (UID 1000)
+- Prefer ownership or group write access instead of world-writable permissions:
+  - `sudo chown -R 1000:1000 reports/`
+  - or `chmod 750 reports/` with matching group permissions

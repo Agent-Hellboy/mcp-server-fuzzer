@@ -73,7 +73,7 @@ docker-compose run --rm fuzzer \
 ### HTTP/SSE Servers
 
 - **Linux**: Use `--network host` to access servers on host machine
-- **macOS/Windows**: Use `host.docker.internal` hostname (automatically configured in docker-compose)
+- **macOS/Windows**: Use `host.docker.internal` hostname (host-gateway requires Docker Engine 20.10+)
 - **Remote Servers**: Use server's IP address or domain name directly
 
 ### Stdio Servers
@@ -167,7 +167,9 @@ And use absolute paths in endpoint:
 
 The container runs as non-root user. If you need to write to mounted volumes, ensure proper permissions:
 ```bash
-chmod -R 777 reports/  # Or use appropriate permissions
+# Recommended: match container UID (1000) or grant group write
+sudo chown -R 1000:1000 reports/
+# Or: chmod 750 reports/ and ensure the group matches
 ```
 
 ## CI/CD Integration
