@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol
+from typing import Any, Iterable, Literal, Protocol
 
 
 class SupportsToDict(Protocol):
@@ -92,7 +92,7 @@ def _parse_label(label: Any) -> tuple[LabelPrefix | None, str | None]:
 
 
 def collect_labeled_protocol_items(
-    protocol_results: list[dict[str, Any]], prefix: LabelPrefix
+    protocol_results: Iterable[Any], prefix: LabelPrefix
 ) -> dict[str, list[dict[str, Any]]]:
     """Collect protocol results grouped by a known label prefix."""
     items: dict[str, list[dict[str, Any]]] = {}
@@ -125,7 +125,7 @@ def summarize_protocol_items(
 
 
 def collect_and_summarize_protocol_items(
-    protocol_results: list[dict[str, Any]], prefix: LabelPrefix
+    protocol_results: Iterable[Any], prefix: LabelPrefix
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, dict[str, Any]]]:
     """Collect labeled protocol items and summarize them."""
     items = collect_labeled_protocol_items(protocol_results, prefix)

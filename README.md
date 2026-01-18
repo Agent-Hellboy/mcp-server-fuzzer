@@ -348,7 +348,7 @@ docker run --rm -it --network host \
 
 ### Security Considerations
 
-- The Docker container runs as root by default; use `--user` or a custom image to run as non-root
+- The Docker container runs as non-root user (UID 1000) for improved security
 - Stdio servers run in isolated container environment
 - Use read-only mounts (`:ro`) for server code when possible
 - Reports are written to mounted volume, not inside container

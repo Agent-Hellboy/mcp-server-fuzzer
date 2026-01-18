@@ -142,11 +142,13 @@ docker run --rm -it \
 ### Cannot Connect to HTTP Server on Host
 
 **Linux**: Use `--network host` flag
+
 ```bash
 docker run --rm -it --network host ...
 ```
 
 **macOS/Windows**: Use `host.docker.internal` hostname
+
 ```bash
 docker run --rm -it ... --endpoint http://host.docker.internal:8000
 ```
@@ -154,11 +156,13 @@ docker run --rm -it ... --endpoint http://host.docker.internal:8000
 ### Server Not Found in Container
 
 Make sure server code is mounted correctly:
+
 ```bash
 -v $(pwd)/servers:/servers:ro
 ```
 
 And use absolute paths in endpoint:
+
 ```bash
 --endpoint "python /servers/my_server.py"
 ```
@@ -166,6 +170,7 @@ And use absolute paths in endpoint:
 ### Permission Denied
 
 The container runs as non-root user. If you need to write to mounted volumes, ensure proper permissions:
+
 ```bash
 # Recommended: match container UID (1000) or grant group write
 sudo chown -R 1000:1000 reports/

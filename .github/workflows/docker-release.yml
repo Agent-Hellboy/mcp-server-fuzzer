@@ -7,6 +7,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 env:
   REGISTRY: docker.io
   IMAGE_NAME: princekrroshan01/mcp-fuzzer

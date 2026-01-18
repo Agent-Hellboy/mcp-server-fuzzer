@@ -25,6 +25,7 @@ docker run --rm -it \
 ### Pattern 1: HTTP Server on Host Machine
 
 **Linux:**
+
 ```bash
 docker run --rm -it --network host \
   -v $(pwd)/reports:/output \
@@ -33,6 +34,7 @@ docker run --rm -it --network host \
 ```
 
 **macOS/Windows:**
+
 ```bash
 docker run --rm -it \
   -v $(pwd)/reports:/output \
