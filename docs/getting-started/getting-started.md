@@ -10,6 +10,38 @@ This guide provides instructions for installing and configuring MCP Server Fuzze
 pip install mcp-fuzzer
 ```
 
+### Docker (Quick Start)
+
+The container runs as a non-root user (UID 1000). Make sure your output directory is writable.
+
+**Linux (HTTP server on host):**
+
+```bash
+docker run --rm -it --network host \
+  -v $(pwd)/reports:/output \
+  -v $(pwd)/servers:/servers:ro \
+  -v $(pwd)/examples/config:/config:ro \
+  mcp-fuzzer:latest \
+  --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
+```
+
+**macOS/Windows (HTTP server on host):**
+
+```bash
+docker run --rm -it \
+  -v $(pwd)/reports:/output \
+  -v $(pwd)/servers:/servers:ro \
+  -v $(pwd)/examples/config:/config:ro \
+  mcp-fuzzer:latest \
+  --mode tools --protocol http --endpoint http://host.docker.internal:8000 --runs 10
+```
+
+If you hit permission errors, ensure the output directory is writable by UID 1000:
+
+```bash
+sudo chown -R 1000:1000 reports/
+```
+
 ### From Source
 
 ```bash

@@ -1,0 +1,20 @@
+# Production-oriented docker-compose (no TTY/stdin)
+version: '3.8'
+
+services:
+  fuzzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcp-fuzzer:latest
+    volumes:
+      - ./reports:/output
+      - ${SERVER_PATH:-./servers}:/servers:ro
+      - ${CONFIG_PATH:-./examples/config}:/config:ro
+    environment:
+      - MCP_SPEC_SCHEMA_VERSION=${MCP_SPEC_SCHEMA_VERSION:-2025-06-18}
+    # NOTE: host-gateway requires Docker Engine 20.10+.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    entrypoint: ["mcp-fuzzer"]
+    command: ["--help"]

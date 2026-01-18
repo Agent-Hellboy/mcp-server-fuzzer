@@ -75,9 +75,28 @@ The easiest way to use MCP Server Fuzzer is via Docker:
 # Build the Docker image
 docker build -t mcp-fuzzer:latest .
 
-# Or pull from registry (when published)
-# docker pull mcp-fuzzer:latest
+# Or pull the published image
+# docker pull princekrroshan01/mcp-fuzzer:latest
 ```
+
+The container ships with `mcp-fuzzer` as the entrypoint, so you pass CLI args
+after the image name. Use `/output` for reports and mount any server/config
+inputs you need.
+
+```bash
+# Show CLI help
+docker run --rm mcp-fuzzer:latest --help
+
+# Example: store reports on the host
+docker run --rm -v $(pwd)/reports:/output mcp-fuzzer:latest \
+  --mode tools --protocol http --endpoint http://localhost:8000 \
+  --output-dir /output
+```
+
+Required mounts (stdio/config workflows):
+- `/output`: writeable reports directory
+- `/servers`: read-only server code/executables for stdio
+- `/config`: read-only config directory
 
 ### Basic Usage
 
@@ -225,6 +244,17 @@ docker run --rm -it \
   --mode tools --protocol stdio --endpoint "python /servers/my_server.py" --output-dir /output
 ```
 
+### Docker Releases
+
+Docker images are published automatically on every GitHub Release (tagged `v*`)
+via CI. The published image is:
+
+```bash
+docker pull princekrroshan01/mcp-fuzzer:latest
+```
+
+Note: The runtime image includes `curl` and `ca-certificates` so stdio servers can fetch HTTPS resources (e.g., schemas, tokens, metadata) without bundling extra tools. If your servers never make outbound HTTPS calls, you can remove them.
+
 ### Using Docker Compose
 
 For easier configuration and management, use `docker-compose.yml`:
@@ -256,6 +286,14 @@ docker-compose -f docker-compose.host-network.yml run --rm fuzzer \
   --mode tools \
   --protocol http \
   --endpoint http://localhost:8000 \
+  --runs 50 \
+  --output-dir /output
+
+# Production-style (no TTY/stdin)
+docker-compose -f docker-compose.prod.yml run --rm fuzzer \
+  --mode tools \
+  --protocol stdio \
+  --endpoint "node /servers/my-server.js stdio" \
   --runs 50 \
   --output-dir /output
 ```
@@ -310,7 +348,7 @@ docker run --rm -it --network host \
 
 ### Security Considerations
 
-- The Docker container runs as root by default; use `--user` or a custom image to run as non-root
+- The Docker container runs as non-root user (UID 1000) for improved security
 - Stdio servers run in isolated container environment
 - Use read-only mounts (`:ro`) for server code when possible
 - Reports are written to mounted volume, not inside container

@@ -1,0 +1,24 @@
+# Alternative docker-compose for Linux with host network
+# Use this if you're on Linux and want direct host network access
+# Usage: docker-compose -f docker-compose.host-network.yml run --rm fuzzer ...
+
+version: '3.8'
+
+services:
+  fuzzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcp-fuzzer:latest
+    volumes:
+      - ./reports:/output
+      - ${SERVER_PATH:-./servers}:/servers:ro
+      - ${CONFIG_PATH:-./examples/config}:/config:ro
+    environment:
+      - MCP_SPEC_SCHEMA_VERSION=${MCP_SPEC_SCHEMA_VERSION:-2025-06-18}
+    # Linux: Use host network for direct access to localhost
+    network_mode: host
+    entrypoint: ["mcp-fuzzer"]
+    command: ["--help"]
+    stdin_open: true
+    tty: true

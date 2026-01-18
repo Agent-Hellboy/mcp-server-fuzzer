@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # MCP Fuzzer service - acts as client
+  fuzzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcp-fuzzer:latest
+    volumes:
+      # Mount output directory for reports
+      - ./reports:/output
+      # Mount server code/executables for stdio servers
+      - ${SERVER_PATH:-./servers}:/servers:ro
+      # Mount custom configs if needed
+      - ${CONFIG_PATH:-./examples/config}:/config:ro
+    environment:
+      # Pass through any MCP_SPEC_SCHEMA_VERSION if set
+      - MCP_SPEC_SCHEMA_VERSION=${MCP_SPEC_SCHEMA_VERSION:-2025-06-18}
+    # For HTTP/SSE servers, use bridge network with host access
+    # On Linux, you can use 'network_mode: host' instead
+    # For macOS/Windows, use extra_hosts to access host.docker.internal
+    # NOTE: host-gateway requires Docker Engine 20.10+.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Override entrypoint to pass CLI args
+    entrypoint: ["mcp-fuzzer"]
+    # Default command (override with docker-compose run)
+    command: ["--help"]
+    stdin_open: true
+    tty: true
+
+  # Example: Stdio server service (optional - for testing)
+  # Uncomment and customize for your stdio server
+  # stdio-server:
+  #   build:
+  #     context: ./servers/your-server
+  #   container_name: mcp-stdio-server
+  #   # Server runs here, fuzzer connects via stdio
+  #   command: ["node", "dist/index.js", "stdio"]
