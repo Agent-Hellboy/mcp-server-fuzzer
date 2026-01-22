@@ -105,7 +105,11 @@ def _mutate_str(value: str, rng: random.Random) -> str:
 
 
 def _random_key(rng: random.Random) -> str:
-    return "fuzz_" + rng.choice(string.ascii_lowercase) + rng.choice(string.ascii_lowercase)
+    return (
+        "fuzz_"
+        + rng.choice(string.ascii_lowercase)
+        + rng.choice(string.ascii_lowercase)
+    )
 
 
 def _random_leaf(rng: random.Random) -> Any:
