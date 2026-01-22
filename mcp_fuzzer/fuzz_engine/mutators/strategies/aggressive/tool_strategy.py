@@ -22,17 +22,13 @@ from ..schema_helpers import apply_schema_edge_cases
 from ..interesting_values import (
     SQL_INJECTION,
     XSS_PAYLOADS,
-    PATH_TRAVERSAL,
     COMMAND_INJECTION,
+    PATH_TRAVERSAL,
     SSRF_PAYLOADS,
-    UNICODE_TRICKS,
     ENCODING_BYPASS,
     TYPE_CONFUSION,
-    OVERFLOW_INTS,
-    HOMOGLYPHS,
     get_payload_within_length,
     inject_unicode_trick,
-    get_off_by_one_string,
     get_off_by_one_int,
 )
 
@@ -65,9 +61,20 @@ def generate_aggressive_text(
         "path_traversal",
         "command_injection",
         "ssrf",
+        "broken_base64",
+        "broken_timestamp",
+        "unicode",
+        "null_bytes",
+        "escape_chars",
+        "html_entities",
+        "overflow",
+        "mixed",
+        "extreme",
         "unicode_trick",
         "encoding_bypass",
         "type_confusion",
+        "broken_uuid",
+        "special_chars",
         "broken_format",
         "edge_chars",
     ]
@@ -96,15 +103,66 @@ def generate_aggressive_text(
             return _fit_to_length(random.choice(COMMAND_INJECTION))
 
     if strategy == "sql_injection":
-        return _fit_to_length(get_payload_within_length(max_size, "sql"))
+        return _fit_to_length(random.choice(SQL_INJECTION))
     elif strategy == "xss":
-        return _fit_to_length(get_payload_within_length(max_size, "xss"))
+        return _fit_to_length(random.choice(XSS_PAYLOADS))
     elif strategy == "path_traversal":
-        return _fit_to_length(get_payload_within_length(max_size, "path"))
+        return _fit_to_length(random.choice(PATH_TRAVERSAL))
     elif strategy == "command_injection":
         return _fit_to_length(random.choice(COMMAND_INJECTION))
     elif strategy == "ssrf":
         return _fit_to_length(random.choice(SSRF_PAYLOADS))
+    elif strategy == "broken_base64":
+        broken_base64 = [
+            "InvalidBase64!@#$",
+            "Base64!@#$",
+        ]
+        return _fit_to_length(random.choice(broken_base64))
+    elif strategy == "broken_timestamp":
+        broken_timestamps = [
+            "not-a-timestamp",
+            "2024-13-40T25:70:99Z",
+        ]
+        return _fit_to_length(random.choice(broken_timestamps))
+    elif strategy == "unicode":
+        length = random.randint(min_size, max_size)
+        return _fit_to_length(
+            "".join(random.choice(UNICODE_CHARS) for _ in range(length))
+        )
+    elif strategy == "null_bytes":
+        length = random.randint(min_size, max_size)
+        return _fit_to_length(
+            "".join(random.choice(NULL_BYTES) for _ in range(length))
+        )
+    elif strategy == "escape_chars":
+        length = random.randint(min_size, max_size)
+        return _fit_to_length(
+            "".join(random.choice(ESCAPE_CHARS) for _ in range(length))
+        )
+    elif strategy == "html_entities":
+        length = random.randint(min_size, max_size)
+        return _fit_to_length(
+            "".join(random.choice(HTML_ENTITIES) for _ in range(length))
+        )
+    elif strategy == "overflow":
+        overflow_values = [
+            "A" * 1000,
+            "B" * 2000,
+        ]
+        return random.choice(overflow_values)
+    elif strategy == "mixed":
+        length = random.randint(min_size, max_size)
+        alphabet = string.ascii_letters + string.digits + SPECIAL_CHARS
+        return _fit_to_length(
+            "".join(random.choice(alphabet) for _ in range(length))
+        )
+    elif strategy == "extreme":
+        extreme_values = [
+            "",
+            " " * max_size,
+            "A" * max(1, max_size * 10),
+        ]
+        return random.choice(extreme_values)
     elif strategy == "unicode_trick":
         # Embed unicode trick in normal-looking value
         base = "test_value"
@@ -113,6 +171,18 @@ def generate_aggressive_text(
         return _fit_to_length(random.choice(ENCODING_BYPASS))
     elif strategy == "type_confusion":
         return _fit_to_length(random.choice(TYPE_CONFUSION))
+    elif strategy == "broken_uuid":
+        broken_uuids = [
+            "not-a-uuid-at-all",
+            "1234",
+            "zzzz-zzzz-zzzz-zzzz",
+        ]
+        return _fit_to_length(random.choice(broken_uuids))
+    elif strategy == "special_chars":
+        length = random.randint(min_size, max_size)
+        return _fit_to_length(
+            "".join(random.choice(SPECIAL_CHARS) for _ in range(length))
+        )
     elif strategy == "broken_format":
         # Invalid formats that might bypass validation
         broken_formats = [
@@ -133,8 +203,8 @@ def generate_aggressive_text(
         ]
         return _fit_to_length(random.choice(edge_values))
     else:
-        # Default: SQL injection (most common vulnerability)
-        return _fit_to_length(get_payload_within_length(max_size, "sql"))
+        length = random.randint(min_size, max_size)
+        return "".join(random.choice(string.ascii_letters) for _ in range(length))
 
 
 def _generate_aggressive_integer(
@@ -161,8 +231,16 @@ def _generate_aggressive_integer(
     if max_value is None:
         max_value = 1000
 
-    # Choose strategy - prioritize off-by-one when constraints exist
-    strategies = ["off_by_one", "off_by_one", "boundary", "overflow", "normal"]
+    strategies = [
+        "off_by_one",
+        "boundary",
+        "overflow",
+        "normal",
+        "extreme",
+        "zero",
+        "negative",
+        "special",
+    ]
     strategy = random.choice(strategies)
 
     if strategy == "off_by_one":
@@ -175,11 +253,8 @@ def _generate_aggressive_integer(
         return get_off_by_one_int(max_value, min_value)
 
     elif strategy == "overflow":
-        # Integer overflow values (outside typical ranges)
-        overflow_candidates = [v for v in OVERFLOW_INTS if v > max_value or v < min_value]
-        if overflow_candidates:
-            return random.choice(overflow_candidates)
-        return max_value + 1
+        overflow_values = [999999999, -999999999, 2**31, -(2**31)]
+        return random.choice(overflow_values)
 
     elif strategy == "boundary":
         # Boundary values that ARE within range (edge testing)
@@ -197,6 +272,27 @@ def _generate_aggressive_integer(
             return random.choice(valid)
         return random.randint(min_value, max_value)
 
+    elif strategy == "extreme":
+        extreme_values = [
+            -2147483648,
+            2147483647,
+            -9223372036854775808,
+            9223372036854775807,
+            0,
+            -1,
+            1,
+        ]
+        return random.choice(extreme_values)
+    elif strategy == "zero":
+        return 0
+    elif strategy == "negative":
+        upper = min(-1, max_value)
+        if upper < min_value:
+            return min_value - 1
+        return random.randint(min_value, upper)
+    elif strategy == "special":
+        special_values = [42, 69, 420, 1337, 8080, 65535]
+        return random.choice(special_values)
     else:
         # Normal value within range
         return random.randint(min_value, max_value)
@@ -228,7 +324,18 @@ def _generate_aggressive_float(
     if max_value is None:
         max_value = 1000.0
 
-    strategies = ["off_by_one", "special", "boundary", "normal"]
+    strategies = [
+        "off_by_one",
+        "infinity",
+        "special",
+        "boundary",
+        "normal",
+        "extreme",
+        "zero",
+        "negative",
+        "tiny",
+        "huge",
+    ]
     strategy = random.choice(strategies)
 
     if strategy == "off_by_one":
@@ -239,8 +346,10 @@ def _generate_aggressive_float(
             return float(schema["minimum"]) - 0.001
         return max_value + 0.001
 
+    elif strategy == "infinity":
+        return random.choice([float("inf"), float("-inf")])
+
     elif strategy == "special":
-        # Special float values that might cause issues
         return random.choice(SPECIAL_FLOATS)
 
     elif strategy == "boundary":
@@ -251,6 +360,20 @@ def _generate_aggressive_float(
             return random.choice(valid)
         return random.uniform(min_value, max_value)
 
+    elif strategy == "extreme":
+        extreme_values = [0.0, -0.0, 1.0, -1.0, 3.14159, -3.14159]
+        return random.choice(extreme_values)
+    elif strategy == "zero":
+        return 0.0
+    elif strategy == "negative":
+        upper = min(-1.0, max_value)
+        if upper < min_value:
+            return min_value - 1.0
+        return random.uniform(min_value, upper)
+    elif strategy == "tiny":
+        return random.uniform(1e-10, 1e-5)
+    elif strategy == "huge":
+        return random.uniform(1e10, 1e15)
     else:
         return random.uniform(min_value, max_value)
 
@@ -323,7 +446,8 @@ def _pick_semantic_number(name: str, spec: dict[str, Any]) -> int | float:
         return -1
 
     # For "max" fields, try to exceed maximum
-    if any(token in lowered for token in ("max", "upper", "limit", "size", "count", "timeout")):
+    max_tokens = ("max", "upper", "limit", "size", "count", "timeout")
+    if any(token in lowered for token in max_tokens):
         if maximum is not None:
             return maximum + 1  # Off-by-one above
         return 2147483648  # INT32_MAX + 1

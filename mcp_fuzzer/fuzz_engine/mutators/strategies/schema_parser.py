@@ -346,8 +346,6 @@ def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
     from .interesting_values import (
         get_realistic_boundary_string,
         get_payload_within_length,
-        SQL_INJECTION,
-        XSS_PAYLOADS,
         UNICODE_TRICKS,
     )
 
@@ -517,7 +515,6 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
     from .interesting_values import (
         get_realistic_boundary_int,
         BOUNDARY_INTS_MEDIUM,
-        get_off_by_one_int,
     )
 
     # Handle integer constraints with conservative defaults (was +/-1M)
@@ -559,9 +556,14 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
                 pass
         return int(value)
     else:
-        # In aggressive mode, prioritize off-by-one and overflow
-        strategies = ["off_by_one", "off_by_one", "boundary", "overflow"]
-        strategy = random.choice(strategies)
+        # In aggressive mode, mix boundary coverage with off-by-one/overflow
+        roll = random.random()
+        if roll < 0.4:
+            strategy = "off_by_one"
+        elif roll < 0.6:
+            strategy = "overflow"
+        else:
+            strategy = "boundary"
 
         if strategy == "off_by_one":
             # Off-by-one violation
