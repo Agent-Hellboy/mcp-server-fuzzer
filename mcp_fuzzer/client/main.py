@@ -136,9 +136,11 @@ async def unified_client_main(settings: ClientSettings) -> int:
                         config["tool"], runs=config.get("runs", 10)
                     )
                 else:
+                    logging.debug(f"Calling fuzz_all_tools with runs={config.get('runs', 10)}")
                     tool_results = await client.fuzz_all_tools(
                         runs_per_tool=config.get("runs", 10)
                     )
+                    logging.debug(f"fuzz_all_tools completed, got {len(tool_results)} tool results")
         elif mode == "protocol":
             await _run_spec_guard_if_enabled(client, config, reporter)
             if config.get("protocol_type"):

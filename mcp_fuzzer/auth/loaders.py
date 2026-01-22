@@ -68,6 +68,13 @@ def setup_auth_from_env() -> AuthManager:
     default_provider = os.getenv("MCP_DEFAULT_AUTH_PROVIDER")
     if default_provider:
         auth_manager.set_default_provider(default_provider)
+    elif len(auth_manager.auth_providers) == 1:
+        # If only one provider exists, set it as default for convenience
+        provider_name = next(iter(auth_manager.auth_providers.keys()))
+        auth_manager.set_default_provider(provider_name)
+    elif "api_key" in auth_manager.auth_providers:
+        # Prefer api_key as default if multiple providers exist
+        auth_manager.set_default_provider("api_key")
 
     return auth_manager
 
