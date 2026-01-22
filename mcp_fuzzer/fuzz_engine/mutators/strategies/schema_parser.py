@@ -343,9 +343,17 @@ def _handle_array_type(
 
 def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
     """Handle string type schema."""
-    # Handle string constraints
+    from .interesting_values import (
+        get_realistic_boundary_string,
+        get_payload_within_length,
+        SQL_INJECTION,
+        XSS_PAYLOADS,
+        UNICODE_TRICKS,
+    )
+
+    # Handle string constraints with conservative defaults
     min_length = max(0, int(schema.get("minLength", 0)))
-    max_length = int(schema.get("maxLength", 100))
+    max_length = int(schema.get("maxLength", 50))  # Conservative default (was 100)
     if max_length < min_length:
         max_length = min_length
     pattern = schema.get("pattern")
@@ -370,32 +378,37 @@ def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
 
     def _enforce_length(value: str) -> str:
         if len(value) < min_length:
-            value = value + ("A" * (min_length - len(value)))
+            value = value + "a" * (min_length - len(value))
         if len(value) > max_length:
             value = value[:max_length]
         return value
 
     # Generate string based on phase
     if phase == "realistic":
-        # Generate a reasonable string with only printable ASCII characters
-        length = random.randint(min_length, min(max_length, 50))
-        # Use only printable characters, no control characters
-        chars = "".join(chr(i) for i in range(32, 127))  # Printable ASCII
-        return "".join(random.choice(chars) for _ in range(length))
+        # Generate boundary-length strings for testing
+        return get_realistic_boundary_string(min_length, max_length)
     else:
-        # In aggressive mode, stay within length constraints
-        if random.random() < 0.7:
-            length = random.randint(min_length, min(max_length, 100))
-            chars = string.ascii_letters + string.digits + string.punctuation
-            return "".join(random.choice(chars) for _ in range(length))
-        edge_cases = [
-            "<script>alert('xss')</script>",
-            "' OR '1'='1",
-            "../../../etc/passwd",
-            "\x00\x01\x02\x03",
-            "mixed123!@#",
-        ]
-        return _enforce_length(random.choice(edge_cases))
+        # In aggressive mode, use constraint-aware attack payloads
+        strategies = ["sql", "xss", "path", "unicode", "mixed"]
+        strategy = random.choice(strategies)
+
+        if strategy == "sql":
+            payload = get_payload_within_length(max_length, "sql")
+        elif strategy == "xss":
+            payload = get_payload_within_length(max_length, "xss")
+        elif strategy == "path":
+            payload = get_payload_within_length(max_length, "path")
+        elif strategy == "unicode":
+            # Embed unicode trick in normal-looking string
+            base = "test" + random.choice(UNICODE_TRICKS) + "value"
+            payload = base
+        else:
+            # Mixed special characters
+            chars = string.ascii_letters + string.digits + "!@#$%"
+            length = random.randint(min_length, min(max_length, 30))
+            payload = "".join(random.choice(chars) for _ in range(length))
+
+        return _enforce_length(payload)
 
 
 def _handle_string_format(format_type: str, phase: str) -> str:
@@ -501,9 +514,15 @@ def _generate_string_from_pattern(
 
 def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
     """Handle integer type schema."""
-    # Handle integer constraints
-    minimum = schema.get("minimum", -1000000)
-    maximum = schema.get("maximum", 1000000)
+    from .interesting_values import (
+        get_realistic_boundary_int,
+        BOUNDARY_INTS_MEDIUM,
+        get_off_by_one_int,
+    )
+
+    # Handle integer constraints with conservative defaults (was +/-1M)
+    minimum = schema.get("minimum", -1000)
+    maximum = schema.get("maximum", 1000)
     exc_min = schema.get("exclusiveMinimum")
     exc_max = schema.get("exclusiveMaximum")
     multiple_of = schema.get("multipleOf")
@@ -523,8 +542,8 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
         minimum, maximum = maximum, minimum
 
     if phase == "realistic":
-        # Generate a reasonable integer
-        value = random.randint(minimum, maximum)
+        # Generate boundary values for testing
+        value = get_realistic_boundary_int(minimum, maximum)
         if multiple_of:
             try:
                 m = int(multiple_of)
@@ -540,31 +559,27 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
                 pass
         return int(value)
     else:
-        # In aggressive mode, sometimes use edge cases
-        if random.random() < 0.7:
-            # Normal value
-            value = random.randint(minimum, maximum)
-        else:
-            # Edge cases
-            edge_cases = [
-                minimum,  # Minimum value
-                maximum,  # Maximum value
-                0,  # Zero
-                -1,  # Negative one
-                1,  # Positive one
-                -2147483648,  # INT32_MIN
-                2147483647,  # INT32_MAX
-                -9223372036854775808,  # INT64_MIN
-                9223372036854775807,  # INT64_MAX
-            ]
+        # In aggressive mode, prioritize off-by-one and overflow
+        strategies = ["off_by_one", "off_by_one", "boundary", "overflow"]
+        strategy = random.choice(strategies)
 
-            # Filter out values outside the allowed range
-            valid_edge_cases = [v for v in edge_cases if minimum <= v <= maximum]
-
-            if valid_edge_cases:
-                value = random.choice(valid_edge_cases)
+        if strategy == "off_by_one":
+            # Off-by-one violation
+            if schema.get("maximum") is not None:
+                value = int(schema["maximum"]) + 1
+            elif schema.get("minimum") is not None:
+                value = int(schema["minimum"]) - 1
             else:
-                value = random.randint(minimum, maximum)
+                value = maximum + 1
+        elif strategy == "overflow":
+            # Integer overflow values
+            overflow_values = [2147483648, -2147483649, 9223372036854775808]
+            value = random.choice(overflow_values)
+        else:
+            # Boundary values within range
+            boundary_values = [minimum, maximum, 0, -1, 1] + BOUNDARY_INTS_MEDIUM
+            valid = [v for v in boundary_values if minimum <= v <= maximum]
+            value = random.choice(valid) if valid else random.randint(minimum, maximum)
 
         if multiple_of:
             try:
@@ -581,9 +596,11 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
 
 def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
     """Handle number type schema."""
-    # Handle number constraints
-    minimum = schema.get("minimum", -1000000.0)
-    maximum = schema.get("maximum", 1000000.0)
+    from .interesting_values import SPECIAL_FLOATS
+
+    # Handle number constraints with conservative defaults (was +/-1M)
+    minimum = schema.get("minimum", -1000.0)
+    maximum = schema.get("maximum", 1000.0)
     exc_min = schema.get("exclusiveMinimum")
     exc_max = schema.get("exclusiveMaximum")
     multiple_of = schema.get("multipleOf")
@@ -604,8 +621,11 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
         minimum, maximum = maximum, minimum
 
     if phase == "realistic":
-        # Generate a reasonable float
-        value = random.uniform(minimum, maximum)
+        # Generate boundary float values
+        boundaries = [minimum, maximum, (minimum + maximum) / 2, 0.0, 1.0, -1.0]
+        valid = [v for v in boundaries if minimum <= v <= maximum]
+        value = random.choice(valid) if valid else random.uniform(minimum, maximum)
+
         if multiple_of:
             try:
                 m = float(multiple_of)
@@ -624,33 +644,26 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
                 pass
         return float(value)
     else:
-        # In aggressive mode, sometimes use edge cases
-        if random.random() < 0.7:
-            # Normal value
-            value = random.uniform(minimum, maximum)
-        else:
-            # Edge cases
-            edge_cases = [
-                minimum,  # Minimum value
-                maximum,  # Maximum value
-                0.0,  # Zero
-                -0.0,  # Negative zero
-            ]
+        # In aggressive mode, prioritize off-by-one and special values
+        strategies = ["off_by_one", "special", "boundary"]
+        strategy = random.choice(strategies)
 
-            # Filter out values outside the allowed range
-            valid_edge_cases = []
-            for v in edge_cases:
-                try:
-                    if minimum <= v <= maximum:
-                        valid_edge_cases.append(v)
-                except Exception:  # Handle specific exceptions when possible
-                    # Skip values that can't be compared (like NaN)
-                    pass
-
-            if valid_edge_cases:
-                value = random.choice(valid_edge_cases)
+        if strategy == "off_by_one":
+            # Off-by-one violation
+            if schema.get("maximum") is not None:
+                value = float(schema["maximum"]) + 0.001
+            elif schema.get("minimum") is not None:
+                value = float(schema["minimum"]) - 0.001
             else:
-                value = random.uniform(minimum, maximum)
+                value = maximum + 0.001
+        elif strategy == "special":
+            # Special float values
+            value = random.choice(SPECIAL_FLOATS)
+        else:
+            # Boundary values
+            boundaries = [minimum, maximum, 0.0, -0.0, 1.0, -1.0]
+            valid = [v for v in boundaries if minimum <= v <= maximum]
+            value = random.choice(valid) if valid else random.uniform(minimum, maximum)
 
         if multiple_of:
             try:

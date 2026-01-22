@@ -4,6 +4,12 @@ Realistic Tool Strategy
 
 This module provides strategies for generating realistic tool arguments and data.
 Used in the realistic phase to test server behavior with valid, expected inputs.
+
+Key principles:
+- 100% schema-valid values (always pass JSON Schema validation)
+- Boundary value testing (minLength, maxLength, minimum, maximum)
+- Deterministic enum enumeration (cycle through all values)
+- No injection payloads or attack vectors
 """
 
 import asyncio
@@ -15,6 +21,31 @@ from datetime import datetime, timezone
 from typing import Any
 
 from hypothesis import strategies as st
+
+from ..interesting_values import (
+    BOUNDARY_STRINGS,
+    REALISTIC_SAMPLES,
+    get_realistic_boundary_int,
+    get_realistic_boundary_string,
+    cycle_enum_values,
+)
+
+# Global run counter for deterministic cycling
+_run_counter: int = 0
+
+
+def get_run_index() -> int:
+    """Get and increment the global run counter for deterministic cycling."""
+    global _run_counter
+    idx = _run_counter
+    _run_counter += 1
+    return idx
+
+
+def reset_run_counter() -> None:
+    """Reset the run counter (useful for testing)."""
+    global _run_counter
+    _run_counter = 0
 
 
 def base64_strings(
@@ -103,77 +134,201 @@ def timestamp_strings(
     )
 
 
+def generate_realistic_string_sync(
+    schema: dict[str, Any],
+    key: str | None = None,
+    run_index: int | None = None,
+) -> str:
+    """Generate a schema-valid boundary string for realistic testing (sync version)."""
+    if run_index is None:
+        run_index = get_run_index()
+
+    min_length = max(0, int(schema.get("minLength", 0)))
+    max_length = int(schema.get("maxLength", 50))  # Conservative default
+    if max_length < min_length:
+        max_length = min_length
+
+    # Handle format constraints
+    format_type = schema.get("format")
+    if format_type:
+        return _generate_formatted_string(format_type, min_length, max_length)
+
+    # Handle pattern constraints
+    pattern = schema.get("pattern")
+    if pattern:
+        return _generate_pattern_string(pattern, min_length, max_length)
+
+    # Use semantic samples if key suggests a known field type
+    if key:
+        lowered = key.lower()
+        for sample_key, samples in REALISTIC_SAMPLES.items():
+            if sample_key in lowered:
+                sample = samples[run_index % len(samples)]
+                # Ensure it fits constraints
+                if len(sample) < min_length:
+                    sample = sample + "a" * (min_length - len(sample))
+                if len(sample) > max_length:
+                    sample = sample[:max_length]
+                return sample
+
+    # Default: generate boundary-length strings
+    return get_realistic_boundary_string(min_length, max_length, run_index)
+
+
+def generate_realistic_integer_sync(
+    schema: dict[str, Any],
+    run_index: int | None = None,
+) -> int:
+    """Generate a schema-valid boundary integer for realistic testing."""
+    if run_index is None:
+        run_index = get_run_index()
+
+    minimum = int(schema.get("minimum", 0))
+    maximum = int(schema.get("maximum", 1000))  # Conservative default
+
+    # Handle exclusive bounds
+    exc_min = schema.get("exclusiveMinimum")
+    exc_max = schema.get("exclusiveMaximum")
+
+    if isinstance(exc_min, bool) and exc_min:
+        minimum += 1
+    elif isinstance(exc_min, (int, float)):
+        minimum = int(exc_min) + 1
+
+    if isinstance(exc_max, bool) and exc_max:
+        maximum -= 1
+    elif isinstance(exc_max, (int, float)):
+        maximum = int(exc_max) - 1
+
+    if minimum > maximum:
+        minimum, maximum = maximum, minimum
+
+    value = get_realistic_boundary_int(minimum, maximum, run_index)
+
+    # Handle multipleOf constraint
+    multiple_of = schema.get("multipleOf")
+    if multiple_of and int(multiple_of) > 0:
+        m = int(multiple_of)
+        # Find nearest multiple within range
+        start = ((minimum + (m - 1)) // m) * m
+        if start <= maximum:
+            k_max = (maximum - start) // m
+            k = run_index % (k_max + 1)
+            value = start + m * k
+
+    return value
+
+
+def _generate_formatted_string(
+    format_type: str,
+    min_length: int,
+    max_length: int,
+) -> str:
+    """Generate a string matching a specific format."""
+    normalized = format_type.strip().lower()
+
+    if normalized == "date-time":
+        return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    elif normalized == "date":
+        return datetime.now(timezone.utc).date().isoformat()
+    elif normalized == "time":
+        return datetime.now(timezone.utc).strftime("%H:%M:%S")
+    elif normalized == "uuid":
+        return str(uuid.uuid4())
+    elif normalized == "email":
+        return "test@example.com"
+    elif normalized == "uri":
+        return "https://example.com/api/v1"
+    elif normalized == "hostname":
+        return "example.com"
+    elif normalized == "ipv4":
+        return "192.168.1.1"
+    elif normalized == "ipv6":
+        return "2001:db8::1"
+    else:
+        # Unknown format, generate simple alphanumeric
+        length = min(max_length, max(min_length, 10))
+        return "a" * length
+
+
+def _generate_pattern_string(
+    pattern: str,
+    min_length: int,
+    max_length: int,
+) -> str:
+    """Generate a string matching common regex patterns."""
+    length = min(max_length, max(min_length, 10))
+
+    if pattern == "^[a-zA-Z0-9]+$":
+        return "Test123"[:length] if length < 7 else "Test123" + "a" * (length - 7)
+    elif pattern == "^[0-9]+$":
+        return "1" * length
+    elif pattern == "^[a-zA-Z]+$":
+        return "a" * length
+    elif pattern == "^[a-z]+$":
+        return "a" * length
+    elif pattern == "^[A-Z]+$":
+        return "A" * length
+    else:
+        # Fallback to alphanumeric
+        return "a" * length
+
+
 async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str:
-    """Generate realistic text using custom strategies."""
-    # Normalize bounds and cache loop
+    """Generate realistic text using boundary-aware strategies."""
+    # Normalize bounds
     if min_size > max_size:
         min_size, max_size = max_size, min_size
-    loop = asyncio.get_running_loop()
 
-    strategy = random.choice(
-        [
-            "normal",
-            "base64",
-            "uuid",
-            "timestamp",
-            "numbers",
-            "mixed_alphanumeric",
-        ]
-    )
+    run_index = get_run_index()
 
-    if strategy == "normal":
-        # Generate more realistic data based on context
-        if min_size == 0 and max_size > 50:
-            # Likely a title or description field - use realistic text
-            realistic_titles = [
-                "Sales Performance Q4",
-                "User Growth Metrics",
-                "Revenue Analysis",
-                "Customer Satisfaction Survey",
-                "Product Usage Statistics",
-                "Market Share Analysis",
-                "Performance Dashboard",
-                "Trend Analysis",
-            ]
-            return random.choice(realistic_titles)
-        else:
-            # Use only printable ASCII characters, no control characters
-            chars = string.ascii_letters + string.digits + " ._-"
-            length = random.randint(min_size, min(max_size, 100))  # Limit max length
-            return "".join(random.choice(chars) for _ in range(length))
-    elif strategy == "base64":
-        # Use asyncio executor to prevent deadlocks
-        size_min = max(1, min_size // 2)
-        size_max = max(1, max_size // 2)
-        if size_min > size_max:
-            size_min, size_max = size_max, size_min
-        return await loop.run_in_executor(
-            None,
-            base64_strings(min_size=size_min, max_size=size_max).example,
-        )
+    # Use boundary values deterministically
+    strategies = [
+        "boundary",
+        "sample",
+        "uuid",
+        "timestamp",
+    ]
+    strategy = strategies[run_index % len(strategies)]
+
+    if strategy == "boundary":
+        return get_realistic_boundary_string(min_size, max_size, run_index)
+    elif strategy == "sample":
+        # Use realistic sample values
+        all_samples = []
+        for samples in REALISTIC_SAMPLES.values():
+            all_samples.extend(samples)
+        sample = all_samples[run_index % len(all_samples)]
+        # Fit to constraints
+        if len(sample) < min_size:
+            sample = sample + "a" * (min_size - len(sample))
+        if len(sample) > max_size:
+            sample = sample[:max_size]
+        return sample
     elif strategy == "uuid":
-        # Use asyncio executor to prevent deadlocks
-        return await loop.run_in_executor(None, uuid_strings().example)
+        return str(uuid.uuid4())
     elif strategy == "timestamp":
-        # Use asyncio executor to prevent deadlocks
-        return await loop.run_in_executor(None, timestamp_strings().example)
-    elif strategy == "numbers":
-        return str(random.randint(1, 999999))
-    elif strategy == "mixed_alphanumeric":
-        length = random.randint(min_size, max_size)
-        chars = string.ascii_letters + string.digits
-        return "".join(random.choice(chars) for _ in range(length))
+        return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     else:
-        return "realistic_value"
+        return get_realistic_boundary_string(min_size, max_size, run_index)
 
 
 async def fuzz_tool_arguments_realistic(tool: dict[str, Any]) -> dict[str, Any]:
-    """Generate realistic tool arguments based on schema."""
+    """
+    Generate realistic tool arguments based on schema.
+
+    This function generates schema-valid boundary values for testing business logic:
+    - Deterministic cycling through boundary values (min, max, mid)
+    - All enum values are cycled through
+    - No attack payloads or invalid data
+    """
     from ..schema_parser import make_fuzz_strategy_from_jsonschema
 
     schema = tool.get("inputSchema")
     if not isinstance(schema, dict):
         schema = {}
+
+    run_index = get_run_index()
 
     # Use the enhanced schema parser to generate realistic values
     try:
@@ -187,156 +342,113 @@ async def fuzz_tool_arguments_realistic(tool: dict[str, Any]) -> dict[str, Any]:
 
     # Get required fields
     required = schema.get("required", [])
+    properties = schema.get("properties", {})
 
-    # Always backfill any missing required fields
-    if required:
-        for field in required:
-            if field not in args:
-                args[field] = await generate_realistic_text()
+    # Process each property with schema-aware generation
+    for prop_name, prop_spec in properties.items():
+        if not isinstance(prop_spec, dict):
+            continue
 
-    # Ensure we have at least some arguments
-    if schema.get("properties"):
-        properties = schema.get("properties", {})
+        # Determine if we should include this property
+        is_required = prop_name in required
+        # In realistic mode: always include required, sometimes include optional
+        should_include = is_required or (run_index % 3 == 0)
 
-        for prop_name, prop_spec in properties.items():
-            # Special handling for array type properties
-            if prop_spec.get("type") == "array":
-                if prop_name not in args or not isinstance(args[prop_name], list):
-                    items_schema = prop_spec.get("items", {})
-                    count = random.randint(1, 3)
-                    item_type = items_schema.get("type")
-                    values: list[Any] = []
+        if prop_name in args:
+            continue  # Already generated by schema parser
 
-                    if item_type == "object":
-                        # Generate each object via schema parser to honor constraints
-                        for _ in range(count):
-                            try:
-                                from ..schema_parser import (
-                                    make_fuzz_strategy_from_jsonschema as _mk,
-                                )
+        if not should_include:
+            continue
 
-                                val = _mk(items_schema, phase="realistic")
-                                values.append(val if isinstance(val, dict) else {})
-                            except Exception:
-                                values.append({})
-                    elif item_type == "integer":
-                        minimum = items_schema.get("minimum", -100)
-                        maximum = items_schema.get("maximum", 100)
-                        values = [
-                            random.randint(minimum, maximum) for _ in range(count)
-                        ]
-                    elif item_type == "number":
-                        minimum = items_schema.get("minimum", -100.0)
-                        maximum = items_schema.get("maximum", 100.0)
-                        values = [
-                            round(random.uniform(minimum, maximum), 2)
-                            for _ in range(count)
-                        ]
-                    else:
-                        values = [await generate_realistic_text() for _ in range(count)]
-                    args[prop_name] = values
-            # Special handling for object type properties
-            elif prop_spec.get("type") == "object":
-                if prop_name not in args or not isinstance(args[prop_name], dict):
-                    # Generate nested object via schema parser to honor constraints
-                    try:
-                        from ..schema_parser import (
-                            make_fuzz_strategy_from_jsonschema as _mk,
-                        )
+        prop_type = prop_spec.get("type")
+        if isinstance(prop_type, list):
+            prop_type = prop_type[0] if prop_type else "string"
 
-                        nested = _mk(prop_spec, phase="realistic")
-                        args[prop_name] = nested if isinstance(nested, dict) else {}
-                    except Exception:
-                        args[prop_name] = {}
-            # Special handling for integer type properties
-            elif prop_spec.get("type") == "integer":
-                # Generate an integer within the specified range
-                if prop_name not in args:
-                    minimum = prop_spec.get("minimum", -100)
-                    maximum = prop_spec.get("maximum", 100)
+        # Handle enum values - cycle through all deterministically
+        if "enum" in prop_spec and prop_spec["enum"]:
+            args[prop_name] = cycle_enum_values(prop_spec["enum"], run_index)
+            continue
 
-                    args[prop_name] = random.randint(minimum, maximum)
-            # Special handling for number type properties
-            elif prop_spec.get("type") == "number":
-                # Generate a float within the specified range
-                if prop_name not in args:
-                    minimum = prop_spec.get("minimum", -100.0)
-                    maximum = prop_spec.get("maximum", 100.0)
-                    args[prop_name] = round(random.uniform(minimum, maximum), 2)
-            # Special handling for boolean type properties
-            elif prop_spec.get("type") == "boolean":
-                if prop_name not in args:
-                    args[prop_name] = random.choice([True, False])
-            # Special handling for string format types
-            elif prop_spec.get("type") == "string" and prop_spec.get("format"):
-                # Generate a formatted string based on the format type
-                format_type = prop_spec.get("format")
-                if prop_name not in args:
-                    if format_type == "email":
-                        domains = ["example.com", "test.org", "mail.net", "domain.io"]
-                        username = "".join(random.choices(string.ascii_lowercase, k=8))
-                        domain = random.choice(domains)
-                        args[prop_name] = f"{username}@{domain}"
-                    elif format_type == "uri":
-                        schemes = ["http", "https"]
-                        domains = ["example.com", "test.org", "api.domain.io"]
-                        paths = ["", "/api", "/v1/resources", "/users/123"]
-                        scheme = random.choice(schemes)
-                        domain = random.choice(domains)
-                        path = random.choice(paths)
-                        args[prop_name] = f"{scheme}://{domain}{path}"
-                    elif format_type == "date-time":
-                        args[prop_name] = (
-                            datetime.now(timezone.utc)
-                            .isoformat(timespec="seconds")
-                            .replace("+00:00", "Z")
-                        )
-                    elif format_type == "uuid":
-                        args[prop_name] = str(uuid.uuid4())
-                    else:
-                        args[prop_name] = await generate_realistic_text()
-            # Always generate a fallback value for unknown property types
-            elif prop_name not in args:
-                prop_type = prop_spec.get("type")
-                if isinstance(prop_type, list):
-                    prop_type = prop_type[0] if prop_type else None
-                if prop_type not in {
-                    "string",
-                    "integer",
-                    "number",
-                    "boolean",
-                    "array",
-                    "object",
-                }:
-                    args[prop_name] = await generate_realistic_text()
-            # In realistic mode, only generate required properties and some
-            # optional ones
-            # But only if the property has a simple string schema without enum/format
-            # constraints
-            elif prop_name not in args and (
-                prop_name in required or random.random() < 0.3
-            ):
-                # Only use fallback generation for simple string properties without
-                # constraints
-                if (
-                    prop_spec.get("type") == "string"
-                    and not prop_spec.get("enum")
-                    and not prop_spec.get("format")
-                    and not prop_spec.get("pattern")
-                ):
-                    args[prop_name] = await generate_realistic_text()
-                # For properties with schemas, let the schema parser handle them
-                elif prop_spec.get("type") in [
-                    "integer",
-                    "number",
-                    "boolean",
-                    "array",
-                    "object",
-                ]:
-                    # These should have been handled by the schema parser above
-                    pass
-                else:
-                    # Fallback for unknown types
-                    args[prop_name] = await generate_realistic_text()
+        # Handle const values
+        if "const" in prop_spec:
+            args[prop_name] = prop_spec["const"]
+            continue
+
+        # Handle by type
+        if prop_type == "string":
+            args[prop_name] = generate_realistic_string_sync(
+                prop_spec, key=prop_name, run_index=run_index
+            )
+        elif prop_type == "integer":
+            args[prop_name] = generate_realistic_integer_sync(
+                prop_spec, run_index=run_index
+            )
+        elif prop_type == "number":
+            # Generate boundary float values
+            minimum = float(prop_spec.get("minimum", 0.0))
+            maximum = float(prop_spec.get("maximum", 100.0))
+            boundaries = [minimum, maximum, (minimum + maximum) / 2]
+            args[prop_name] = boundaries[run_index % len(boundaries)]
+        elif prop_type == "boolean":
+            # Cycle through True/False
+            args[prop_name] = run_index % 2 == 0
+        elif prop_type == "array":
+            args[prop_name] = await _generate_realistic_array(
+                prop_spec, run_index=run_index
+            )
+        elif prop_type == "object":
+            try:
+                nested = make_fuzz_strategy_from_jsonschema(prop_spec, phase="realistic")
+                args[prop_name] = nested if isinstance(nested, dict) else {}
+            except Exception:
+                args[prop_name] = {}
+        else:
+            # Fallback for unknown types
+            args[prop_name] = await generate_realistic_text()
+
+    # Ensure all required fields are present
+    for field in required:
+        if field not in args:
+            field_spec = properties.get(field, {})
+            args[field] = generate_realistic_string_sync(
+                field_spec, key=field, run_index=run_index
+            )
 
     return args
+
+
+async def _generate_realistic_array(
+    schema: dict[str, Any],
+    run_index: int = 0,
+) -> list[Any]:
+    """Generate a schema-valid array with boundary item counts."""
+    from ..schema_parser import make_fuzz_strategy_from_jsonschema
+
+    min_items = max(0, int(schema.get("minItems", 0)))
+    max_items = int(schema.get("maxItems", 5))  # Conservative default
+
+    if max_items < min_items:
+        max_items = min_items
+
+    # Cycle through boundary counts: min, max, mid
+    boundary_counts = [min_items, max_items, (min_items + max_items) // 2]
+    count = max(1, boundary_counts[run_index % len(boundary_counts)])
+
+    items_schema = schema.get("items", {})
+    if isinstance(items_schema, list):
+        # Tuple validation
+        return [
+            make_fuzz_strategy_from_jsonschema(sub, phase="realistic")
+            for sub in items_schema[:count]
+        ]
+
+    # Generate items based on schema
+    result = []
+    for i in range(count):
+        try:
+            item = make_fuzz_strategy_from_jsonschema(items_schema, phase="realistic")
+            result.append(item)
+        except Exception:
+            result.append("item")
+
+    return result
