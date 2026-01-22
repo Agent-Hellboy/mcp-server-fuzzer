@@ -5,19 +5,38 @@ Protocol Mutator
 This module contains the mutation logic for generating fuzzed protocol messages.
 """
 
+import copy
 import inspect
+import random
+from pathlib import Path
 from typing import Any, Callable
 
 from .base import Mutator
 from .strategies import ProtocolStrategies
+from .seed_pool import SeedPool
+from .seed_mutation import mutate_seed_payload
 
 
 class ProtocolMutator(Mutator):
     """Generates fuzzed protocol messages."""
 
-    def __init__(self):
+    def __init__(
+        self,
+        seed_pool: SeedPool | None = None,
+        corpus_dir: Path | None = None,
+        havoc_mode: bool = False,
+        havoc_min: int = 2,
+        havoc_max: int = 6,
+    ):
         """Initialize the protocol mutator."""
         self.strategies = ProtocolStrategies()
+        storage_dir = corpus_dir / "protocol" if corpus_dir else None
+        self.seed_pool = seed_pool or SeedPool(
+            max_per_key=40, reseed_ratio=0.3, storage_dir=storage_dir
+        )
+        self.havoc_mode = havoc_mode
+        self.havoc_min = havoc_min
+        self.havoc_max = havoc_max
 
     def get_fuzzer_method(
         self, protocol_type: str, phase: str = "aggressive"
@@ -49,6 +68,11 @@ class ProtocolMutator(Mutator):
         Returns:
             Generated fuzz data
         """
+        if self.seed_pool.should_reseed(self._seed_ratio_for_phase(phase)):
+            seed = self.seed_pool.pick_seed(protocol_type)
+            if isinstance(seed, dict):
+                return self._mutate_from_seed(protocol_type, seed, phase)
+
         fuzzer_method = self.get_fuzzer_method(protocol_type, phase)
         if not fuzzer_method:
             raise ValueError(
@@ -66,5 +90,75 @@ class ProtocolMutator(Mutator):
         maybe_coro = fuzzer_method(**kwargs)
         if inspect.isawaitable(maybe_coro):
             return await maybe_coro
-        else:
-            return maybe_coro
+        return maybe_coro
+
+    def record_feedback(
+        self,
+        protocol_type: str,
+        fuzz_data: dict[str, Any],
+        *,
+        server_error: str | None = None,
+        spec_checks: list[dict[str, Any]] | None = None,
+        response_signature: str | None = None,
+    ) -> None:
+        if not isinstance(fuzz_data, dict):
+            return
+        seed = copy.deepcopy(fuzz_data)
+        signature = _protocol_signature(server_error, spec_checks)
+        if signature:
+            self.seed_pool.add_seed(protocol_type, seed, signature=signature, score=1.4)
+        if response_signature:
+            self.seed_pool.add_seed(
+                protocol_type,
+                seed,
+                signature=f"resp:{response_signature}",
+                score=1.2,
+            )
+
+    @staticmethod
+    def _seed_ratio_for_phase(phase: str) -> float:
+        return 0.1 if phase == "realistic" else 0.3
+
+    def _mutate_from_seed(
+        self,
+        protocol_type: str,
+        seed: dict[str, Any],
+        phase: str,
+    ) -> dict[str, Any]:
+        stack = self._havoc_stack()
+        mutated = mutate_seed_payload(seed, stack=stack)
+        if "jsonrpc" in mutated:
+            mutated["jsonrpc"] = "2.0"
+        if "method" not in mutated:
+            fuzzer_method = self.get_fuzzer_method(protocol_type, phase)
+            if fuzzer_method and not inspect.iscoroutinefunction(fuzzer_method):
+                base = fuzzer_method()
+                if inspect.isawaitable(base):
+                    base = None
+                if isinstance(base, dict) and base.get("method"):
+                    mutated["method"] = base["method"]
+        return mutated
+
+    def _havoc_stack(self) -> int:
+        if not self.havoc_mode:
+            return 1
+        low = max(1, self.havoc_min)
+        high = max(low, self.havoc_max)
+        return random.randint(low, high)
+
+
+def _protocol_signature(
+    server_error: str | None,
+    spec_checks: list[dict[str, Any]] | None,
+) -> str | None:
+    if server_error:
+        return f"err:{server_error[:120]}"
+    if spec_checks:
+        failures = [
+            check.get("id")
+            for check in spec_checks
+            if str(check.get("status", "")).upper() == "FAIL"
+        ]
+        if failures:
+            return "spec:" + ",".join(sorted(set(failures)))
+    return None
