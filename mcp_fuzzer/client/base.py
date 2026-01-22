@@ -6,6 +6,7 @@ This module provides the base client class for fuzzing MCP servers.
 """
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from ..auth import AuthManager
@@ -36,6 +37,8 @@ class MCPFuzzerClient:
         max_concurrency: int = 5,
         tool_client: ToolClient | None = None,
         protocol_client: ProtocolClient | None = None,
+        corpus_root: str | None = None,
+        havoc_mode: bool = False,
     ):
         """
         Initialize the MCP Fuzzer Client.
@@ -69,12 +72,16 @@ class MCPFuzzerClient:
             safety_system=self.safety_system,
             enable_safety=self.safety_enabled,
             max_concurrency=max_concurrency,
+            corpus_root=(Path(corpus_root) if corpus_root else None),
+            havoc_mode=havoc_mode,
         )
 
         self.protocol_client = protocol_client or ProtocolClient(
             transport=transport,
             safety_system=self.safety_system,
             max_concurrency=max_concurrency,
+            corpus_root=(Path(corpus_root) if corpus_root else None),
+            havoc_mode=havoc_mode,
         )
 
         self._logger = logging.getLogger(__name__)
@@ -150,6 +157,12 @@ class MCPFuzzerClient:
             )
         return await self.protocol_client.fuzz_all_protocol_types(
             runs_per_type=runs_per_type, phase=phase
+        )
+
+    async def fuzz_stateful_sequences(self, runs: int = 5, phase: str = "realistic"):
+        """Fuzz using learned stateful sequences."""
+        return await self.protocol_client.fuzz_stateful_sequences(
+            runs=runs, phase=phase
         )
 
     async def fuzz_resources(self, runs_per_type=5, phase="realistic"):

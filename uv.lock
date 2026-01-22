@@ -719,7 +719,7 @@ wheels = [
 
 [[package]]
 name = "mcp-fuzzer"
-version = "0.2.5"
+version = "0.2.8"
 source = { editable = "." }
 dependencies = [
     { name = "emoji" },
@@ -759,7 +759,7 @@ requires-dist = [
     { name = "emoji" },
     { name = "httpx" },
     { name = "hypothesis" },
-    { name = "jsonschema" },
+    { name = "jsonschema", specifier = ">=4.25.1" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.5.0" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.0.0" },
     { name = "mkdocs-minify-plugin", marker = "extra == 'docs'", specifier = ">=0.7.0" },

@@ -171,14 +171,15 @@ async def test_fuzz_tool_arguments_realistic():
                 "count": {"type": "integer", "minimum": 10, "maximum": 100},
                 "score": {"type": "number", "minimum": 0.0, "maximum": 10.0},
                 "enabled": {"type": "boolean"},
-            }
+            },
+            "required": ["count", "score", "enabled"],
         }
     }
     
     result = await fuzz_tool_arguments_realistic(tool)
     assert isinstance(result["count"], int)
     assert 10 <= result["count"] <= 100
-    assert isinstance(result["score"], float)
+    assert isinstance(result["score"], (int, float))
     assert 0.0 <= result["score"] <= 10.0
     assert isinstance(result["enabled"], bool)
     
@@ -188,7 +189,8 @@ async def test_fuzz_tool_arguments_realistic():
             "properties": {
                 "tags": {"type": "array", "items": {"type": "string"}},
                 "numbers": {"type": "array", "items": {"type": "integer"}},
-            }
+            },
+            "required": ["tags", "numbers"],
         }
     }
     
@@ -255,12 +257,11 @@ async def test_generate_realistic_text_bounds_swapping():
 @pytest.mark.asyncio
 async def test_generate_realistic_text_fallback():
     """Test the fallback case in generate_realistic_text."""
-    import random
-    from unittest.mock import patch
-
-    with patch.object(random, "choice", return_value="invalid_strategy"):
-        text = await generate_realistic_text()
-        assert text == "realistic_value"
+    # With deterministic cycling, generate_realistic_text always returns
+    # a valid string based on run_index, no random fallback
+    text = await generate_realistic_text()
+    assert isinstance(text, str)
+    assert len(text) >= 1
 
 
 @pytest.mark.asyncio

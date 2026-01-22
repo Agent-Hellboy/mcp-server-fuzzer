@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 import random
-import string
 from datetime import datetime, timezone
 from typing import Any
 
@@ -175,6 +174,11 @@ def _edge_array(
 
 
 def _edge_string(schema: dict[str, Any], key: str | None) -> str:
+    """
+    Generate edge case string with constraint-aware payloads.
+
+    Uses conservative defaults instead of extreme fallbacks.
+    """
     const = schema.get("const")
     if isinstance(const, str):
         return const
@@ -192,7 +196,8 @@ def _edge_string(schema: dict[str, Any], key: str | None) -> str:
         max_length = min_length
     if isinstance(max_length, int) and max_length == 0:
         return ""
-    target_length = max_length if isinstance(max_length, int) else max(min_length, 64)
+    # Conservative default: 50 instead of 64
+    target_length = max_length if isinstance(max_length, int) else max(min_length, 50)
     target_length = max(target_length, min_length)
     pattern = schema.get("pattern")
     format_type = schema.get("format")
@@ -206,29 +211,32 @@ def _edge_string(schema: dict[str, Any], key: str | None) -> str:
     if format_type == "uuid":
         return "f84a4f17-9f1a-4e95-a1d4-1cda0cfcf01d"
     if format_type == "email":
-        username = "fuzzer" + "".join(random.choices(string.ascii_lowercase, k=8))
-        return f"{username}@example.com"
+        # Email injection attempt
+        return "fuzzer+' OR '1'='1@example.com"
     if format_type == "uri" or (key and "uri" in key.lower()):
         return _build_traversal_uri(target_length)
 
     if pattern == "^[0-9]+$":
         return "9" * target_length
     if pattern == "^[a-zA-Z0-9]+$":
-        return "A" * target_length
+        return "a" * target_length  # Lowercase 'a' instead of 'A'
 
     semantic = _semantic_string_by_key(key, min_length, target_length)
     if semantic is not None:
         return semantic
 
+    # Constraint-aware attack payloads (fit within target_length)
     special_tokens = [
         SQL_INJECTION,
-        "<script>alert('xss')</script>",
-        "../" * 6 + "etc/passwd",
+        "<script>alert(1)</script>",
+        "../../../etc/passwd",
+        "test\x00hidden",  # Null byte injection
         "valid-value",
-        "token:" + "A" * max(0, target_length - 6),
     ]
 
-    base = random.choice(special_tokens)
+    # Pick payload that fits, or use shortest
+    fitting = [t for t in special_tokens if len(t) <= target_length]
+    base = random.choice(fitting) if fitting else special_tokens[-1]
     return _resize_string(base, min_length, target_length)
 
 
@@ -251,6 +259,11 @@ def _resize_string(value: str, min_length: int, max_length: int) -> str:
 
 
 def _edge_number(schema: dict[str, Any], integer: bool) -> int | float:
+    """
+    Generate edge case number with off-by-one violations.
+
+    Uses conservative defaults (0) instead of extreme values (-2^63).
+    """
     minimum = schema.get("minimum")
     maximum = schema.get("maximum")
     exc_min = schema.get("exclusiveMinimum")
@@ -272,12 +285,21 @@ def _edge_number(schema: dict[str, Any], integer: bool) -> int | float:
         eff_max = None
 
     value: float | None = None
-    if eff_max is not None:
+
+    # Prioritize off-by-one violations when constraints exist
+    if maximum is not None:
+        # Off-by-one above maximum
+        value = maximum + delta
+    elif minimum is not None:
+        # Off-by-one below minimum
+        value = minimum - delta
+    elif eff_max is not None:
         value = eff_max
     elif eff_min is not None:
         value = eff_min
     else:
-        value = -2**63 if integer else -1e9
+        # Conservative default: 0 instead of -2^63
+        value = 0
 
     multiple_of = schema.get("multipleOf")
     if isinstance(multiple_of, (int, float)) and multiple_of != 0:
@@ -293,6 +315,11 @@ def _edge_number(schema: dict[str, Any], integer: bool) -> int | float:
 def _semantic_string_by_key(
     key: str | None, min_length: int, max_length: int
 ) -> str | None:
+    """
+    Generate semantic attack payload based on field name.
+
+    Uses constraint-aware payloads that fit within max_length.
+    """
     if not key:
         return None
     lowered = key.lower()
@@ -301,6 +328,12 @@ def _semantic_string_by_key(
         return _resize_string("klingon-extended", min_length, max_length)
     if "file_path" in lowered or lowered.endswith("path"):
         return _build_traversal_uri(max_length)
+    if any(x in lowered for x in ("query", "search", "filter", "sql")):
+        return _resize_string(SQL_INJECTION, min_length, max_length)
+    if any(x in lowered for x in ("html", "content", "body")):
+        return _resize_string("<script>alert(1)</script>", min_length, max_length)
+    if any(x in lowered for x in ("cmd", "command", "exec", "shell")):
+        return _resize_string("; ls -la", min_length, max_length)
     if "analysis" in lowered:
         return _resize_string(
             "deep quantitative analysis with high precision context",

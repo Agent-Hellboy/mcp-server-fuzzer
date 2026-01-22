@@ -7,13 +7,16 @@ This module provides functionality for fuzzing MCP protocol types.
 
 import json
 import logging
+import random
 import traceback
+from pathlib import Path
 from typing import Any
 
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
 from ..protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 from ..fuzz_engine.mutators import ProtocolMutator
+from ..fuzz_engine.mutators.seed_mutation import mutate_seed_payload
 from .. import spec_guard
 from ..fuzz_engine.executor import ProtocolExecutor
 from ..safety_system.safety import SafetyProvider
@@ -51,6 +54,8 @@ class ProtocolClient:
         transport,
         safety_system: SafetyProvider | None = None,
         max_concurrency: int = 5,
+        corpus_root: Path | None = None,
+        havoc_mode: bool = False,
     ):
         """
         Initialize the protocol client.
@@ -63,8 +68,14 @@ class ProtocolClient:
         self.transport = transport
         self.safety_system = safety_system
         # Important: let ProtocolClient own sending (safety checks happen here)
-        self.protocol_mutator = ProtocolMutator()
+        self.protocol_mutator = ProtocolMutator(
+            corpus_dir=corpus_root, havoc_mode=havoc_mode
+        )
         self._logger = logging.getLogger(__name__)
+        self._observed_resources: set[str] = set()
+        self._observed_prompts: set[str] = set()
+        self._successful_requests: dict[str, list[dict[str, Any]]] = {}
+        self._max_successful_requests = 25
 
     async def _check_safety_for_protocol_message(
         self, protocol_type: str, fuzz_data: dict[str, Any]
@@ -190,6 +201,36 @@ class ProtocolClient:
                 protocol_type, payload, method=method
             )
 
+        if (
+            server_error is None
+            and isinstance(server_response, dict)
+            and "error" not in server_response
+        ):
+            self._record_successful_request(protocol_type, fuzz_data, server_response)
+
+        error_signature = server_error
+        if (
+            error_signature is None
+            and isinstance(server_response, dict)
+            and "error" in server_response
+        ):
+            err = server_response.get("error")
+            if isinstance(err, dict):
+                code = err.get("code")
+                message = err.get("message")
+                error_signature = f"jsonrpc:{code}:{message}"
+            else:
+                error_signature = f"jsonrpc:{err}"
+
+        response_signature = _response_shape_signature(server_response)
+        self.protocol_mutator.record_feedback(
+            protocol_type,
+            fuzz_data,
+            server_error=error_signature,
+            spec_checks=spec_checks,
+            response_signature=response_signature,
+        )
+
         return {
             "fuzz_data": fuzz_data,
             "label": label,
@@ -200,6 +241,99 @@ class ProtocolClient:
             "spec_scope": spec_scope,
             "success": success,
         }
+
+    async def fuzz_stateful_sequences(
+        self, runs: int = 5, phase: str = "realistic"
+    ) -> list[ProtocolFuzzResult]:
+        """Fuzz using learned stateful sequences."""
+        results: list[ProtocolFuzzResult] = []
+        if runs <= 0:
+            return results
+
+        for run_index in range(runs):
+            sequence = await self._build_stateful_sequence(phase)
+            for step_index, (protocol_type, fuzz_data) in enumerate(sequence):
+                label = f"sequence {run_index + 1}/{runs} step {step_index + 1}"
+                results.append(
+                    await self._execute_protocol_fuzz(protocol_type, fuzz_data, label)
+                )
+        return results
+
+    async def _build_stateful_sequence(
+        self, phase: str
+    ) -> list[tuple[str, dict[str, Any]]]:
+        sequence: list[tuple[str, dict[str, Any]]] = []
+        for protocol_type in (
+            "InitializeRequest",
+            "ListResourcesRequest",
+            "ListPromptsRequest",
+        ):
+            sequence.append(
+                (protocol_type, await self._pick_learned_request(protocol_type, phase))
+            )
+
+        if self._observed_resources:
+            read_req = await self._pick_learned_request(READ_RESOURCE_REQUEST, phase)
+            params = self._extract_params(read_req)
+            params["uri"] = random.choice(sorted(self._observed_resources))
+            read_req["params"] = params
+            sequence.append((READ_RESOURCE_REQUEST, read_req))
+
+        if self._observed_prompts:
+            prompt_req = await self._pick_learned_request(GET_PROMPT_REQUEST, phase)
+            params = self._extract_params(prompt_req)
+            params["name"] = random.choice(sorted(self._observed_prompts))
+            if "arguments" not in params:
+                params["arguments"] = {}
+            prompt_req["params"] = params
+            sequence.append((GET_PROMPT_REQUEST, prompt_req))
+
+        sequence.append(
+            ("PingRequest", await self._pick_learned_request("PingRequest", phase))
+        )
+        return sequence
+
+    async def _pick_learned_request(
+        self, protocol_type: str, phase: str
+    ) -> dict[str, Any]:
+        learned = self._successful_requests.get(protocol_type, [])
+        if learned:
+            base = random.choice(learned)
+            mutated = mutate_seed_payload(base, stack=1)
+            if "jsonrpc" in base:
+                mutated["jsonrpc"] = base.get("jsonrpc", "2.0")
+            if "method" in base and "method" not in mutated:
+                mutated["method"] = base["method"]
+            return mutated
+        try:
+            return await self.protocol_mutator.mutate(protocol_type, phase=phase)
+        except Exception:
+            return {"jsonrpc": "2.0", "method": "unknown", "params": {}}
+
+    def _record_successful_request(
+        self,
+        protocol_type: str,
+        fuzz_data: dict[str, Any],
+        response: dict[str, Any],
+    ) -> None:
+        if isinstance(fuzz_data, dict):
+            pool = self._successful_requests.setdefault(protocol_type, [])
+            pool.append(fuzz_data)
+            if len(pool) > self._max_successful_requests:
+                del pool[0 : len(pool) - self._max_successful_requests]
+
+        if protocol_type == "ListResourcesRequest":
+            for resource in self._extract_list_items(response, "resources"):
+                if isinstance(resource, dict):
+                    uri = resource.get("uri")
+                    if isinstance(uri, str):
+                        self._observed_resources.add(uri)
+        if protocol_type == "ListPromptsRequest":
+            for prompt in self._extract_list_items(response, "prompts"):
+                if isinstance(prompt, dict):
+                    name = prompt.get("name")
+                    if isinstance(name, str):
+                        self._observed_prompts.add(name)
 
     async def _process_single_protocol_fuzz(
         self,
@@ -495,3 +629,20 @@ class ProtocolClient:
     async def shutdown(self) -> None:
         """Shutdown the protocol client."""
         return None
+
+
+def _response_shape_signature(response: Any) -> str | None:
+    if response is None:
+        return None
+    if isinstance(response, dict):
+        keys = ",".join(sorted(response.keys()))
+        if "result" in response and isinstance(response.get("result"), dict):
+            result_keys = ",".join(sorted(response["result"].keys()))
+            return f"dict:{keys}:result[{result_keys}]"
+        if "error" in response and isinstance(response.get("error"), dict):
+            err_keys = ",".join(sorted(response["error"].keys()))
+            return f"dict:{keys}:error[{err_keys}]"
+        return f"dict:{keys}"
+    if isinstance(response, list):
+        return f"list:{len(response)}"
+    return f"type:{type(response).__name__}"

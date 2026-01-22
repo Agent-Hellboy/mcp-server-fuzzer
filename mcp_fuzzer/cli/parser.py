@@ -147,6 +147,30 @@ Examples:
         help="Number of fuzzing runs per protocol type (default: 5)",
     )
     parser.add_argument(
+        "--stateful",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable learned stateful protocol sequences (default: false)",
+    )
+    parser.add_argument(
+        "--stateful-runs",
+        type=int,
+        default=5,
+        help="Number of learned stateful sequences to run (default: 5)",
+    )
+    parser.add_argument(
+        "--havoc",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable stacked corpus mutations (havoc mode)",
+    )
+    parser.add_argument(
+        "--corpus",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable per-target corpus save/load (default: true)",
+    )
+    parser.add_argument(
         "--protocol-type",
         help="Fuzz only a specific protocol type (when mode is protocol)",
     )

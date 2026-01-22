@@ -123,6 +123,23 @@ def build_fuzzing_schema() -> dict[str, Any]:
             "minimum": 1,
             "description": "Maximum concurrent operations",
         },
+        "corpus_enabled": {
+            "type": "boolean",
+            "description": "Persist per-target seed corpus for feedback-guided fuzzing",
+        },
+        "havoc_mode": {
+            "type": "boolean",
+            "description": "Enable stacked mutations when replaying corpus seeds",
+        },
+        "stateful": {
+            "type": "boolean",
+            "description": "Enable learned stateful fuzzing sequences",
+        },
+        "stateful_runs": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of learned stateful sequences to run",
+        },
     }
 
 
