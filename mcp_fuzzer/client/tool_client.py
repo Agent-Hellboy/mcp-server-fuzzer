@@ -233,8 +233,12 @@ class ToolClient:
         tool_timeout: float | None = None,
     ) -> dict[str, dict[str, Any]]:
         """Fuzz all tools from the server."""
+        self._logger.debug(f"fuzz_all_tools called with runs_per_tool={runs_per_tool}, tool_timeout={tool_timeout}")
+        self._logger.info("Fetching tools from server...")
         tools = await self._get_tools_from_server()
+        self._logger.debug(f"_get_tools_from_server returned {len(tools) if tools else 0} tools")
         if not tools:
+            self._logger.warning("No tools available for fuzzing")
             return {}
 
         all_results = {}
