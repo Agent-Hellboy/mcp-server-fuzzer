@@ -8,6 +8,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from mcp_fuzzer.fuzz_engine.mutators import ProtocolMutator
+from mcp_fuzzer.fuzz_engine.mutators import protocol_mutator as protocol_mutator_module
 
 pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.mutators]
 
@@ -146,3 +147,78 @@ async def test_mutate_various_protocol_types(protocol_mutator):
     for protocol_type in protocol_types:
         result = await protocol_mutator.mutate(protocol_type, phase="realistic")
         assert isinstance(result, dict)
+
+
+def test_record_feedback_adds_seeds(protocol_mutator):
+    protocol_mutator.seed_pool = MagicMock()
+    protocol_mutator.record_feedback(
+        "InitializeRequest",
+        {"method": "initialize", "id": 1},
+        server_error=None,
+        spec_checks=[{"id": "rule-1", "status": "FAIL"}],
+        response_signature="sig",
+    )
+    protocol_mutator.seed_pool.add_seed.assert_any_call(
+        "InitializeRequest",
+        {"method": "initialize", "id": 1},
+        signature="spec:rule-1",
+        score=1.4,
+    )
+    protocol_mutator.seed_pool.add_seed.assert_any_call(
+        "InitializeRequest",
+        {"method": "initialize", "id": 1},
+        signature="resp:sig",
+        score=1.2,
+    )
+
+
+def test_record_feedback_ignores_non_dict(protocol_mutator):
+    protocol_mutator.seed_pool = MagicMock()
+    protocol_mutator.record_feedback("InitializeRequest", ["not", "dict"])
+    protocol_mutator.seed_pool.add_seed.assert_not_called()
+
+
+def test_mutate_from_seed_sets_method_and_jsonrpc(protocol_mutator):
+    with patch.object(
+        protocol_mutator_module,
+        "mutate_seed_payload",
+        return_value={"jsonrpc": "1.0", "params": {}},
+    ):
+        with patch.object(
+            protocol_mutator,
+            "get_fuzzer_method",
+            return_value=lambda: {"method": "tools/list"},
+        ):
+            mutated = protocol_mutator._mutate_from_seed(
+                "InitializeRequest", {"jsonrpc": "1.0"}, "realistic"
+            )
+    assert mutated["jsonrpc"] == "2.0"
+    assert mutated["method"] == "tools/list"
+
+
+def test_havoc_stack_bounds(protocol_mutator, monkeypatch):
+    protocol_mutator.havoc_mode = True
+    protocol_mutator.havoc_min = 5
+    protocol_mutator.havoc_max = 2
+    monkeypatch.setattr(protocol_mutator_module.random, "randint", lambda a, b: a)
+    assert protocol_mutator._havoc_stack() == 5
+    protocol_mutator.havoc_mode = False
+    assert protocol_mutator._havoc_stack() == 1
+
+
+def test_protocol_signature_variants():
+    assert protocol_mutator_module._protocol_signature(
+        "server error", None
+    ) == "err:server error"
+    assert (
+        protocol_mutator_module._protocol_signature(
+            None,
+            [
+                {"id": "rule-a", "status": "fail"},
+                {"id": "rule-b", "status": "PASS"},
+                {"id": "rule-a", "status": "FAIL"},
+            ],
+        )
+        == "spec:rule-a"
+    )
+    assert protocol_mutator_module._protocol_signature(None, None) is None

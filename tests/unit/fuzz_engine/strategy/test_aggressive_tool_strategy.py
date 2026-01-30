@@ -91,3 +91,34 @@ def test_fuzz_tool_arguments_aggressive_fallbacks(monkeypatch):
     assert "flag" in args
     assert "items" in args
     assert "meta" in args
+
+
+def test_generate_aggressive_text_semantic_hints(monkeypatch):
+    monkeypatch.setattr(
+        tool_strategy,
+        "get_payload_within_length",
+        lambda _, k: f"{k}_payload",
+    )
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda seq: seq[0])
+
+    assert tool_strategy.generate_aggressive_text(key="resource_url").startswith("http")
+    assert tool_strategy.generate_aggressive_text(key="file_path") == "../"
+    assert tool_strategy.generate_aggressive_text(key="search_query") == "sql_payload"
+    assert tool_strategy.generate_aggressive_text(key="html_body") == "xss_payload"
+    assert tool_strategy.generate_aggressive_text(key="command") == "; ls"
+
+
+def test_generate_aggressive_integer_off_by_one(monkeypatch):
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda seq: "off_by_one")
+    assert tool_strategy._generate_aggressive_integer(schema={"maximum": 5}) == 6
+
+
+def test_generate_aggressive_integer_negative(monkeypatch):
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda seq: "negative")
+    assert tool_strategy._generate_aggressive_integer(min_value=0, max_value=5) == -1
+
+
+def test_generate_aggressive_float_off_by_one(monkeypatch):
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda seq: "off_by_one")
+    value = tool_strategy._generate_aggressive_float(schema={"maximum": 3.0})
+    assert value == 3.001

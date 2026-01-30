@@ -7,6 +7,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from mcp_fuzzer.fuzz_engine.mutators import ToolMutator
+from mcp_fuzzer.fuzz_engine.mutators import tool_mutator as tool_mutator_module
 
 pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.mutators]
 
@@ -100,3 +101,59 @@ async def test_mutate_strategies_integration(tool_mutator, sample_tool):
         result = await tool_mutator.mutate(sample_tool, phase="realistic")
         mock_fuzz.assert_called_once_with(sample_tool, phase="realistic")
         assert result == {"test": "value"}
+
+
+def test_record_feedback_adds_seeds(tool_mutator):
+    tool_mutator.seed_pool = MagicMock()
+    tool_mutator.record_feedback(
+        "test_tool",
+        {"arg": "value"},
+        exception="bad",
+        spec_checks=[{"id": "rule-1", "status": "FAIL"}],
+        response_signature="sig",
+    )
+    tool_mutator.seed_pool.add_seed.assert_any_call(
+        "test_tool",
+        {"arg": "value"},
+        signature="exc:bad",
+        score=1.5,
+    )
+    tool_mutator.seed_pool.add_seed.assert_any_call(
+        "test_tool",
+        {"arg": "value"},
+        signature="resp:sig",
+        score=1.2,
+    )
+
+
+def test_record_feedback_ignores_non_dict(tool_mutator):
+    tool_mutator.seed_pool = MagicMock()
+    tool_mutator.record_feedback("test_tool", ["not", "dict"])
+    tool_mutator.seed_pool.add_seed.assert_not_called()
+
+
+def test_havoc_stack_bounds(tool_mutator, monkeypatch):
+    tool_mutator.havoc_mode = True
+    tool_mutator.havoc_min = 4
+    tool_mutator.havoc_max = 1
+    monkeypatch.setattr(tool_mutator_module.random, "randint", lambda a, b: a)
+    assert tool_mutator._havoc_stack() == 4
+    tool_mutator.havoc_mode = False
+    assert tool_mutator._havoc_stack() == 1
+
+
+def test_tool_signature_variants():
+    assert tool_mutator_module._tool_signature(
+        "oops", None
+    ) == "exc:oops"
+    assert (
+        tool_mutator_module._tool_signature(
+            None,
+            [
+                {"id": "rule-a", "status": "FAIL"},
+                {"id": "rule-b", "status": "pass"},
+            ],
+        )
+        == "spec:rule-a"
+    )
+    assert tool_mutator_module._tool_signature(None, None) is None
