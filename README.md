@@ -49,6 +49,10 @@ MCP Server Fuzzer combines:
 
 It does **not** use instrumentation-based fuzzing (no coverage or binary/source instrumentation).
 
+### Basic Fuzzer Flow
+
+![Basic fuzzer flow diagram](images/fuzzer-flow.svg)
+
 ### Extensibility for Contributors
 MCP Server Fuzzer is designed for easy extension while keeping CLI usage simple:
 

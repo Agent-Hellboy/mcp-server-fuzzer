@@ -17,3 +17,9 @@ def test_havoc_stack_uses_rng():
     rng = random.Random(0)
 
     assert havoc_stack(havoc_mode=True, havoc_min=2, havoc_max=4, rng=rng) == 3
+
+
+def test_havoc_stack_inverted_bounds():
+    rng = random.Random(0)
+
+    assert havoc_stack(havoc_mode=True, havoc_min=5, havoc_max=3, rng=rng) == 5

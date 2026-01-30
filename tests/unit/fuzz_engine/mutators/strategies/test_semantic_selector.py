@@ -56,6 +56,7 @@ def test_pick_string_id_uses_unicode_trick():
 
     assert payload.startswith("tes")
     assert "t_id" in payload
+    assert any(ord(ch) > 127 for ch in payload)
 
 
 def test_pick_number_uses_bounds_for_min_max_tokens():

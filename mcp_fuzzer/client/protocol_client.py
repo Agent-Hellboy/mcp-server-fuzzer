@@ -197,7 +197,9 @@ class ProtocolClient:
         spec_scope: str | None = None
         if isinstance(server_response, dict):
             payload = server_response.get("result", server_response)
-            method = fuzz_data.get("method") if isinstance(fuzz_data, dict) else None
+            method = (
+                data_to_send.get("method") if isinstance(data_to_send, dict) else None
+            )
             spec_checks, spec_scope = spec_guard.get_spec_checks_for_protocol_type(
                 protocol_type, payload, method=method
             )
@@ -207,7 +209,9 @@ class ProtocolClient:
             and isinstance(server_response, dict)
             and "error" not in server_response
         ):
-            self._record_successful_request(protocol_type, fuzz_data, server_response)
+            self._record_successful_request(
+                protocol_type, data_to_send, server_response
+            )
 
         error_signature = server_error
         if (
@@ -226,7 +230,7 @@ class ProtocolClient:
         response_signature = _response_shape_signature(server_response)
         self.protocol_mutator.record_feedback(
             protocol_type,
-            fuzz_data,
+            data_to_send,
             server_error=error_signature,
             spec_checks=spec_checks,
             response_signature=response_signature,

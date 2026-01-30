@@ -101,9 +101,12 @@ def test_generate_aggressive_text_semantic_hints(monkeypatch):
         "get_payload_within_length",
         lambda _, k: f"{k}_payload",
     )
+    monkeypatch.setattr(tool_strategy, "SSRF_PAYLOADS", ["ssrf://payload"])
+    monkeypatch.setattr(tool_strategy, "PATH_TRAVERSAL", ["../"])
+    monkeypatch.setattr(tool_strategy, "COMMAND_INJECTION", ["; ls"])
     monkeypatch.setattr(tool_strategy.random, "choice", lambda seq: seq[0])
 
-    assert "://" in tool_strategy.generate_aggressive_text(key="resource_url")
+    assert tool_strategy.generate_aggressive_text(key="resource_url") == "ssrf://payload"
     assert tool_strategy.generate_aggressive_text(key="file_path") == "../"
     assert tool_strategy.generate_aggressive_text(key="search_query") == "sql_payload"
     assert tool_strategy.generate_aggressive_text(key="html_body") == "xss_payload"

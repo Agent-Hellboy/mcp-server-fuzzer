@@ -54,7 +54,11 @@ def test_generate_aggressive_text_nosql_semantic(monkeypatch):
 
 def test_generate_aggressive_text_overflow(monkeypatch):
     _force_strategy(monkeypatch, "overflow")
-    value = tool_strategy.generate_aggressive_text(min_size=1, max_size=10)
+    value = tool_strategy.generate_aggressive_text(
+        min_size=1,
+        max_size=10,
+        allow_overflow=True,
+    )
     assert len(value) >= 1000
 
 
@@ -291,7 +295,7 @@ def test_generate_aggressive_float_negative_upper_lt_min(monkeypatch):
 
     monkeypatch.setattr(tool_strategy.random, "choice", choice)
     value = tool_strategy._generate_aggressive_float(min_value=0.0, max_value=-5.0)
-    assert value == -1.0
+    assert -5.0 <= value <= -1.0
 
 
 def test_generate_aggressive_float_off_by_one_default(monkeypatch):

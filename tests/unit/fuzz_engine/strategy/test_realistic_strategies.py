@@ -162,7 +162,8 @@ def test_timestamp_strings_without_microseconds():
     ],
 )
 def test_generate_realistic_string_sync_formats(format_type, validator):
-    schema = {"format": format_type, "minLength": 5, "maxLength": 20}
+    max_len = 40 if format_type == "uuid" else 20
+    schema = {"format": format_type, "minLength": 5, "maxLength": max_len}
     value = generate_realistic_string_sync(schema, key="field", run_index=0)
     assert validator(value)
 
@@ -544,7 +545,12 @@ async def test_fuzz_tool_arguments_realistic_array_object(monkeypatch):
     tool = {
         "inputSchema": {
             "properties": {
-                "items": {"type": "array", "items": {"type": "object"}},
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1,
+                    "items": {"type": "object"},
+                },
             }
         }
     }
@@ -554,17 +560,25 @@ async def test_fuzz_tool_arguments_realistic_array_object(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fuzz_tool_arguments_realistic_array_number(monkeypatch):
-    monkeypatch.setattr(tool_strategy.random, "randint", lambda *_args: 2)
-    monkeypatch.setattr(tool_strategy.random, "uniform", lambda *_args: 1.23)
+    def _mk(schema, phase="realistic"):
+        if schema.get("type") == "number":
+            return 1.23
+        return {}
+
     monkeypatch.setattr(
         "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
-        lambda *_args, **_kwargs: {},
+        _mk,
     )
 
     tool = {
         "inputSchema": {
             "properties": {
-                "scores": {"type": "array", "items": {"type": "number"}},
+                "scores": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {"type": "number"},
+                },
             }
         }
     }

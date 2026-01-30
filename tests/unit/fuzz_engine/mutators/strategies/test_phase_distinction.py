@@ -7,10 +7,9 @@ These tests verify that:
 - AGGRESSIVE phase generates attack payloads and violations
 """
 
-import json
 import random
 import pytest
-from jsonschema import validate, ValidationError
+from jsonschema import validate
 
 from mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser import (
     make_fuzz_strategy_from_jsonschema,

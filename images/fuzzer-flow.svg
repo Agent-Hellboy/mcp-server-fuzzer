@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="560" viewBox="0 0 1500 560">
+  <defs>
+    <style>
+      .box { fill: #f7f7f7; stroke: #222; stroke-width: 2; rx: 8; ry: 8; }
+      .box-accent { fill: #eef6ff; stroke: #1f4b99; stroke-width: 2; rx: 8; ry: 8; }
+      .box-muted { fill: #fbfbfb; stroke: #666; stroke-width: 1.5; rx: 8; ry: 8; }
+      .text { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #111; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #333; }
+      .arrow { stroke: #222; stroke-width: 2; marker-end: url(#arrowhead); fill: none; }
+      .arrow-muted { stroke: #666; stroke-width: 2; marker-end: url(#arrowhead); fill: none; }
+      .arrow-dash { stroke: #444; stroke-width: 2; stroke-dasharray: 6 4; marker-end: url(#arrowhead); fill: none; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#222" />
+    </marker>
+  </defs>
+
+  <!-- Entry / Config -->
+  <rect class="box" x="20" y="30" width="140" height="40" />
+  <text class="text" x="90" y="55" text-anchor="middle">CLI / Config</text>
+
+  <rect class="box" x="190" y="30" width="160" height="40" />
+  <text class="text" x="270" y="55" text-anchor="middle">Runtime Manager</text>
+
+  <rect class="box" x="370" y="30" width="160" height="40" />
+  <text class="text" x="450" y="55" text-anchor="middle">Client Runner</text>
+
+  <!-- Mode selection -->
+  <rect class="box-muted" x="560" y="20" width="130" height="30" />
+  <text class="label" x="625" y="40" text-anchor="middle">Mode</text>
+  <rect class="box" x="560" y="55" width="130" height="40" />
+  <text class="text" x="625" y="80" text-anchor="middle">Protocol / Tools</text>
+
+  <!-- Mutator + Strategies -->
+  <rect class="box" x="720" y="30" width="140" height="40" />
+  <text class="text" x="790" y="55" text-anchor="middle">Mutator</text>
+
+  <rect class="box" x="880" y="30" width="160" height="40" />
+  <text class="text" x="960" y="55" text-anchor="middle">Schema Strategy</text>
+
+  <rect class="box" x="1060" y="30" width="190" height="40" />
+  <text class="text" x="1155" y="55" text-anchor="middle">Payload + Boundary Gen</text>
+
+  <rect class="box" x="1270" y="30" width="160" height="40" />
+  <text class="text" x="1350" y="55" text-anchor="middle">Build Request</text>
+
+  <!-- Transport + Server -->
+  <rect class="box" x="1270" y="110" width="160" height="40" />
+  <text class="text" x="1350" y="135" text-anchor="middle">Transport</text>
+  <text class="label" x="1350" y="152" text-anchor="middle">HTTP / SSE / stdio</text>
+
+  <rect class="box-accent" x="1270" y="180" width="160" height="40" />
+  <text class="text" x="1350" y="205" text-anchor="middle">MCP Server</text>
+
+  <!-- Response + Checks -->
+  <rect class="box" x="1060" y="180" width="180" height="40" />
+  <text class="text" x="1150" y="205" text-anchor="middle">Response</text>
+
+  <rect class="box" x="860" y="180" width="180" height="40" />
+  <text class="text" x="950" y="205" text-anchor="middle">Spec Checks</text>
+
+  <rect class="box" x="660" y="180" width="180" height="40" />
+  <text class="text" x="750" y="205" text-anchor="middle">Safety System</text>
+
+  <!-- Feedback / Seeds / Corpus -->
+  <rect class="box" x="460" y="180" width="180" height="40" />
+  <text class="text" x="550" y="205" text-anchor="middle">Feedback Signatures</text>
+
+  <rect class="box" x="260" y="180" width="180" height="40" />
+  <text class="text" x="350" y="205" text-anchor="middle">Seed Pool</text>
+
+  <rect class="box" x="60" y="180" width="180" height="40" />
+  <text class="text" x="150" y="205" text-anchor="middle">Corpus</text>
+  <text class="label" x="150" y="222" text-anchor="middle">(persisted seeds)</text>
+
+  <!-- Mutation helper branch -->
+  <rect class="box-muted" x="260" y="260" width="180" height="40" />
+  <text class="text" x="350" y="285" text-anchor="middle">pick_seed()</text>
+
+  <rect class="box-muted" x="260" y="320" width="180" height="40" />
+  <text class="text" x="350" y="345" text-anchor="middle">mutate_seed_payload()</text>
+
+  <rect class="box-muted" x="460" y="320" width="180" height="40" />
+  <text class="text" x="550" y="345" text-anchor="middle">Reseed Ratio</text>
+
+  <rect class="box-muted" x="460" y="260" width="180" height="40" />
+  <text class="text" x="550" y="285" text-anchor="middle">Signature Dedupe</text>
+
+  <rect class="box-muted" x="660" y="260" width="180" height="40" />
+  <text class="text" x="750" y="285" text-anchor="middle">Stateful Replay</text>
+
+  <!-- SLA / Reporting -->
+  <rect class="box" x="1060" y="260" width="180" height="40" />
+  <text class="text" x="1150" y="285" text-anchor="middle">Server SLA / Latency</text>
+
+  <rect class="box" x="370" y="420" width="180" height="40" />
+  <text class="text" x="460" y="445" text-anchor="middle">Reporting</text>
+  <text class="label" x="460" y="462" text-anchor="middle">JSON / CSV / HTML</text>
+
+  <rect class="box" x="580" y="420" width="180" height="40" />
+  <text class="text" x="670" y="445" text-anchor="middle">Result Store</text>
+
+  <!-- Arrows: forward flow -->
+  <path class="arrow" d="M160 50 H190" />
+  <path class="arrow" d="M350 50 H370" />
+  <path class="arrow" d="M530 50 H560" />
+  <path class="arrow" d="M690 75 H720" />
+  <path class="arrow" d="M860 50 H880" />
+  <path class="arrow" d="M1040 50 H1060" />
+  <path class="arrow" d="M1250 50 H1270" />
+  <path class="arrow" d="M1350 70 V110" />
+  <path class="arrow" d="M1350 150 V180" />
+  <path class="arrow" d="M1270 200 H1240" />
+  <path class="arrow" d="M1060 200 H1040" />
+  <path class="arrow" d="M860 200 H840" />
+  <path class="arrow" d="M660 200 H640" />
+
+  <!-- Feedback chain -->
+  <path class="arrow" d="M640 200 H460" />
+  <path class="arrow" d="M460 200 H440" />
+  <path class="arrow" d="M440 200 H260" />
+  <path class="arrow" d="M260 200 H240" />
+  <path class="arrow" d="M240 200 H60" />
+
+  <!-- Feedback loop back to Mutator -->
+  <path class="arrow-dash" d="M350 180 C330 140, 520 110, 720 70" />
+  <text class="label" x="430" y="120">reseed path</text>
+
+  <!-- Detailed mutation branch -->
+  <path class="arrow-muted" d="M350 220 V260" />
+  <path class="arrow-muted" d="M350 300 V320" />
+  <path class="arrow-muted" d="M350 360 C360 390, 430 400, 460 420" />
+
+  <path class="arrow-muted" d="M550 220 V260" />
+  <path class="arrow-muted" d="M550 300 V320" />
+  <path class="arrow-muted" d="M550 360 C560 390, 620 400, 640 420" />
+
+  <path class="arrow-muted" d="M750 300 C760 330, 800 360, 820 420" />
+
+  <!-- SLA + Reporting from response/checks -->
+  <path class="arrow-muted" d="M1150 220 V260" />
+  <path class="arrow" d="M950 220 C820 330, 640 370, 550 420" />
+  <path class="arrow" d="M1150 220 C1000 330, 820 370, 760 420" />
+</svg>

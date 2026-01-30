@@ -225,10 +225,14 @@ def get_payload_within_length(max_length: int, category: str = "sql") -> str:
 
 def inject_unicode_trick(value: str, max_length: int | None = None) -> str:
     """Embed a unicode trick into a value."""
+    non_ascii = [
+        trick for trick in UNICODE_TRICKS if any(ord(ch) > 127 for ch in trick)
+    ]
+    choices = non_ascii or UNICODE_TRICKS
     if not value:
-        return random.choice(UNICODE_TRICKS)
+        return random.choice(choices)
     
-    trick = random.choice(UNICODE_TRICKS)
+    trick = random.choice(choices)
     mid = len(value) // 2
     result = value[:mid] + trick + value[mid:]
     

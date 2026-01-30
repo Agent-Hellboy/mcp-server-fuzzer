@@ -48,6 +48,8 @@ def generate_aggressive_text(
     min_size: int = 1,
     max_size: int = 100,
     key: str | None = None,
+    *,
+    allow_overflow: bool = True,
 ) -> str:
     """
     Generate aggressive text for security/robustness testing.
@@ -56,6 +58,28 @@ def generate_aggressive_text(
     the specified length limits. It prioritizes actual attack vectors over
     random garbage.
     """
+    def _normalize_sizes(
+        raw_min: Any,
+        raw_max: Any,
+        default_min: int = 1,
+        default_max: int = 100,
+    ) -> tuple[int, int]:
+        try:
+            min_value = default_min if raw_min is None else int(raw_min)
+        except (TypeError, ValueError):
+            min_value = default_min
+        try:
+            max_value = default_max if raw_max is None else int(raw_max)
+        except (TypeError, ValueError):
+            max_value = default_max
+        min_value = max(0, min_value)
+        max_value = max(0, max_value)
+        if min_value > max_value:
+            min_value, max_value = max_value, min_value
+        return min_value, max_value
+
+    min_size, max_size = _normalize_sizes(min_size, max_size)
+
     # Choose strategy weighted toward attack payloads
     strategies = [
         "sql_injection",
@@ -158,7 +182,10 @@ def generate_aggressive_text(
             "A" * 1000,
             "B" * 2000,
         ]
-        return random.choice(overflow_values)
+        if allow_overflow:
+            return random.choice(overflow_values)
+        # Respect max_size unless overflow is explicitly allowed.
+        return _fit_to_length(random.choice(overflow_values))
     elif strategy == "mixed":
         length = random.randint(min_size, max_size)
         alphabet = string.ascii_letters + string.digits + SPECIAL_CHARS

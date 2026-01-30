@@ -35,7 +35,7 @@ class FuzzerContext:
     havoc_max: int = 6
 
     def with_defaults(self) -> "FuzzerContext":
-        rng = self.rng or random
+        rng = self.rng or random.Random()
         run_index = (
             self.run_index if self.run_index is not None else rng.randint(0, 1_000_000)
         )
@@ -71,7 +71,7 @@ def ensure_context(
     else:
         context = replace(
             context,
-            phase=phase or context.phase,
+            phase=phase if phase is not None else context.phase,
             schema=schema if schema is not None else context.schema,
             key=key if key is not None else context.key,
             run_index=run_index if run_index is not None else context.run_index,
