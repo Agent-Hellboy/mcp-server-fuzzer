@@ -20,16 +20,18 @@ from typing import Any
 
 from ..schema_helpers import apply_schema_edge_cases
 from ..interesting_values import (
-    SQL_INJECTION,
-    XSS_PAYLOADS,
     COMMAND_INJECTION,
-    PATH_TRAVERSAL,
-    SSRF_PAYLOADS,
     ENCODING_BYPASS,
+    NOSQL_INJECTION,
+    OVERFLOW_INTS,
+    PATH_TRAVERSAL,
+    SQL_INJECTION,
+    SSRF_PAYLOADS,
     TYPE_CONFUSION,
+    XSS_PAYLOADS,
+    get_off_by_one_int,
     get_payload_within_length,
     inject_unicode_trick,
-    get_off_by_one_int,
 )
 
 # Legacy constants for backward compatibility (use interesting_values.py instead)
@@ -38,6 +40,8 @@ UNICODE_CHARS = "漢字éñüřαβγδεζηθικλμνξοπρστυφχψω"
 NULL_BYTES = ["\x00", "\x01", "\x02", "\x03", "\x04", "\x05"]
 ESCAPE_CHARS = ["\\", "\\'", '\\"', "\\n", "\\r", "\\t", "\\b", "\\f"]
 HTML_ENTITIES = ["&lt;", "&gt;", "&amp;", "&quot;", "&#x27;", "&#x2F;"]
+MIN_TOKENS = ("min", "lower", "start")
+MAX_TOKENS = ("max", "upper", "limit", "size", "count", "timeout")
 
 
 def generate_aggressive_text(
@@ -59,6 +63,7 @@ def generate_aggressive_text(
         "xss",
         "xss",
         "path_traversal",
+        "nosql_injection",
         "command_injection",
         "ssrf",
         "broken_base64",
@@ -97,6 +102,8 @@ def generate_aggressive_text(
             return _fit_to_length(random.choice(PATH_TRAVERSAL))
         if any(x in lowered for x in ("query", "search", "sql", "filter")):
             return _fit_to_length(get_payload_within_length(max_size, "sql"))
+        if any(x in lowered for x in ("mongo", "nosql")):
+            return _fit_to_length(random.choice(NOSQL_INJECTION))
         if any(x in lowered for x in ("html", "content", "body", "text")):
             return _fit_to_length(get_payload_within_length(max_size, "xss"))
         if any(x in lowered for x in ("cmd", "command", "exec", "shell")):
@@ -104,6 +111,8 @@ def generate_aggressive_text(
 
     if strategy == "sql_injection":
         return _fit_to_length(random.choice(SQL_INJECTION))
+    elif strategy == "nosql_injection":
+        return _fit_to_length(random.choice(NOSQL_INJECTION))
     elif strategy == "xss":
         return _fit_to_length(random.choice(XSS_PAYLOADS))
     elif strategy == "path_traversal":
@@ -230,6 +239,8 @@ def _generate_aggressive_integer(
         min_value = -1000
     if max_value is None:
         max_value = 1000
+    if min_value > max_value:
+        min_value, max_value = max_value, min_value
 
     strategies = [
         "off_by_one",
@@ -253,8 +264,12 @@ def _generate_aggressive_integer(
         return get_off_by_one_int(max_value, min_value)
 
     elif strategy == "overflow":
-        overflow_values = [999999999, -999999999, 2**31, -(2**31)]
-        return random.choice(overflow_values)
+        overflow_candidates = [
+            value
+            for value in OVERFLOW_INTS
+            if value < min_value or value > max_value
+        ]
+        return random.choice(overflow_candidates or OVERFLOW_INTS)
 
     elif strategy == "boundary":
         # Boundary values that ARE within range (edge testing)
@@ -394,7 +409,7 @@ def _pick_semantic_string(name: str, max_length: int | None = None) -> str:
 
     Uses constraint-aware payloads that fit within max_length.
     """
-    max_len = max_length or 100  # Conservative default instead of unlimited
+    max_len = max_length if max_length is not None else 100
 
     lowered = name.lower()
 
@@ -440,14 +455,13 @@ def _pick_semantic_number(name: str, spec: dict[str, Any]) -> int | float:
     maximum = spec.get("maximum")
 
     # For "min" fields, try to go below minimum
-    if any(token in lowered for token in ("min", "lower", "start")):
+    if any(token in lowered for token in MIN_TOKENS):
         if minimum is not None:
             return minimum - 1  # Off-by-one below
         return -1
 
     # For "max" fields, try to exceed maximum
-    max_tokens = ("max", "upper", "limit", "size", "count", "timeout")
-    if any(token in lowered for token in max_tokens):
+    if any(token in lowered for token in MAX_TOKENS):
         if maximum is not None:
             return maximum + 1  # Off-by-one above
         return 2147483648  # INT32_MAX + 1
@@ -565,7 +579,22 @@ def fuzz_tool_arguments_aggressive(tool: dict[str, Any]) -> dict[str, Any]:
             # Generate array with attack payloads
             min_items = prop_spec.get("minItems", 0)
             max_items = prop_spec.get("maxItems", 3)
-            count = random.randint(min_items, min(max_items, 5))
+            try:
+                min_items = int(min_items)
+            except (TypeError, ValueError):
+                min_items = 0
+            try:
+                max_items = int(max_items)
+            except (TypeError, ValueError):
+                max_items = 3
+            min_items = max(0, min_items)
+            max_items = max(0, max_items)
+            if min_items > max_items:
+                min_items, max_items = max_items, min_items
+            capped_max = min(max_items, 5)
+            if capped_max < min_items:
+                capped_max = min_items
+            count = random.randint(min_items, capped_max)
             items_schema = prop_spec.get("items", {"type": "string"})
             return [_fallback_value(items_schema) for _ in range(count)]
         if prop_type == "object":

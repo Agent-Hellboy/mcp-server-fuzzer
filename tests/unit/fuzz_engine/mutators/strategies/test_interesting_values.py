@@ -109,7 +109,7 @@ class TestHelperFunctions:
     def test_get_payload_within_length_returns_sql(self):
         """Should return SQL injection payload."""
         payload = get_payload_within_length(100, "sql")
-        assert any(p in payload for p in SQL_INJECTION)
+        assert payload in SQL_INJECTION
 
     def test_inject_unicode_trick_embeds_trick(self):
         """Should embed unicode trick in value."""

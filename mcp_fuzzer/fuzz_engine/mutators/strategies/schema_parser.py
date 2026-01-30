@@ -513,8 +513,9 @@ def _generate_string_from_pattern(
 def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
     """Handle integer type schema."""
     from .interesting_values import (
-        get_realistic_boundary_int,
         BOUNDARY_INTS_MEDIUM,
+        get_off_by_one_int,
+        get_realistic_boundary_int,
     )
 
     # Handle integer constraints with conservative defaults (was +/-1M)
@@ -568,11 +569,11 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
         if strategy == "off_by_one":
             # Off-by-one violation
             if schema.get("maximum") is not None:
-                value = int(schema["maximum"]) + 1
+                value = get_off_by_one_int(maximum=int(schema["maximum"]))
             elif schema.get("minimum") is not None:
-                value = int(schema["minimum"]) - 1
+                value = get_off_by_one_int(minimum=int(schema["minimum"]))
             else:
-                value = maximum + 1
+                value = get_off_by_one_int(maximum=maximum)
         elif strategy == "overflow":
             # Integer overflow values
             overflow_values = [2147483648, -2147483649, 9223372036854775808]

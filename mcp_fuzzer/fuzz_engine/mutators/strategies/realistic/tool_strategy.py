@@ -16,6 +16,7 @@ import asyncio
 import base64
 import random
 import string
+import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -29,22 +30,26 @@ from ..interesting_values import (
     cycle_enum_values,
 )
 
-# Global run counter for deterministic cycling
-_run_counter: int = 0
+# Thread-local run counter for deterministic cycling per thread
+_run_counter = threading.local()
+
+
+def _utc_timestamp() -> str:
+    """Return an RFC3339 timestamp in UTC with seconds precision."""
+    dt = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return dt.replace("+00:00", "Z")
 
 
 def get_run_index() -> int:
-    """Get and increment the global run counter for deterministic cycling."""
-    global _run_counter
-    idx = _run_counter
-    _run_counter += 1
+    """Get and increment the per-thread run counter for deterministic cycling."""
+    idx = getattr(_run_counter, "value", 0)
+    _run_counter.value = idx + 1
     return idx
 
 
 def reset_run_counter() -> None:
-    """Reset the run counter (useful for testing)."""
-    global _run_counter
-    _run_counter = 0
+    """Reset the per-thread run counter (useful for testing)."""
+    _run_counter.value = 0
 
 
 def base64_strings(
@@ -227,8 +232,7 @@ def _generate_formatted_string(
     normalized = format_type.strip().lower()
 
     if normalized == "date-time":
-        dt = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        return dt.replace("+00:00", "Z")
+        return _utc_timestamp()
     elif normalized == "date":
         return datetime.now(timezone.utc).date().isoformat()
     elif normalized == "time":
@@ -305,9 +309,7 @@ async def generate_realistic_text(min_size: int = 1, max_size: int = 100) -> str
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
-            lambda: datetime.now(timezone.utc)
-            .isoformat(timespec="seconds")
-            .replace("+00:00", "Z"),
+            _utc_timestamp,
         )
     if strategy == "numbers":
         return str(random.randint(0, 1000))
@@ -420,7 +422,10 @@ async def fuzz_tool_arguments_realistic(tool: dict[str, Any]) -> dict[str, Any]:
                 nested = make_fuzz_strategy_from_jsonschema(
                     prop_spec, phase="realistic"
                 )
-                args[prop_name] = nested if isinstance(nested, dict) else {}
+                if isinstance(nested, dict):
+                    args[prop_name] = nested
+                else:
+                    args[prop_name] = {}
             except Exception:
                 args[prop_name] = {}
         else:

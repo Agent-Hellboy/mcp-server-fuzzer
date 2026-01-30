@@ -8,6 +8,7 @@ These tests verify that:
 """
 
 import json
+import random
 import pytest
 from jsonschema import validate, ValidationError
 
@@ -87,12 +88,15 @@ class TestRealisticPhaseSchemaValidity:
 class TestAggressivePhaseAttackPayloads:
     """Tests that AGGRESSIVE phase generates attack payloads."""
 
+    def setup_method(self):
+        random.seed(0)
+
     def test_aggressive_string_may_contain_sql_injection(self):
         """AGGRESSIVE might generate SQL injection payloads."""
         schema = {"type": "string", "maxLength": 100}
         results = [
             make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
-            for _ in range(20)
+            for _ in range(100)
         ]
         # At least one should contain SQL-like patterns
         sql_patterns = ["'", "OR", "--", "SELECT", "DROP"]
@@ -107,7 +111,7 @@ class TestAggressivePhaseAttackPayloads:
         schema = {"type": "string", "maxLength": 100}
         results = [
             make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
-            for _ in range(20)
+            for _ in range(100)
         ]
         # At least one should contain XSS-like patterns
         xss_patterns = ["<script>", "javascript:", "onerror", "<img"]
@@ -122,7 +126,7 @@ class TestAggressivePhaseAttackPayloads:
         schema = {"type": "integer", "maximum": 100}
         results = [
             make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
-            for _ in range(20)
+            for _ in range(100)
         ]
         # At least one should exceed the maximum
         has_violation = any(r > 100 for r in results)
@@ -133,7 +137,7 @@ class TestAggressivePhaseAttackPayloads:
         schema = {"type": "integer"}
         results = [
             make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
-            for _ in range(20)
+            for _ in range(100)
         ]
         # At least one should be a large/overflow value
         large_values = [r for r in results if abs(r) > 2**30]

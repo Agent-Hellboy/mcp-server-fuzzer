@@ -9,6 +9,7 @@ This module contains carefully selected constants for schema-aware fuzzing:
 Based on AFL mutation strategies, OWASP testing patterns, and property-based testing.
 """
 
+import random
 from typing import Any
 
 # ============================================================================
@@ -66,6 +67,16 @@ SQL_INJECTION: list[str] = [
     "' UNION SELECT NULL--",
     "1; DELETE FROM",
     "' OR ''='",
+]
+
+# NoSQL injection payloads (MongoDB-style operators)
+NOSQL_INJECTION: list[str] = [
+    '{"$ne": null}',
+    '{"$gt": ""}',
+    '{"$regex": ".*"}',
+    '{"$where": "this.password.length > 0"}',
+    '{"$exists": true}',
+    '{"$or": [{"role":"admin"},{"role":{"$ne":"user"}}]}',
 ]
 
 # XSS payloads (HTML/JS injection)
@@ -193,6 +204,7 @@ def get_payload_within_length(max_length: int, category: str = "sql") -> str:
     """Get an attack payload that fits within the length constraint."""
     payloads_map: dict[str, list[str]] = {
         "sql": SQL_INJECTION,
+        "nosql": NOSQL_INJECTION,
         "xss": XSS_PAYLOADS,
         "path": PATH_TRAVERSAL,
         "command": COMMAND_INJECTION,
@@ -213,8 +225,6 @@ def get_payload_within_length(max_length: int, category: str = "sql") -> str:
 
 def inject_unicode_trick(value: str, max_length: int | None = None) -> str:
     """Embed a unicode trick into a value."""
-    import random
-    
     if not value:
         return random.choice(UNICODE_TRICKS)
     
