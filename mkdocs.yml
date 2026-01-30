@@ -118,6 +118,7 @@ nav:
       - Transport Improvements: transport/transport-improvements.md
   - Architecture:
       - Overview: architecture/architecture.md
+      - Fuzzer Design: architecture/fuzzer-design.md
       - Fuzz Engine: architecture/fuzz-engine.md
       - Client Architecture: architecture/client-architecture.md
       - Async Executor: architecture/async-executor.md

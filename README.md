@@ -40,6 +40,19 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 - Intelligent Testing: Hypothesis-based data generation with custom strategies
 - More Than Conformance: Goes beyond the checks in [modelcontextprotocol/conformance](https://github.com/modelcontextprotocol/conformance) with fuzzing, reporting, and safety tooling
 
+### Fuzzing Paradigms
+
+MCP Server Fuzzer combines:
+
+- Grammar/protocol-based fuzzing (schema-driven MCP request generation)
+- Black-box fuzzing (no instrumentation; feedback from responses/spec checks)
+
+It does **not** use instrumentation-based fuzzing (no coverage or binary/source instrumentation).
+
+### Basic Fuzzer Flow
+
+![Basic fuzzer flow diagram](images/fuzzer-flow.svg)
+
 ### Extensibility for Contributors
 MCP Server Fuzzer is designed for easy extension while keeping CLI usage simple:
 

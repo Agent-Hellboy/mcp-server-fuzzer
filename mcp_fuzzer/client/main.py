@@ -13,6 +13,7 @@ from ..reports import FuzzerReporter
 from ..reports.formatters.common import extract_tool_runs
 from ..safety_system.safety import SafetyFilter
 from ..exceptions import MCPError
+from ..corpus import build_corpus_root, build_target_id, default_fs_root
 from .settings import ClientSettings
 from .base import MCPFuzzerClient
 from .transport import build_driver_with_auth
@@ -105,6 +106,14 @@ async def unified_client_main(settings: ClientSettings) -> int:
             output_dir=config["output_dir"], safety_system=safety_system
         )
 
+    corpus_root = None
+    if config.get("corpus_enabled", True):
+        endpoint = config.get("endpoint") or "unknown"
+        protocol = config.get("protocol", "unknown")
+        target_id = build_target_id(protocol, endpoint)
+        fs_root = config.get("fs_root") or str(default_fs_root())
+        corpus_root = str(build_corpus_root(fs_root, target_id))
+
     client = MCPFuzzerClient(
         transport=transport,
         auth_manager=config.get("auth_manager"),
@@ -113,6 +122,8 @@ async def unified_client_main(settings: ClientSettings) -> int:
         safety_system=safety_system,
         safety_enabled=safety_enabled,
         max_concurrency=config.get("max_concurrency", 5),
+        corpus_root=corpus_root,
+        havoc_mode=config.get("havoc_mode", False),
     )
 
     try:
@@ -153,18 +164,39 @@ async def unified_client_main(settings: ClientSettings) -> int:
                     runs_per_type=config.get("runs_per_type", 10),
                     phase=protocol_phase,
                 )
+            if config.get("stateful", False):
+                protocol_results["stateful_sequences"] = (
+                    await client.fuzz_stateful_sequences(
+                        runs=config.get("stateful_runs", 5),
+                        phase=protocol_phase,
+                    )
+                )
         elif mode == "resources":
             await _run_spec_guard_if_enabled(client, config, reporter)
             protocol_results = await client.fuzz_resources(
                 runs_per_type=config.get("runs_per_type", 10),
                 phase=protocol_phase,
             )
+            if config.get("stateful", False):
+                protocol_results["stateful_sequences"] = (
+                    await client.fuzz_stateful_sequences(
+                        runs=config.get("stateful_runs", 5),
+                        phase=protocol_phase,
+                    )
+                )
         elif mode == "prompts":
             await _run_spec_guard_if_enabled(client, config, reporter)
             protocol_results = await client.fuzz_prompts(
                 runs_per_type=config.get("runs_per_type", 10),
                 phase=protocol_phase,
             )
+            if config.get("stateful", False):
+                protocol_results["stateful_sequences"] = (
+                    await client.fuzz_stateful_sequences(
+                        runs=config.get("stateful_runs", 5),
+                        phase=protocol_phase,
+                    )
+                )
         elif mode == "all":
             logging.info("Running both tools and protocol fuzzing")  # pragma: no cover
             if config.get("phase") == "both":
@@ -197,6 +229,13 @@ async def unified_client_main(settings: ClientSettings) -> int:
                 protocol_results = await client.fuzz_all_protocol_types(
                     runs_per_type=config.get("runs_per_type", 10),
                     phase=protocol_phase,
+                )
+            if config.get("stateful", False):
+                protocol_results["stateful_sequences"] = (
+                    await client.fuzz_stateful_sequences(
+                        runs=config.get("stateful_runs", 5),
+                        phase=protocol_phase,
+                    )
                 )
         else:
             logging.error(f"Unknown mode: {config['mode']}")

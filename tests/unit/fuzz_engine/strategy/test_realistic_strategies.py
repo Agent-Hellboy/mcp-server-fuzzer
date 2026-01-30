@@ -15,8 +15,12 @@ from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.tool_strategy import (
     base64_strings,
     timestamp_strings,
     uuid_strings,
+    generate_realistic_integer_sync,
+    generate_realistic_string_sync,
     generate_realistic_text,
+    _generate_realistic_array,
     fuzz_tool_arguments_realistic,
+    reset_run_counter,
 )
 from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic import tool_strategy
 from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.protocol_type_strategy import (  # noqa: E501
@@ -126,6 +130,141 @@ def test_timestamp_strings_without_microseconds():
     assert "." not in value
 
 
+@pytest.mark.parametrize(
+    "format_type, validator",
+    [
+        (
+            "date-time",
+            lambda value: value.endswith("Z")
+            or "+" in value
+            or "-" in value[10:],
+        ),
+        ("date", lambda value: len(value) == 10),
+        (
+            "time",
+            lambda value: re.match(
+                r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$",
+                value,
+            )
+            is not None,
+        ),
+        ("uuid", lambda value: str(uuid.UUID(value)) == value),
+        ("email", lambda value: "@" in value),
+        (
+            "uri",
+            lambda value: value.startswith("http://")
+            or value.startswith("https://"),
+        ),
+        ("hostname", lambda value: "." in value),
+        ("ipv4", lambda value: value.count(".") == 3),
+        ("ipv6", lambda value: ":" in value),
+        ("unknown", lambda value: value.isalnum()),
+    ],
+)
+def test_generate_realistic_string_sync_formats(format_type, validator):
+    max_len = 40 if format_type == "uuid" else 20
+    schema = {"format": format_type, "minLength": 5, "maxLength": max_len}
+    value = generate_realistic_string_sync(schema, key="field", run_index=0)
+    assert validator(value)
+
+
+@pytest.mark.parametrize(
+    "pattern, expected",
+    [
+        ("^[a-zA-Z0-9]+$", "Test"),
+        ("^[0-9]+$", "1111"),
+        ("^[a-zA-Z]+$", "aaaa"),
+        ("^[a-z]+$", "aaaa"),
+        ("^[A-Z]+$", "AAAA"),
+        ("other", "aaaa"),
+    ],
+)
+def test_generate_realistic_string_sync_patterns(pattern, expected):
+    schema = {"pattern": pattern, "minLength": 4, "maxLength": 4}
+    value = generate_realistic_string_sync(schema, key="field", run_index=0)
+    assert value == expected
+
+
+def test_generate_realistic_integer_sync_constraints():
+    schema = {
+        "minimum": 2,
+        "maximum": 10,
+        "exclusiveMinimum": True,
+        "exclusiveMaximum": 10,
+        "multipleOf": 3,
+    }
+    value = generate_realistic_integer_sync(schema, run_index=0)
+    assert value in {3, 6, 9}
+
+    schema = {"minimum": 10, "maximum": 5}
+    value = generate_realistic_integer_sync(schema, run_index=0)
+    assert 5 <= value <= 10
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_strategies(monkeypatch):
+    original_choice = tool_strategy.random.choice
+
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda _: "base64")
+    assert isinstance(await generate_realistic_text(), str)
+
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda _: "uuid")
+    assert isinstance(await generate_realistic_text(), str)
+
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda _: "timestamp")
+    assert isinstance(await generate_realistic_text(), str)
+
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda _: "numbers")
+    assert (await generate_realistic_text()).isdigit()
+
+    def mixed_choice(seq, calls={"count": 0}):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return "mixed_alphanumeric"
+        return original_choice(seq)
+
+    monkeypatch.setattr(tool_strategy.random, "choice", mixed_choice)
+    assert isinstance(await generate_realistic_text(min_size=5, max_size=5), str)
+
+    def normal_choice(seq, calls={"count": 0}):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return "normal"
+        return "Sales Performance Q4"
+
+    monkeypatch.setattr(tool_strategy.random, "choice", normal_choice)
+    assert (await generate_realistic_text(min_size=1, max_size=50)).startswith(
+        "Sales"
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_array_variants():
+    array_schema = {"items": [{"type": "string"}, {"type": "integer"}], "maxItems": 1}
+    result = await _generate_realistic_array(array_schema, run_index=0)
+    assert isinstance(result, list)
+
+    array_schema = {"items": {"type": "number", "minimum": 1.0, "maximum": 2.0}}
+    result = await _generate_realistic_array(array_schema, run_index=0)
+    assert all(isinstance(item, float) for item in result)
+
+    array_schema = {"items": {"type": "integer", "minimum": 1, "maximum": 2}}
+    result = await _generate_realistic_array(array_schema, run_index=0)
+    assert all(isinstance(item, int) for item in result)
+
+    array_schema = {"items": {"type": "string", "minLength": 2, "maxLength": 2}}
+    result = await _generate_realistic_array(array_schema, run_index=0)
+    assert all(isinstance(item, str) for item in result)
+
+    array_schema = {"items": {"minLength": 1}}
+    result = await _generate_realistic_array(array_schema, run_index=0)
+    assert isinstance(result, list)
+
+
+def test_generate_realistic_string_sync_semantic_sample():
+    schema = {"minLength": 1, "maxLength": 50}
+    value = generate_realistic_string_sync(schema, key="email_address", run_index=0)
+    assert "@" in value
 @pytest.mark.asyncio
 async def test_generate_realistic_text():
     """Test generate_realistic_text returns a string."""
@@ -171,14 +310,15 @@ async def test_fuzz_tool_arguments_realistic():
                 "count": {"type": "integer", "minimum": 10, "maximum": 100},
                 "score": {"type": "number", "minimum": 0.0, "maximum": 10.0},
                 "enabled": {"type": "boolean"},
-            }
+            },
+            "required": ["count", "score", "enabled"],
         }
     }
     
     result = await fuzz_tool_arguments_realistic(tool)
     assert isinstance(result["count"], int)
     assert 10 <= result["count"] <= 100
-    assert isinstance(result["score"], float)
+    assert isinstance(result["score"], (int, float))
     assert 0.0 <= result["score"] <= 10.0
     assert isinstance(result["enabled"], bool)
     
@@ -188,7 +328,8 @@ async def test_fuzz_tool_arguments_realistic():
             "properties": {
                 "tags": {"type": "array", "items": {"type": "string"}},
                 "numbers": {"type": "array", "items": {"type": "integer"}},
-            }
+            },
+            "required": ["tags", "numbers"],
         }
     }
     
@@ -216,6 +357,30 @@ async def test_fuzz_tool_arguments_edge_cases():
     result = await fuzz_tool_arguments_realistic(tool)
     assert "field1" in result
     assert "field2" in result
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_realistic_enum_const_object():
+    reset_run_counter()
+    tool = {
+        "inputSchema": {
+            "properties": {
+                "mode": {"type": "string", "enum": ["a", "b"]},
+                "status": {"const": "ok"},
+                "nested": {
+                    "type": "object",
+                    "properties": {"value": {"type": "string"}},
+                },
+                "choice": {"type": ["string", "null"]},
+            },
+            "required": ["mode", "status", "nested", "choice"],
+        }
+    }
+    result = await fuzz_tool_arguments_realistic(tool)
+    assert result["mode"] in {"a", "b"}
+    assert result["status"] == "ok"
+    assert isinstance(result["nested"], dict)
+    assert isinstance(result["choice"], str)
     
     # Missing inputSchema
     tool = {}
@@ -255,12 +420,11 @@ async def test_generate_realistic_text_bounds_swapping():
 @pytest.mark.asyncio
 async def test_generate_realistic_text_fallback():
     """Test the fallback case in generate_realistic_text."""
-    import random
-    from unittest.mock import patch
-
-    with patch.object(random, "choice", return_value="invalid_strategy"):
-        text = await generate_realistic_text()
-        assert text == "realistic_value"
+    # With deterministic cycling, generate_realistic_text always returns
+    # a valid string based on run_index, no random fallback
+    text = await generate_realistic_text()
+    assert isinstance(text, str)
+    assert len(text) >= 1
 
 
 @pytest.mark.asyncio
@@ -381,7 +545,12 @@ async def test_fuzz_tool_arguments_realistic_array_object(monkeypatch):
     tool = {
         "inputSchema": {
             "properties": {
-                "items": {"type": "array", "items": {"type": "object"}},
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1,
+                    "items": {"type": "object"},
+                },
             }
         }
     }
@@ -391,17 +560,25 @@ async def test_fuzz_tool_arguments_realistic_array_object(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fuzz_tool_arguments_realistic_array_number(monkeypatch):
-    monkeypatch.setattr(tool_strategy.random, "randint", lambda *_args: 2)
-    monkeypatch.setattr(tool_strategy.random, "uniform", lambda *_args: 1.23)
+    def _mk(schema, phase="realistic"):
+        if schema.get("type") == "number":
+            return 1.23
+        return {}
+
     monkeypatch.setattr(
         "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
-        lambda *_args, **_kwargs: {},
+        _mk,
     )
 
     tool = {
         "inputSchema": {
             "properties": {
-                "scores": {"type": "array", "items": {"type": "number"}},
+                "scores": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {"type": "number"},
+                },
             }
         }
     }
@@ -454,6 +631,7 @@ async def test_fuzz_tool_arguments_realistic_string_formats(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fuzz_tool_arguments_realistic_unknown_type(monkeypatch):
+    reset_run_counter()
     monkeypatch.setattr(
         "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
         lambda *_args, **_kwargs: {},

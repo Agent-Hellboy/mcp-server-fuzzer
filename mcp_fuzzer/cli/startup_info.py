@@ -141,7 +141,15 @@ def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> 
             config_table.add_row("Timing", display_name, str(args_dict[param]))
 
     # Fuzzing Settings
-    fuzzing_params = ["runs", "runs_per_type", "protocol_type"]
+    fuzzing_params = [
+        "runs",
+        "runs_per_type",
+        "protocol_type",
+        "stateful",
+        "stateful_runs",
+        "havoc",
+        "corpus",
+    ]
     for param in fuzzing_params:
         if param in args_dict and args_dict[param] is not None:
             display_name = param.replace("_", " ").title()
