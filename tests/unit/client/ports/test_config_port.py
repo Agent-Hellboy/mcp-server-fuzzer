@@ -39,6 +39,8 @@ def test_config_port_contract():
     assert config.get("key") == "value"
     config.update({"other": 2})
     assert config.get("other") == 2
+    assert config.get("missing", "fallback") == "fallback"
     assert config.load_file("config.toml") == {"path": "config.toml"}
     assert config.apply_file(config_path="config.toml") is True
+    assert config.apply_file() is False
     assert config.get_schema() == {"type": "object"}

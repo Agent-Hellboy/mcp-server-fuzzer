@@ -15,6 +15,7 @@ from .base import Mutator
 from .strategies import ProtocolStrategies
 from .seed_pool import SeedPool
 from .seed_mutation import mutate_seed_payload
+from .utils import havoc_stack
 
 
 class ProtocolMutator(Mutator):
@@ -31,9 +32,18 @@ class ProtocolMutator(Mutator):
         """Initialize the protocol mutator."""
         self.strategies = ProtocolStrategies()
         storage_dir = corpus_dir / "protocol" if corpus_dir else None
-        self.seed_pool = seed_pool or SeedPool(
-            max_per_key=40, reseed_ratio=0.3, storage_dir=storage_dir
-        )
+        if seed_pool:
+            self.seed_pool = seed_pool
+            self._rng = getattr(seed_pool, "_rng", random.Random())
+        else:
+            rng = random.Random()
+            self.seed_pool = SeedPool(
+                max_per_key=40,
+                reseed_ratio=0.3,
+                storage_dir=storage_dir,
+                rng=rng,
+            )
+            self._rng = rng
         self.havoc_mode = havoc_mode
         self.havoc_min = havoc_min
         self.havoc_max = havoc_max
@@ -140,11 +150,12 @@ class ProtocolMutator(Mutator):
         return mutated
 
     def _havoc_stack(self) -> int:
-        if not self.havoc_mode:
-            return 1
-        low = max(1, self.havoc_min)
-        high = max(low, self.havoc_max)
-        return random.randint(low, high)
+        return havoc_stack(
+            havoc_mode=self.havoc_mode,
+            havoc_min=self.havoc_min,
+            havoc_max=self.havoc_max,
+            rng=self._rng,
+        )
 
 
 def _protocol_signature(
@@ -154,11 +165,12 @@ def _protocol_signature(
     if server_error:
         return f"err:{server_error[:120]}"
     if spec_checks:
-        failures = [
-            check.get("id")
-            for check in spec_checks
-            if str(check.get("status", "")).upper() == "FAIL"
-        ]
+        failures = []
+        for check in spec_checks:
+            if str(check.get("status", "")).upper() == "FAIL":
+                check_id = check.get("id")
+                if check_id is not None:
+                    failures.append(str(check_id))
         if failures:
             return "spec:" + ",".join(sorted(set(failures)))
     return None

@@ -109,7 +109,6 @@ def test_record_feedback_adds_seeds(tool_mutator):
         "test_tool",
         {"arg": "value"},
         exception="bad",
-        spec_checks=[{"id": "rule-1", "status": "FAIL"}],
         response_signature="sig",
     )
     tool_mutator.seed_pool.add_seed.assert_any_call(
@@ -126,17 +125,34 @@ def test_record_feedback_adds_seeds(tool_mutator):
     )
 
 
+def test_record_feedback_spec_checks_signature(tool_mutator):
+    tool_mutator.seed_pool = MagicMock()
+    tool_mutator.record_feedback(
+        "test_tool",
+        {"arg": "value"},
+        exception=None,
+        spec_checks=[{"id": "rule-1", "status": "FAIL"}],
+    )
+    tool_mutator.seed_pool.add_seed.assert_any_call(
+        "test_tool",
+        {"arg": "value"},
+        signature="spec:rule-1",
+        score=1.5,
+    )
+
+
 def test_record_feedback_ignores_non_dict(tool_mutator):
     tool_mutator.seed_pool = MagicMock()
     tool_mutator.record_feedback("test_tool", ["not", "dict"])
     tool_mutator.seed_pool.add_seed.assert_not_called()
 
 
-def test_havoc_stack_bounds(tool_mutator, monkeypatch):
+def test_havoc_stack_bounds(tool_mutator):
     tool_mutator.havoc_mode = True
     tool_mutator.havoc_min = 4
     tool_mutator.havoc_max = 1
-    monkeypatch.setattr(tool_mutator_module.random, "randint", lambda a, b: a)
+    tool_mutator._rng = MagicMock()
+    tool_mutator._rng.randint.return_value = 4
     assert tool_mutator._havoc_stack() == 4
     tool_mutator.havoc_mode = False
     assert tool_mutator._havoc_stack() == 1

@@ -9,9 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import copy
 import json
+import logging
 import random
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -75,9 +79,9 @@ class SeedPool:
         if not entries:
             return None
         if len(entries) == 1:
-            return entries[0].data
+            return copy.deepcopy(entries[0].data)
         weights = [entry.score for entry in entries]
-        return self._rng.choices(entries, weights=weights, k=1)[0].data
+        return copy.deepcopy(self._rng.choices(entries, weights=weights, k=1)[0].data)
 
     def should_reseed(self, ratio_override: float | None = None) -> bool:
         ratio = self._reseed_ratio if ratio_override is None else ratio_override
@@ -112,7 +116,14 @@ class SeedPool:
                 signature = entry.get("signature")
                 score = entry.get("score", 1.0)
                 if isinstance(data, dict) and isinstance(signature, str):
-                    self.add_seed(key, data, signature=signature, score=float(score))
+                    try:
+                        score_value = float(score)
+                    except (TypeError, ValueError):
+                        _logger.debug(
+                            "Invalid seed score for %s: %r", key, score
+                        )
+                        score_value = 1.0
+                    self.add_seed(key, data, signature=signature, score=score_value)
         self._autosave = autosave
 
     def save_key(self, key: str) -> None:

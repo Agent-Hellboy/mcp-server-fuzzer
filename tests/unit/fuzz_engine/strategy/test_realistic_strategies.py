@@ -133,12 +133,28 @@ def test_timestamp_strings_without_microseconds():
 @pytest.mark.parametrize(
     "format_type, validator",
     [
-        ("date-time", lambda value: value.endswith("Z")),
+        (
+            "date-time",
+            lambda value: value.endswith("Z")
+            or "+" in value
+            or "-" in value[10:],
+        ),
         ("date", lambda value: len(value) == 10),
-        ("time", lambda value: len(value.split(":")) == 3),
+        (
+            "time",
+            lambda value: re.match(
+                r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$",
+                value,
+            )
+            is not None,
+        ),
         ("uuid", lambda value: str(uuid.UUID(value)) == value),
         ("email", lambda value: "@" in value),
-        ("uri", lambda value: value.startswith("https://")),
+        (
+            "uri",
+            lambda value: value.startswith("http://")
+            or value.startswith("https://"),
+        ),
         ("hostname", lambda value: "." in value),
         ("ipv4", lambda value: value.count(".") == 3),
         ("ipv6", lambda value: ":" in value),

@@ -5,6 +5,7 @@ Protocol Client Module
 This module provides functionality for fuzzing MCP protocol types.
 """
 
+import copy
 import json
 import logging
 import random
@@ -318,7 +319,7 @@ class ProtocolClient:
     ) -> None:
         if isinstance(fuzz_data, dict):
             pool = self._successful_requests.setdefault(protocol_type, [])
-            pool.append(fuzz_data)
+            pool.append(copy.deepcopy(fuzz_data))
             if len(pool) > self._max_successful_requests:
                 del pool[0 : len(pool) - self._max_successful_requests]
 

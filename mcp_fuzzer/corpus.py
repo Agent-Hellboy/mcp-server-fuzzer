@@ -13,9 +13,10 @@ def default_fs_root() -> Path:
 
 
 def build_target_id(protocol: str, endpoint: str) -> str:
-    raw = f"{protocol}::{endpoint}".lower()
+    normalized_protocol = protocol.lower()
+    raw = f"{normalized_protocol}::{endpoint}".lower()
     digest = sha256(raw.encode("utf-8")).hexdigest()[:16]
-    return f"{protocol}-{digest}"
+    return f"{normalized_protocol}-{digest}"
 
 
 def build_corpus_root(fs_root: str | Path | None, target_id: str) -> Path:

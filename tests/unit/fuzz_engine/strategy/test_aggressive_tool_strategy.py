@@ -3,6 +3,8 @@
 Tests for aggressive tool argument strategies.
 """
 
+import re
+
 from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive import tool_strategy
 from mcp_fuzzer.fuzz_engine.mutators.strategies import schema_parser
 
@@ -17,14 +19,14 @@ def test_pick_semantic_string_variants():
     assert resource_url.startswith("file://") or "://" in resource_url
 
     cursor = tool_strategy._pick_semantic_string("cursor")
-    assert cursor.startswith("cursor_") or len(cursor) > 0
+    assert re.search(r"t.*id", cursor)
 
     name = tool_strategy._pick_semantic_string("name")
-    assert name.startswith("id_") or len(name) > 0
+    assert re.search(r"t.*id", name)
 
     query = tool_strategy._pick_semantic_string("query")
     # May contain SQL injection payloads
-    assert query.startswith("q=") or "'" in query or len(query) > 0
+    assert query.startswith("q=") or "'" in query or " OR " in query
 
     # Misc no longer returns garbage "A" * 256
     misc = tool_strategy._pick_semantic_string("misc")
@@ -101,7 +103,7 @@ def test_generate_aggressive_text_semantic_hints(monkeypatch):
     )
     monkeypatch.setattr(tool_strategy.random, "choice", lambda seq: seq[0])
 
-    assert tool_strategy.generate_aggressive_text(key="resource_url").startswith("http")
+    assert "://" in tool_strategy.generate_aggressive_text(key="resource_url")
     assert tool_strategy.generate_aggressive_text(key="file_path") == "../"
     assert tool_strategy.generate_aggressive_text(key="search_query") == "sql_payload"
     assert tool_strategy.generate_aggressive_text(key="html_body") == "xss_payload"

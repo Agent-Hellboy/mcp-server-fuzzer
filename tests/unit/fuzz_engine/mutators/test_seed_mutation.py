@@ -124,18 +124,14 @@ def test_mutate_value_dict_and_unknown():
 
 
 def test_mutate_value_scalar_types():
-    rng = random.Random(0)
+    rng = FakeRandom()
     assert seed_mutation._mutate_value(True, rng, depth=0) is False
-    assert seed_mutation._mutate_value(10, rng, depth=0) in {
-        11,
-        9,
-        26,
-        -6,
-        0,
-        -1,
-        2**31 - 1,
-    }
-    assert seed_mutation._mutate_value(1.0, rng, depth=0) in {0.0, 2.0, 11.0}
+
+    rng = FakeRandom(choice_values=[2])
+    assert seed_mutation._mutate_value(10, rng, depth=0) == 26
+
+    rng = FakeRandom(choice_values=[-1.0])
+    assert seed_mutation._mutate_value(1.0, rng, depth=0) == 0.0
 
 
 def test_mutate_str_variants():

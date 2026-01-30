@@ -37,3 +37,4 @@ def test_seed_pool_persistence_roundtrip(tmp_path: Path):
     reloaded = SeedPool(storage_dir=storage, autosave=False)
     picked = reloaded.pick_seed("tool:test")
     assert picked == seed
+    assert reloaded.add_seed("tool:test", seed, signature="sig-1", score=1.0) is False

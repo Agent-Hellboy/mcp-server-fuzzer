@@ -338,6 +338,8 @@ def _generate_aggressive_float(
         min_value = -1000.0
     if max_value is None:
         max_value = 1000.0
+    if min_value > max_value:
+        min_value, max_value = max_value, min_value
 
     strategies = [
         "off_by_one",

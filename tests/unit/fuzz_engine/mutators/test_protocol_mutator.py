@@ -196,11 +196,12 @@ def test_mutate_from_seed_sets_method_and_jsonrpc(protocol_mutator):
     assert mutated["method"] == "tools/list"
 
 
-def test_havoc_stack_bounds(protocol_mutator, monkeypatch):
+def test_havoc_stack_bounds(protocol_mutator):
     protocol_mutator.havoc_mode = True
     protocol_mutator.havoc_min = 5
     protocol_mutator.havoc_max = 2
-    monkeypatch.setattr(protocol_mutator_module.random, "randint", lambda a, b: a)
+    protocol_mutator._rng = MagicMock()
+    protocol_mutator._rng.randint.return_value = 5
     assert protocol_mutator._havoc_stack() == 5
     protocol_mutator.havoc_mode = False
     assert protocol_mutator._havoc_stack() == 1
