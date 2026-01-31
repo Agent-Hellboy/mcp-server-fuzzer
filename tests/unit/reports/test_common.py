@@ -133,7 +133,11 @@ def test_collect_security_summary_aggregates_oracles_and_violations():
                         {"domain": "filesystem", "controls": ["MCP-FS-02"]},
                     ],
                 },
-                {"oracle_findings": [{"oracle": "process", "type": "unexpected_process"}]},
+                {
+                    "oracle_findings": [
+                        {"oracle": "process", "type": "unexpected_process"}
+                    ]
+                },
             ]
         },
         "tool_b": {

@@ -388,6 +388,16 @@ def test_process_safe_helpers_and_allowlist(monkeypatch):
 
     monkeypatch.setattr("psutil.Process", lambda pid: tree.get(pid))
     pre_snapshot = oracle.pre_call(1)
+    # Add a new allowlisted process so post_call sees it as new
+    new_worker = _ProcessStub(
+        pid=3,
+        name="worker",
+        cmdline=["worker"],
+        child_pids=[],
+        manager=tree,
+    )
+    tree.add(new_worker)
+    root._child_pids.append(3)
     findings, effects = oracle.post_call(1, pre_snapshot)
     assert any(effect["type"] == "new_process" for effect in effects)
     assert findings == []

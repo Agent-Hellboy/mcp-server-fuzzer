@@ -138,7 +138,7 @@ def collect_security_summary(
     """Aggregate oracle findings and policy violations from tool results.
 
     Returns a dict with:
-    - oracle_findings_by_type: counts by oracle type (process, filesystem, network, authz)
+    - oracle_findings_by_type: counts by oracle type (process, fs, network, authz)
     - policy_violations_by_domain: counts by domain (FS, EXEC, NET, AUTHZ, INPUT)
     - policy_controls: counts by control id (e.g. MCP-EXEC-01, MCP-FS-02)
     """

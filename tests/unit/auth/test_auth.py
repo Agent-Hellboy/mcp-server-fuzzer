@@ -299,7 +299,7 @@ def test_auth_manager_get_negative_auth_variants_empty_when_no_auth(auth_manager
 
 
 def test_auth_manager_get_negative_auth_variants_when_tool_has_auth(auth_manager):
-    """get_negative_auth_variants returns missing and invalid_token when tool has auth."""
+    """get_negative_auth_variants returns missing and invalid_token when auth set."""
     auth_provider = APIKeyAuth("test_key")
     auth_manager.add_auth_provider("probe", auth_provider)
     auth_manager.map_tool_to_auth("sample_tool", "probe")
@@ -310,7 +310,11 @@ def test_auth_manager_get_negative_auth_variants_when_tool_has_auth(auth_manager
     missing_params = next(v[1] for v in variants if v[0] == "missing")
     assert missing_params == {}
     invalid_params = next(v[1] for v in variants if v[0] == "invalid_token")
-    assert "token" in invalid_params or "api_key" in invalid_params or "Authorization" in invalid_params
+    assert (
+        "token" in invalid_params
+        or "api_key" in invalid_params
+        or "Authorization" in invalid_params
+    )
 
 
 # Test cases for auth factory functions

@@ -894,7 +894,7 @@ async def test_send_client_response_posts_with_retries(monkeypatch):
 
 
 def test_get_stored_session_ids_and_extract():
-    """get_stored_session_ids returns IDs received via _maybe_extract_session_headers."""
+    """get_stored_session_ids returns IDs from _maybe_extract_session_headers."""
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
     assert driver.get_stored_session_ids() == []
     response = FakeResponse(status_code=200, headers={"mcp-session-id": "sid-1"})
