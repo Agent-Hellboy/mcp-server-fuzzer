@@ -7,6 +7,7 @@ and result aggregation.
 """
 
 import logging
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
@@ -338,13 +339,14 @@ class FuzzerReporter:
 
     def get_current_status(self) -> dict[str, Any]:
         """Get current status of the reporter."""
+        metadata = self._metadata.to_dict() if self._metadata else {}
         return {
             "session_id": self.session_id,
             "output_directory": str(self.output_dir),
             "tool_results_count": len(self.collector.tool_results),
             "protocol_results_count": len(self.collector.protocol_results),
             "safety_data_available": bool(self.collector.safety_data),
-            "metadata": self.fuzzing_metadata,
+            "metadata": metadata,
         }
 
     def print_status(self):
@@ -368,7 +370,8 @@ class FuzzerReporter:
             include_safety=include_safety, finalize=False
         )
         if title is not None and format_name == "html":
-            self._html_adapter.title = title
+            self._html_adapter = replace(self._html_adapter, title=title)
+            self.formatter_registry.register("html", self._html_adapter)
         return self.formatter_registry.save(
             format_name, snapshot, self.output_dir, filename
         )
@@ -441,18 +444,6 @@ class FuzzerReporter:
             logging.debug("Failed to gather runtime data: %s", exc)
 
         return {}
-
-    async def _generate_summary_stats(self) -> dict[str, Any]:
-        """Backward-compatible summary helper used in tests."""
-        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        return snapshot.summary.to_dict()
-
-    @property
-    def fuzzing_metadata(self) -> dict[str, Any]:
-        """Expose metadata as a serializable dict for compatibility."""
-        if not self._metadata:
-            return {}
-        return self._metadata.to_dict()
 
     @property
     def tool_results(self) -> dict[str, list[dict[str, Any]]]:

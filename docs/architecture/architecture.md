@@ -25,7 +25,7 @@ flowchart TB
   end
 
   subgraph Client
-    B1[UnifiedMCPFuzzerClient (client/main.py)]
+    B1[MCPFuzzerClient (client/main.py)]
     B2[Safety Integration]
     B3[Reporting Integration]
   end

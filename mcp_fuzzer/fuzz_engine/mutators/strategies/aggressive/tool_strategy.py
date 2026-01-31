@@ -34,7 +34,6 @@ from ..interesting_values import (
     inject_unicode_trick,
 )
 
-# Legacy constants for backward compatibility (use interesting_values.py instead)
 SPECIAL_CHARS = "!@#$%^&*()_+-=[]{}|;':\",./<>?`~"
 UNICODE_CHARS = "漢字éñüřαβγδεζηθικλμνξοπρστυφχψω"
 NULL_BYTES = ["\x00", "\x01", "\x02", "\x03", "\x04", "\x05"]

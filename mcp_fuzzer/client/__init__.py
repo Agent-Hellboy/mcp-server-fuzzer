@@ -33,11 +33,8 @@ from .constants import (
 )
 from .ports import ConfigPort
 
-UnifiedMCPFuzzerClient = MCPFuzzerClient
-
 __all__ = [
     "MCPFuzzerClient",
-    "UnifiedMCPFuzzerClient",
     "ConfigPort",
     "ConfigAdapter",
     "config_mediator",

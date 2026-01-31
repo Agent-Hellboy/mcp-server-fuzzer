@@ -190,14 +190,15 @@ class TestFuzzerReporter:
 
         reporter.set_fuzzing_metadata(**metadata)
 
-        assert reporter.fuzzing_metadata["session_id"] == reporter.session_id
-        assert reporter.fuzzing_metadata["mode"] == "tools"
-        assert reporter.fuzzing_metadata["protocol"] == "stdio"
-        assert reporter.fuzzing_metadata["endpoint"] == "test_endpoint"
-        assert reporter.fuzzing_metadata["runs"] == 100
-        assert reporter.fuzzing_metadata["runs_per_type"] == 10
-        assert "start_time" in reporter.fuzzing_metadata
-        assert "fuzzer_version" in reporter.fuzzing_metadata
+        metadata = reporter.get_current_status()["metadata"]
+        assert metadata["session_id"] == reporter.session_id
+        assert metadata["mode"] == "tools"
+        assert metadata["protocol"] == "stdio"
+        assert metadata["endpoint"] == "test_endpoint"
+        assert metadata["runs"] == 100
+        assert metadata["runs_per_type"] == 10
+        assert "start_time" in metadata
+        assert "fuzzer_version" in metadata
 
     def test_add_tool_results(self, reporter):
         """Test adding tool results."""
@@ -333,7 +334,10 @@ class TestFuzzerReporter:
     @pytest.mark.asyncio
     async def test_generate_summary_stats_empty_results(self, reporter):
         """Test generating summary stats with empty results."""
-        stats = await reporter._generate_summary_stats()
+        snapshot = await reporter._prepare_snapshot(
+            include_safety=False, finalize=False
+        )
+        stats = snapshot.summary.to_dict()
 
         assert stats["tools"]["total_tools"] == 0
         assert stats["tools"]["total_runs"] == 0
@@ -360,7 +364,10 @@ class TestFuzzerReporter:
             "protocol1", [{"success": True}, {"error": "test_error"}]
         )
 
-        stats = await reporter._generate_summary_stats()
+        snapshot = await reporter._prepare_snapshot(
+            include_safety=False, finalize=False
+        )
+        stats = snapshot.summary.to_dict()
 
         # Check tool stats
         assert stats["tools"]["total_tools"] == 1

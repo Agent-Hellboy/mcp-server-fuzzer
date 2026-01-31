@@ -36,10 +36,10 @@ The executor's concurrency can be configured in several ways:
    executor = AsyncFuzzExecutor(max_concurrency=10)
    ```
 
-2. **Via UnifiedMCPFuzzerClient**:
+2. **Via MCPFuzzerClient**:
 
    ```python
-   client = UnifiedMCPFuzzerClient(
+   client = MCPFuzzerClient(
        transport,
        max_concurrency=10  # Controls concurrency for both tool and protocol fuzzers
    )

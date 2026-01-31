@@ -17,10 +17,7 @@ from .settings import ClientSettings
 from .base import MCPFuzzerClient
 from .transport import build_driver_with_auth
 from .runtime import RunContext, build_run_plan
-from .runtime.run_plan import _run_spec_guard_if_enabled as _run_spec_guard_if_enabled
-
-# For backward compatibility
-UnifiedMCPFuzzerClient = MCPFuzzerClient
+from .runtime.run_plan import _run_spec_guard_if_enabled
 
 
 async def unified_client_main(settings: ClientSettings) -> int:
@@ -272,4 +269,4 @@ async def unified_client_main(settings: ClientSettings) -> int:
         await client.cleanup()
 
 
-__all__ = ["unified_client_main", "UnifiedMCPFuzzerClient", "MCPFuzzerClient"]
+__all__ = ["unified_client_main", "MCPFuzzerClient"]

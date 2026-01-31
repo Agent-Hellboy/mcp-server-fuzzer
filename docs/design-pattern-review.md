@@ -16,7 +16,7 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 | Execution & Concurrency | Executor, Builder | 7 |
 | Safety System | Strategy, Policy, Adapter | 7 |
 | Runtime & Process Management | State, Observer, Strategy, Watchdog, Builder | 8 |
-| Reporting & Output | Builder, Strategy, Adapter | 7 |
+| Reporting & Observability | Builder, Strategy, Adapter | 7 |
 
 ## Module-by-Module Analysis
 

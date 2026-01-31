@@ -210,8 +210,8 @@ export_csv: "reports/results.csv"
 export_html: "reports/results.html"
 ```
 
-Standardized output files are currently emitted as JSON; `output.format` is
-accepted for compatibility with legacy tooling.
+Standardized output files are currently emitted as JSON regardless of
+`output.format`; other values are reserved for future formats.
 
 ## Authentication Configuration
 
@@ -257,4 +257,4 @@ Use the transport by setting `protocol: mytransport` in the same config file.
 
 ## Notes
 
-- Standardized output files are currently emitted as JSON; `output.format` is accepted for compatibility.
+- Standardized output files are currently emitted as JSON regardless of `output.format`.

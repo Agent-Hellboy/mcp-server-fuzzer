@@ -97,7 +97,7 @@ def test_report_snapshot_rates_and_access():
     assert snapshot.total_tests() == 4
     assert snapshot.overall_success_rate() == 50.0
     assert "metadata" in snapshot
-    assert snapshot["metadata"]["mode"] == "tools"
+    assert snapshot.to_dict()["metadata"]["mode"] == "tools"
 
 
 def test_report_snapshot_no_tests_returns_zero():

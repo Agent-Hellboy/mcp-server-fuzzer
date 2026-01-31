@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pytest
+
 from mcp_fuzzer.reports.core.models import (
     FuzzingMetadata,
     ReportSnapshot,
@@ -9,6 +11,8 @@ from mcp_fuzzer.reports.formatters.registry import (
     ReportSaveAdapter,
     FormatterRegistry,
 )
+
+pytestmark = [pytest.mark.unit]
 
 
 def _snapshot() -> ReportSnapshot:
@@ -49,12 +53,9 @@ def test_formatter_registry_saves(tmp_path):
 def test_formatter_registry_unknown_name(tmp_path):
     registry = FormatterRegistry()
     snapshot = _snapshot()
-    try:
+    with pytest.raises(KeyError) as excinfo:
         registry.save("missing", snapshot, tmp_path)
-    except KeyError as exc:
-        assert "Unknown formatter" in str(exc)
-    else:
-        raise AssertionError("Expected KeyError for missing formatter")
+    assert "Unknown formatter" in str(excinfo.value)
 
 
 def test_formatter_adapter_save_with_filename(tmp_path):
