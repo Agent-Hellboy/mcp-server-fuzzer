@@ -93,6 +93,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         }
 
         self.session_id: str | None = None
+        self._session_ids: list[str] = []
         self.protocol_version: str | None = None
         self._initialized: bool = False
         self._init_lock: asyncio.Lock = asyncio.Lock()
@@ -130,6 +131,8 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         sid = response.headers.get(MCP_SESSION_ID)
         if sid:
             self.session_id = sid
+            if sid not in self._session_ids:
+                self._session_ids.append(sid)
             self._logger.debug("Received session id: %s", sid)
 
         protocol_header = response.headers.get(MCP_PROTOCOL_VERSION)
@@ -513,6 +516,31 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         except Exception:
             # Surface the failure; leave _initialized False
             raise
+
+    def get_stored_session_ids(self) -> list[str]:
+        """Return list of session IDs received from the server (for replay testing)."""
+        return list(self._session_ids)
+
+    async def try_session_replay(self, session_id: str) -> bool:
+        """Send a request using the given session ID and return True if it succeeds.
+
+        Used in security mode to detect whether the server accepts replayed sessions.
+        """
+        prev = self.session_id
+        self.session_id = session_id
+        try:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list",
+                "params": {},
+            }
+            result = await self.send_raw(payload)
+            return isinstance(result, dict) and "result" in result
+        except Exception:
+            return False
+        finally:
+            self.session_id = prev
 
     async def _stream_request(
         self, payload: dict[str, Any]

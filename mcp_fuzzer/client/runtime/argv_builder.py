@@ -51,6 +51,14 @@ def prepare_inner_argv(args: Any) -> list[str]:
     _add_value("--spec-prompt-name", _get_attr("spec_prompt_name", None))
     _add_value("--spec-prompt-args", _get_attr("spec_prompt_args", None))
     _add_value("--fs-root", _get_attr("fs_root", None))
+    _add_value("--security-mode", _get_attr("security_mode", None))
+    _add_list("--fs-allow-root", _get_attr("fs_allow_roots", None))
+    _add_list("--fs-deny-root", _get_attr("fs_deny_roots", None))
+    _add_value("--repo-root", _get_attr("repo_root", None))
+    _add_value("--workspace-root", _get_attr("workspace_root", None))
+    _add_list("--net-allow-host", _get_attr("net_allow_hosts", None))
+    _add_list("--proc-allow", _get_attr("proc_allow", None))
+    _add_list("--proc-ignore", _get_attr("proc_ignore", None))
     _add_value("--output-dir", _get_attr("output_dir", None))
     _add_value("--log-level", _get_attr("log_level", None))
 
@@ -83,6 +91,12 @@ def prepare_inner_argv(args: Any) -> list[str]:
         argv.append("--no-spec-guard")
 
     _add_list("--allow-host", _get_attr("allow_hosts", None))
+
+    net_deny_by_default = _get_attr("net_deny_by_default", None)
+    if net_deny_by_default is True:
+        argv.append("--net-deny-by-default")
+    elif net_deny_by_default is False:
+        argv.append("--no-net-deny-by-default")
 
     return argv
 

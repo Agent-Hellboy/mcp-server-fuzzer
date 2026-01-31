@@ -33,6 +33,9 @@ class FuzzerContext:
     havoc_mode: bool = False
     havoc_min: int = 2
     havoc_max: int = 6
+    created_files: tuple[str, ...] = ()
+    repo_paths: tuple[str, ...] = ()
+    symlink_targets: tuple[tuple[str, str], ...] = ()
 
     def with_defaults(self) -> "FuzzerContext":
         rng = self.rng or random.Random()

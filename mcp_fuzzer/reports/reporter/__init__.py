@@ -26,7 +26,7 @@ from ..formatters import (
     ReportSaveAdapter,
     FormatterRegistry,
 )
-from ..formatters.common import extract_tool_runs
+from ..formatters.common import extract_tool_runs, collect_security_summary
 from ..output import OutputManager
 from .config import ReporterConfig
 from ..safety_reporter import SafetyReporter
@@ -201,6 +201,8 @@ class FuzzerReporter:
     def print_tool_summary(self, results: dict[str, Any]):
         """Print tool fuzzing summary to console."""
         self.console_formatter.print_tool_summary(results)
+        security_summary = collect_security_summary(results)
+        self.console_formatter.print_security_summary(security_summary)
 
         # Store results for final report
         for tool_name, tool_results in results.items():
@@ -241,6 +243,7 @@ class FuzzerReporter:
     ):
         """Print overall summary to console."""
         self.console_formatter.print_overall_summary(tool_results, protocol_results)
+        self.console_formatter.print_security_summary(self.collector.security_summary)
 
     def print_safety_summary(self):
         """Print safety system summary to console."""

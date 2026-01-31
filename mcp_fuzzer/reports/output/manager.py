@@ -34,6 +34,7 @@ class OutputManager:
         total_tests: int,
         success_rate: float,
         safety_enabled: bool = False,
+        security_summary: dict[str, Any] | None = None,
     ) -> str:
         """Save fuzzing results using standardized format."""
         output = self.protocol.create_fuzzing_results_output(
@@ -46,6 +47,7 @@ class OutputManager:
             total_tests=total_tests,
             success_rate=success_rate,
             safety_enabled=safety_enabled,
+            security_summary=security_summary,
         )
         return self._save(output)
 

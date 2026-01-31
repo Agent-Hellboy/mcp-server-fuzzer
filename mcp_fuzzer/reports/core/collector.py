@@ -24,6 +24,11 @@ class ReportCollector:
         self.spec_checks: list[dict[str, Any]] = []
         self.safety_data: dict[str, Any] = {}
         self.runtime_data: dict[str, Any] = {}
+        self.security_summary: dict[str, dict[str, int]] = {
+            "oracle_findings_by_type": {},
+            "policy_violations_by_domain": {},
+            "policy_controls": {},
+        }
 
     def add_tool_results(self, tool_name: str, results: list[dict[str, Any]]):
         bucket = self.tool_results.setdefault(tool_name, [])
@@ -91,6 +96,8 @@ class ReportCollector:
         if runtime_data:
             runtime.update(deepcopy(runtime_data))
 
+        security = deepcopy(self.security_summary)
+
         return ReportSnapshot(
             metadata=metadata,
             tool_results=deepcopy(self.tool_results),
@@ -99,6 +106,7 @@ class ReportCollector:
             spec_summary=self._build_spec_summary(),
             safety_data=safety,
             runtime_data=runtime,
+            security_summary=security,
         )
 
     def collect_errors(self) -> list[dict[str, Any]]:
@@ -161,7 +169,30 @@ class ReportCollector:
     def _coerce_result(self, result: dict[str, Any] | RunRecord) -> RunRecord:
         if isinstance(result, RunRecord):
             return result
-        return RunRecord(payload=deepcopy(result))
+        payload = deepcopy(result)
+        self._update_security_summary(payload)
+        return RunRecord(payload=payload)
+
+    def _update_security_summary(self, payload: dict[str, Any]) -> None:
+        for finding in payload.get("oracle_findings", []):
+            if not isinstance(finding, dict):
+                continue
+            oracle = finding.get("oracle", "unknown")
+            counter = self.security_summary["oracle_findings_by_type"]
+            counter[oracle] = counter.get(oracle, 0) + 1
+
+        for violation in payload.get("policy_violations", []):
+            if not isinstance(violation, dict):
+                continue
+            domain = violation.get("domain", "unknown")
+            domain_counter = self.security_summary["policy_violations_by_domain"]
+            domain_counter[domain] = domain_counter.get(domain, 0) + 1
+
+            controls = violation.get("controls")
+            if isinstance(controls, list):
+                for control in controls:
+                    control_counter = self.security_summary["policy_controls"]
+                    control_counter[control] = control_counter.get(control, 0) + 1
 
     def _collect_spec_checks(self) -> list[dict[str, Any]]:
         checks: list[dict[str, Any]] = []

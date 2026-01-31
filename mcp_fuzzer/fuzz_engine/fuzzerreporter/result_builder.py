@@ -24,6 +24,10 @@ class ResultBuilder:
         safety_blocked: bool = False,
         safety_reason: str | None = None,
         safety_sanitized: bool = False,
+        oracle_findings: list[dict[str, Any]] | None = None,
+        policy_violations: list[dict[str, Any]] | None = None,
+        side_effects: list[dict[str, Any]] | None = None,
+        semantic_mismatch: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Create standardized tool fuzzing result.
@@ -68,6 +72,15 @@ class ResultBuilder:
         if safety_sanitized:
             result["safety_sanitized"] = safety_sanitized
 
+        if oracle_findings is not None:
+            result["oracle_findings"] = oracle_findings
+        if policy_violations is not None:
+            result["policy_violations"] = policy_violations
+        if side_effects is not None:
+            result["side_effects"] = side_effects
+        if semantic_mismatch is not None:
+            result["semantic_mismatch"] = semantic_mismatch
+
         return result
 
     def build_protocol_result(
@@ -80,6 +93,10 @@ class ResultBuilder:
         invariant_violations: list[str] | None = None,
         spec_checks: list[dict[str, Any]] | None = None,
         spec_scope: str | None = None,
+        oracle_findings: list[dict[str, Any]] | None = None,
+        policy_violations: list[dict[str, Any]] | None = None,
+        side_effects: list[dict[str, Any]] | None = None,
+        semantic_mismatch: dict[str, Any] | None = None,
     ) -> FuzzDataResult:
         """
         Create standardized protocol fuzzing result.
@@ -111,6 +128,14 @@ class ResultBuilder:
             result["spec_checks"] = spec_checks
         if spec_scope:
             result["spec_scope"] = spec_scope
+        if oracle_findings is not None:
+            result["oracle_findings"] = oracle_findings
+        if policy_violations is not None:
+            result["policy_violations"] = policy_violations
+        if side_effects is not None:
+            result["side_effects"] = side_effects
+        if semantic_mismatch is not None:
+            result["semantic_mismatch"] = semantic_mismatch
 
         return result
 

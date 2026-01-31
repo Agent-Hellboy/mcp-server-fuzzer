@@ -891,3 +891,50 @@ async def test_send_client_response_posts_with_retries(monkeypatch):
     await driver._send_client_response({"jsonrpc": "2.0"})
 
     driver._post_with_retries.assert_called_once()
+
+
+def test_get_stored_session_ids_and_extract():
+    """get_stored_session_ids returns IDs from _maybe_extract_session_headers."""
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    assert driver.get_stored_session_ids() == []
+    response = FakeResponse(status_code=200, headers={"mcp-session-id": "sid-1"})
+    driver._maybe_extract_session_headers(response)
+    assert driver.get_stored_session_ids() == ["sid-1"]
+    response2 = FakeResponse(status_code=200, headers={"mcp-session-id": "sid-2"})
+    driver._maybe_extract_session_headers(response2)
+    assert "sid-1" in driver.get_stored_session_ids()
+    assert "sid-2" in driver.get_stored_session_ids()
+
+
+@pytest.mark.asyncio
+async def test_try_session_replay_success(monkeypatch):
+    """try_session_replay returns True when request with given session_id succeeds."""
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    driver._initialized = True
+    send_raw_calls = []
+
+    async def fake_send_raw(payload):
+        send_raw_calls.append((driver.session_id, payload))
+        return {"result": {"tools": []}}
+
+    monkeypatch.setattr(driver, "send_raw", fake_send_raw)
+    result = await driver.try_session_replay("replay-sid")
+    assert result is True
+    assert len(send_raw_calls) == 1
+    assert send_raw_calls[0][0] == "replay-sid"
+    assert send_raw_calls[0][1].get("method") == "tools/list"
+    assert driver.session_id is None
+
+
+@pytest.mark.asyncio
+async def test_try_session_replay_failure(monkeypatch):
+    """try_session_replay returns False when request fails."""
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    driver._initialized = True
+
+    async def fake_send_raw_fail(_payload):
+        raise TransportError("session invalid")
+
+    monkeypatch.setattr(driver, "send_raw", fake_send_raw_fail)
+    result = await driver.try_session_replay("bad-sid")
+    assert result is False

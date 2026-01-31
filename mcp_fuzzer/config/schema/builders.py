@@ -186,6 +186,54 @@ def build_network_schema() -> dict[str, Any]:
     }
 
 
+def build_security_mode_schema() -> dict[str, Any]:
+    """Build schema for security mode configuration."""
+    return {
+        "security_mode": {
+            "type": "string",
+            "enum": ["off", "minimal", "full"],
+            "description": "Enable security mode oracles and policy checks",
+        },
+        "fs_allow_roots": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Allowed filesystem roots for security mode",
+        },
+        "fs_deny_roots": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Denied filesystem roots for security mode",
+        },
+        "repo_root": {
+            "type": "string",
+            "description": "Repository root for security mode path policy",
+        },
+        "workspace_root": {
+            "type": "string",
+            "description": "Workspace root for security mode path policy",
+        },
+        "net_allow_hosts": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Allowed outbound hosts for security mode",
+        },
+        "net_deny_by_default": {
+            "type": "boolean",
+            "description": "Deny outbound network by default in security mode",
+        },
+        "proc_allow": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Allowlisted process command names",
+        },
+        "proc_ignore": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Process command names to ignore",
+        },
+    }
+
+
 def build_auth_schema() -> dict[str, Any]:
     """Build schema for authentication configuration."""
     return {

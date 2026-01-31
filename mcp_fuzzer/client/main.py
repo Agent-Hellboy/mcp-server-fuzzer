@@ -13,6 +13,7 @@ from ..reports.formatters.common import extract_tool_runs
 from ..safety_system.safety import SafetyFilter
 from ..exceptions import MCPError
 from ..corpus import build_corpus_root, build_target_id, default_fs_root
+from ..security_mode import build_security_policy
 from .settings import ClientSettings
 from .base import MCPFuzzerClient
 from .transport import build_driver_with_auth
@@ -97,6 +98,8 @@ async def unified_client_main(settings: ClientSettings) -> int:
         fs_root = config.get("fs_root") or str(default_fs_root())
         corpus_root = str(build_corpus_root(fs_root, target_id))
 
+    security_policy = build_security_policy(config)
+
     client = MCPFuzzerClient(
         transport=transport,
         auth_manager=config.get("auth_manager"),
@@ -107,6 +110,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
         max_concurrency=config.get("max_concurrency", 5),
         corpus_root=corpus_root,
         havoc_mode=config.get("havoc_mode", False),
+        security_policy=security_policy,
     )
 
     try:

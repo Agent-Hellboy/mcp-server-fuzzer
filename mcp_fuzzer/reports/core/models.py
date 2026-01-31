@@ -143,6 +143,7 @@ class ReportSnapshot:
     spec_summary: dict[str, Any] = field(default_factory=dict)
     safety_data: dict[str, Any] = field(default_factory=dict)
     runtime_data: dict[str, Any] = field(default_factory=dict)
+    security_summary: dict[str, Any] = field(default_factory=dict)
 
     def total_tests(self) -> int:
         tool_tests = sum(len(results) for results in self.tool_results.values())
@@ -183,4 +184,5 @@ class ReportSnapshot:
             "spec_summary": self.spec_summary,
             "safety": self.safety_data,
             "runtime": self.runtime_data,
+            "security_summary": self.security_summary,
         }

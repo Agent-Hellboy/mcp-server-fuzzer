@@ -9,10 +9,11 @@ from .providers import (
     create_oauth_auth,
     create_custom_header_auth,
 )
-from .manager import AuthManager
+from .manager import AuthManager, NegativeAuthVariant
 from .loaders import setup_auth_from_env, load_auth_config
 
 __all__ = [
+    "NegativeAuthVariant",
     "AuthProvider",
     "APIKeyAuth",
     "BasicAuth",

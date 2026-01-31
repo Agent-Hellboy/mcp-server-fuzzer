@@ -109,6 +109,65 @@ COMMAND_INJECTION: list[str] = [
     "& dir",
 ]
 
+COMMAND_INJECTION_TOKENS: list[str] = [
+    ";",
+    "&&",
+    "||",
+    "|",
+    "`",
+    "$(",
+    "\n",
+    "$(curl http://169.254.169.254)",
+    "$(bash -lc \"echo injected\")",
+]
+
+ARG_INJECTION_HINTS: list[str] = [
+    "--output=",
+    "--exec=",
+    "-c",
+    "--config=",
+    "--separator=",
+]
+
+PATH_TRAVERSAL_EXTENDED: list[str] = [
+    "../",
+    "..\\",
+    "%2e%2e/",
+    "..%2f",
+    "..\\..\\",
+    "..\\../",
+    "..\\/..\\",
+    "..\\..\\windows\\system32",
+    "..//..//etc//passwd",
+    "..\\..\\..\\..\\",
+    "..//..//",
+]
+
+# UNC / Windows paths for path traversal
+PATH_TRAVERSAL_UNC: list[str] = [
+    "\\\\server\\share\\file.txt",
+    "\\\\?\\C:\\Windows\\System32",
+    "\\\\127.0.0.1\\c$\\file",
+    "//server/share",
+    "\\\\server\\share\\..\\..\\etc\\passwd",
+]
+
+SECURITY_DICTIONARY: dict[str, list[str]] = {
+    "command": COMMAND_INJECTION
+    + [
+        "; whoami",
+        "&& whoami",
+        "$(ls /)",
+        "$(python -c 'import os; os.system(\"whoami\")')",
+        "`uname -a`",
+    ],
+    "arg_injection": [
+        f"{hint}$(curl http://169.254.169.254/{i})"
+        for i, hint in enumerate(ARG_INJECTION_HINTS, 1)
+    ],
+    "path": PATH_TRAVERSAL + PATH_TRAVERSAL_EXTENDED + PATH_TRAVERSAL_UNC,
+}
+
 # SSRF payloads
 SSRF_PAYLOADS: list[str] = [
     "http://localhost",
@@ -206,8 +265,12 @@ def get_payload_within_length(max_length: int, category: str = "sql") -> str:
         "sql": SQL_INJECTION,
         "nosql": NOSQL_INJECTION,
         "xss": XSS_PAYLOADS,
-        "path": PATH_TRAVERSAL,
+        "path": PATH_TRAVERSAL + PATH_TRAVERSAL_EXTENDED + PATH_TRAVERSAL_UNC,
         "command": COMMAND_INJECTION,
+        "arg_injection": [
+            f"{h}$(curl http://169.254.169.254)"
+            for h in ARG_INJECTION_HINTS
+        ],
         "ssrf": SSRF_PAYLOADS,
     }
     
@@ -221,6 +284,25 @@ def get_payload_within_length(max_length: int, category: str = "sql") -> str:
     # Truncate shortest if none fit
     shortest = min(payloads, key=len)
     return shortest[:max_length] if max_length > 0 else ""
+
+
+def get_security_payload(
+    max_length: int,
+    category: str = "command",
+) -> str:
+    """Return a security-sensitive payload, truncating softly to honor max_length."""
+    payloads = SECURITY_DICTIONARY.get(category, SECURITY_DICTIONARY["command"])
+    payload = random.choice(payloads)
+    if max_length <= 0 or len(payload) <= max_length:
+        return payload
+    # Soft truncation: keep leading tokens/shell indicators
+    tokens = [";", "&&", "||", "|", "`", "$(", "\n"]
+    for token in tokens:
+        idx = payload.find(token)
+        if 0 <= idx < max_length:
+            end = min(len(payload), max_length)
+            return payload[:end]
+    return payload[:max_length]
 
 
 def inject_unicode_trick(value: str, max_length: int | None = None) -> str:

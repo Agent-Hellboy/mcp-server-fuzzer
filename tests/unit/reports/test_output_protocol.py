@@ -88,6 +88,28 @@ class TestOutputProtocol:
         assert output["metadata"]["total_tests"] == 3
         assert output["metadata"]["success_rate"] == 66.67
         assert output["metadata"]["safety_enabled"] is True
+        assert output["data"]["security_summary"] == {}
+
+    def test_create_fuzzing_results_output_with_security_summary(self):
+        """Ensure custom security summary is preserved."""
+        tool_results = {"tool1": [{"success": True}]}
+        protocol_results = {"PingRequest": [{"success": True}]}
+        summary = {"oracle_findings_by_type": {"filesystem": 1}}
+
+        output = self.protocol.create_fuzzing_results_output(
+            mode="tools",
+            protocol="http",
+            endpoint="http://test.com",
+            tool_results=tool_results,
+            protocol_results=protocol_results,
+            execution_time="PT10S",
+            total_tests=1,
+            success_rate=100.0,
+            safety_enabled=False,
+            security_summary=summary,
+        )
+
+        assert output["data"]["security_summary"] == summary
 
     def test_create_fuzzing_results_from_snapshot(self):
         start = datetime(2024, 1, 1, 0, 0, 0)
@@ -116,6 +138,7 @@ class TestOutputProtocol:
         assert output["data"]["total_tools"] == 1
         assert output["data"]["total_protocol_types"] == 1
         assert output["metadata"]["safety_enabled"] is True
+        assert output["data"]["security_summary"] == {}
 
     def test_create_error_report_output(self):
         """Test creating error report output."""
@@ -318,6 +341,30 @@ class TestOutputManager:
             Path(self.temp_dir) / "sessions" / self.manager.protocol.session_id
         )
         assert session_dir.exists()
+
+    def test_save_fuzzing_results_includes_security_summary(self):
+        """Ensure manager persists provided security summary."""
+        tool_results = {"tool1": [{"success": True}]}
+        protocol_results = {"InitializeRequest": [{"success": True}]}
+        summary = {"policy_violations_by_domain": {"filesystem": 1}}
+
+        filepath = self.manager.save_fuzzing_results(
+            mode="tools",
+            protocol="http",
+            endpoint="http://test.com",
+            tool_results=tool_results,
+            protocol_results=protocol_results,
+            execution_time="PT5S",
+            total_tests=1,
+            success_rate=100.0,
+            safety_enabled=False,
+            security_summary=summary,
+        )
+
+        with open(filepath) as handle:
+            data = json.load(handle)
+
+        assert data["data"]["security_summary"] == summary
 
     def test_save_error_report(self):
         """Test saving error report through manager."""

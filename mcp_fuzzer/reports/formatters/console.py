@@ -244,3 +244,33 @@ class ConsoleFormatter:
         self.console.print(
             f"Protocol types with exceptions: {protocol_types_with_exceptions}"
         )
+
+    def print_security_summary(self, summary: dict[str, dict[str, int]] | None) -> None:
+        """Print aggregated security findings if available."""
+        if not summary:
+            return
+
+        oracle_counts = summary.get("oracle_findings_by_type") or {}
+        domain_counts = summary.get("policy_violations_by_domain") or {}
+        control_counts = summary.get("policy_controls") or {}
+
+        if not (oracle_counts or domain_counts or control_counts):
+            return
+
+        self.console.print("\n[bold]Security Mode Summary:[/bold]")
+
+        def _print_table(title: str, counts: dict[str, int]) -> None:
+            if not counts:
+                return
+            table = Table(title=title)
+            table.add_column("Type", style="cyan", no_wrap=True)
+            table.add_column("Count", style="green", no_wrap=True)
+            for key, value in sorted(
+                counts.items(), key=lambda item: (-item[1], item[0])
+            ):
+                table.add_row(str(key), str(value))
+            self.console.print(table)
+
+        _print_table("Oracle findings by type", oracle_counts)
+        _print_table("Policy violations by domain", domain_counts)
+        _print_table("Policy controls", control_counts)
