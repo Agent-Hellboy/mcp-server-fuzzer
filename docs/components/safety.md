@@ -186,6 +186,7 @@ from mcp_fuzzer.safety_system.filesystem.sandbox import FilesystemSandbox
 class CustomSandbox(SandboxProvider):
     def initialize(self, root: str) -> None:
         ...
+
     def get_sandbox(self) -> FilesystemSandbox:
         ...
 
