@@ -39,6 +39,7 @@ class MCPFuzzerClient:
         protocol_client: ProtocolClient | None = None,
         corpus_root: str | None = None,
         havoc_mode: bool = False,
+        security_policy: Any | None = None,
     ):
         """
         Initialize the MCP Fuzzer Client.
@@ -74,6 +75,7 @@ class MCPFuzzerClient:
             max_concurrency=max_concurrency,
             corpus_root=(Path(corpus_root) if corpus_root else None),
             havoc_mode=havoc_mode,
+            security_policy=security_policy,
         )
 
         self.protocol_client = protocol_client or ProtocolClient(

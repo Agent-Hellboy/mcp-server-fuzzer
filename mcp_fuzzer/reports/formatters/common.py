@@ -130,3 +130,46 @@ def collect_and_summarize_protocol_items(
     """Collect labeled protocol items and summarize them."""
     items = collect_labeled_protocol_items(protocol_results, prefix)
     return items, summarize_protocol_items(items)
+
+
+def collect_security_summary(
+    tool_results: dict[str, Any],
+) -> dict[str, Any]:
+    """Aggregate oracle findings and policy violations from tool results.
+
+    Returns a dict with:
+    - oracle_findings_by_type: counts by oracle type (process, filesystem, network, authz)
+    - policy_violations_by_domain: counts by domain (FS, EXEC, NET, AUTHZ, INPUT)
+    - policy_controls: counts by control id (e.g. MCP-EXEC-01, MCP-FS-02)
+    """
+    runs_list: list[dict[str, Any]] = []
+    for _tool_name, tool_entry in (tool_results or {}).items():
+        runs, _ = extract_tool_runs(tool_entry)
+        if isinstance(runs, list):
+            runs_list.extend(runs)
+
+    oracle_by_type: dict[str, int] = {}
+    violations_by_domain: dict[str, int] = {}
+    control_counts: dict[str, int] = {}
+
+    for run in runs_list:
+        if not isinstance(run, dict):
+            continue
+        for finding in run.get("oracle_findings") or []:
+            if isinstance(finding, dict):
+                oracle = str(finding.get("oracle", "unknown"))
+                oracle_by_type[oracle] = oracle_by_type.get(oracle, 0) + 1
+        for violation in run.get("policy_violations") or []:
+            if isinstance(violation, dict):
+                domain = str(violation.get("domain", "unknown"))
+                violations_by_domain[domain] = (
+                    violations_by_domain.get(domain, 0) + 1
+                )
+                for ctrl in violation.get("controls") or []:
+                    control_counts[ctrl] = control_counts.get(ctrl, 0) + 1
+
+    return {
+        "oracle_findings_by_type": oracle_by_type,
+        "policy_violations_by_domain": violations_by_domain,
+        "policy_controls": control_counts,
+    }

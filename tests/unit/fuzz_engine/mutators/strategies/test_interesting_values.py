@@ -14,6 +14,7 @@ from mcp_fuzzer.fuzz_engine.mutators.strategies.interesting_values import (
     SQL_INJECTION,
     XSS_PAYLOADS,
     PATH_TRAVERSAL,
+    PATH_TRAVERSAL_UNC,
     UNICODE_TRICKS,
     TYPE_CONFUSION,
     get_boundary_values_for_range,
@@ -77,6 +78,11 @@ class TestAttackPayloads:
         """Path traversal should contain .. patterns."""
         assert any(".." in p for p in PATH_TRAVERSAL)
 
+    def test_path_traversal_unc_contains_unc_paths(self):
+        """PATH_TRAVERSAL_UNC should contain UNC/Windows paths for security corpus."""
+        assert len(PATH_TRAVERSAL_UNC) > 0
+        assert any("\\\\" in p or "//" in p for p in PATH_TRAVERSAL_UNC)
+
     def test_unicode_tricks_contains_null_byte(self):
         """Unicode tricks should contain null byte."""
         assert "\x00" in UNICODE_TRICKS
@@ -110,6 +116,12 @@ class TestHelperFunctions:
         """Should return SQL injection payload."""
         payload = get_payload_within_length(100, "sql")
         assert payload in SQL_INJECTION
+
+    def test_get_payload_within_length_arg_injection(self):
+        """Regression: arg_injection category returns payload with exploit pattern."""
+        payload = get_payload_within_length(200, "arg_injection")
+        assert len(payload) <= 200
+        assert "curl" in payload or "--" in payload or "=" in payload
 
     def test_inject_unicode_trick_embeds_trick(self):
         """Should embed unicode trick in value."""

@@ -39,6 +39,7 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 - Production Ready: PATH shims, sandbox defaults, and CI-friendly controls
 - Intelligent Testing: Hypothesis-based data generation with custom strategies
 - More Than Conformance: Goes beyond the checks in [modelcontextprotocol/conformance](https://github.com/modelcontextprotocol/conformance) with fuzzing, reporting, and safety tooling
+- **Security Mode**: Audit server security against the [MCP Server Security Standard (MSSS)](https://github.com/mcp-security-standard/mcp-server-security-standard) with side-effect oracles (process, filesystem, network), policy-violation checks, and reporting that maps findings to MSSS controls (e.g. MCP-EXEC-01, MCP-FS-02, MCP-NET-01)
 
 ### Fuzzing Paradigms
 
@@ -48,6 +49,10 @@ MCP Server Fuzzer combines:
 - Black-box fuzzing (no instrumentation; feedback from responses/spec checks)
 
 It does **not** use instrumentation-based fuzzing (no coverage or binary/source instrumentation).
+
+### Security mode (MSSS auditing)
+
+With `--security-mode minimal` or `--security-mode full`, the fuzzer audits server behavior against the [MCP Server Security Standard (MSSS)](https://github.com/mcp-security-standard/mcp-server-security-standard). It uses side-effect oracles (process, filesystem, network), policy-violation checks, and optional auth/session probes. Results include oracle findings and policy violations mapped to MSSS control IDs (e.g. MCP-EXEC-01, MCP-FS-02, MCP-NET-01). See [Configuration](#configuration) for `--security-mode`, `--fs-allow-root`, `--net-allow-host`, `--proc-allow`, and related options.
 
 ### Basic Fuzzer Flow
 

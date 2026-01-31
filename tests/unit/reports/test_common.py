@@ -9,6 +9,7 @@ from mcp_fuzzer.reports.formatters.common import (
     calculate_protocol_success_rate,
     collect_and_summarize_protocol_items,
     collect_labeled_protocol_items,
+    collect_security_summary,
     extract_tool_runs,
     normalize_report_data,
     result_has_failure,
@@ -116,3 +117,49 @@ def test_summarize_protocol_items_detects_failures():
     assert summary["alpha"]["errors"] == 1
     assert summary["beta"]["errors"] == 1
     assert result_has_failure({"success": False})
+
+
+def test_collect_security_summary_aggregates_oracles_and_violations():
+    tool_results = {
+        "tool_a": {
+            "runs": [
+                {
+                    "oracle_findings": [
+                        {"oracle": "process", "type": "unexpected_process"},
+                        {"oracle": "filesystem", "type": "symlink_escape"},
+                    ],
+                    "policy_violations": [
+                        {"domain": "process", "controls": ["MCP-EXEC-01"]},
+                        {"domain": "filesystem", "controls": ["MCP-FS-02"]},
+                    ],
+                },
+                {"oracle_findings": [{"oracle": "process", "type": "unexpected_process"}]},
+            ]
+        },
+        "tool_b": {
+            "runs": [
+                {
+                    "policy_violations": [
+                        {"domain": "authz", "controls": ["MCP-AUTHZ-01"]},
+                    ],
+                },
+            ]
+        },
+    }
+    summary = collect_security_summary(tool_results)
+    assert summary["oracle_findings_by_type"]["process"] == 2
+    assert summary["oracle_findings_by_type"]["filesystem"] == 1
+    assert summary["policy_violations_by_domain"]["process"] == 1
+    assert summary["policy_violations_by_domain"]["filesystem"] == 1
+    assert summary["policy_violations_by_domain"]["authz"] == 1
+    assert summary["policy_controls"]["MCP-EXEC-01"] == 1
+    assert summary["policy_controls"]["MCP-FS-02"] == 1
+    assert summary["policy_controls"]["MCP-AUTHZ-01"] == 1
+
+
+def test_collect_security_summary_empty():
+    assert collect_security_summary({}) == {
+        "oracle_findings_by_type": {},
+        "policy_violations_by_domain": {},
+        "policy_controls": {},
+    }

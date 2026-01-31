@@ -240,6 +240,65 @@ Examples:
         ),
     )
 
+    # Security mode controls (side-effect oracles + policy checks)
+    parser.add_argument(
+        "--security-mode",
+        choices=["off", "minimal", "full"],
+        default="off",
+        help="Enable security mode oracles (off|minimal|full). Default: off.",
+    )
+    parser.add_argument(
+        "--fs-allow-root",
+        action="append",
+        dest="fs_allow_roots",
+        metavar="PATH",
+        help="Allowed filesystem root for security mode (repeatable).",
+    )
+    parser.add_argument(
+        "--fs-deny-root",
+        action="append",
+        dest="fs_deny_roots",
+        metavar="PATH",
+        help="Denied filesystem root for security mode (repeatable).",
+    )
+    parser.add_argument(
+        "--repo-root",
+        metavar="PATH",
+        help="Repository root path for security mode path policy.",
+    )
+    parser.add_argument(
+        "--workspace-root",
+        metavar="PATH",
+        help="Workspace root path for security mode path policy.",
+    )
+    parser.add_argument(
+        "--net-allow-host",
+        action="append",
+        dest="net_allow_hosts",
+        metavar="HOST",
+        help="Allow outbound connections to host (repeatable).",
+    )
+    parser.add_argument(
+        "--net-deny-by-default",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Deny outbound network by default in security mode.",
+    )
+    parser.add_argument(
+        "--proc-allow",
+        action="append",
+        dest="proc_allow",
+        metavar="CMD",
+        help="Allowlisted process command (repeatable).",
+    )
+    parser.add_argument(
+        "--proc-ignore",
+        action="append",
+        dest="proc_ignore",
+        metavar="CMD",
+        help="Ignored process command (repeatable).",
+    )
+
     parser.add_argument(
         "--auth-config",
         help="Path to authentication configuration file (JSON format)",

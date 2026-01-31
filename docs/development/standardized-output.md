@@ -447,7 +447,7 @@ Top-level fields are:
 
 Each `output_type` maps to a data payload:
 
-- `fuzzing_results`: mode, protocol, endpoint, tool/protocol summaries, spec summary.
+- `fuzzing_results`: mode, protocol, endpoint, tool/protocol summaries, spec summary, and `security_summary` (oracle findings/policy violation counts aggregated per control domain).
 - `error_report`: list of errors + warnings, execution context.
 - `safety_summary`: blocked operations, safety statistics, risk assessment.
 - `performance_metrics`: metrics and benchmarks.
@@ -458,7 +458,7 @@ Each `output_type` maps to a data payload:
 ### OutputProtocol
 
 - `create_base_output(output_type, data, metadata)`: Create base output structure
-- `create_fuzzing_results_output(...)`: Create fuzzing results output
+- `create_fuzzing_results_output(..., security_summary=None)`: Create fuzzing results output with optional security summary
 - `create_error_report_output(...)`: Create error report output
 - `create_safety_summary_output(...)`: Create safety summary output
 - `validate_output(output)`: Validate output against schema
@@ -466,7 +466,7 @@ Each `output_type` maps to a data payload:
 
 ### OutputManager
 
-- `save_fuzzing_results(...)`: Save fuzzing results
+- `save_fuzzing_results(..., security_summary=None)`: Save fuzzing results with optional security summary
 - `save_error_report(...)`: Save error report
 - `save_safety_summary(...)`: Save safety summary
 - `get_session_directory(session_id)`: Get session directory path

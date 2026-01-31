@@ -27,6 +27,10 @@ class FuzzDataResult(TypedDict, total=False):
     protocol_type: str
     exception: str | None
     invariant_violations: list[str]
+    oracle_findings: list[dict[str, Any]]
+    policy_violations: list[dict[str, Any]]
+    side_effects: list[dict[str, Any]]
+    semantic_mismatch: dict[str, Any] | None
 
 
 class ProtocolFuzzResult(TypedDict, total=False):
@@ -41,6 +45,10 @@ class ProtocolFuzzResult(TypedDict, total=False):
     success: bool
     exception: str | None
     traceback: str | None
+    oracle_findings: list[dict[str, Any]]
+    policy_violations: list[dict[str, Any]]
+    side_effects: list[dict[str, Any]]
+    semantic_mismatch: dict[str, Any] | None
 
 
 class ToolFuzzResult(TypedDict, total=False):
@@ -56,6 +64,10 @@ class ToolFuzzResult(TypedDict, total=False):
     exception: str | None
     traceback: str | None
     error: str | None
+    oracle_findings: list[dict[str, Any]]
+    policy_violations: list[dict[str, Any]]
+    side_effects: list[dict[str, Any]]
+    semantic_mismatch: dict[str, Any] | None
 
 
 class BatchExecutionResult(TypedDict):

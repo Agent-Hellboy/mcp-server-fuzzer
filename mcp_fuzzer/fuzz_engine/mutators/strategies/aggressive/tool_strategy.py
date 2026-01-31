@@ -20,6 +20,7 @@ from typing import Any
 
 from ..schema_helpers import apply_schema_edge_cases
 from ..interesting_values import (
+    ARG_INJECTION_HINTS,
     COMMAND_INJECTION,
     ENCODING_BYPASS,
     NOSQL_INJECTION,
@@ -31,6 +32,7 @@ from ..interesting_values import (
     XSS_PAYLOADS,
     get_off_by_one_int,
     get_payload_within_length,
+    get_security_payload,
     inject_unicode_trick,
 )
 
@@ -41,6 +43,21 @@ ESCAPE_CHARS = ["\\", "\\'", '\\"', "\\n", "\\r", "\\t", "\\b", "\\f"]
 HTML_ENTITIES = ["&lt;", "&gt;", "&amp;", "&quot;", "&#x27;", "&#x2F;"]
 MIN_TOKENS = ("min", "lower", "start")
 MAX_TOKENS = ("max", "upper", "limit", "size", "count", "timeout")
+
+
+def _prefer_security_dictionary(key: str | None, max_size: int) -> str | None:
+    if not key:
+        return None
+    lowered = key.lower()
+    command_hints = ("cmd", "command", "exec", "shell", "run", "script")
+    path_hints = ("path", "file", "dir", "folder", "repo", "root")
+    if any(hint in lowered for hint in command_hints):
+        return get_security_payload(max_size, "command")
+    if any(hint in lowered for hint in path_hints):
+        return get_security_payload(max_size, "path")
+    if any(hint in lowered for hint in ARG_INJECTION_HINTS):
+        return get_security_payload(max_size, "arg_injection")
+    return None
 
 
 def generate_aggressive_text(
@@ -115,6 +132,10 @@ def generate_aggressive_text(
         if len(value) > max_size:
             value = value[:max_size]
         return value
+
+    security_override = _prefer_security_dictionary(key, max_size)
+    if security_override:
+        return _fit_to_length(security_override)
 
     # Use semantic hints from key name
     if key:

@@ -168,6 +168,26 @@ class TestConsoleFormatter:
         table = console_formatter.console.print.call_args[0][0]
         assert table.title == "MCP Resources Fuzzing Summary"
 
+    def test_print_security_summary_empty(self, console_formatter):
+        console_formatter.console.print.reset_mock()
+        console_formatter.print_security_summary({})
+        console_formatter.console.print.assert_not_called()
+
+    def test_print_security_summary_with_counts(self, console_formatter):
+        console_formatter.console.print.reset_mock()
+        summary = {
+            "oracle_findings_by_type": {"filesystem": 2},
+            "policy_violations_by_domain": {"filesystem": 1},
+            "policy_controls": {"MCP-EXEC-01": 1},
+        }
+        console_formatter.print_security_summary(summary)
+        calls = console_formatter.console.print.call_args_list
+        assert calls[0][0][0] == "\n[bold]Security Mode Summary:[/bold]"
+        table_titles = [getattr(call[0][0], "title", "") for call in calls[1:]]
+        assert "Oracle findings by type" in table_titles
+        assert "Policy violations by domain" in table_titles
+        assert "Policy controls" in table_titles
+
     def test_print_spec_guard_summary_no_checks(self, console_formatter):
         """Test printing spec guard summary without checks."""
         console_formatter.print_spec_guard_summary([])
@@ -489,6 +509,38 @@ class TestTextFormatter:
             assert "Total Operations Blocked: 5" in content
             assert "Unique Tools Blocked: 3" in content
             assert "Risk Assessment: MEDIUM" in content
+
+        finally:
+            import os
+
+            os.unlink(temp_filename)
+
+    def test_save_text_report_with_security_summary(self, text_formatter):
+        """Test writing security summary section."""
+        report_data = {
+            "metadata": {"session_id": "test_session"},
+            "security_summary": {
+                "oracle_findings_by_type": {"filesystem": 1},
+                "policy_violations_by_domain": {"filesystem": 1},
+                "policy_controls": {"MCP-FS-02": 1},
+            },
+        }
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".txt"
+        ) as temp_file:
+            temp_filename = temp_file.name
+
+        try:
+            text_formatter.save_text_report(report_data, temp_filename)
+
+            with open(temp_filename, "r") as f:
+                content = f.read()
+
+            assert "SECURITY MODE SUMMARY" in content
+            assert "Oracle findings by type" in content
+            assert "Policy violations by domain" in content
+            assert "Policy controls" in content
 
         finally:
             import os

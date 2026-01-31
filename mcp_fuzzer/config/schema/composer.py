@@ -12,6 +12,7 @@ from .builders import (
     build_fuzzing_schema,
     build_network_schema,
     build_output_schema,
+    build_security_mode_schema,
     build_safety_schema,
     build_transport_retry_schema,
     build_timeout_schema,
@@ -33,6 +34,7 @@ def get_config_schema() -> dict[str, Any]:
     properties.update(build_basic_schema())
     properties.update(build_fuzzing_schema())
     properties.update(build_network_schema())
+    properties.update(build_security_mode_schema())
     properties.update(build_auth_schema())
     properties.update(build_custom_transports_schema())
     properties.update(build_safety_schema())

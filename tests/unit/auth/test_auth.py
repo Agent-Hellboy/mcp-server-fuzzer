@@ -292,6 +292,27 @@ def test_auth_manager_get_default_auth_headers_invalid_provider(auth_manager):
     assert headers == {}
 
 
+def test_auth_manager_get_negative_auth_variants_empty_when_no_auth(auth_manager):
+    """get_negative_auth_variants returns empty when tool has no auth."""
+    variants = auth_manager.get_negative_auth_variants("unknown_tool")
+    assert variants == []
+
+
+def test_auth_manager_get_negative_auth_variants_when_tool_has_auth(auth_manager):
+    """get_negative_auth_variants returns missing and invalid_token when tool has auth."""
+    auth_provider = APIKeyAuth("test_key")
+    auth_manager.add_auth_provider("probe", auth_provider)
+    auth_manager.map_tool_to_auth("sample_tool", "probe")
+    variants = auth_manager.get_negative_auth_variants("sample_tool")
+    names = [v[0] for v in variants]
+    assert "missing" in names
+    assert "invalid_token" in names
+    missing_params = next(v[1] for v in variants if v[0] == "missing")
+    assert missing_params == {}
+    invalid_params = next(v[1] for v in variants if v[0] == "invalid_token")
+    assert "token" in invalid_params or "api_key" in invalid_params or "Authorization" in invalid_params
+
+
 # Test cases for auth factory functions
 def test_create_api_key_auth():
     """Test creating API key auth."""

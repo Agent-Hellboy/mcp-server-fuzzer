@@ -2,6 +2,9 @@ from typing import Any
 
 from .providers import AuthProvider
 
+# Variant name -> params to send instead of real auth (for negative auth testing)
+NegativeAuthVariant = tuple[str, dict[str, Any]]
+
 
 class AuthManager:
     """Manages authentication for different tools and services."""
@@ -52,3 +55,23 @@ class AuthManager:
         if self.default_provider and self.default_provider in self.auth_providers:
             return self.auth_providers[self.default_provider].get_auth_headers()
         return {}
+
+    def get_negative_auth_variants(self, tool_name: str) -> list[NegativeAuthVariant]:
+        """Return variants for negative auth testing: missing auth and invalid token.
+
+        Used in security mode to probe whether the server rejects missing or
+        invalid auth. Each variant is (name, params) to use instead of real auth.
+        """
+        if not self.get_auth_for_tool(tool_name) and not self.default_provider:
+            return []
+        return [
+            ("missing", {}),
+            (
+                "invalid_token",
+                {
+                    "token": "invalid",
+                    "api_key": "invalid",
+                    "Authorization": "Bearer invalid",
+                },
+            ),
+        ]
