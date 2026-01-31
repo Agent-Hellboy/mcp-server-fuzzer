@@ -325,8 +325,9 @@ class TestFuzzerReporter:
 
         args, _ = reporter.json_formatter.save_report.call_args
         saved_report = args[0]
-        assert "safety" in saved_report
-        assert saved_report["safety"]["blocked_operations"] == 5
+        snapshot_dict = saved_report.to_dict()
+        assert "safety" in snapshot_dict
+        assert snapshot_dict["safety"]["blocked_operations"] == 5
 
         reporter.text_formatter.save_text_report.assert_called_once()
         reporter.safety_reporter.export_safety_data.assert_called_once()
@@ -472,8 +473,9 @@ class TestFuzzerReporter:
         await reporter.generate_final_report()
 
         saved_report = reporter.json_formatter.save_report.call_args[0][0]
-        assert "end_time" in saved_report["metadata"]
-        assert saved_report["metadata"]["end_time"] is not None
+        snapshot_dict = saved_report.to_dict()
+        assert "end_time" in snapshot_dict["metadata"]
+        assert snapshot_dict["metadata"]["end_time"] is not None
 
     @pytest.mark.asyncio
     async def test_generate_standardized_report_defaults(self, reporter):

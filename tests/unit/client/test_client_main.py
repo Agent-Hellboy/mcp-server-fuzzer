@@ -9,6 +9,7 @@ import pytest
 
 from mcp_fuzzer.client import main as client_main
 from mcp_fuzzer.client.main import unified_client_main
+from mcp_fuzzer.client.runtime.run_plan import _run_spec_guard_if_enabled
 from mcp_fuzzer.client.settings import ClientSettings
 from mcp_fuzzer.exceptions import MCPError
 
@@ -316,7 +317,7 @@ class StubClient:
 async def test_run_spec_guard_disabled():
     client = StubClient()
     config = {"spec_guard": False}
-    await client_main._run_spec_guard_if_enabled(client, config, reporter=None)
+    await _run_spec_guard_if_enabled(client, config, reporter=None)
 
 
 @pytest.mark.asyncio
