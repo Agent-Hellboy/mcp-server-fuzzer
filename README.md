@@ -51,6 +51,7 @@ It does **not** use instrumentation-based fuzzing (no coverage or binary/source 
 
 ### Basic Fuzzer Flow
 
+```txt
 ```mermaid
 flowchart TB
     subgraph CLI["CLI + Config"]
@@ -150,6 +151,7 @@ flowchart TB
     C3 --> H4
     D1 --> I1
 ```
+
 
 ### Extensibility for Contributors
 MCP Server Fuzzer is designed for easy extension while keeping CLI usage simple:
