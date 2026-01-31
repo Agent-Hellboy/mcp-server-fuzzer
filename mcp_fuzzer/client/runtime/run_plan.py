@@ -25,6 +25,11 @@ class RunContext:
     tool_results: dict[str, Any] = field(default_factory=dict)
     protocol_results: dict[str, Any] = field(default_factory=dict)
 
+    def ensure_pipeline(self) -> ClientExecutionPipeline:
+        if self.pipeline is None:
+            self.pipeline = ClientExecutionPipeline(self.client, self.config)
+        return self.pipeline
+
 
 class RunCommand(Protocol):
     """Command interface for a single run step."""
@@ -91,10 +96,7 @@ class ToolsCommand:
     name = "tools"
 
     async def run(self, context: RunContext) -> None:
-        pipeline = context.pipeline or ClientExecutionPipeline(
-            context.client, context.config
-        )
-        context.pipeline = pipeline
+        pipeline = context.ensure_pipeline()
         context.tool_results = await pipeline.fuzz_tools()
 
 
@@ -102,10 +104,7 @@ class ProtocolCommand:
     name = "protocol"
 
     async def run(self, context: RunContext) -> None:
-        pipeline = context.pipeline or ClientExecutionPipeline(
-            context.client, context.config
-        )
-        context.pipeline = pipeline
+        pipeline = context.ensure_pipeline()
         context.protocol_results = await pipeline.fuzz_protocol()
 
 
@@ -113,10 +112,7 @@ class ResourcesCommand:
     name = "resources"
 
     async def run(self, context: RunContext) -> None:
-        pipeline = context.pipeline or ClientExecutionPipeline(
-            context.client, context.config
-        )
-        context.pipeline = pipeline
+        pipeline = context.ensure_pipeline()
         context.protocol_results = await pipeline.fuzz_resources()
 
 
@@ -124,10 +120,7 @@ class PromptsCommand:
     name = "prompts"
 
     async def run(self, context: RunContext) -> None:
-        pipeline = context.pipeline or ClientExecutionPipeline(
-            context.client, context.config
-        )
-        context.pipeline = pipeline
+        pipeline = context.ensure_pipeline()
         context.protocol_results = await pipeline.fuzz_prompts()
 
 
@@ -138,15 +131,15 @@ class StatefulCommand:
         config = context.config
         if not config.get("stateful", False):
             return
-        pipeline = context.pipeline or ClientExecutionPipeline(
-            context.client, context.config
-        )
-        context.pipeline = pipeline
+        pipeline = context.ensure_pipeline()
         context.protocol_results.update(await pipeline.fuzz_stateful())
 
 
 def build_run_plan(mode: str, config: dict[str, Any]) -> RunPlan:
     steps: list[RunCommand] = []
+    supported_modes = {"all", "protocol", "resources", "prompts", "tools"}
+    if mode not in supported_modes:
+        raise ValueError(f"Unsupported mode: {mode}")
 
     if mode == "all":
         steps.append(ToolsCommand())

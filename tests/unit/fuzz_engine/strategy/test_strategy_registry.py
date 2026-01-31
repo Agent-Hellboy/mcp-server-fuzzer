@@ -16,11 +16,13 @@ def test_strategy_registry_protocol_override():
         "realistic",
         custom_protocol,
     )
-    method = ProtocolStrategies.get_protocol_fuzzer_method(
-        "InitializeRequest", "realistic"
-    )
-    assert method is custom_protocol
-    strategy_registry.unregister_protocol("InitializeRequest", "realistic")
+    try:
+        method = ProtocolStrategies.get_protocol_fuzzer_method(
+            "InitializeRequest", "realistic"
+        )
+        assert method is custom_protocol
+    finally:
+        strategy_registry.unregister_protocol("InitializeRequest", "realistic")
 
 
 @pytest.mark.asyncio
@@ -29,6 +31,8 @@ async def test_strategy_registry_tool_override():
         return {"overridden": True}
 
     strategy_registry.register_tool("aggressive", custom_tool)
-    result = await ToolStrategies.fuzz_tool_arguments({"name": "x"}, "aggressive")
-    assert result == {"overridden": True}
-    strategy_registry.unregister_tool("aggressive")
+    try:
+        result = await ToolStrategies.fuzz_tool_arguments({"name": "x"}, "aggressive")
+        assert result == {"overridden": True}
+    finally:
+        strategy_registry.unregister_tool("aggressive")

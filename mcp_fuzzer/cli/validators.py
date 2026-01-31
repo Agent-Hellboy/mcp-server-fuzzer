@@ -65,6 +65,74 @@ class ValidationManager:
             if not args.endpoint.strip():
                 raise ArgumentValidationError("--endpoint cannot be empty")
 
+        if hasattr(args, "transport_retries") and args.transport_retries is not None:
+            if (
+                not isinstance(args.transport_retries, int)
+                or args.transport_retries < 1
+            ):
+                raise ArgumentValidationError(
+                    "--transport-retries must be at least 1"
+                )
+
+        if (
+            hasattr(args, "transport_retry_delay")
+            and args.transport_retry_delay is not None
+        ):
+            if (
+                not isinstance(args.transport_retry_delay, (int, float))
+                or args.transport_retry_delay < 0
+            ):
+                raise ArgumentValidationError(
+                    "--transport-retry-delay must be >= 0"
+                )
+
+        if (
+            hasattr(args, "transport_retry_backoff")
+            and args.transport_retry_backoff is not None
+        ):
+            if (
+                not isinstance(args.transport_retry_backoff, (int, float))
+                or args.transport_retry_backoff < 1
+            ):
+                raise ArgumentValidationError(
+                    "--transport-retry-backoff must be >= 1"
+                )
+
+        if (
+            hasattr(args, "transport_retry_max_delay")
+            and args.transport_retry_max_delay is not None
+        ):
+            if (
+                not isinstance(args.transport_retry_max_delay, (int, float))
+                or args.transport_retry_max_delay < 0
+            ):
+                raise ArgumentValidationError(
+                    "--transport-retry-max-delay must be >= 0"
+                )
+
+        if (
+            hasattr(args, "transport_retry_max_delay")
+            and args.transport_retry_max_delay is not None
+            and hasattr(args, "transport_retry_delay")
+            and args.transport_retry_delay is not None
+        ):
+            if args.transport_retry_max_delay < args.transport_retry_delay:
+                raise ArgumentValidationError(
+                    "--transport-retry-max-delay must be >= --transport-retry-delay"
+                )
+
+        if (
+            hasattr(args, "transport_retry_jitter")
+            and args.transport_retry_jitter is not None
+        ):
+            if (
+                not isinstance(args.transport_retry_jitter, (int, float))
+                or args.transport_retry_jitter < 0
+            ):
+                raise ArgumentValidationError(
+                    "--transport-retry-jitter must be >= 0"
+                )
+
     def validate_config_file(self, path: str) -> None:
         """Validate a config file and print success message."""
         config_mediator.load_file(path)

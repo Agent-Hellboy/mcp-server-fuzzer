@@ -67,3 +67,121 @@ async def test_run_plan_all_mode_executes_steps():
     assert "stateful" in client.calls
     assert context.tool_results == {"t": []}
     assert context.protocol_results.get("p") == []
+
+
+@pytest.mark.asyncio
+async def test_run_plan_tools_mode_only_runs_tools():
+    client = DummyClient()
+    reporter = DummyReporter()
+    config = {"mode": "tools", "spec_guard": True, "stateful": True}
+    context = RunContext(
+        client=client,
+        config=config,
+        reporter=reporter,
+        protocol_phase="realistic",
+    )
+    plan = build_run_plan("tools", config)
+    await plan.execute(context)
+    assert client.calls == ["tools"]
+    assert context.tool_results == {"t": []}
+
+
+@pytest.mark.asyncio
+async def test_run_plan_protocol_mode_only_runs_protocol():
+    client = DummyClient()
+    reporter = DummyReporter()
+    config = {"mode": "protocol", "spec_guard": True, "stateful": False}
+    context = RunContext(
+        client=client,
+        config=config,
+        reporter=reporter,
+        protocol_phase="realistic",
+    )
+    plan = build_run_plan("protocol", config)
+    await plan.execute(context)
+    assert client.calls == ["spec", "protocol"]
+    assert context.protocol_results == {"p": []}
+
+
+@pytest.mark.asyncio
+async def test_run_plan_resources_mode_only_runs_resources():
+    client = DummyClient()
+    reporter = DummyReporter()
+    config = {"mode": "resources", "spec_guard": True, "stateful": False}
+    context = RunContext(
+        client=client,
+        config=config,
+        reporter=reporter,
+        protocol_phase="realistic",
+    )
+    plan = build_run_plan("resources", config)
+    await plan.execute(context)
+    assert client.calls == ["spec", "resources"]
+    assert context.protocol_results == {"r": []}
+
+
+@pytest.mark.asyncio
+async def test_run_plan_prompts_mode_only_runs_prompts():
+    client = DummyClient()
+    reporter = DummyReporter()
+    config = {"mode": "prompts", "spec_guard": True, "stateful": False}
+    context = RunContext(
+        client=client,
+        config=config,
+        reporter=reporter,
+        protocol_phase="realistic",
+    )
+    plan = build_run_plan("prompts", config)
+    await plan.execute(context)
+    assert client.calls == ["spec", "prompts"]
+    assert context.protocol_results == {"p": []}
+
+
+@pytest.mark.asyncio
+async def test_run_plan_stateful_disabled_skips_stateful():
+    client = DummyClient()
+    reporter = DummyReporter()
+    config = {"mode": "protocol", "spec_guard": True, "stateful": False}
+    context = RunContext(
+        client=client,
+        config=config,
+        reporter=reporter,
+        protocol_phase="realistic",
+    )
+    plan = build_run_plan("protocol", config)
+    await plan.execute(context)
+    assert "stateful" not in client.calls
+
+
+@pytest.mark.asyncio
+async def test_run_plan_spec_guard_disabled_skips_checks():
+    client = DummyClient()
+    reporter = DummyReporter()
+    config = {"mode": "protocol", "spec_guard": False, "stateful": False}
+    context = RunContext(
+        client=client,
+        config=config,
+        reporter=reporter,
+        protocol_phase="realistic",
+    )
+    plan = build_run_plan("protocol", config)
+    await plan.execute(context)
+    assert "spec" not in client.calls
+    assert reporter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_run_plan_spec_guard_enabled_records_checks():
+    client = DummyClient()
+    reporter = DummyReporter()
+    config = {"mode": "protocol", "spec_guard": True, "stateful": False}
+    context = RunContext(
+        client=client,
+        config=config,
+        reporter=reporter,
+        protocol_phase="realistic",
+    )
+    plan = build_run_plan("protocol", config)
+    await plan.execute(context)
+    assert "spec" in client.calls
+    assert reporter.calls

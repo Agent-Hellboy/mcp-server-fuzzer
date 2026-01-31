@@ -2,6 +2,8 @@ import pytest
 
 from mcp_fuzzer.transport.interfaces.driver import TransportDriver
 
+pytestmark = [pytest.mark.unit, pytest.mark.transport]
+
 
 class DummyDriver(TransportDriver):
     def __init__(self) -> None:

@@ -38,7 +38,7 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 - Comprehensive Reporting: Multiple output formats (JSON, CSV, HTML, Markdown)
 - Production Ready: PATH shims, sandbox defaults, and CI-friendly controls
 - Intelligent Testing: Hypothesis-based data generation with custom strategies
-- More Than Conformance: Goes belslyond the checks in [modelcontextprotocol/conformance](https://github.com/modelcontextprotocol/conformance) with fuzzing, reporting, and safety tooling
+- More Than Conformance: Goes beyond the checks in [modelcontextprotocol/conformance](https://github.com/modelcontextprotocol/conformance) with fuzzing, reporting, and safety tooling
 
 ### Fuzzing Paradigms
 

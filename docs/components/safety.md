@@ -181,11 +181,12 @@ protocol and pass it to `SafetyFilter`:
 
 ```python
 from mcp_fuzzer.safety_system.safety import SandboxProvider, SafetyFilter
+from mcp_fuzzer.safety_system.filesystem.sandbox import FileSandbox
 
 class CustomSandbox(SandboxProvider):
-    def initialize(self, root):
+    def initialize(self, root: str) -> None:
         ...
-    def get_sandbox(self):
+    def get_sandbox(self) -> FileSandbox:
         ...
 
 custom_filter = SafetyFilter(sandbox_provider=CustomSandbox())

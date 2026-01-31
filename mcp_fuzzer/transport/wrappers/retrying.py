@@ -65,17 +65,13 @@ class RetryingTransport(TransportDriver):
 
     async def _with_retries(self, coro_factory, label: str) -> Any:
         attempts = self._policy.max_attempts
-        last_exc: BaseException | None = None
         for attempt in range(1, attempts + 1):
             try:
                 return await coro_factory()
             except Exception as exc:  # noqa: BLE001 - intentional retry boundary
-                last_exc = exc
                 if not self._should_retry(exc) or attempt >= attempts:
                     raise
                 await asyncio.sleep(self._next_delay(attempt))
-        if last_exc:
-            raise last_exc
         raise TransportError(f"Retry wrapper failed for {label}")
 
     async def send_request(
@@ -112,7 +108,7 @@ class RetryingTransport(TransportDriver):
 
     async def connect(self) -> None:
         if hasattr(self._transport, "connect"):
-            await self._with_retries(self._transport.connect, "connect")
+            await self._with_retries(lambda: self._transport.connect(), "connect")
 
     async def disconnect(self) -> None:
         if hasattr(self._transport, "disconnect"):

@@ -32,6 +32,7 @@ class ReportSaveAdapter(ReportSaver):
                 path = output_dir / filename
         else:
             path = output_dir / f"report.{self.default_extension}"
+        path.parent.mkdir(parents=True, exist_ok=True)
         if self.title is None:
             self.save_fn(report, str(path))
         else:
