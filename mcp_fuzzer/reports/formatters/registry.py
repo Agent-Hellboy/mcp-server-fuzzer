@@ -7,19 +7,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .interface import ReportFormatter
+from .interface import ReportSaver
 from ..core.models import ReportSnapshot
 
 
 @dataclass(frozen=True)
-class FormatterAdapter(ReportFormatter):
+class FormatterAdapter(ReportSaver):
     """Adapter that exposes a common formatter interface."""
 
     save_fn: Callable[[ReportSnapshot, str], None]
     default_extension: str
-
-    def format(self, report: ReportSnapshot) -> str:
-        raise NotImplementedError("FormatterAdapter does not implement format()")
 
     def save(
         self,
@@ -39,14 +36,11 @@ class FormatterAdapter(ReportFormatter):
 
 
 @dataclass
-class HtmlFormatterAdapter(ReportFormatter):
+class HtmlFormatterAdapter(ReportSaver):
     """Adapter for HTML formatter that supports a title."""
 
     save_fn: Callable[[ReportSnapshot, str, str], None]
     title: str = "Fuzzing Results Report"
-
-    def format(self, report: ReportSnapshot) -> str:
-        raise NotImplementedError("HtmlFormatterAdapter does not implement format()")
 
     def save(
         self,
@@ -69,12 +63,12 @@ class FormatterRegistry:
     """Registry keyed by output type."""
 
     def __init__(self) -> None:
-        self._formatters: dict[str, ReportFormatter] = {}
+        self._formatters: dict[str, ReportSaver] = {}
 
-    def register(self, name: str, formatter: ReportFormatter) -> None:
+    def register(self, name: str, formatter: ReportSaver) -> None:
         self._formatters[name] = formatter
 
-    def get(self, name: str) -> ReportFormatter | None:
+    def get(self, name: str) -> ReportSaver | None:
         return self._formatters.get(name)
 
     def save(
