@@ -108,8 +108,8 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 - **Patterns Used:** Builder (`OutputProtocol`, `ResultBuilder`) for standardized
   report payloads. Strategy-like formatter set (`ConsoleFormatter`,
   `JSONFormatter`, `TextFormatter`, etc.). Adapter uses a save-only contract
-  (`ReportSaver` Protocol) for registry adapters, while full formatters implement
-  `ReportFormatter`.
+  (`ReportSaver` Protocol) for registry adapters (`ReportSaverAdapter`,
+  `HtmlSaverAdapter`), while full formatters implement `ReportFormatter`.
 - **Strengths:** OutputProtocol centralizes format semantics; formatters are
   small and focused.
 - **Notes:** Formatter selection now goes through a registry, and the

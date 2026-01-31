@@ -22,9 +22,9 @@ from ..formatters import (
     TextFormatter,
     XMLFormatter,
     ConsoleFormatter,
-    FormatterAdapter,
+    ReportSaverAdapter,
     FormatterRegistry,
-    HtmlFormatterAdapter,
+    HtmlSaverAdapter,
 )
 from ..formatters.common import extract_tool_runs
 from ..output import OutputManager
@@ -64,13 +64,7 @@ class FuzzerReporter:
             config_provider: Configuration provider (dict-like). If None, uses the
                 global config provider.
         """
-        # Dependency injection: use provided config or fall back to global
-        if config_provider is None:
-            from ...client.adapters import config_mediator
-
-            # Use config_mediator as the provider
-            # (it implements dict-like interface via get())
-            config_provider = config_mediator
+        config_provider = self._resolve_config_provider(config_provider)
 
         resolved_config = config or ReporterConfig.from_provider(
             provider=config_provider,
@@ -91,12 +85,9 @@ class FuzzerReporter:
         self.output_manager = output_manager or OutputManager(
             str(self.output_dir), self.output_compress
         )
-        if safety_reporter is None:
-            if safety_system is _AUTO_FILTER:
-                safety_reporter = SafetyReporter()
-            else:
-                safety_reporter = SafetyReporter(safety_system)
-        self.safety_reporter = safety_reporter
+        self.safety_reporter = self._resolve_safety_reporter(
+            safety_reporter, safety_system
+        )
 
         self.console_formatter = ConsoleFormatter(self.console)
         self.json_formatter = JSONFormatter()
@@ -106,29 +97,10 @@ class FuzzerReporter:
         self.html_formatter = HTMLFormatter()
         self.markdown_formatter = MarkdownFormatter()
         self.formatter_registry = FormatterRegistry()
-        self.formatter_registry.register(
-            "json", FormatterAdapter(self.json_formatter.save_report, "json")
-        )
-        self.formatter_registry.register(
-            "text", FormatterAdapter(self.text_formatter.save_text_report, "txt")
-        )
-        self.formatter_registry.register(
-            "csv", FormatterAdapter(self.csv_formatter.save_csv_report, "csv")
-        )
-        self.formatter_registry.register(
-            "xml", FormatterAdapter(self.xml_formatter.save_xml_report, "xml")
-        )
-        self._html_adapter = HtmlFormatterAdapter(
+        self._html_adapter = HtmlSaverAdapter(
             self.html_formatter.save_html_report
         )
-        self.formatter_registry.register("html", self._html_adapter)
-        self.formatter_registry.register(
-            "markdown",
-            FormatterAdapter(
-                self.markdown_formatter.save_markdown_report,
-                "md",
-            ),
-        )
+        self._register_format_savers()
 
         self._metadata: FuzzingMetadata | None = None
         self._transport: Any = None
@@ -138,6 +110,50 @@ class FuzzerReporter:
 
         logging.info(
             f"FuzzerReporter initialized with output directory: {self.output_dir}"
+        )
+
+    @staticmethod
+    def _resolve_config_provider(
+        config_provider: Mapping[str, Any] | None
+    ) -> Mapping[str, Any]:
+        if config_provider is not None:
+            return config_provider
+        from ...client.adapters import config_mediator
+
+        # config_mediator implements dict-like get()
+        return config_mediator
+
+    @staticmethod
+    def _resolve_safety_reporter(
+        safety_reporter: SafetyReporter | None,
+        safety_system: Any,
+    ) -> SafetyReporter:
+        if safety_reporter is not None:
+            return safety_reporter
+        if safety_system is _AUTO_FILTER:
+            return SafetyReporter()
+        return SafetyReporter(safety_system)
+
+    def _register_format_savers(self) -> None:
+        self.formatter_registry.register(
+            "json", ReportSaverAdapter(self.json_formatter.save_report, "json")
+        )
+        self.formatter_registry.register(
+            "text", ReportSaverAdapter(self.text_formatter.save_text_report, "txt")
+        )
+        self.formatter_registry.register(
+            "csv", ReportSaverAdapter(self.csv_formatter.save_csv_report, "csv")
+        )
+        self.formatter_registry.register(
+            "xml", ReportSaverAdapter(self.xml_formatter.save_xml_report, "xml")
+        )
+        self.formatter_registry.register("html", self._html_adapter)
+        self.formatter_registry.register(
+            "markdown",
+            ReportSaverAdapter(
+                self.markdown_formatter.save_markdown_report,
+                "md",
+            ),
         )
 
     def set_fuzzing_metadata(

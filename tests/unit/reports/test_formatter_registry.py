@@ -6,9 +6,9 @@ from mcp_fuzzer.reports.core.models import (
     SummaryStats,
 )
 from mcp_fuzzer.reports.formatters.registry import (
-    FormatterAdapter,
+    ReportSaverAdapter,
     FormatterRegistry,
-    HtmlFormatterAdapter,
+    HtmlSaverAdapter,
 )
 
 
@@ -40,7 +40,7 @@ def test_formatter_registry_saves(tmp_path):
             handle.write("ok")
 
     registry = FormatterRegistry()
-    registry.register("txt", FormatterAdapter(save_fn, "txt"))
+    registry.register("txt", ReportSaverAdapter(save_fn, "txt"))
     snapshot = _snapshot()
     path = registry.save("txt", snapshot, tmp_path)
     assert path.endswith(".txt")
@@ -66,7 +66,7 @@ def test_formatter_adapter_save_with_filename(tmp_path):
         with open(filename, "w") as handle:
             handle.write("ok")
 
-    adapter = FormatterAdapter(save_fn, "json")
+    adapter = ReportSaverAdapter(save_fn, "json")
     snapshot = _snapshot()
     path = adapter.save(snapshot, tmp_path, filename="custom.out")
     assert path.endswith("custom.out")
@@ -82,7 +82,7 @@ def test_formatter_adapter_save_with_absolute_filename(tmp_path):
         with open(filename, "w") as handle:
             handle.write("ok")
 
-    adapter = FormatterAdapter(save_fn, "txt")
+    adapter = ReportSaverAdapter(save_fn, "txt")
     snapshot = _snapshot()
     path = adapter.save(snapshot, tmp_path, filename=str(absolute))
     assert path == str(absolute)
@@ -97,7 +97,7 @@ def test_html_formatter_adapter_save_uses_title(tmp_path):
         with open(filename, "w") as handle:
             handle.write(title)
 
-    adapter = HtmlFormatterAdapter(save_fn, title="Custom Title")
+    adapter = HtmlSaverAdapter(save_fn, title="Custom Title")
     snapshot = _snapshot()
     path = adapter.save(snapshot, tmp_path)
     assert path.endswith("report.html")

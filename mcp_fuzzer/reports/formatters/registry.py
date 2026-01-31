@@ -12,7 +12,7 @@ from ..core.models import ReportSnapshot
 
 
 @dataclass(frozen=True)
-class FormatterAdapter(ReportSaver):
+class ReportSaverAdapter(ReportSaver):
     """Adapter that exposes a common formatter interface."""
 
     save_fn: Callable[[ReportSnapshot, str], None]
@@ -36,7 +36,7 @@ class FormatterAdapter(ReportSaver):
 
 
 @dataclass
-class HtmlFormatterAdapter(ReportSaver):
+class HtmlSaverAdapter(ReportSaver):
     """Adapter for HTML formatter that supports a title."""
 
     save_fn: Callable[[ReportSnapshot, str, str], None]
@@ -84,4 +84,4 @@ class FormatterRegistry:
         return formatter.save(report, output_dir, filename)
 
 
-__all__ = ["FormatterAdapter", "FormatterRegistry", "HtmlFormatterAdapter"]
+__all__ = ["ReportSaverAdapter", "FormatterRegistry", "HtmlSaverAdapter"]
