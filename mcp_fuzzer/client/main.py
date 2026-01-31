@@ -229,7 +229,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
             if config.get("export_csv"):
                 csv_filename = config["export_csv"]
                 if client.reporter:
-                    await client.reporter.export_csv(csv_filename)
+                    await client.reporter.export_format("csv", csv_filename)
                     logging.info(f"Exported CSV report to: {csv_filename}")
                 else:
                     logging.warning("No reporter available for CSV export")
@@ -237,7 +237,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
             if config.get("export_xml"):
                 xml_filename = config["export_xml"]
                 if client.reporter:
-                    await client.reporter.export_xml(xml_filename)
+                    await client.reporter.export_format("xml", xml_filename)
                     logging.info(f"Exported XML report to: {xml_filename}")
                 else:
                     logging.warning("No reporter available for XML export")
@@ -245,7 +245,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
             if config.get("export_html"):
                 html_filename = config["export_html"]
                 if client.reporter:
-                    await client.reporter.export_html(html_filename)
+                    await client.reporter.export_format("html", html_filename)
                     logging.info(f"Exported HTML report to: {html_filename}")
                 else:
                     logging.warning("No reporter available for HTML export")
@@ -253,7 +253,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
             if config.get("export_markdown"):
                 markdown_filename = config["export_markdown"]
                 if client.reporter:
-                    await client.reporter.export_markdown(markdown_filename)
+                    await client.reporter.export_format("markdown", markdown_filename)
                     logging.info(f"Exported Markdown report to: {markdown_filename}")
                 else:
                     logging.warning("No reporter available for Markdown export")

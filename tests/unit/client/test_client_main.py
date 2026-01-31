@@ -37,10 +37,7 @@ def _settings(**overrides):
 
 def _make_reporter():
     reporter = MagicMock()
-    reporter.export_csv = AsyncMock()
-    reporter.export_markdown = AsyncMock()
-    reporter.export_html = AsyncMock()
-    reporter.export_xml = AsyncMock()
+    reporter.export_format = AsyncMock()
     return reporter
 
 
@@ -71,7 +68,7 @@ def test_unified_client_main_tools_mode():
     mock_transport_factory.assert_called_once()
     assert client_instance.fuzz_all_tools.await_count == 1
     client_instance.cleanup.assert_awaited()
-    mock_reporter.export_csv.assert_not_called()
+    mock_reporter.export_format.assert_not_called()
 
 
 def test_unified_client_main_unknown_mode_logs_error_and_returns_nonzero():
@@ -179,8 +176,8 @@ def test_unified_client_main_exports_reports_and_handles_errors():
         patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
     ):
         asyncio.run(unified_client_main(settings))
-    reporter.export_csv.assert_called_once()
-    reporter.export_markdown.assert_called_once()
+    reporter.export_format.assert_any_call("csv", "out.csv")
+    reporter.export_format.assert_any_call("markdown", "md.md")
 
 
 def test_unified_client_main_exports_html_xml():
@@ -206,8 +203,8 @@ def test_unified_client_main_exports_html_xml():
         patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
     ):
         asyncio.run(unified_client_main(settings))
-    reporter.export_html.assert_called_once()
-    reporter.export_xml.assert_called_once()
+    reporter.export_format.assert_any_call("html", "out.html")
+    reporter.export_format.assert_any_call("xml", "out.xml")
 
 
 def test_unified_client_main_safety_disabled():

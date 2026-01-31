@@ -412,10 +412,11 @@ class TestFuzzerReporter:
         """Test printing status."""
         reporter.set_fuzzing_metadata("tools", "stdio", "test", 10)
 
-        reporter.print_status()
+        report_text = reporter.print_status()
 
         # Verify console print was called multiple times
         assert reporter.console.print.call_count > 0
+        assert "Reporter Status" in report_text
 
     def test_cleanup(self, reporter):
         """Test cleanup method."""
@@ -548,10 +549,10 @@ class TestFuzzerReporter:
     @pytest.mark.asyncio
     async def test_export_formatters(self, reporter, tmp_path):
         """Test format-specific export helpers."""
-        await reporter.export_csv(str(tmp_path / "report.csv"))
-        await reporter.export_xml(str(tmp_path / "report.xml"))
-        await reporter.export_html(str(tmp_path / "report.html"))
-        await reporter.export_markdown(str(tmp_path / "report.md"))
+        await reporter.export_format("csv", str(tmp_path / "report.csv"))
+        await reporter.export_format("xml", str(tmp_path / "report.xml"))
+        await reporter.export_format("html", str(tmp_path / "report.html"))
+        await reporter.export_format("markdown", str(tmp_path / "report.md"))
 
         reporter.csv_formatter.save_csv_report.assert_called_once()
         reporter.xml_formatter.save_xml_report.assert_called_once()

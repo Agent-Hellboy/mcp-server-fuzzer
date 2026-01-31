@@ -12,11 +12,12 @@ from ..core.models import ReportSnapshot
 
 
 @dataclass(frozen=True)
-class ReportSaverAdapter(ReportSaver):
+class ReportSaveAdapter(ReportSaver):
     """Adapter that exposes a common formatter interface."""
 
-    save_fn: Callable[[ReportSnapshot, str], None]
+    save_fn: Callable[..., None]
     default_extension: str
+    title: str | None = None
 
     def save(
         self,
@@ -31,31 +32,10 @@ class ReportSaverAdapter(ReportSaver):
                 path = output_dir / filename
         else:
             path = output_dir / f"report.{self.default_extension}"
-        self.save_fn(report, str(path))
-        return str(path)
-
-
-@dataclass
-class HtmlSaverAdapter(ReportSaver):
-    """Adapter for HTML formatter that supports a title."""
-
-    save_fn: Callable[[ReportSnapshot, str, str], None]
-    title: str = "Fuzzing Results Report"
-
-    def save(
-        self,
-        report: ReportSnapshot,
-        output_dir: Path,
-        filename: str | None = None,
-    ) -> str:
-        output_dir.mkdir(parents=True, exist_ok=True)
-        if filename:
-            path = Path(filename)
-            if not path.is_absolute():
-                path = output_dir / filename
+        if self.title is None:
+            self.save_fn(report, str(path))
         else:
-            path = output_dir / "report.html"
-        self.save_fn(report, str(path), self.title)
+            self.save_fn(report, str(path), self.title)
         return str(path)
 
 
@@ -84,4 +64,4 @@ class FormatterRegistry:
         return formatter.save(report, output_dir, filename)
 
 
-__all__ = ["ReportSaverAdapter", "FormatterRegistry", "HtmlSaverAdapter"]
+__all__ = ["ReportSaveAdapter", "FormatterRegistry"]
