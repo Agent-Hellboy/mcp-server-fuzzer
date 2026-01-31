@@ -256,5 +256,3 @@ custom_transports:
 Use the transport by setting `protocol: mytransport` in the same config file.
 
 ## Notes
-
-- Standardized output files are currently emitted as JSON regardless of `output.format`.

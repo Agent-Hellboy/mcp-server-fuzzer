@@ -118,9 +118,10 @@ async def unified_client_main(settings: ClientSettings) -> int:
             reporter=reporter,
             protocol_phase=protocol_phase,
         )
-        plan = build_run_plan(mode, config)
-        if not plan.steps:
-            logging.error("Unknown mode: %s", config.get("mode"))
+        try:
+            plan = build_run_plan(mode, config)
+        except ValueError as exc:
+            logging.error("Failed to build run plan: %s", exc)
             return 1
         await plan.execute(context)
         tool_results = context.tool_results
