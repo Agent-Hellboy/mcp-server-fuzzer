@@ -7,6 +7,7 @@ and result aggregation.
 """
 
 import logging
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
@@ -22,6 +23,8 @@ from ..formatters import (
     TextFormatter,
     XMLFormatter,
     ConsoleFormatter,
+    ReportSaveAdapter,
+    FormatterRegistry,
 )
 from ..formatters.common import extract_tool_runs
 from ..output import OutputManager
@@ -30,11 +33,14 @@ from ..safety_reporter import SafetyReporter
 
 from importlib.metadata import version, PackageNotFoundError
 
-try:
-    fuzzer_version = version("mcp-fuzzer")
-except PackageNotFoundError:
-    fuzzer_version = "unknown"
 _AUTO_FILTER = object()
+
+
+def _resolve_fuzzer_version() -> str:
+    try:
+        return version("mcp-fuzzer")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 class FuzzerReporter:
@@ -61,13 +67,7 @@ class FuzzerReporter:
             config_provider: Configuration provider (dict-like). If None, uses the
                 global config provider.
         """
-        # Dependency injection: use provided config or fall back to global
-        if config_provider is None:
-            from ...client.adapters import config_mediator
-
-            # Use config_mediator as the provider
-            # (it implements dict-like interface via get())
-            config_provider = config_mediator
+        config_provider = self._resolve_config_provider(config_provider)
 
         resolved_config = config or ReporterConfig.from_provider(
             provider=config_provider,
@@ -88,12 +88,9 @@ class FuzzerReporter:
         self.output_manager = output_manager or OutputManager(
             str(self.output_dir), self.output_compress
         )
-        if safety_reporter is None:
-            if safety_system is _AUTO_FILTER:
-                safety_reporter = SafetyReporter()
-            else:
-                safety_reporter = SafetyReporter(safety_system)
-        self.safety_reporter = safety_reporter
+        self.safety_reporter = self._resolve_safety_reporter(
+            safety_reporter, safety_system
+        )
 
         self.console_formatter = ConsoleFormatter(self.console)
         self.json_formatter = JSONFormatter()
@@ -102,15 +99,67 @@ class FuzzerReporter:
         self.xml_formatter = XMLFormatter()
         self.html_formatter = HTMLFormatter()
         self.markdown_formatter = MarkdownFormatter()
+        self.formatter_registry = FormatterRegistry()
+        self._html_adapter = ReportSaveAdapter(
+            self.html_formatter.save_html_report,
+            "html",
+            title="Fuzzing Results Report",
+        )
+        self._register_format_savers()
 
         self._metadata: FuzzingMetadata | None = None
         self._transport: Any = None
+        self._fuzzer_version = _resolve_fuzzer_version()
 
         # Use session ID from output manager
         self.session_id = self.output_manager.protocol.session_id
 
         logging.info(
             f"FuzzerReporter initialized with output directory: {self.output_dir}"
+        )
+
+    @staticmethod
+    def _resolve_config_provider(
+        config_provider: Mapping[str, Any] | None
+    ) -> Mapping[str, Any]:
+        if config_provider is not None:
+            return config_provider
+        from ...client.adapters import config_mediator
+
+        # config_mediator implements dict-like get()
+        return config_mediator
+
+    @staticmethod
+    def _resolve_safety_reporter(
+        safety_reporter: SafetyReporter | None,
+        safety_system: Any,
+    ) -> SafetyReporter:
+        if safety_reporter is not None:
+            return safety_reporter
+        if safety_system is _AUTO_FILTER:
+            return SafetyReporter()
+        return SafetyReporter(safety_system)
+
+    def _register_format_savers(self) -> None:
+        self.formatter_registry.register(
+            "json", ReportSaveAdapter(self.json_formatter.save_report, "json")
+        )
+        self.formatter_registry.register(
+            "text", ReportSaveAdapter(self.text_formatter.save_text_report, "txt")
+        )
+        self.formatter_registry.register(
+            "csv", ReportSaveAdapter(self.csv_formatter.save_csv_report, "csv")
+        )
+        self.formatter_registry.register(
+            "xml", ReportSaveAdapter(self.xml_formatter.save_xml_report, "xml")
+        )
+        self.formatter_registry.register("html", self._html_adapter)
+        self.formatter_registry.register(
+            "markdown",
+            ReportSaveAdapter(
+                self.markdown_formatter.save_markdown_report,
+                "md",
+            ),
         )
 
     def set_fuzzing_metadata(
@@ -129,7 +178,7 @@ class FuzzerReporter:
             endpoint=endpoint,
             runs=runs,
             runs_per_type=runs_per_type,
-            fuzzer_version=fuzzer_version,
+            fuzzer_version=self._fuzzer_version,
             start_time=datetime.now(),
         )
 
@@ -210,18 +259,22 @@ class FuzzerReporter:
         snapshot = await self._prepare_snapshot(
             include_safety=include_safety, finalize=True
         )
-        json_filename = self.output_dir / f"fuzzing_report_{self.session_id}.json"
-        self.json_formatter.save_report(snapshot, str(json_filename))
+        json_filename = f"fuzzing_report_{self.session_id}.json"
+        self.formatter_registry.save(
+            "json", snapshot, self.output_dir, json_filename
+        )
 
-        text_filename = self.output_dir / f"fuzzing_report_{self.session_id}.txt"
-        self.text_formatter.save_text_report(snapshot, str(text_filename))
+        text_filename = f"fuzzing_report_{self.session_id}.txt"
+        self.formatter_registry.save(
+            "text", snapshot, self.output_dir, text_filename
+        )
 
         if include_safety and self.safety_reporter.has_safety_data():
             safety_filename = self.output_dir / f"safety_report_{self.session_id}.json"
             self.safety_reporter.export_safety_data(str(safety_filename))
 
         logging.info(f"Final report generated: {json_filename}")
-        return str(json_filename)
+        return str(self.output_dir / json_filename)
 
     async def generate_standardized_report(
         self, output_types: list[str] = None, include_safety: bool = True
@@ -286,52 +339,42 @@ class FuzzerReporter:
 
     def get_current_status(self) -> dict[str, Any]:
         """Get current status of the reporter."""
+        metadata = self._metadata.to_dict() if self._metadata else {}
         return {
             "session_id": self.session_id,
             "output_directory": str(self.output_dir),
             "tool_results_count": len(self.collector.tool_results),
             "protocol_results_count": len(self.collector.protocol_results),
             "safety_data_available": bool(self.collector.safety_data),
-            "metadata": self.fuzzing_metadata,
+            "metadata": metadata,
         }
 
     def print_status(self):
         """Print current status to console."""
         status = self.get_current_status()
+        report_text = self._render_status(status)
+        for line in report_text.splitlines():
+            self.console.print(line)
+        return report_text
 
-        self.console.print("\n[bold blue]\U0001f4ca Reporter Status[/bold blue]")
-        self.console.print(f"Session ID: {status['session_id']}")
-        self.console.print(f"Output Directory: {status['output_directory']}")
-        self.console.print(f"Tool Results: {status['tool_results_count']}")
-        self.console.print(f"Protocol Results: {status['protocol_results_count']}")
-        self.console.print(
-            f"Safety Data: {'Available' if status['safety_data_available'] else 'None'}"
+    async def export_format(
+        self,
+        format_name: str,
+        filename: str,
+        *,
+        title: str | None = None,
+        include_safety: bool = False,
+    ) -> str:
+        """Export report data to a named format."""
+        snapshot = await self._prepare_snapshot(
+            include_safety=include_safety, finalize=False
         )
-
-        if status["metadata"]:
-            self.console.print("\n[bold]Fuzzing Session:[/bold]")
-            for key, value in status["metadata"].items():
-                self.console.print(f"  {key}: {value}")
-
-    async def export_csv(self, filename: str):
-        """Export report data to CSV format."""
-        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        self.csv_formatter.save_csv_report(snapshot, filename)
-
-    async def export_xml(self, filename: str):
-        """Export report data to XML format."""
-        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        self.xml_formatter.save_xml_report(snapshot, filename)
-
-    async def export_html(self, filename: str, title: str = "Fuzzing Results Report"):
-        """Export report data to HTML format."""
-        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        self.html_formatter.save_html_report(snapshot, filename, title)
-
-    async def export_markdown(self, filename: str):
-        """Export report data to Markdown format."""
-        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        self.markdown_formatter.save_markdown_report(snapshot, filename)
+        if title is not None and format_name == "html":
+            self._html_adapter = replace(self._html_adapter, title=title)
+            self.formatter_registry.register("html", self._html_adapter)
+        return self.formatter_registry.save(
+            format_name, snapshot, self.output_dir, filename
+        )
 
     async def _prepare_snapshot(
         self, include_safety: bool, finalize: bool
@@ -362,7 +405,7 @@ class FuzzerReporter:
             endpoint="unknown",
             runs=0,
             runs_per_type=None,
-            fuzzer_version=fuzzer_version,
+            fuzzer_version=self._fuzzer_version,
             start_time=datetime.now(),
         )
         return self._metadata
@@ -402,18 +445,6 @@ class FuzzerReporter:
 
         return {}
 
-    async def _generate_summary_stats(self) -> dict[str, Any]:
-        """Backward-compatible summary helper used in tests."""
-        snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        return snapshot.summary.to_dict()
-
-    @property
-    def fuzzing_metadata(self) -> dict[str, Any]:
-        """Expose metadata as a serializable dict for compatibility."""
-        if not self._metadata:
-            return {}
-        return self._metadata.to_dict()
-
     @property
     def tool_results(self) -> dict[str, list[dict[str, Any]]]:
         """Expose collected tool results as dictionaries."""
@@ -434,6 +465,25 @@ class FuzzerReporter:
     def safety_data(self) -> dict[str, Any]:
         """Expose current safety data."""
         return dict(self.collector.safety_data)
+
+    @staticmethod
+    def _render_status(status: dict[str, Any]) -> str:
+        lines = [
+            "\n[bold blue]\U0001f4ca Reporter Status[/bold blue]",
+            f"Session ID: {status['session_id']}",
+            f"Output Directory: {status['output_directory']}",
+            f"Tool Results: {status['tool_results_count']}",
+            f"Protocol Results: {status['protocol_results_count']}",
+            (
+                "Safety Data: "
+                f"{'Available' if status['safety_data_available'] else 'None'}"
+            ),
+        ]
+        if status.get("metadata"):
+            lines.append("\n[bold]Fuzzing Session:[/bold]")
+            for key, value in status["metadata"].items():
+                lines.append(f"  {key}: {value}")
+        return "\n".join(lines)
 
     def cleanup(self):
         """Clean up reporter resources."""

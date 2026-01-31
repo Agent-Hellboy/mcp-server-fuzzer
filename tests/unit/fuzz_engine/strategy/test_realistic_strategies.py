@@ -645,3 +645,215 @@ async def test_fuzz_tool_arguments_realistic_unknown_type(monkeypatch):
     tool = {"inputSchema": {"properties": {"mystery": {"type": "null"}}}}
     result = await fuzz_tool_arguments_realistic(tool)
     assert result["mystery"] == "value"
+
+
+def test_generate_realistic_string_sync_format_and_pattern():
+    tool_strategy.reset_run_counter()
+    value = tool_strategy.generate_realistic_string_sync(
+        {"format": "email", "minLength": 20, "maxLength": 30},
+        key="email",
+    )
+    assert "@" in value
+    assert 20 <= len(value) <= 30
+
+    digits = tool_strategy.generate_realistic_string_sync(
+        {"pattern": "^[0-9]+$", "minLength": 2, "maxLength": 4}
+    )
+    assert digits.isdigit()
+    assert 2 <= len(digits) <= 4
+
+
+def test_generate_realistic_string_sync_semantic_adjusts_bounds():
+    value = tool_strategy.generate_realistic_string_sync(
+        {"minLength": 10, "maxLength": 5},
+        key="name",
+        run_index=0,
+    )
+    assert len(value) == 10
+
+    short = tool_strategy.generate_realistic_string_sync(
+        {"minLength": 0, "maxLength": 2},
+        key="name",
+        run_index=0,
+    )
+    assert len(short) == 2
+
+
+def test_generate_formatted_string_fallbacks():
+    short_email = tool_strategy._generate_formatted_string("email", 0, 3)
+    assert len(short_email) <= 3
+
+    padded_uri = tool_strategy._generate_formatted_string("uri", 25, 40)
+    assert padded_uri.startswith("https://")
+    assert len(padded_uri) >= 25
+
+    hostname = tool_strategy._generate_formatted_string("hostname", 0, 3)
+    assert len(hostname) <= 3
+
+    fallback_uuid = tool_strategy._generate_formatted_string("uuid", 100, 101)
+    assert len(fallback_uuid) >= 100
+
+    short_uri = tool_strategy._generate_formatted_string("uri", 0, 10)
+    assert len(short_uri) <= 10
+
+    padded_hostname = tool_strategy._generate_formatted_string("hostname", 12, 20)
+    assert len(padded_hostname) >= 12
+
+
+def test_generate_pattern_string_invalid_regex():
+    value = tool_strategy._generate_pattern_string("(", 1, 5)
+    assert 1 <= len(value) <= 5
+
+
+def test_generate_realistic_integer_sync_exclusive_multiple():
+    value = tool_strategy.generate_realistic_integer_sync(
+        {
+            "minimum": 1.2,
+            "maximum": 5.8,
+            "exclusiveMinimum": True,
+            "exclusiveMaximum": True,
+            "multipleOf": 2,
+        },
+        run_index=0,
+    )
+    assert value == 4
+
+
+def test_generate_realistic_integer_sync_swaps_bounds():
+    value = tool_strategy.generate_realistic_integer_sync(
+        {"minimum": 10, "maximum": 5},
+        run_index=1,
+    )
+    assert 5 <= value <= 10
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_text_pads_when_small(monkeypatch):
+    monkeypatch.setattr(tool_strategy.random, "choice", lambda seq: seq[-1])
+    value = await tool_strategy.generate_realistic_text(min_size=50, max_size=60)
+    assert len(value) >= 50
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_array_tuple_items_expanded():
+    schema = {
+        "minItems": 3,
+        "maxItems": 3,
+        "items": [{"type": "string"}, {"type": "integer"}],
+        "additionalItems": {"type": "string"},
+    }
+    result = await tool_strategy._generate_realistic_array(schema, run_index=0)
+    assert len(result) == 3
+
+
+@pytest.mark.asyncio
+async def test_generate_realistic_array_string_items_and_error(monkeypatch):
+    schema = {"minItems": 2, "maxItems": 2, "items": {"type": "string"}}
+    result = await tool_strategy._generate_realistic_array(schema, run_index=1)
+    assert len(result) == 2
+
+    schema = {"minItems": 3, "maxItems": 1, "items": []}
+    result = await tool_strategy._generate_realistic_array(schema, run_index=0)
+    assert len(result) == 3
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("fail")
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
+        boom,
+    )
+    schema = {"minItems": 1, "maxItems": 1, "items": {"type": "object"}}
+    result = await tool_strategy._generate_realistic_array(schema, run_index=0)
+    assert result == ["item"]
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_arguments_realistic_covers_branches(monkeypatch):
+    tool_strategy.reset_run_counter()
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser.make_fuzz_strategy_from_jsonschema",
+        lambda *_args, **_kwargs: {},
+    )
+
+    async def fake_text(*_args, **_kwargs):
+        return "text"
+
+    monkeypatch.setattr(tool_strategy, "generate_realistic_text", fake_text)
+
+    tool = {
+        "inputSchema": {
+            "type": "object",
+            "required": [
+                "ratio",
+                "ratio2",
+                "bad_number",
+                "count",
+                "flag",
+                "payload",
+                "tags",
+                "choice",
+                "const_val",
+                "misc",
+            ],
+            "properties": {
+                "ratio": {
+                    "type": "number",
+                    "minimum": 0.1,
+                    "maximum": 0.3,
+                    "exclusiveMinimum": True,
+                    "exclusiveMaximum": True,
+                    "multipleOf": 0.1,
+                },
+                "ratio2": {
+                    "type": "number",
+                    "exclusiveMinimum": 0.05,
+                    "exclusiveMaximum": 0.15,
+                    "minimum": 0.2,
+                    "maximum": 0.1,
+                },
+                "bad_number": {
+                    "type": "number",
+                    "minimum": "bad",
+                    "maximum": "bad",
+                },
+                "count": {"type": "integer", "minimum": 1, "maximum": 2},
+                "flag": {"type": "boolean"},
+                "payload": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                },
+                "tags": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "items": {"type": "string"},
+                },
+                "choice": {"enum": ["a", "b"]},
+                "const_val": {"const": "fixed"},
+                "optional": {"type": "string"},
+                "misc": "not-a-dict",
+            },
+        }
+    }
+
+    args = await tool_strategy.fuzz_tool_arguments_realistic(tool)
+    assert set(
+        [
+            "ratio",
+            "ratio2",
+            "bad_number",
+            "count",
+            "flag",
+            "payload",
+            "tags",
+            "choice",
+            "const_val",
+            "misc",
+        ]
+    ).issubset(args)
+
+    # Trigger the "should_include" skip branch with a second run
+    args_second = await tool_strategy.fuzz_tool_arguments_realistic(tool)
+    assert "optional" not in args_second

@@ -13,7 +13,7 @@ if sys.version_info < (3, 10):
     )
 
 from .cli import create_argument_parser, build_cli_config
-from .client import MCPFuzzerClient, UnifiedMCPFuzzerClient
+from .client import MCPFuzzerClient
 from .fuzz_engine import (
     ToolMutator,
     ProtocolMutator,
@@ -36,7 +36,6 @@ __all__ = [
     "ToolStrategies",
     "ProtocolStrategies",
     "MCPFuzzerClient",
-    "UnifiedMCPFuzzerClient",
     "create_argument_parser",
     "build_cli_config",
 ]

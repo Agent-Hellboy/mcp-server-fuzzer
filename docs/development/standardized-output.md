@@ -427,6 +427,32 @@ Enable debug logging to troubleshoot output generation:
 mcp-fuzzer --verbose --log-level DEBUG --output-types fuzzing_results
 ```
 
+## OutputProtocol Schema (External Tooling)
+
+The canonical JSON schema for OutputProtocol lives at:
+
+```
+schemas/output_v1.json
+```
+
+Top-level fields are:
+
+- `protocol_version` (string, `1.0.0`)
+- `timestamp` (RFC 3339 date-time)
+- `tool_version` (string)
+- `session_id` (string)
+- `output_type` (enum: `fuzzing_results`, `error_report`, `safety_summary`, `performance_metrics`, `configuration_dump`)
+- `data` (object payload per output type)
+- `metadata` (object with execution/run metadata)
+
+Each `output_type` maps to a data payload:
+
+- `fuzzing_results`: mode, protocol, endpoint, tool/protocol summaries, spec summary.
+- `error_report`: list of errors + warnings, execution context.
+- `safety_summary`: blocked operations, safety statistics, risk assessment.
+- `performance_metrics`: metrics and benchmarks.
+- `configuration_dump`: resolved configuration snapshot.
+
 ## API Reference
 
 ### OutputProtocol

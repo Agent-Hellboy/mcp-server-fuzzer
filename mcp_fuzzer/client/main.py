@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
 
 import emoji
 
@@ -17,43 +16,7 @@ from ..corpus import build_corpus_root, build_target_id, default_fs_root
 from .settings import ClientSettings
 from .base import MCPFuzzerClient
 from .transport import build_driver_with_auth
-
-# For backward compatibility
-UnifiedMCPFuzzerClient = MCPFuzzerClient
-
-
-async def _run_spec_guard_if_enabled(
-    client: MCPFuzzerClient,
-    config: dict[str, Any],
-    reporter: FuzzerReporter | None,
-) -> None:
-    if not config.get("spec_guard", True):
-        return
-    requested_version = (
-        str(config.get("spec_schema_version"))
-        if config.get("spec_schema_version") is not None
-        else os.getenv("MCP_SPEC_SCHEMA_VERSION")
-    )
-    checks = await client.run_spec_suite(
-        resource_uri=config.get("spec_resource_uri"),
-        prompt_name=config.get("spec_prompt_name"),
-        prompt_args=config.get("spec_prompt_args"),
-    )
-    negotiated_version = os.getenv("MCP_SPEC_SCHEMA_VERSION")
-    failed = [c for c in checks if str(c.get("status", "")).upper() == "FAIL"]
-    logging.info(
-        "Spec guard checks completed: %d total, %d failed",
-        len(checks),
-        len(failed),
-    )
-    if reporter:
-        reporter.add_spec_checks(checks)
-        reporter.print_spec_guard_summary(
-            checks,
-            requested_version=requested_version,
-            negotiated_version=negotiated_version,
-        )
-
+from .runtime import RunContext, build_run_plan
 
 async def unified_client_main(settings: ClientSettings) -> int:
     """Run the fuzzing workflow using merged client settings."""
@@ -72,15 +35,35 @@ async def unified_client_main(settings: ClientSettings) -> int:
     )
 
     class Args:
-        def __init__(self, protocol, endpoint, timeout):
+        def __init__(
+            self,
+            protocol,
+            endpoint,
+            timeout,
+            transport_retries,
+            transport_retry_delay,
+            transport_retry_backoff,
+            transport_retry_max_delay,
+            transport_retry_jitter,
+        ):
             self.protocol = protocol
             self.endpoint = endpoint
             self.timeout = timeout
+            self.transport_retries = transport_retries
+            self.transport_retry_delay = transport_retry_delay
+            self.transport_retry_backoff = transport_retry_backoff
+            self.transport_retry_max_delay = transport_retry_max_delay
+            self.transport_retry_jitter = transport_retry_jitter
 
     args = Args(
         protocol=config["protocol"],
         endpoint=config["endpoint"],
         timeout=config.get("timeout", 30.0),
+        transport_retries=config.get("transport_retries", 1),
+        transport_retry_delay=config.get("transport_retry_delay", 0.5),
+        transport_retry_backoff=config.get("transport_retry_backoff", 2.0),
+        transport_retry_max_delay=config.get("transport_retry_max_delay", 5.0),
+        transport_retry_jitter=config.get("transport_retry_jitter", 0.1),
     )  # pragma: no cover
 
     client_args = {
@@ -127,119 +110,22 @@ async def unified_client_main(settings: ClientSettings) -> int:
     )
 
     try:
-        tool_results: dict[str, Any] = {}
-        protocol_results: dict[str, Any] = {}
         mode = config["mode"]
         protocol_phase = config.get("protocol_phase", "realistic")
-        if mode == "tools":
-            if config.get("phase") == "both":
-                if config.get("tool"):
-                    tool_results = await client.fuzz_tool_both_phases(
-                        config["tool"], runs_per_phase=config.get("runs", 10)
-                    )
-                else:
-                    tool_results = await client.fuzz_all_tools_both_phases(
-                        runs_per_phase=config.get("runs", 10)
-                    )
-            else:
-                if config.get("tool"):
-                    tool_results = await client.fuzz_tool(
-                        config["tool"], runs=config.get("runs", 10)
-                    )
-                else:
-                    tool_results = await client.fuzz_all_tools(
-                        runs_per_tool=config.get("runs", 10)
-                    )
-        elif mode == "protocol":
-            await _run_spec_guard_if_enabled(client, config, reporter)
-            if config.get("protocol_type"):
-                protocol_type = config["protocol_type"]
-                protocol_results[protocol_type] = await client.fuzz_protocol_type(
-                    protocol_type,
-                    runs=config.get("runs_per_type", 10),
-                    phase=protocol_phase,
-                )
-            else:
-                protocol_results = await client.fuzz_all_protocol_types(
-                    runs_per_type=config.get("runs_per_type", 10),
-                    phase=protocol_phase,
-                )
-            if config.get("stateful", False):
-                protocol_results["stateful_sequences"] = (
-                    await client.fuzz_stateful_sequences(
-                        runs=config.get("stateful_runs", 5),
-                        phase=protocol_phase,
-                    )
-                )
-        elif mode == "resources":
-            await _run_spec_guard_if_enabled(client, config, reporter)
-            protocol_results = await client.fuzz_resources(
-                runs_per_type=config.get("runs_per_type", 10),
-                phase=protocol_phase,
-            )
-            if config.get("stateful", False):
-                protocol_results["stateful_sequences"] = (
-                    await client.fuzz_stateful_sequences(
-                        runs=config.get("stateful_runs", 5),
-                        phase=protocol_phase,
-                    )
-                )
-        elif mode == "prompts":
-            await _run_spec_guard_if_enabled(client, config, reporter)
-            protocol_results = await client.fuzz_prompts(
-                runs_per_type=config.get("runs_per_type", 10),
-                phase=protocol_phase,
-            )
-            if config.get("stateful", False):
-                protocol_results["stateful_sequences"] = (
-                    await client.fuzz_stateful_sequences(
-                        runs=config.get("stateful_runs", 5),
-                        phase=protocol_phase,
-                    )
-                )
-        elif mode == "all":
-            logging.info("Running both tools and protocol fuzzing")  # pragma: no cover
-            if config.get("phase") == "both":
-                if config.get("tool"):
-                    tool_results = await client.fuzz_tool_both_phases(
-                        config["tool"], runs_per_phase=config.get("runs", 10)
-                    )
-                else:
-                    tool_results = await client.fuzz_all_tools_both_phases(
-                        runs_per_phase=config.get("runs", 10)
-                    )
-            else:
-                if config.get("tool"):
-                    tool_results = await client.fuzz_tool(
-                        config["tool"], runs=config.get("runs", 10)
-                    )
-                else:
-                    tool_results = await client.fuzz_all_tools(
-                        runs_per_tool=config.get("runs", 10)
-                    )
-            await _run_spec_guard_if_enabled(client, config, reporter)
-            if config.get("protocol_type"):
-                protocol_type = config["protocol_type"]
-                protocol_results[protocol_type] = await client.fuzz_protocol_type(
-                    protocol_type,
-                    runs=config.get("runs_per_type", 10),
-                    phase=protocol_phase,
-                )
-            else:
-                protocol_results = await client.fuzz_all_protocol_types(
-                    runs_per_type=config.get("runs_per_type", 10),
-                    phase=protocol_phase,
-                )
-            if config.get("stateful", False):
-                protocol_results["stateful_sequences"] = (
-                    await client.fuzz_stateful_sequences(
-                        runs=config.get("stateful_runs", 5),
-                        phase=protocol_phase,
-                    )
-                )
-        else:
-            logging.error(f"Unknown mode: {config['mode']}")
+        context = RunContext(
+            client=client,
+            config=config,
+            reporter=reporter,
+            protocol_phase=protocol_phase,
+        )
+        try:
+            plan = build_run_plan(mode, config)
+        except ValueError as exc:
+            logging.error("Failed to build run plan: %s", exc)
             return 1
+        await plan.execute(context)
+        tool_results = context.tool_results
+        protocol_results = context.protocol_results
 
         try:  # pragma: no cover
             if (
@@ -339,7 +225,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
             if config.get("export_csv"):
                 csv_filename = config["export_csv"]
                 if client.reporter:
-                    await client.reporter.export_csv(csv_filename)
+                    await client.reporter.export_format("csv", csv_filename)
                     logging.info(f"Exported CSV report to: {csv_filename}")
                 else:
                     logging.warning("No reporter available for CSV export")
@@ -347,7 +233,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
             if config.get("export_xml"):
                 xml_filename = config["export_xml"]
                 if client.reporter:
-                    await client.reporter.export_xml(xml_filename)
+                    await client.reporter.export_format("xml", xml_filename)
                     logging.info(f"Exported XML report to: {xml_filename}")
                 else:
                     logging.warning("No reporter available for XML export")
@@ -355,7 +241,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
             if config.get("export_html"):
                 html_filename = config["export_html"]
                 if client.reporter:
-                    await client.reporter.export_html(html_filename)
+                    await client.reporter.export_format("html", html_filename)
                     logging.info(f"Exported HTML report to: {html_filename}")
                 else:
                     logging.warning("No reporter available for HTML export")
@@ -363,7 +249,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
             if config.get("export_markdown"):
                 markdown_filename = config["export_markdown"]
                 if client.reporter:
-                    await client.reporter.export_markdown(markdown_filename)
+                    await client.reporter.export_format("markdown", markdown_filename)
                     logging.info(f"Exported Markdown report to: {markdown_filename}")
                 else:
                     logging.warning("No reporter available for Markdown export")
@@ -382,4 +268,4 @@ async def unified_client_main(settings: ClientSettings) -> int:
         await client.cleanup()
 
 
-__all__ = ["unified_client_main", "UnifiedMCPFuzzerClient", "MCPFuzzerClient"]
+__all__ = ["unified_client_main", "MCPFuzzerClient"]

@@ -8,12 +8,8 @@ from typing import Protocol
 from ..core.models import ReportSnapshot
 
 
-class ReportFormatter(Protocol):
-    """Interface for report formatters."""
-
-    def format(self, report: ReportSnapshot) -> str:
-        """Convert report data to string content."""
-        ...
+class ReportSaver(Protocol):
+    """Interface for report writers that can save to disk."""
 
     def save(
         self,
@@ -22,4 +18,12 @@ class ReportFormatter(Protocol):
         filename: str | None = None,
     ) -> str:
         """Format and save the report to a file."""
+        ...
+
+
+class ReportFormatter(ReportSaver, Protocol):
+    """Interface for report formatters that can render to string content."""
+
+    def format(self, report: ReportSnapshot) -> str:
+        """Convert report data to string content."""
         ...

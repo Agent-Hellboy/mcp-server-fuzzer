@@ -184,11 +184,3 @@ class ReportSnapshot:
             "safety": self.safety_data,
             "runtime": self.runtime_data,
         }
-
-    def __contains__(self, item: object) -> bool:
-        """Allow dict-style membership checks for compatibility."""
-        return item in self.to_dict()
-
-    def __getitem__(self, key: str) -> Any:
-        """Allow dict-style indexing for compatibility with existing tests."""
-        return self.to_dict()[key]

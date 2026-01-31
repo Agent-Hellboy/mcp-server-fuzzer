@@ -106,6 +106,36 @@ Examples:
         help="Request timeout in seconds (default: 30.0)",
     )
     parser.add_argument(
+        "--transport-retries",
+        type=int,
+        default=1,
+        help="Total attempts for transport requests (default: 1)",
+    )
+    parser.add_argument(
+        "--transport-retry-delay",
+        type=float,
+        default=0.5,
+        help="Base delay for transport retries in seconds (default: 0.5)",
+    )
+    parser.add_argument(
+        "--transport-retry-backoff",
+        type=float,
+        default=2.0,
+        help="Backoff multiplier for transport retries (default: 2.0)",
+    )
+    parser.add_argument(
+        "--transport-retry-max-delay",
+        type=float,
+        default=5.0,
+        help="Maximum delay for transport retries in seconds (default: 5.0)",
+    )
+    parser.add_argument(
+        "--transport-retry-jitter",
+        type=float,
+        default=0.1,
+        help="Jitter factor for transport retry delay (default: 0.1)",
+    )
+    parser.add_argument(
         "--tool-timeout",
         type=float,
         help=(

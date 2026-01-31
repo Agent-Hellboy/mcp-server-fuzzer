@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schemas.mcp-fuzzer.local/output_v1.json",
+  "title": "MCP Fuzzer OutputProtocol v1",
+  "type": "object",
+  "required": [
+    "protocol_version",
+    "timestamp",
+    "tool_version",
+    "session_id",
+    "output_type",
+    "data",
+    "metadata"
+  ],
+  "properties": {
+    "protocol_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tool_version": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "output_type": {
+      "type": "string",
+      "enum": [
+        "fuzzing_results",
+        "error_report",
+        "safety_summary",
+        "performance_metrics",
+        "configuration_dump"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

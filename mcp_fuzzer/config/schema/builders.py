@@ -37,6 +37,37 @@ def build_timeout_schema() -> dict[str, Any]:
     }
 
 
+def build_transport_retry_schema() -> dict[str, Any]:
+    """Build schema for transport retry configuration."""
+    return {
+        "transport_retries": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Total attempts for transport requests (1 disables retries)",
+        },
+        "transport_retry_delay": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Base delay between transport retries in seconds",
+        },
+        "transport_retry_backoff": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Backoff multiplier for transport retry delay",
+        },
+        "transport_retry_max_delay": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Maximum delay between transport retries in seconds",
+        },
+        "transport_retry_jitter": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Jitter factor applied to retry delays",
+        },
+    }
+
+
 def build_basic_schema() -> dict[str, Any]:
     """Build schema for basic configuration properties.
 
