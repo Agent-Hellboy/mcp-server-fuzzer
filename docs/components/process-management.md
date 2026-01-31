@@ -174,6 +174,20 @@ async def main():
 asyncio.run(main())
 ```
 
+### ProcessManager Lifecycle States
+
+| Stage | Trigger | Notes |
+| --- | --- | --- |
+| Unregistered | Initial state | Process not tracked by registry. |
+| Registered | `register_existing_process` | Process added to registry and watchdog. |
+| Running | `start_process` | Process launched and `started` event emitted. |
+| Stopping | `stop_process` | Graceful/forced stop requested. |
+| Stopped | `stop_process` / exit | Process stopped, `stopped` event emitted. |
+| Shutdown | `shutdown` | All processes stopped, watchdog stopped, registry cleared. |
+
+Events emitted by the manager (`started`, `stopped`, `stopped_all`, `shutdown`,
+`shutdown_failed`, `signal`, `signal_all`) allow observers to track transitions.
+
 ## Configuration
 
 ### WatchdogConfig

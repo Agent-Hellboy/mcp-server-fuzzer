@@ -52,6 +52,18 @@ timeout: 30.0
 tool_timeout: 10.0
 log_level: "INFO"
 
+# Transport retry policy (optional)
+# transport_retries: Total attempts for transport requests (1 disables retries)
+# transport_retry_delay: Base delay between retries (seconds)
+# transport_retry_backoff: Backoff multiplier
+# transport_retry_max_delay: Maximum delay between retries (seconds)
+# transport_retry_jitter: Jitter factor for retry delay
+transport_retries: 1
+transport_retry_delay: 0.5
+transport_retry_backoff: 2.0
+transport_retry_max_delay: 5.0
+transport_retry_jitter: 0.1
+
 # Safety and filesystem constraints
 safety_enabled: true
 enable_safety_system: false

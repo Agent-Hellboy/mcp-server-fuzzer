@@ -160,6 +160,49 @@ it to a bug report or CI artifact. Standardized output artifacts (`output.types`
 containing `safety_summary`) convey the same information in a machine-readable
 format.
 
+## Extending Detection and Sandbox Providers
+
+You can customize detection patterns by passing explicit lists when constructing
+`SafetyFilter`:
+
+```python
+from mcp_fuzzer.safety_system.safety import SafetyFilter
+
+custom_filter = SafetyFilter(
+    dangerous_url_patterns=[r"https?://", r"example\\.com"],
+    dangerous_script_patterns=[r"<script", r"onload="],
+    dangerous_command_patterns=[r"rm\\s+-rf", r"shutdown"],
+    dangerous_argument_names=["path", "command"],
+)
+```
+
+To swap the filesystem sandbox implementation, implement the `SandboxProvider`
+protocol and pass it to `SafetyFilter`:
+
+```python
+from mcp_fuzzer.safety_system.safety import SandboxProvider, SafetyFilter
+
+class CustomSandbox(SandboxProvider):
+    def initialize(self, root):
+        ...
+    def get_sandbox(self):
+        ...
+
+custom_filter = SafetyFilter(sandbox_provider=CustomSandbox())
+```
+
+## Minimal Policy Configuration Example
+
+```yaml
+safety_enabled: true
+enable_safety_system: true
+fs_root: "~/.mcp_fuzzer"
+no_network: true
+allow_hosts:
+  - "localhost"
+  - "127.0.0.1"
+```
+
 ## Best Practices
 
 - Always combine `--enable-safety-system` with a sandboxed `--fs-root` when

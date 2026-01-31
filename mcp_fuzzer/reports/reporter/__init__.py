@@ -22,6 +22,9 @@ from ..formatters import (
     TextFormatter,
     XMLFormatter,
     ConsoleFormatter,
+    FormatterAdapter,
+    FormatterRegistry,
+    HtmlFormatterAdapter,
 )
 from ..formatters.common import extract_tool_runs
 from ..output import OutputManager
@@ -102,6 +105,30 @@ class FuzzerReporter:
         self.xml_formatter = XMLFormatter()
         self.html_formatter = HTMLFormatter()
         self.markdown_formatter = MarkdownFormatter()
+        self.formatter_registry = FormatterRegistry()
+        self.formatter_registry.register(
+            "json", FormatterAdapter(self.json_formatter.save_report, "json")
+        )
+        self.formatter_registry.register(
+            "text", FormatterAdapter(self.text_formatter.save_text_report, "txt")
+        )
+        self.formatter_registry.register(
+            "csv", FormatterAdapter(self.csv_formatter.save_csv_report, "csv")
+        )
+        self.formatter_registry.register(
+            "xml", FormatterAdapter(self.xml_formatter.save_xml_report, "xml")
+        )
+        self._html_adapter = HtmlFormatterAdapter(
+            self.html_formatter.save_html_report
+        )
+        self.formatter_registry.register("html", self._html_adapter)
+        self.formatter_registry.register(
+            "markdown",
+            FormatterAdapter(
+                self.markdown_formatter.save_markdown_report,
+                "md",
+            ),
+        )
 
         self._metadata: FuzzingMetadata | None = None
         self._transport: Any = None
@@ -316,22 +343,23 @@ class FuzzerReporter:
     async def export_csv(self, filename: str):
         """Export report data to CSV format."""
         snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        self.csv_formatter.save_csv_report(snapshot, filename)
+        self.formatter_registry.save("csv", snapshot, self.output_dir, filename)
 
     async def export_xml(self, filename: str):
         """Export report data to XML format."""
         snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        self.xml_formatter.save_xml_report(snapshot, filename)
+        self.formatter_registry.save("xml", snapshot, self.output_dir, filename)
 
     async def export_html(self, filename: str, title: str = "Fuzzing Results Report"):
         """Export report data to HTML format."""
         snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        self.html_formatter.save_html_report(snapshot, filename, title)
+        self._html_adapter.title = title
+        self.formatter_registry.save("html", snapshot, self.output_dir, filename)
 
     async def export_markdown(self, filename: str):
         """Export report data to Markdown format."""
         snapshot = await self._prepare_snapshot(include_safety=False, finalize=False)
-        self.markdown_formatter.save_markdown_report(snapshot, filename)
+        self.formatter_registry.save("markdown", snapshot, self.output_dir, filename)
 
     async def _prepare_snapshot(
         self, include_safety: bool, finalize: bool

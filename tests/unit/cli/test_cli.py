@@ -38,6 +38,11 @@ def _base_args(**overrides):
         protocol="http",
         endpoint="http://localhost",
         timeout=30.0,
+        transport_retries=1,
+        transport_retry_delay=0.5,
+        transport_retry_backoff=2.0,
+        transport_retry_max_delay=5.0,
+        transport_retry_jitter=0.1,
         verbose=False,
         runs=10,
         runs_per_type=5,
@@ -473,6 +478,31 @@ def test_run_cli_happy_path():
         mock_validator.validate_arguments.return_value = None
         mock_validator.validate_transport.return_value = None
         run_cli()
+
+
+def test_run_cli_orchestration_invokes_runner():
+    args = _base_args(enable_safety_system=True)
+    merged = {"enable_safety_system": True}
+    cli_config = CliConfig(args=args, merged=merged)
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
+        patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
+        patch("mcp_fuzzer.cli.entrypoint.build_cli_config", return_value=cli_config),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+        patch("mcp_fuzzer.cli.entrypoint.prepare_inner_argv", return_value=["prog"]),
+        patch("mcp_fuzzer.cli.entrypoint.ClientSettings") as mock_settings_cls,
+        patch("mcp_fuzzer.cli.entrypoint.SafetyController") as mock_safety_cls,
+        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt") as mock_runner,
+    ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_transport.return_value = None
+        mock_safety = mock_safety_cls.return_value
+        run_cli()
+        mock_settings_cls.assert_called_once_with(merged)
+        mock_safety.start_if_enabled.assert_called_once_with(True)
+        mock_runner.assert_called_once()
 
 
 def test_run_cli_transport_error_exit(monkeypatch):

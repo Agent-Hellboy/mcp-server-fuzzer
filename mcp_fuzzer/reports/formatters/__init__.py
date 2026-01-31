@@ -8,6 +8,7 @@ from .csv_fmt import CSVFormatter
 from .xml_fmt import XMLFormatter
 from .html_fmt import HTMLFormatter
 from .markdown_fmt import MarkdownFormatter
+from .registry import FormatterAdapter, FormatterRegistry, HtmlFormatterAdapter
 
 __all__ = [
     "ConsoleFormatter",
@@ -17,5 +18,8 @@ __all__ = [
     "XMLFormatter",
     "HTMLFormatter",
     "MarkdownFormatter",
+    "FormatterAdapter",
+    "FormatterRegistry",
+    "HtmlFormatterAdapter",
     "calculate_tool_success_rate",
 ]

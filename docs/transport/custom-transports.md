@@ -14,6 +14,8 @@ The custom transport system consists of:
 2. **Factory Integration**: Automatic discovery and instantiation of custom transports.
 3. **Configuration Support**: Declarative configuration of custom transports via YAML.
 4. **Type Safety**: Full type checking and validation for custom transport implementations.
+5. **Adapter Helpers**: Optional `JsonRpcAdapter` for shared RPC helpers across transports.
+6. **Wrapper Support**: Optional `RetryingTransport` wrapper for retry policies.
 
 ## Implementing a Custom Transport
 
@@ -71,6 +73,13 @@ class MyCustomTransport(TransportDriver):
             yield {}
 ```
 
+### Adapter Expectations (Recommended)
+
+If your transport is JSON-RPC based, you can optionally compose
+`JsonRpcAdapter` to reuse shared RPC helper methods (list tools, call tool,
+resource operations). This keeps the transport focused on I/O while
+delegating JSON-RPC conventions to the adapter.
+
 ### 2. Register Your Transport
 
 Add your custom transport to the configuration file:
@@ -109,6 +118,21 @@ class MyCustomTransport(TransportDriver):
 # Self-register (runs when module is imported)
 register_custom_driver("my-custom", MyCustomTransport)
 ```
+
+## Optional: RetryingTransport Wrapper
+
+You can enable retry behavior without modifying your transport by wrapping it:
+
+```python
+from mcp_fuzzer.transport import RetryingTransport, RetryPolicy, build_driver
+
+transport = build_driver("my-custom://endpoint")
+policy = RetryPolicy(max_attempts=3, base_delay=0.5, max_delay=5.0)
+transport = RetryingTransport(transport, policy=policy)
+```
+
+The CLI/config supports `transport_retries` and related settings for built-in
+drivers; the wrapper can be used directly for custom transports if needed.
 
 This makes extension simpler – no factory changes needed, and CLI usage remains unchanged.
 

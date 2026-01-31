@@ -31,6 +31,7 @@ from .catalog import (
 )
 from .controller.coordinator import TransportCoordinator
 from .controller.process_supervisor import ProcessSupervisor, ProcessState
+from .wrappers import RetryingTransport, RetryPolicy
 
 __all__ = [
     "TransportDriver",
@@ -59,4 +60,6 @@ __all__ = [
     "TransportCoordinator",
     "ProcessSupervisor",
     "ProcessState",
+    "RetryingTransport",
+    "RetryPolicy",
 ]

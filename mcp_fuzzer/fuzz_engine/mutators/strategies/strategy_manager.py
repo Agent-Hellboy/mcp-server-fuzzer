@@ -12,6 +12,7 @@ import random
 from .realistic import fuzz_tool_arguments_realistic
 from .aggressive import fuzz_tool_arguments_aggressive
 from .spec_protocol import get_spec_protocol_fuzzer_method
+from .registry import strategy_registry
 
 
 class ProtocolStrategies:
@@ -42,6 +43,9 @@ class ProtocolStrategies:
         phase: str = "aggressive",
     ) -> Callable[[], dict[str, Any] | None] | None:
         """Get the fuzzer method for a protocol type and phase using spec_protocol."""
+        override = strategy_registry.get_protocol(protocol_type, phase)
+        if override:
+            return override
         return get_spec_protocol_fuzzer_method(protocol_type, phase)
 
     @staticmethod
@@ -132,6 +136,9 @@ class ToolStrategies:
         tool: dict[str, Any], phase: str = "aggressive"
     ) -> dict[str, Any]:
         """Generate fuzzed tool arguments based on phase."""
+        override = strategy_registry.get_tool(phase)
+        if override:
+            return await override(tool)
         if phase == ToolStrategies.REALISTIC_PHASE:
             return await fuzz_tool_arguments_realistic(tool)
         return fuzz_tool_arguments_aggressive(tool)
