@@ -344,6 +344,44 @@ def test_get_default_auth_headers_multiple_no_api_key(monkeypatch):
     assert auth_manager.get_default_auth_headers() == {}
 
 
+def test_get_default_auth_headers_invalid_default_prefers_single(monkeypatch):
+    """Invalid default should fall back to sole provider."""
+    auth_manager = AuthManager()
+
+    class StubProvider(AuthProvider):
+        def get_auth_headers(self):
+            return {"X-Test": "only-provider"}
+
+        def get_auth_params(self):
+            return {}
+
+    auth_manager.add_auth_provider("only", StubProvider())
+    auth_manager.set_default_provider("missing")
+
+    assert auth_manager.get_default_auth_headers() == {"X-Test": "only-provider"}
+
+
+def test_get_default_auth_headers_invalid_default_prefers_api_key(monkeypatch):
+    """Invalid default with multiple providers should still prefer api_key."""
+    auth_manager = AuthManager()
+
+    class StubProvider(AuthProvider):
+        def __init__(self, value):
+            self.value = value
+
+        def get_auth_headers(self):
+            return {"X-Test": self.value}
+
+        def get_auth_params(self):
+            return {}
+
+    auth_manager.add_auth_provider("api_key", StubProvider("api"))
+    auth_manager.add_auth_provider("basic", StubProvider("basic"))
+    auth_manager.set_default_provider("missing")
+
+    assert auth_manager.get_default_auth_headers() == {"X-Test": "api"}
+
+
 # Test cases for auth factory functions
 def test_create_api_key_auth():
     """Test creating API key auth."""

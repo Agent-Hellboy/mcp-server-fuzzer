@@ -35,6 +35,19 @@ def test_resolve_auth_port_env_auto_detect(monkeypatch):
     assert auth_port.resolve_auth_port(args) is sentinel
 
 
+def test_resolve_auth_port_prefers_config_over_env(monkeypatch):
+    """Explicit config should win even if env vars are present."""
+    monkeypatch.setenv("MCP_API_KEY", "secret")
+    config_sentinel = object()
+    env_sentinel = object()
+    monkeypatch.setattr(auth_port, "load_auth_config", lambda path: config_sentinel)
+    monkeypatch.setattr(auth_port, "setup_auth_from_env", lambda: env_sentinel)
+
+    args = argparse.Namespace(auth_config="auth.json", auth_env=False)
+
+    assert auth_port.resolve_auth_port(args) is config_sentinel
+
+
 def test_resolve_auth_port_none():
     args = argparse.Namespace(auth_config=None, auth_env=False)
     assert auth_port.resolve_auth_port(args) is None
