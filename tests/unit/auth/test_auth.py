@@ -292,7 +292,7 @@ def test_auth_manager_get_default_auth_headers_invalid_provider(auth_manager):
     assert headers == {}
 
 
-def test_get_default_auth_headers_single_provider(monkeypatch):
+def test_get_default_auth_headers_single_provider():
     """Single provider should be used as implicit default."""
     auth_manager = AuthManager()
 
@@ -307,7 +307,7 @@ def test_get_default_auth_headers_single_provider(monkeypatch):
     assert auth_manager.get_default_auth_headers() == {"X-Test": "single"}
 
 
-def test_get_default_auth_headers_prefers_api_key(monkeypatch):
+def test_get_default_auth_headers_prefers_api_key():
     """When multiple providers exist, prefer api_key if present."""
     auth_manager = AuthManager()
 
@@ -327,7 +327,7 @@ def test_get_default_auth_headers_prefers_api_key(monkeypatch):
     assert auth_manager.get_default_auth_headers() == {"X-Test": "api"}
 
 
-def test_get_default_auth_headers_multiple_no_api_key(monkeypatch):
+def test_get_default_auth_headers_multiple_no_api_key():
     """Multiple providers without api_key should return empty headers."""
     auth_manager = AuthManager()
 

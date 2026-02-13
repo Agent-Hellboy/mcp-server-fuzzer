@@ -48,6 +48,16 @@ def test_resolve_auth_port_prefers_config_over_env(monkeypatch):
     assert auth_port.resolve_auth_port(args) is config_sentinel
 
 
-def test_resolve_auth_port_none():
+def test_resolve_auth_port_none(monkeypatch):
+    """Should return None when no config, flag, or env vars are present."""
+    for key in [
+        "MCP_API_KEY",
+        "MCP_USERNAME",
+        "MCP_PASSWORD",
+        "MCP_OAUTH_TOKEN",
+        "MCP_CUSTOM_HEADERS",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+
     args = argparse.Namespace(auth_config=None, auth_env=False)
     assert auth_port.resolve_auth_port(args) is None
