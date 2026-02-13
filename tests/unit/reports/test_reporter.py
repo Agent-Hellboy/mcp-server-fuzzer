@@ -190,14 +190,15 @@ class TestFuzzerReporter:
 
         reporter.set_fuzzing_metadata(**metadata)
 
-        assert reporter.fuzzing_metadata["session_id"] == reporter.session_id
-        assert reporter.fuzzing_metadata["mode"] == "tools"
-        assert reporter.fuzzing_metadata["protocol"] == "stdio"
-        assert reporter.fuzzing_metadata["endpoint"] == "test_endpoint"
-        assert reporter.fuzzing_metadata["runs"] == 100
-        assert reporter.fuzzing_metadata["runs_per_type"] == 10
-        assert "start_time" in reporter.fuzzing_metadata
-        assert "fuzzer_version" in reporter.fuzzing_metadata
+        metadata = reporter.get_current_status()["metadata"]
+        assert metadata["session_id"] == reporter.session_id
+        assert metadata["mode"] == "tools"
+        assert metadata["protocol"] == "stdio"
+        assert metadata["endpoint"] == "test_endpoint"
+        assert metadata["runs"] == 100
+        assert metadata["runs_per_type"] == 10
+        assert "start_time" in metadata
+        assert "fuzzer_version" in metadata
 
     def test_add_tool_results(self, reporter):
         """Test adding tool results."""
@@ -324,8 +325,9 @@ class TestFuzzerReporter:
 
         args, _ = reporter.json_formatter.save_report.call_args
         saved_report = args[0]
-        assert "safety" in saved_report
-        assert saved_report["safety"]["blocked_operations"] == 5
+        snapshot_dict = saved_report.to_dict()
+        assert "safety" in snapshot_dict
+        assert snapshot_dict["safety"]["blocked_operations"] == 5
 
         reporter.text_formatter.save_text_report.assert_called_once()
         reporter.safety_reporter.export_safety_data.assert_called_once()
@@ -333,7 +335,10 @@ class TestFuzzerReporter:
     @pytest.mark.asyncio
     async def test_generate_summary_stats_empty_results(self, reporter):
         """Test generating summary stats with empty results."""
-        stats = await reporter._generate_summary_stats()
+        snapshot = await reporter._prepare_snapshot(
+            include_safety=False, finalize=False
+        )
+        stats = snapshot.summary.to_dict()
 
         assert stats["tools"]["total_tools"] == 0
         assert stats["tools"]["total_runs"] == 0
@@ -360,7 +365,10 @@ class TestFuzzerReporter:
             "protocol1", [{"success": True}, {"error": "test_error"}]
         )
 
-        stats = await reporter._generate_summary_stats()
+        snapshot = await reporter._prepare_snapshot(
+            include_safety=False, finalize=False
+        )
+        stats = snapshot.summary.to_dict()
 
         # Check tool stats
         assert stats["tools"]["total_tools"] == 1
@@ -412,10 +420,11 @@ class TestFuzzerReporter:
         """Test printing status."""
         reporter.set_fuzzing_metadata("tools", "stdio", "test", 10)
 
-        reporter.print_status()
+        report_text = reporter.print_status()
 
         # Verify console print was called multiple times
         assert reporter.console.print.call_count > 0
+        assert "Reporter Status" in report_text
 
     def test_cleanup(self, reporter):
         """Test cleanup method."""
@@ -464,8 +473,9 @@ class TestFuzzerReporter:
         await reporter.generate_final_report()
 
         saved_report = reporter.json_formatter.save_report.call_args[0][0]
-        assert "end_time" in saved_report["metadata"]
-        assert saved_report["metadata"]["end_time"] is not None
+        snapshot_dict = saved_report.to_dict()
+        assert "end_time" in snapshot_dict["metadata"]
+        assert snapshot_dict["metadata"]["end_time"] is not None
 
     @pytest.mark.asyncio
     async def test_generate_standardized_report_defaults(self, reporter):
@@ -548,10 +558,10 @@ class TestFuzzerReporter:
     @pytest.mark.asyncio
     async def test_export_formatters(self, reporter, tmp_path):
         """Test format-specific export helpers."""
-        await reporter.export_csv(str(tmp_path / "report.csv"))
-        await reporter.export_xml(str(tmp_path / "report.xml"))
-        await reporter.export_html(str(tmp_path / "report.html"))
-        await reporter.export_markdown(str(tmp_path / "report.md"))
+        await reporter.export_format("csv", str(tmp_path / "report.csv"))
+        await reporter.export_format("xml", str(tmp_path / "report.xml"))
+        await reporter.export_format("html", str(tmp_path / "report.html"))
+        await reporter.export_format("markdown", str(tmp_path / "report.md"))
 
         reporter.csv_formatter.save_csv_report.assert_called_once()
         reporter.xml_formatter.save_xml_report.assert_called_once()

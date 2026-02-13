@@ -7,6 +7,7 @@ This module provides functionality for fuzzing MCP tools.
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any
 
 from ..auth import AuthManager
@@ -34,6 +35,8 @@ class ToolClient:
         safety_system: SafetyProvider | None = None,
         max_concurrency: int = 5,
         enable_safety: bool = True,
+        corpus_root: Path | None = None,
+        havoc_mode: bool = False,
     ):
         """
         Initialize the tool client.
@@ -52,7 +55,9 @@ class ToolClient:
             self.safety_system = None
         else:
             self.safety_system = safety_system or SafetyFilter()
-        self.tool_mutator = ToolMutator()
+        self.tool_mutator = ToolMutator(
+            corpus_dir=corpus_root, havoc_mode=havoc_mode
+        )
         self._logger = logging.getLogger(__name__)
         self._tool_schema_checks: dict[str, list[dict[str, Any]]] = {}
 
@@ -191,6 +196,13 @@ class ToolClient:
                         if spec_checks
                         else {}
                     )
+                    response_signature = _response_shape_signature(result)
+                    self.tool_mutator.record_feedback(
+                        tool_name,
+                        sanitized_args,
+                        spec_checks=spec_checks,
+                        response_signature=response_signature,
+                    )
                     results.append(
                         {
                             "args": sanitized_args,
@@ -203,6 +215,9 @@ class ToolClient:
                     )
                 except Exception as e:
                     self._logger.warning("Exception calling tool %s: %s", tool_name, e)
+                    self.tool_mutator.record_feedback(
+                        tool_name, sanitized_args, exception=str(e)
+                    )
                     results.append(
                         {
                             "args": sanitized_args,
@@ -233,10 +248,17 @@ class ToolClient:
         tool_timeout: float | None = None,
     ) -> dict[str, dict[str, Any]]:
         """Fuzz all tools from the server."""
-        self._logger.debug(f"fuzz_all_tools called with runs_per_tool={runs_per_tool}, tool_timeout={tool_timeout}")
+        self._logger.debug(
+            "fuzz_all_tools called with runs_per_tool=%s, tool_timeout=%s",
+            runs_per_tool,
+            tool_timeout,
+        )
         self._logger.info("Fetching tools from server...")
         tools = await self._get_tools_from_server()
-        self._logger.debug(f"_get_tools_from_server returned {len(tools) if tools else 0} tools")
+        self._logger.debug(
+            "_get_tools_from_server returned %s tools",
+            len(tools) if tools else 0,
+        )
         if not tools:
             self._logger.warning("No tools available for fuzzing")
             return {}
@@ -387,6 +409,13 @@ class ToolClient:
                     if spec_checks
                     else {}
                 )
+                response_signature = _response_shape_signature(result)
+                self.tool_mutator.record_feedback(
+                    tool_name,
+                    sanitized_args,
+                    spec_checks=spec_checks,
+                    response_signature=response_signature,
+                )
                 processed.append(
                     {
                         "args": sanitized_args,
@@ -399,6 +428,9 @@ class ToolClient:
                     }
                 )
             except Exception as e:
+                self.tool_mutator.record_feedback(
+                    tool_name, sanitized_args, exception=str(e)
+                )
                 processed.append(
                     {
                         "args": sanitized_args,
@@ -491,3 +523,25 @@ class ToolClient:
         """Shutdown the tool client."""
         # No cleanup needed for mutator
         pass
+
+
+def _response_shape_signature(response: Any) -> str | None:
+    if response is None:
+        return None
+    if isinstance(response, dict):
+        keys = ",".join(sorted(response.keys()))
+        content = response.get("content")
+        if isinstance(content, list):
+            types = sorted(
+                {
+                    item.get("type")
+                    for item in content
+                    if isinstance(item, dict) and isinstance(item.get("type"), str)
+                }
+            )
+            type_sig = ",".join(types) if types else "unknown"
+            return f"dict:{keys}:content[{type_sig}]"
+        return f"dict:{keys}"
+    if isinstance(response, list):
+        return f"list:{len(response)}"
+    return f"type:{type(response).__name__}"

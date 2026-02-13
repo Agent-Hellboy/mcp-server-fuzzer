@@ -20,6 +20,7 @@ from .aggressive import (
 )
 
 from .strategy_manager import ProtocolStrategies, ToolStrategies
+from .registry import StrategyRegistry, strategy_registry
 from .spec_protocol import get_spec_protocol_fuzzer_method
 
 __all__ = [
@@ -38,4 +39,6 @@ __all__ = [
     "ProtocolStrategies",
     "ToolStrategies",
     "get_spec_protocol_fuzzer_method",
+    "StrategyRegistry",
+    "strategy_registry",
 ]

@@ -13,6 +13,7 @@ from .builders import (
     build_network_schema,
     build_output_schema,
     build_safety_schema,
+    build_transport_retry_schema,
     build_timeout_schema,
 )
 
@@ -28,6 +29,7 @@ def get_config_schema() -> dict[str, Any]:
     """
     properties = {}
     properties.update(build_timeout_schema())
+    properties.update(build_transport_retry_schema())
     properties.update(build_basic_schema())
     properties.update(build_fuzzing_schema())
     properties.update(build_network_schema())

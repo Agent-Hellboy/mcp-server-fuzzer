@@ -292,6 +292,58 @@ def test_auth_manager_get_default_auth_headers_invalid_provider(auth_manager):
     assert headers == {}
 
 
+def test_get_default_auth_headers_single_provider(monkeypatch):
+    """Single provider should be used as implicit default."""
+    auth_manager = AuthManager()
+
+    class StubProvider(AuthProvider):
+        def get_auth_headers(self):
+            return {"X-Test": "single"}
+
+        def get_auth_params(self):
+            return {}
+
+    auth_manager.add_auth_provider("only", StubProvider())
+    assert auth_manager.get_default_auth_headers() == {"X-Test": "single"}
+
+
+def test_get_default_auth_headers_prefers_api_key(monkeypatch):
+    """When multiple providers exist, prefer api_key if present."""
+    auth_manager = AuthManager()
+
+    class StubProvider(AuthProvider):
+        def __init__(self, value):
+            self.value = value
+
+        def get_auth_headers(self):
+            return {"X-Test": self.value}
+
+        def get_auth_params(self):
+            return {}
+
+    auth_manager.add_auth_provider("basic", StubProvider("basic"))
+    auth_manager.add_auth_provider("api_key", StubProvider("api"))
+
+    assert auth_manager.get_default_auth_headers() == {"X-Test": "api"}
+
+
+def test_get_default_auth_headers_multiple_no_api_key(monkeypatch):
+    """Multiple providers without api_key should return empty headers."""
+    auth_manager = AuthManager()
+
+    class StubProvider(AuthProvider):
+        def get_auth_headers(self):
+            return {"X-Test": "unused"}
+
+        def get_auth_params(self):
+            return {}
+
+    auth_manager.add_auth_provider("first", StubProvider())
+    auth_manager.add_auth_provider("second", StubProvider())
+
+    assert auth_manager.get_default_auth_headers() == {}
+
+
 # Test cases for auth factory functions
 def test_create_api_key_auth():
     """Test creating API key auth."""

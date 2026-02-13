@@ -9,122 +9,111 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 
 | Module | Primary Patterns | Fit Score |
 | --- | --- | --- |
-| CLI Layer | Facade, Command, Builder | 8 |
-| Transport Layer | Strategy, Adapter, Factory | 9 |
-| Fuzzing Engine | Template Method, Observer, Mediator | 7 |
-| Strategy System | Strategy, Prototype, Data Builder | 8 |
-| Safety System | Chain of Responsibility, Decorator | 7 |
-| Runtime & Process Management | State, Watchdog, Resource Pool | 8 |
-| Reporting & Observability | Observer, Bridge, Adapter | 7 |
+| CLI & Config | Facade, Builder, Port/Adapter | 8 |
+| Client Orchestration | Facade, Mediator | 8 |
+| Transport Layer | Strategy, Adapter, Factory/Registry, State | 9 |
+| Mutators & Strategies | Strategy, Prototype, Object Pool | 8 |
+| Execution & Concurrency | Executor, Builder | 7 |
+| Safety System | Strategy, Policy, Adapter | 7 |
+| Runtime & Process Management | State, Observer, Strategy, Watchdog, Builder | 8 |
+| Reporting & Observability | Builder, Strategy, Adapter | 7 |
 
 ## Module-by-Module Analysis
 
-### CLI Layer (Fit Score: 8/10)
+### CLI & Config (Fit Score: 8/10)
 
-- **Patterns Used:** Facade to shield users from subsystem complexity, Command
-  objects for sub-commands/options, Builder for assembling runtime config.
-- **Strengths:** The CLI is a clear entry point that composes transports,
-  strategies, and reporters. Options map almost 1:1 to configuration objects.
-- **Gaps & Ideas:** Reuse of parsing logic across sub-commands could improve if
-  argument builders lived in a dedicated factory so the CLI does not own every
-  instantiation detail.
+- **Patterns Used:** Facade (`mcp_fuzzer/cli/entrypoint.py` `run_cli` and
+  `mcp_fuzzer/client/main.py` `unified_client_main`) as the single entry point
+  that wires parsing, validation, safety, transport, and execution. Builder
+  (`mcp_fuzzer/fuzz_engine/runtime/config.py` `ProcessConfigBuilder`) for
+  composing process configs. Port/Adapter (Hexagonal) for config access
+  (`mcp_fuzzer/client/ports/config_port.py` + `mcp_fuzzer/client/adapters/config_adapter.py`).
+- **Strengths:** Clear top-level flow: parse → validate → merge config → execute.
+  Config access is mediated through a port, so core components avoid direct
+  coupling to config storage.
+- **Notes:** CLI orchestration is covered by unit tests, and command-style
+  run steps are encapsulated in the runtime run plan.
 
-Next steps:
-- Extract reusable CLI config builders so new commands inherit validation rules.
-- Create smoke tests that cover composite CLI scenarios (auth + transports +
-  safety flags) to guard the Facade contract.
+### Client Orchestration (Fit Score: 8/10)
+
+- **Patterns Used:** Facade (`mcp_fuzzer/client/base.py` `MCPFuzzerClient`) exposes
+  a unified API for tool/protocol fuzzing and reporting. Mediator-style
+  coordination happens in `MCPFuzzerClient` and `unified_client_main`, which
+  orchestrate `ToolClient`, `ProtocolClient`, `SafetyFilter`, and `FuzzerReporter`
+  without those components knowing about each other.
+- **Strengths:** The client layer is the single high-level surface area for
+  fuzzing operations, keeping CLI and tests simple.
+- **Notes:** Mode handling is consolidated via a run plan and execution pipeline.
 
 ### Transport Layer (Fit Score: 9/10)
 
-- **Patterns Used:** Strategy for choosing HTTP/SSE/Stdio transports, Adapter
-  to normalize differing protocol semantics, Abstract Factory for wiring the
-  right transport + auth combo.
-- **Strengths:** `build_driver` hides instantiation logic, and adapters
-  expose uniform `send/receive` APIs. Test doubles are easy to swap in.
-- **Gaps & Ideas:** Some transports share retry/backoff logic that could live in
-  a Decorator for clarity.
+- **Patterns Used:** Strategy via `TransportDriver` with concrete drivers
+  (`HttpDriver`, `SseDriver`, `StdioDriver`, `StreamHttpDriver`). Adapter
+  via `JsonRpcAdapter` to normalize RPC helpers across transports.
+  Factory/Registry via `DriverCatalog` + `build_driver` in
+  `mcp_fuzzer/transport/catalog`. State via `DriverState` and `LifecycleBehavior`.
+- **Strengths:** Registry-driven construction makes it easy to add custom
+  transports. Mixins (`HttpClientBehavior`, `ResponseParserBehavior`,
+  `LifecycleBehavior`) remove duplication while keeping drivers focused.
+- **Notes:** Retry policy can be layered via `RetryingTransport`; transport docs
+  now cover registry and adapter expectations.
 
-Next steps:
-- Introduce a `RetryingTransport` decorator so timeouts/backoff are composable.
-- Document the adapter contract (`open`, `close`, `send_message`) to guide
-  community transport additions.
+### Mutators & Strategies (Fit Score: 8/10)
 
-### Fuzzing Engine (Fit Score: 7/10)
+- **Patterns Used:** Strategy (`ToolStrategies`, `ProtocolStrategies`) for
+  switching realistic/aggressive generators. Prototype via `SeedPool` +
+  `mutate_seed_payload`, which clone and mutate high-value inputs. Object Pool
+  in `SeedPool`, maintaining a bounded pool of reusable seeds.
+- **Strengths:** Phase-based strategies keep fuzzing logic testable and
+  extensible. Seed pooling introduces feedback-guided fuzzing without complex
+  dependencies.
+- **Notes:** Strategy overrides can be registered at runtime via
+  `strategy_registry`, with documented extension examples.
 
-- **Patterns Used:** Template Method drives fuzzing runs, Observer notifies
-  reporters, Mediator coordinates strategies and safety modules.
-- **Strengths:** The engine isolates orchestration from transport details and
-  exposes hooks for reporting progress.
-- **Gaps & Ideas:** Template steps are implicit in the engine's methods; naming
-  them (`prepare`, `execute`, `finalize`) would make the template clearer.
+### Execution & Concurrency (Fit Score: 7/10)
 
-Next steps:
-- Refactor engine workflows into explicit template methods to mitigate control
-  flow duplication.
-- Introduce mediator interface tests to guarantee event ordering for reporters
-  and safety filters.
-
-### Strategy System (Fit Score: 8/10)
-
-- **Patterns Used:** Strategy for swapping data generators, Prototype for
-  cloning request blueprints, Builder for constructing complex payloads.
-- **Strengths:** Strategies encapsulate data semantics, which keeps fuzzing
-  logic simple and testable.
-- **Gaps & Ideas:** The builder/prototype separation is blurred; immutable
-  strategy inputs would clarify responsibilities.
-
-Next steps:
-- Add a registry (simple factory) so experimental strategies can be toggled at
-  runtime.
-- Provide examples that show how to extend the `Strategy` interface for new
-  domains (tools vs. resources).
+- **Patterns Used:** Executor (`AsyncFuzzExecutor`) encapsulates concurrency and
+  scheduling. Builder (`ResultBuilder`) standardizes output shape for tool,
+  protocol, and batch runs.
+- **Strengths:** Executors isolate concurrency concerns; builders make results
+  consistent across clients and reporters.
+- **Notes:** A shared execution pipeline (`ClientExecutionPipeline`) coordinates
+  tool/protocol runs from a single interface.
 
 ### Safety System (Fit Score: 7/10)
 
-- **Patterns Used:** Chain of Responsibility for running filters in sequence,
-  Decorator for layering mock responses and path blocking.
-- **Strengths:** Safety features remain optional but composable—callers pass in
-  the chain entry point.
-- **Gaps & Ideas:** Chains are assembled imperatively; a configuration-driven
-  builder would make the pattern more obvious.
-
-Next steps:
-- Define a `SafetyPolicy` object that declares filter order and parameters.
-- Cover the chain with integration tests to ensure early exits and bypass
-  clauses behave as expected.
+- **Patterns Used:** Strategy via `DangerDetector` and policy helpers in
+  `mcp_fuzzer/safety_system/policy.py`. Adapter via `SandboxProvider` to swap
+  filesystem sandbox implementations. The `SafetyFilter` acts as the main
+  policy engine with pluggable components.
+- **Strengths:** Detection and sanitization are separated, making it easier to
+  extend or replace detection rules.
+- **Notes:** Safety documentation now includes extension points and a minimal
+  policy configuration example.
 
 ### Runtime & Process Management (Fit Score: 8/10)
 
-- **Patterns Used:** State machine for process lifecycle, Watchdog pattern for
-  supervising tasks, Object Pool/resource pool for concurrency limits.
-- **Strengths:** Async primitives plus the watchdog isolate failure domains and
-  keep resource usage predictable.
-- **Gaps & Ideas:** Lifecycle transitions are implicit; documenting the state
-  diagram would help contributors reason about edge cases.
-
-Next steps:
-- Add a state transition table (docs or docstring) for the process manager.
-- Consider extracting the process pool into a reusable module for integration
-  with future runners.
+- **Patterns Used:** State (`ProcessState`, `DriverState`) for lifecycle
+  tracking. Observer (`ProcessEventObserver`) for runtime and transport event
+  hooks. Strategy (`ProcessSignalStrategy`, `TerminationStrategy`) for
+  pluggable signal handling. Watchdog (`ProcessWatchdog`) for hang detection.
+  Builder (`ProcessConfigBuilder`) for composing process configs.
+- **Strengths:** The watchdog + registry split keeps process supervision
+  testable and decoupled from transports.
+- **Notes:** Process lifecycle transitions are documented in the process
+  management guide.
 
 ### Reporting & Observability (Fit Score: 7/10)
 
-- **Patterns Used:** Observer pattern for event sinks, Bridge to support JSON
-  vs. Console outputs, Adapter for CI-friendly formats.
-- **Strengths:** Reporters subscribe to the same event stream, enabling CLI,
-  JSON, and text outputs without touching the engine.
-- **Gaps & Ideas:** Event payloads are tightly coupled to engine internals;
-  defining a stable DTO reduces accidental breakages.
-
-Next steps:
-- Formalize event contracts (schema + version) to help external tooling.
-- Add regression tests to ensure reporters stay backward compatible.
-
-## Improvement Checklist
-
-- [ ] Share code snippets in docs showing how to extend each layer.
-- [ ] Automate linting/tests per module to validate pattern intent.
-- [ ] Keep the pattern map updated whenever architecture changes.
+- **Patterns Used:** Builder (`OutputProtocol`, `ResultBuilder`) for standardized
+  report payloads. Strategy-like formatter set (`ConsoleFormatter`,
+  `JSONFormatter`, `TextFormatter`, etc.). Adapter uses a save-only contract
+  (`ReportSaver` Protocol) for registry adapters (`ReportSaveAdapter`),
+  while full formatters implement `ReportFormatter`.
+- **Strengths:** OutputProtocol centralizes format semantics; formatters are
+  small and focused.
+- **Notes:** Formatter selection now goes through a registry, and the
+  OutputProtocol schema is documented for external tooling.
 
 Maintaining this review ensures new contributors can map their work to the
 existing architecture while spotting opportunities for better abstractions.

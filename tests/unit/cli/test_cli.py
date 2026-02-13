@@ -38,6 +38,11 @@ def _base_args(**overrides):
         protocol="http",
         endpoint="http://localhost",
         timeout=30.0,
+        transport_retries=1,
+        transport_retry_delay=0.5,
+        transport_retry_backoff=2.0,
+        transport_retry_max_delay=5.0,
+        transport_retry_jitter=0.1,
         verbose=False,
         runs=10,
         runs_per_type=5,
@@ -475,6 +480,31 @@ def test_run_cli_happy_path():
         run_cli()
 
 
+def test_run_cli_orchestration_invokes_runner():
+    args = _base_args(enable_safety_system=True)
+    merged = {"enable_safety_system": True}
+    cli_config = CliConfig(args=args, merged=merged)
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
+        patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
+        patch("mcp_fuzzer.cli.entrypoint.build_cli_config", return_value=cli_config),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+        patch("mcp_fuzzer.cli.entrypoint.prepare_inner_argv", return_value=["prog"]),
+        patch("mcp_fuzzer.cli.entrypoint.ClientSettings") as mock_settings_cls,
+        patch("mcp_fuzzer.cli.entrypoint.SafetyController") as mock_safety_cls,
+        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt") as mock_runner,
+    ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_transport.return_value = None
+        mock_safety = mock_safety_cls.return_value
+        run_cli()
+        mock_settings_cls.assert_called_once_with(merged)
+        mock_safety.start_if_enabled.assert_called_once_with(True)
+        mock_runner.assert_called_once()
+
+
 def test_run_cli_transport_error_exit(monkeypatch):
     args = _base_args()
     with (
@@ -668,6 +698,95 @@ def test_validate_arguments_runs_per_type_invalid():
 
     with pytest.raises(ArgumentValidationError):
         manager.validate_arguments(args)
+
+
+def test_validate_arguments_transport_retry_flags_invalid():
+    manager = ValidationManager()
+
+    bad_retries = SimpleNamespace(
+        mode="tools",
+        tool=None,
+        endpoint="server",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=1.0,
+        transport_retries=0,
+        transport_retry_delay=0.0,
+        transport_retry_backoff=1.0,
+        transport_retry_max_delay=1.0,
+        transport_retry_jitter=0.0,
+    )
+    with pytest.raises(ArgumentValidationError):
+        manager.validate_arguments(bad_retries)
+
+    bad_delay = SimpleNamespace(
+        mode="tools",
+        tool=None,
+        endpoint="server",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=1.0,
+        transport_retries=1,
+        transport_retry_delay=-0.1,
+        transport_retry_backoff=1.0,
+        transport_retry_max_delay=1.0,
+        transport_retry_jitter=0.0,
+    )
+    with pytest.raises(ArgumentValidationError):
+        manager.validate_arguments(bad_delay)
+
+    bad_backoff = SimpleNamespace(
+        mode="tools",
+        tool=None,
+        endpoint="server",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=1.0,
+        transport_retries=1,
+        transport_retry_delay=0.0,
+        transport_retry_backoff=0.5,
+        transport_retry_max_delay=1.0,
+        transport_retry_jitter=0.0,
+    )
+    with pytest.raises(ArgumentValidationError):
+        manager.validate_arguments(bad_backoff)
+
+    bad_max_delay = SimpleNamespace(
+        mode="tools",
+        tool=None,
+        endpoint="server",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=1.0,
+        transport_retries=1,
+        transport_retry_delay=1.0,
+        transport_retry_backoff=1.0,
+        transport_retry_max_delay=0.5,
+        transport_retry_jitter=0.0,
+    )
+    with pytest.raises(ArgumentValidationError):
+        manager.validate_arguments(bad_max_delay)
+
+    bad_jitter = SimpleNamespace(
+        mode="tools",
+        tool=None,
+        endpoint="server",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=1.0,
+        transport_retries=1,
+        transport_retry_delay=0.0,
+        transport_retry_backoff=1.0,
+        transport_retry_max_delay=1.0,
+        transport_retry_jitter=-0.1,
+    )
+    with pytest.raises(ArgumentValidationError):
+        manager.validate_arguments(bad_jitter)
 
 
 def test_check_environment_variables_raises_on_invalid(monkeypatch):

@@ -98,7 +98,7 @@ Notes:
 
 Notes:
 
-- Standardized output files are currently emitted as JSON; `--output-format` is accepted for compatibility.
+- Standardized output files are currently emitted as JSON regardless of `--output-format`; other values are reserved for future formats.
 
 ### Export Options
 
@@ -858,7 +858,7 @@ mcp_fuzzer/
   cli/
     parser.py, entrypoint.py, validators.py, config_merge.py
   client/
-    main.py               # UnifiedMCPFuzzerClient orchestrator
+    main.py               # MCPFuzzerClient orchestrator
 ```
 
 ## Schema Parser
@@ -1023,7 +1023,7 @@ The main client for orchestrating fuzzing operations:
 from mcp_fuzzer.client import MCPFuzzerClient
 from mcp_fuzzer.safety_system.safety import SafetyFilter
 
-class UnifiedMCPFuzzerClient:
+class MCPFuzzerClient:
     """Unified client for MCP fuzzing operations."""
 
     def __init__(

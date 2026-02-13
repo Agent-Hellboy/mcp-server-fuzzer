@@ -106,6 +106,36 @@ Examples:
         help="Request timeout in seconds (default: 30.0)",
     )
     parser.add_argument(
+        "--transport-retries",
+        type=int,
+        default=1,
+        help="Total attempts for transport requests (default: 1)",
+    )
+    parser.add_argument(
+        "--transport-retry-delay",
+        type=float,
+        default=0.5,
+        help="Base delay for transport retries in seconds (default: 0.5)",
+    )
+    parser.add_argument(
+        "--transport-retry-backoff",
+        type=float,
+        default=2.0,
+        help="Backoff multiplier for transport retries (default: 2.0)",
+    )
+    parser.add_argument(
+        "--transport-retry-max-delay",
+        type=float,
+        default=5.0,
+        help="Maximum delay for transport retries in seconds (default: 5.0)",
+    )
+    parser.add_argument(
+        "--transport-retry-jitter",
+        type=float,
+        default=0.1,
+        help="Jitter factor for transport retry delay (default: 0.1)",
+    )
+    parser.add_argument(
         "--tool-timeout",
         type=float,
         help=(
@@ -145,6 +175,30 @@ Examples:
         type=int,
         default=5,
         help="Number of fuzzing runs per protocol type (default: 5)",
+    )
+    parser.add_argument(
+        "--stateful",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable learned stateful protocol sequences (default: false)",
+    )
+    parser.add_argument(
+        "--stateful-runs",
+        type=int,
+        default=5,
+        help="Number of learned stateful sequences to run (default: 5)",
+    )
+    parser.add_argument(
+        "--havoc",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable stacked corpus mutations (havoc mode)",
+    )
+    parser.add_argument(
+        "--corpus",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable per-target corpus save/load (default: true)",
     )
     parser.add_argument(
         "--protocol-type",
