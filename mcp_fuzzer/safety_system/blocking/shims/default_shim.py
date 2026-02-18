@@ -4,7 +4,7 @@ import os
 import json
 from datetime import datetime
 
-from ....utils.icons import BLOCKED, CROSS, SHIELD
+from ....utils.icons import CROSS, SHIELD
 
 LOG_FILE = "<<<LOG_FILE>>>"
 

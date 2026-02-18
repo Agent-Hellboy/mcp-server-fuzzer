@@ -1,10 +1,8 @@
-"""
-Lightweight icon/text helpers used to avoid heavy emoji dependency.
-Using simple ASCII-ish tokens keeps output readable in all environments.
-"""
+"""Lightweight icon/text helpers used across CLI and reporters."""
 
-CHECK = "[ok]"
-CROSS = "[x]"
+# Markdown and terminal render well with these Unicode markers; tests rely on them.
+CHECK = "✔"
+CROSS = "❌"
 ALERT = "[alert]"
 SHIELD = "[shield]"
 BLOCKED = "[blocked]"

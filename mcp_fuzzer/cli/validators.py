@@ -14,7 +14,7 @@ from ..client.adapters import config_mediator
 from ..transport.catalog import build_driver
 from ..exceptions import MCPError, TransportError
 from ..env import ENVIRONMENT_VARIABLES, ValidationType
-from ..utils.icons import CHECK, CROSS
+from ..utils.icons import CHECK
 
 
 class ValidationManager:

@@ -27,6 +27,7 @@ from .fuzz_engine import (
 )
 
 __all__ = [
+    "__version__",
     "ToolMutator",
     "ProtocolMutator",
     "BatchMutator",
