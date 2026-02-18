@@ -1,65 +1,67 @@
-# Multi-stage Dockerfile for MCP Server Fuzzer
-FROM python:3.12-slim AS builder
+# Distroless runtime (no busybox) + slim builder
+FROM python:3.11-slim AS builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Set working directory
 WORKDIR /build
 
-# Copy dependency files
-COPY pyproject.toml requirements.txt ./
+# Build dependencies for native wheels
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    libssl-dev \
+    rustc \
+    cargo \
+ && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+# Copy metadata early
+COPY pyproject.toml docker/requirements.runtime.txt ./
 
-# Copy project files
+# Upgrade packaging tools
+RUN python -m pip install --upgrade pip setuptools wheel
+
+# Copy project
 COPY . .
 
-# Install the package (non-editable so runtime doesn't depend on /build)
-RUN pip install --no-cache-dir .
+# Install runtime deps into isolated prefix, then the package itself
+RUN python -m pip install --no-cache-dir --requirement docker/requirements.runtime.txt --prefix=/install \
+ && python -m pip install --no-cache-dir --no-deps --prefix=/install .
 
-# Runtime stage
-FROM python:3.12-slim
+# Prune extras from the install prefix
+RUN rm -rf /install/lib/python3.11/site-packages/pip* /install/bin/pip* \
+ && rm -rf /install/lib/python3.11/test /install/lib/python3.11/ensurepip \
+           /install/lib/python3.11/idlelib /install/lib/python3.11/tkinter \
+ && find /install/lib/python3.11 -type d \( -name "__pycache__" -o -name "tests" -o -name "test" -o -name "explore" \) -prune -exec rm -rf {} + \
+ && find /install/lib/python3.11 -name '*.py[co]' -delete \
+ && find /install -name '*.a' -delete \
+ && find /install -type f \( -name '*.so' -o -name '*.so.*' \) -exec strip --strip-unneeded {} + || true
 
-# Install runtime dependencies (for stdio servers that might need system tools)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Runtime stage: distroless python, nonroot by default
+FROM gcr.io/distroless/python3-debian12:nonroot
 
-# Create non-root user for security
-RUN useradd -m -u 1000 fuzzer && \
-    mkdir -p /app /output && \
-    chown -R fuzzer:fuzzer /app /output
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MCP_FUZZER_IN_DOCKER=1 \
+    PYTHONPATH=/usr/local/lib/python3.11/site-packages
 
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy installed artifacts from builder
+COPY --from=builder /install /usr/local
 
-# Copy project files (needed for schemas and configs)
-# Copy schemas directory (critical for spec guard)
-COPY --chown=fuzzer:fuzzer schemas/ ./schemas/
-# Copy mcp_fuzzer package
-COPY --chown=fuzzer:fuzzer mcp_fuzzer/ ./mcp_fuzzer/
-# Copy other necessary files
-COPY --chown=fuzzer:fuzzer pyproject.toml README.md LICENSE ./
+# Copy runtime resources
+COPY --chown=nonroot:nonroot schemas ./schemas
+COPY --chown=nonroot:nonroot mcp_fuzzer ./mcp_fuzzer
+COPY --chown=nonroot:nonroot pyproject.toml README.md LICENSE ./
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    MCP_FUZZER_IN_DOCKER=1
+USER nonroot
 
-# Switch to non-root user
-USER fuzzer
+HEALTHCHECK NONE
 
-# Default command
-ENTRYPOINT ["mcp-fuzzer"]
-
-# Default to help if no args provided
+ENTRYPOINT ["/usr/bin/python3", "-m", "mcp_fuzzer"]
 CMD ["--help"]

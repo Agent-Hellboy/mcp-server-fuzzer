@@ -7,7 +7,6 @@ import argparse
 import os
 from typing import Any
 
-import emoji
 from rich.console import Console
 
 from ..exceptions import ArgumentValidationError
@@ -15,6 +14,7 @@ from ..client.adapters import config_mediator
 from ..transport.catalog import build_driver
 from ..exceptions import MCPError, TransportError
 from ..env import ENVIRONMENT_VARIABLES, ValidationType
+from ..utils.icons import CHECK, CROSS
 
 
 class ValidationManager:
@@ -136,10 +136,8 @@ class ValidationManager:
     def validate_config_file(self, path: str) -> None:
         """Validate a config file and print success message."""
         config_mediator.load_file(path)
-        success_msg = (
-            f"[green]:heavy_check_mark: Configuration file '{path}' is valid[/green]"
-        )
-        self.console.print(emoji.emojize(success_msg, language="alias"))
+        success_msg = f"[green]{CHECK} Configuration file '{path}' is valid[/green]"
+        self.console.print(success_msg)
 
     def check_environment_variables(self) -> bool:
         """Print environment variable status and return validation result."""
@@ -156,17 +154,12 @@ class ValidationManager:
             is_valid = self._validate_env_var(value, validation_type, validation_params)
 
             if is_valid:
-                self.console.print(
-                    emoji.emojize(
-                        f"[green]:heavy_check_mark: {name}={value}[/green]",
-                        language="alias",
-                    )
-                )
+                self.console.print(f"[green]{CHECK} {name}={value}[/green]")
             else:
                 error_msg = self._get_validation_error_msg(
                     name, value, validation_type, validation_params
                 )
-                self.console.print(emoji.emojize(error_msg, language="alias"))
+                self.console.print(error_msg)
                 all_valid = False
 
         if all_valid:

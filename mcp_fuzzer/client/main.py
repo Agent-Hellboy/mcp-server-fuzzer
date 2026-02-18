@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 import os
 
-import emoji
+from ..utils.icons import ALERT, CHECK, ROCKET, STATS, TARGET
 
 from ..reports import FuzzerReporter
 from ..reports.formatters.common import extract_tool_runs
@@ -135,7 +135,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
                 and tool_results
             ):
                 print("\n" + "=" * 80)
-                print(f"{emoji.emojize(':bullseye:')} MCP FUZZER TOOL RESULTS SUMMARY")
+                print(f"{TARGET} MCP FUZZER TOOL RESULTS SUMMARY")
                 print("=" * 80)
                 client.print_tool_summary(tool_results)
 
@@ -154,7 +154,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
                     else 0
                 )
 
-                print(f"\n{emoji.emojize(':chart_increasing:')} OVERALL STATISTICS")
+                print(f"\n{STATS} OVERALL STATISTICS")
                 print("-" * 40)
                 print(f"• Total Tools Tested: {total_tools}")
                 print(f"• Total Fuzzing Runs: {total_runs}")
@@ -172,8 +172,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
 
                 if vulnerable_tools:
                     print(
-                        f"\n{emoji.emojize(':police_car_light:')} "
-                        f"VULNERABILITIES FOUND: {len(vulnerable_tools)}"
+                        f"\n{ALERT} VULNERABILITIES FOUND: {len(vulnerable_tools)}"
                     )
                     for tool, exceptions, total in vulnerable_tools:
                         rate = exceptions / total * 100
@@ -181,10 +180,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
                             f"  • {tool}: {exceptions}/{total} exceptions ({rate:.1f}%)"
                         )
                 else:
-                    print(
-                        f"\n{emoji.emojize(':check_mark_button:')} "
-                        f"NO VULNERABILITIES FOUND"
-                    )
+                    print(f"\n{CHECK} NO VULNERABILITIES FOUND")
 
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display table summary: {exc}")
@@ -192,9 +188,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
         try:  # pragma: no cover
             if isinstance(protocol_results, dict) and protocol_results:
                 print("\n" + "=" * 80)
-                print(
-                    f"{emoji.emojize(':rocket:')} MCP FUZZER PROTOCOL RESULTS SUMMARY"
-                )
+                print(f"{ROCKET} MCP FUZZER PROTOCOL RESULTS SUMMARY")
                 print("=" * 80)
                 client.print_protocol_summary(protocol_results)
         except Exception as exc:  # pragma: no cover

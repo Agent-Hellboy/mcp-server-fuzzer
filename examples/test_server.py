@@ -582,7 +582,8 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
 
 def run_server():
     """Start the HTTP server."""
-    server_address = ('localhost', 8003)
+    # Bind to all interfaces so it is reachable from Docker host/other containers
+    server_address = ('0.0.0.0', 8003)
     httpd = HTTPServer(server_address, MCPRequestHandler)
 
     logger.info("Test server started on http://localhost:8003")

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import emoji
 from typing import Any
 
 from .common import (
@@ -13,6 +12,7 @@ from .common import (
     result_has_failure,
 )
 from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
+from ...utils.icons import CHECK, CROSS
 
 
 class MarkdownFormatter:
@@ -68,11 +68,7 @@ class MarkdownFormatter:
                 md_content += "|-----|---------|-----------|\n"
 
                 for i, result in enumerate(runs):
-                    success = (
-                        emoji.emojize(":heavy_check_mark:", language="alias")
-                        if result.get("success")
-                        else emoji.emojize(":x:", language="alias")
-                    )
+                    success = CHECK if result.get("success") else CROSS
                     exception = result.get("exception", "")
                     md_content += f"| {i + 1} | {success} | {exception} |\n"
 

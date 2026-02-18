@@ -34,7 +34,6 @@ dependencies = [
     "rich",
     "pyyaml>=6.0",
     "psutil>=5.9.0",
-    "emoji",
 ]
 
 [project.optional-dependencies]

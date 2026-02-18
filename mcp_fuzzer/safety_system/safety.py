@@ -14,7 +14,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-import emoji
+from ..utils.icons import ALERT
 
 from .filesystem import (
     PathSanitizer,
@@ -300,7 +300,7 @@ class SafetyFilter(SafetyProvider):
             if event.dangerous_content:
                 logging.warning(
                     "%s DANGEROUS CONTENT DETECTED:",
-                    emoji.emojize(":police_car_light:"),
+                    ALERT,
                 )
                 for content in event.dangerous_content:
                     logging.warning(

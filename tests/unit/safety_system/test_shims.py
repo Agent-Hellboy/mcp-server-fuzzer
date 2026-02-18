@@ -56,7 +56,6 @@ def test_strict_shim_logs_and_exits(monkeypatch, tmp_path, capsys):
 
 
 def test_default_shim_without_emoji(monkeypatch, capsys):
-    monkeypatch.setattr(default_shim, "HAS_EMOJI", False)
     monkeypatch.setattr(default_shim, "LOG_FILE", "")
     monkeypatch.setattr(default_shim.sys, "argv", ["blocked-cmd"])
 
@@ -65,8 +64,8 @@ def test_default_shim_without_emoji(monkeypatch, capsys):
 
     assert excinfo.value.code == 0
     captured = capsys.readouterr()
-    assert "[X]" in captured.err
-    assert "[*]" in captured.out
+    assert "[FUZZER BLOCKED]" in captured.err
+    assert "was blocked" in captured.out
 
 
 def test_strict_shim_log_write_failure(monkeypatch, capsys):

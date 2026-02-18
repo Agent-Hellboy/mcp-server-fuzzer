@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 
+from ..version import VERSION
+
 
 def create_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -38,6 +40,13 @@ Examples:
     --endpoint http://localhost:8000/mcp/ --verbose
             """
         ),
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s v{VERSION}",
+        help="Show version and exit",
     )
 
     # Configuration file options

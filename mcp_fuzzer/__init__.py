@@ -12,6 +12,7 @@ if sys.version_info < (3, 10):
         "Use a supported interpreter (e.g., tox envs or a 3.10+ venv)."
     )
 
+from .version import VERSION as __version__
 from .cli import create_argument_parser, build_cli_config
 from .client import MCPFuzzerClient
 from .fuzz_engine import (
@@ -25,7 +26,6 @@ from .fuzz_engine import (
     ToolStrategies,
 )
 
-__version__ = "0.1.9"
 __all__ = [
     "ToolMutator",
     "ProtocolMutator",
