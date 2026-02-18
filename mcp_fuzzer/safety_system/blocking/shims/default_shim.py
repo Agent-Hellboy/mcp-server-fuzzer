@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-import sys
 import os
 import json
+import sys
 from datetime import datetime
 
-from ....utils.icons import CROSS, SHIELD
+CROSS = "X"
+SHIELD = "SHIELD"
 
 LOG_FILE = "<<<LOG_FILE>>>"
 

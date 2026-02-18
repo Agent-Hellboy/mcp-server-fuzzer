@@ -14,7 +14,7 @@ from ..client.adapters import config_mediator
 from ..transport.catalog import build_driver
 from ..exceptions import MCPError, TransportError
 from ..env import ENVIRONMENT_VARIABLES, ValidationType
-from ..utils.icons import CHECK
+from ..utils.icons import CHECK, CROSS
 
 
 class ValidationManager:
@@ -203,20 +203,12 @@ class ValidationManager:
         if validation_type == ValidationType.CHOICE:
             choices = params.get("choices", [])
             choices_str = ", ".join(choices)
-            return (
-                "[red]:heavy_multiplication_x: "
-                f"{name}={value} (must be one of: {choices_str})[/red]"
-            )
+            return f"[red]{CROSS} {name}={value} (must be one of: {choices_str})[/red]"
         elif validation_type == ValidationType.BOOLEAN:
-            return (
-                "[red]:heavy_multiplication_x: "
-                f"{name}={value} (must be 'true' or 'false')[/red]"
-            )
+            return f"[red]{CROSS} {name}={value} (must be 'true' or 'false')[/red]"
         elif validation_type == ValidationType.NUMERIC:
-            return (
-                f"[red]:heavy_multiplication_x: {name}={value} (must be numeric)[/red]"
-            )
-        return f"[red]:heavy_multiplication_x: {name}={value} (invalid value)[/red]"
+            return f"[red]{CROSS} {name}={value} (must be numeric)[/red]"
+        return f"[red]{CROSS} {name}={value} (invalid value)[/red]"
 
     def validate_transport(self, args: Any) -> None:
         try:

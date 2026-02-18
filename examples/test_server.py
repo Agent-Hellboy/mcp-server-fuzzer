@@ -6,6 +6,7 @@ This server provides basic MCP functionality for testing the fuzzer CLI.
 """
 
 import json
+import os
 import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Dict
@@ -15,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 REQUIRED_AUTH_SCHEME = "Bearer"
-REQUIRED_TOKEN = "xxx"
+BIND_HOST = os.getenv("BIND_HOST", "0.0.0.0")
+BIND_PORT = int(os.getenv("BIND_PORT", "8003"))
+REQUIRED_TOKEN = os.getenv("REQUIRED_TOKEN", "xxx")
+ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", f"http://{BIND_HOST}:{BIND_PORT}")
 
 
 class SimpleMCPServer:
@@ -121,7 +125,9 @@ class SimpleMCPServer:
                 "result": {
                     "content": {
                         "type": "text",
-                        "text": f"Sampling request received with {len(messages)} messages"
+                        "text": (
+                            f"Sampling request received with {len(messages)} messages"
+                        )
                     },
                     "model": "test-model",
                     "stopReason": "endTurn"
@@ -229,7 +235,9 @@ class MCPProtocolHandler:
         self.server = SimpleMCPServer()
         self.request_id = 0
 
-    def handle_message(self, message: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
+    def handle_message(
+        self, message: Dict[str, Any], headers: Dict[str, str]
+    ) -> Dict[str, Any]:
         """Handle incoming MCP messages"""
         try:
             method = message.get("method")
@@ -349,7 +357,9 @@ class MCPProtocolHandler:
             }
         }
 
-    def handle_call_tool(self, msg_id: Any, params: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
+    def handle_call_tool(
+        self, msg_id: Any, params: Dict[str, Any], headers: Dict[str, str]
+    ) -> Dict[str, Any]:
         """Handle tool call request"""
         tool_name = params.get("name")
         tool_args = params.get("arguments", {})
@@ -361,7 +371,10 @@ class MCPProtocolHandler:
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Test tool called with message: {message}, count: {count}"
+                        "text": (
+                            "Test tool called with message: "
+                            f"{message}, count: {count}"
+                        )
                     }
                 ]
             }
@@ -434,7 +447,9 @@ class MCPProtocolHandler:
             }
         }
 
-    def handle_sampling_create(self, msg_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    def handle_sampling_create(
+        self, msg_id: Any, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Handle sampling create request"""
         # For a test server, just echo back the messages
         messages = params.get("messages", [])
@@ -444,14 +459,18 @@ class MCPProtocolHandler:
             "result": {
                 "content": {
                     "type": "text",
-                    "text": f"Sampling request received with {len(messages)} messages"
+                    "text": (
+                        f"Sampling request received with {len(messages)} messages"
+                    )
                 },
                 "model": "test-model",
                 "stopReason": "endTurn"
             }
         }
 
-    def handle_logging_set_level(self, msg_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    def handle_logging_set_level(
+        self, msg_id: Any, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Handle logging set level request"""
         level = params.get("level", "info")
         logger.info(f"Logging level set to: {level}")
@@ -477,11 +496,17 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
                     "status": "healthy",
                     "server": "Simple Test Server",
                     "version": "1.0.0",
-                    "capabilities": ["tools", "roots", "prompts", "resources", "sampling"]
+                    "capabilities": [
+                        "tools",
+                        "roots",
+                        "prompts",
+                        "resources",
+                        "sampling",
+                    ]
                 })
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Origin', ALLOWED_ORIGIN)
                 self.send_header('Content-Length', len(health_response))
                 self.end_headers()
                 self.wfile.write(health_response.encode())
@@ -506,7 +531,7 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
                 try:
                     request = json.loads(body)
                     logger.debug(f"Received request: {request}")
-                except json.JSONDecodeError as e:
+                except json.JSONDecodeError:
                     logger.error(f"Invalid JSON: {body}")
                     request = {"method": "tools/list", "id": 1}
             else:
@@ -522,18 +547,30 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
                 response_text = json.dumps(response)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
-                self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+                self.send_header('Access-Control-Allow-Origin', ALLOWED_ORIGIN)
+                self.send_header(
+                    'Access-Control-Allow-Methods',
+                    'POST, OPTIONS, GET',
+                )
+                self.send_header(
+                    'Access-Control-Allow-Headers',
+                    'Content-Type, Authorization',
+                )
                 self.send_header('Content-Length', len(response_text))
                 self.end_headers()
                 self.wfile.write(response_text.encode())
             else:
-                # Notification or intentionally silent JSON-RPC message: still close HTTP exchange
+                # Notification or silent JSON-RPC message: close HTTP exchange
                 self.send_response(204)
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
-                self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+                self.send_header('Access-Control-Allow-Origin', ALLOWED_ORIGIN)
+                self.send_header(
+                    'Access-Control-Allow-Methods',
+                    'POST, OPTIONS, GET',
+                )
+                self.send_header(
+                    'Access-Control-Allow-Headers',
+                    'Content-Type, Authorization',
+                )
                 self.end_headers()
 
         except Exception as e:
@@ -553,26 +590,44 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
                 })
                 self.send_response(500)
                 self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
-                self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+                self.send_header('Access-Control-Allow-Origin', ALLOWED_ORIGIN)
+                self.send_header(
+                    'Access-Control-Allow-Methods',
+                    'POST, OPTIONS, GET',
+                )
+                self.send_header(
+                    'Access-Control-Allow-Headers',
+                    'Content-Type, Authorization',
+                )
                 self.send_header('Content-Length', len(error_content))
                 self.end_headers()
                 self.wfile.write(error_content.encode())
             else:
-                # No JSON-RPC id available (e.g., malformed message): still return HTTP 500
+                # No JSON-RPC id available (e.g., malformed message)
                 self.send_response(500)
                 self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
-                self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+                self.send_header(
+                    'Access-Control-Allow-Methods',
+                    'POST, OPTIONS, GET',
+                )
+                self.send_header(
+                    'Access-Control-Allow-Headers',
+                    'Content-Type, Authorization',
+                )
                 self.end_headers()
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Access-Control-Allow-Origin', ALLOWED_ORIGIN)
+        self.send_header(
+            'Access-Control-Allow-Methods',
+            'POST, OPTIONS, GET',
+        )
+        self.send_header(
+            'Access-Control-Allow-Headers',
+            'Content-Type, Authorization',
+        )
         self.end_headers()
 
     def log_message(self, format, *args):
@@ -582,11 +637,15 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
 
 def run_server():
     """Start the HTTP server."""
-    # Bind to all interfaces so it is reachable from Docker host/other containers
-    server_address = ('0.0.0.0', 8003)
+    server_address = (BIND_HOST, BIND_PORT)
     httpd = HTTPServer(server_address, MCPRequestHandler)
 
-    logger.info("Test server started on http://localhost:8003")
+    logger.info(
+        "Test server started on http://%s:%s (bind=%s)",
+        server_address[0],
+        server_address[1],
+        server_address[0],
+    )
     logger.info("Available tools: test_tool, echo_tool, secure_tool")
     logger.info("Note: secure_tool requires Bearer token authentication")
     logger.info("Press Ctrl+C to stop")

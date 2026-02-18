@@ -1,15 +1,18 @@
-"""Lightweight icon/text helpers used across CLI and reporters."""
+"""Lightweight icon/text helpers used across CLI and reporters.
 
-# Markdown and terminal render well with these Unicode markers; tests rely on them.
-CHECK = "✔"
-CROSS = "❌"
-ALERT = "[alert]"
-SHIELD = "[shield]"
-BLOCKED = "[blocked]"
-UNLOCKED = "[unlocked]"
-TARGET = "[target]"
-ROCKET = "[rocket]"
-STATS = "[stats]"
+All values are plain ASCII to avoid emoji rendering differences and keep
+outputs consistent across terminals and Rich/markdown renderers.
+"""
+
+CHECK = "OK"
+CROSS = "X"
+ALERT = "ALERT"
+SHIELD = "SHIELD"
+BLOCKED = "BLOCKED"
+UNLOCKED = "UNLOCKED"
+TARGET = "TARGET"
+ROCKET = "ROCKET"
+STATS = "STATS"
 
 __all__ = [
     "CHECK",
