@@ -51,7 +51,8 @@ _THEMES: Dict[str, Dict[str, str]] = {
 
 def _select_theme() -> Tuple[str, Dict[str, str]]:
     env_theme = os.getenv("MCP_FUZZER_ICON_THEME", "ascii").lower().strip()
-    return (env_theme if env_theme in _THEMES else "ascii", _THEMES.get(env_theme, _THEMES["ascii"]))
+    name = env_theme if env_theme in _THEMES else "ascii"
+    return name, _THEMES.get(env_theme, _THEMES["ascii"])
 
 
 _theme_name, _theme = _select_theme()

@@ -6,10 +6,9 @@ from __future__ import annotations
 import json
 
 import pytest
+from mcp_fuzzer import healthcheck
 
 pytestmark = [pytest.mark.unit]
-
-from mcp_fuzzer import healthcheck
 
 
 def test_healthcheck_passes_with_repo_schemas(tmp_path, monkeypatch):
