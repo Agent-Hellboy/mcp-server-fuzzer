@@ -42,6 +42,19 @@ tox -e tests
 tests/e2e/test_healthcheck_container.sh
 ```
 
+### Run Everything Server E2E (conformance style)
+
+This exercises the bundled "everything" MCP server in `explore/servers` and generates a full fuzzing report.
+
+```bash
+# Use a writable fs root to avoid permission errors on macOS sandboxed envs
+MCP_FUZZER_FS_ROOT=/tmp/mcp_fuzzer_sandbox \
+PATH=".tox/tests/bin:$PATH" \
+bash tests/e2e/test_everything_server.sh
+```
+
+Reports will be written under `/tmp/everything_server_fuzz_<timestamp>/sessions/<uuid>/fuzzing_results.json`.
+
 ### Run tests for specific components
 
 ```bash
