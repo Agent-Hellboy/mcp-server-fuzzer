@@ -35,6 +35,13 @@ pytest
 tox -e tests
 ```
 
+### Run container smoke test (distroless image)
+
+```bash
+# Ensure the image exists first (docker build -t mcp-fuzzer:latest .)
+tests/e2e/test_healthcheck_container.sh
+```
+
 ### Run tests for specific components
 
 ```bash
