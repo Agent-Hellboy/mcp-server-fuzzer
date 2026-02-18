@@ -9,6 +9,9 @@ This directory contains Docker-related files for running MCP Server Fuzzer in a 
 ```bash
 # From project root
 docker build -t mcp-fuzzer:latest .
+
+# Debuggable image (shell + coreutils) using the optional target
+docker build -t mcp-fuzzer:debug --target runtime-debug .
 ```
 
 ### Running the Fuzzer
@@ -132,10 +135,12 @@ docker run --rm -it \
 
 ## Security Considerations
 
-1. **Non-root User**: Container runs as `fuzzer` user (UID 1000) for security
+1. **Non-root User**: Runtime uses the nonroot user (UID 65532) matching distroless
 2. **Read-only Mounts**: Use `:ro` flag for server code mounts when possible
 3. **Isolated Environment**: Stdio servers run in isolated container environment
 4. **No Persistent Storage**: Reports written to mounted volume, not container filesystem
+5. **Healthcheck**: The image exposes a Python-based healthcheck (`mcp_fuzzer.healthcheck`) that validates the package install and schema bundle without relying on a shell.
+6. **Debug Target**: When you need a shell for live debugging, build the `runtime-debug` target. It keeps parity with the distroless runtime (same nonroot UID/GID) but includes bash and common utilities.
 
 ## Troubleshooting
 
@@ -176,6 +181,10 @@ The container runs as non-root user. If you need to write to mounted volumes, en
 sudo chown -R 1000:1000 reports/
 # Or: chmod 750 reports/ and ensure the group matches
 ```
+
+### Native build dependencies (Rust/Cargo)
+
+The default build prefers binary wheels to avoid compiling native dependencies. If you need to compile crates (e.g., for optional deps), set `--build-arg INSTALL_RUST_TOOLS=1 --build-arg PIP_ONLY_BINARY_OVERRIDE=` during `docker build` to install `cargo`/`rustc` and allow source builds.
 
 ## CI/CD Integration
 

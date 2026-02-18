@@ -90,8 +90,8 @@ def test_markdown_formatter_generates_expected_sections(tmp_path: Path, sample_r
     assert "## Spec Guard Summary" in text
     assert "| Spec ID | Failed" in text
     assert "### demo-tool" in text
-    assert "✔" in text
-    assert "❌" in text
+    assert "OK" in text
+    assert "X" in text
     assert "## Protocol Results" in text
     assert "## Resource Item Summary" in text
     assert "## Prompt Item Summary" in text

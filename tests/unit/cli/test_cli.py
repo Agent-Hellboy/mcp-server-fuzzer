@@ -17,6 +17,7 @@ from mcp_fuzzer.cli import (
     ValidationManager,
     build_cli_config,
 )
+from mcp_fuzzer import __version__
 from mcp_fuzzer.cli.config_merge import CliConfig
 from mcp_fuzzer.client.runtime.argv_builder import prepare_inner_argv
 from mcp_fuzzer.client.runtime.async_runner import AsyncRunner
@@ -126,6 +127,15 @@ def test_parse_arguments(monkeypatch):
     ):
         args = parse_arguments()
     assert args.endpoint == "http://localhost:8000"
+
+
+def test_version_flag_exits_and_prints(capsys):
+    parser = create_argument_parser()
+    with pytest.raises(SystemExit) as exc:
+        parser.parse_args(["--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr()
+    assert __version__ in out.out
 
 
 def test_setup_logging_levels():

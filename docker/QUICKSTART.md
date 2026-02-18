@@ -6,6 +6,9 @@
 # Build
 docker build -t mcp-fuzzer:latest .
 
+# Optional: build a debug-friendly image with shell/tools
+docker build -t mcp-fuzzer:debug --target runtime-debug .
+
 # Fuzz HTTP server (container = client)
 docker run --rm -it --network host \
   -v $(pwd)/reports:/output \
@@ -51,6 +54,9 @@ docker run --rm -it \
   -v $(pwd)/reports:/output \
   mcp-fuzzer:latest \
   --mode tools --protocol stdio --endpoint "node /servers/my-server.js stdio" --output-dir /output
+
+# Quick healthcheck (distroless-safe)
+docker run --rm --entrypoint /usr/bin/python3 mcp-fuzzer:latest -m mcp_fuzzer.healthcheck --verbose
 ```
 
 ### Pattern 3: Remote HTTP Server

@@ -15,7 +15,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-import emoji
+from ...utils.icons import BLOCKED, SHIELD, UNLOCKED
 
 from .shims import load_shim_template
 
@@ -66,8 +66,7 @@ class SystemCommandBlocker:
             # Create temporary directory for fake executables
             self.temp_dir = Path(tempfile.mkdtemp(prefix="mcp_fuzzer_block_"))
             logging.info(
-                f"{emoji.emojize(':shield:')} Created command blocking directory: "
-                f"{self.temp_dir}"
+                f"{SHIELD} Created command blocking directory: {self.temp_dir}"
             )
 
             # Create fake executables
@@ -79,8 +78,7 @@ class SystemCommandBlocker:
 
             logging.info("System command blocking activated")
             logging.info(
-                f"{emoji.emojize(':prohibited:')} Blocked commands: "
-                f"{', '.join(self.blocked_commands)}"
+                f"{BLOCKED} Blocked commands: {', '.join(self.blocked_commands)}"
             )
 
         except Exception as e:
@@ -98,9 +96,7 @@ class SystemCommandBlocker:
             # Clean up using the cleanup method
             self.cleanup()
 
-            logging.info(
-                f"{emoji.emojize(':unlocked:')} System command blocking stopped"
-            )
+            logging.info(f"{UNLOCKED} System command blocking stopped")
 
         except Exception as e:
             logging.error(f"Error during cleanup: {e}")

@@ -158,6 +158,7 @@ The following environment variables are currently read at startup:
 - `MCP_FUZZER_HTTP_TIMEOUT`
 - `MCP_FUZZER_SSE_TIMEOUT`
 - `MCP_FUZZER_STDIO_TIMEOUT`
+- `MCP_FUZZER_ICON_THEME` (ascii | unicode | emoji; defaults to ascii)
 
 ## Migration From Pre-Redesign Configs (<=3d61ee4)
 

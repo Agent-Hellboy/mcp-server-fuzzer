@@ -14,7 +14,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-import emoji
+from ..utils.icons import ALERT, BLOCKED
 
 from .filesystem import (
     PathSanitizer,
@@ -290,7 +290,7 @@ class SafetyFilter(SafetyProvider):
         logging.warning("Reason: %s", reason)
         logging.warning("Timestamp: %s", event.timestamp)
         logging.warning("=" * 80)
-        logging.warning("\U0001f6ab SAFETY BLOCK DETECTED")
+        logging.warning("%s SAFETY BLOCK DETECTED", BLOCKED)
         logging.warning("=" * 80)
 
         if event.arguments:
@@ -300,7 +300,7 @@ class SafetyFilter(SafetyProvider):
             if event.dangerous_content:
                 logging.warning(
                     "%s DANGEROUS CONTENT DETECTED:",
-                    emoji.emojize(":police_car_light:"),
+                    ALERT,
                 )
                 for content in event.dangerous_content:
                     logging.warning(

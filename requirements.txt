@@ -1,6 +1,5 @@
 anyio==4.11.0
 certifi==2025.11.12
-emoji==2.15.0
 h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
