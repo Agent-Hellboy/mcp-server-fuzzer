@@ -17,6 +17,7 @@
 
 [Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/) • [Quick Start](#quick-start) • [Examples](#examples) • [Configuration](#configuration)
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20the%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/yAfAyBRg)
 </div>
 
 ---
