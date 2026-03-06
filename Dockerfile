@@ -13,9 +13,12 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 ARG PIP_VERSION=24.3.1
 ARG SETUPTOOLS_VERSION=75.6.0
 ARG WHEEL_VERSION=0.44.0
-ARG BUILD_ESSENTIAL_VERSION=12.9
-ARG LIBFFI_DEV_VERSION=3.4.4-1
-ARG LIBSSL_DEV_VERSION=3.0.18-1~deb12u1
+# Keep OS package versions overrideable for deterministic builds, but default to
+# the latest available in the base image to avoid 404s when Debian publishes
+# security updates that bump patch versions.
+ARG BUILD_ESSENTIAL_VERSION=""
+ARG LIBFFI_DEV_VERSION=""
+ARG LIBSSL_DEV_VERSION=""
 # Optional: install Rust toolchain only when needed for native wheels
 ARG INSTALL_RUST_TOOLS=0
 
@@ -24,10 +27,14 @@ WORKDIR /build
 # Build dependencies for native wheels
 RUN set -eux; \
     apt-get update; \
+    # Use explicit version pins only when provided; otherwise install the
+    # current package versions shipped with the base image. This prevents
+    # build failures when Debian bumps patch versions (seen in the release
+    # workflow where 12.9/3.4.4-1/3.0.18-1~deb12u1 were no longer available).
     apt-get install -y --no-install-recommends \
-      build-essential=${BUILD_ESSENTIAL_VERSION} \
-      libffi-dev=${LIBFFI_DEV_VERSION} \
-      libssl-dev=${LIBSSL_DEV_VERSION}; \
+      "build-essential${BUILD_ESSENTIAL_VERSION:+=${BUILD_ESSENTIAL_VERSION}}" \
+      "libffi-dev${LIBFFI_DEV_VERSION:+=${LIBFFI_DEV_VERSION}}" \
+      "libssl-dev${LIBSSL_DEV_VERSION:+=${LIBSSL_DEV_VERSION}}"; \
     if [ "${INSTALL_RUST_TOOLS}" = "1" ]; then \
       apt-get install -y --no-install-recommends cargo rustc; \
     fi; \
