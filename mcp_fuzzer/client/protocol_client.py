@@ -15,43 +15,28 @@ from typing import Any
 
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
 from ..protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
+from ..protocol_registry import DEFAULT_PROTOCOL_TYPES
+from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
 
 from ..fuzz_engine.mutators import ProtocolMutator
 from ..fuzz_engine.mutators.seed_mutation import mutate_seed_payload
 from .. import spec_guard
 from ..fuzz_engine.executor import ProtocolExecutor
-from ..safety_system.safety import SafetyProvider
+from ..safety_system.safety import CombinedSafetyProvider
 
 # Centralized allow-list for protocol types that can be fuzzed
 # This should stay in sync with ProtocolExecutor.PROTOCOL_TYPES
-ALLOWED_PROTOCOL_TYPES = frozenset(
-    {
-        "InitializeRequest",
-        "InitializedNotification",
-        "ProgressNotification",
-        "CancelledNotification",
-        "ListToolsRequest",
-        "CallToolRequest",
-        "ListResourcesRequest",
-        READ_RESOURCE_REQUEST,
-        "ListResourceTemplatesRequest",
-        "SetLevelRequest",
-        "CreateMessageRequest",
-        "ListPromptsRequest",
-        GET_PROMPT_REQUEST,
-        "ListRootsRequest",
-        "SubscribeRequest",
-        "UnsubscribeRequest",
-        "CompleteRequest",
-        "ElicitRequest",
-        "ListTasksRequest",
-        "GetTaskRequest",
-        "GetTaskPayloadRequest",
-        "CancelTaskRequest",
-        "PingRequest",
-        "GenericJSONRPCRequest",
-    }
-)
+ALLOWED_PROTOCOL_TYPES = frozenset(DEFAULT_PROTOCOL_TYPES + (
+    "InitializedNotification",
+    "ProgressNotification",
+    READ_RESOURCE_REQUEST,
+    "ListResourceTemplatesRequest",
+    "CompleteRequest",
+    "ElicitRequest",
+    "SubscribeRequest",
+    "UnsubscribeRequest",
+    "GenericJSONRPCRequest",
+))
 
 
 class ProtocolClient:
@@ -60,7 +45,7 @@ class ProtocolClient:
     def __init__(
         self,
         transport,
-        safety_system: SafetyProvider | None = None,
+        safety_system: CombinedSafetyProvider | None = None,
         max_concurrency: int = 5,
         corpus_root: Path | None = None,
         havoc_mode: bool = False,
@@ -115,16 +100,9 @@ class ProtocolClient:
                 "data": fuzz_data,
             }
 
-        # Check if message should be blocked (duck-typed, guard if present)
-        if hasattr(
-            self.safety_system, "should_block_protocol_message"
-        ) and self.safety_system.should_block_protocol_message(
-            protocol_type, fuzz_data
-        ):
+        if self.safety_system.should_block_protocol_message(protocol_type, fuzz_data):
             blocking_reason = (
-                self.safety_system.get_blocking_reason()  # type: ignore[attr-defined]
-                if hasattr(self.safety_system, "get_blocking_reason")
-                else "blocked_by_safety_system"
+                self.safety_system.get_blocking_reason() or "blocked_by_safety_system"
             )
             self._logger.warning(
                 f"Safety system blocked {protocol_type} message: {blocking_reason}"
@@ -136,13 +114,12 @@ class ProtocolClient:
                 "data": fuzz_data,
             }
 
-        # Sanitize message if safety system supports it
+        # Sanitize message
         original_data = fuzz_data.copy() if isinstance(fuzz_data, dict) else fuzz_data
-        if hasattr(self.safety_system, "sanitize_protocol_message"):
-            modified_data = self.safety_system.sanitize_protocol_message(
-                protocol_type, fuzz_data
-            )
-            safety_sanitized = modified_data != original_data
+        modified_data = self.safety_system.sanitize_protocol_message(
+            protocol_type, fuzz_data
+        )
+        safety_sanitized = modified_data != original_data
 
         return {
             "blocked": False,
@@ -324,12 +301,18 @@ class ProtocolClient:
             task_tool_req["params"] = params
             sequence.append(("CallToolRequest", task_tool_req))
             sequence.append(
-                ("ListTasksRequest", await self._pick_learned_request("ListTasksRequest", phase))
+                (
+                    "ListTasksRequest",
+                    await self._pick_learned_request("ListTasksRequest", phase),
+                )
             )
 
         if self._observed_tasks:
             sequence.append(
-                ("ListTasksRequest", await self._pick_learned_request("ListTasksRequest", phase))
+                (
+                    "ListTasksRequest",
+                    await self._pick_learned_request("ListTasksRequest", phase),
+                )
             )
 
             task = self._choose_observed_task()
@@ -573,60 +556,6 @@ class ProtocolClient:
         return payloads
 
     @staticmethod
-    def _first_schema_choice(schema: dict[str, Any]) -> Any:
-        enum_values = schema.get("enum")
-        if isinstance(enum_values, list) and enum_values:
-            return copy.deepcopy(enum_values[0])
-
-        for key in ("oneOf", "anyOf"):
-            variants = schema.get(key)
-            if not isinstance(variants, list):
-                continue
-            for variant in variants:
-                if isinstance(variant, dict) and "const" in variant:
-                    return copy.deepcopy(variant["const"])
-        return None
-
-    @classmethod
-    def _default_schema_value(cls, schema: dict[str, Any], name: str) -> Any:
-        if "default" in schema:
-            return copy.deepcopy(schema["default"])
-
-        chosen = cls._first_schema_choice(schema)
-        if chosen is not None:
-            return chosen
-
-        schema_type = schema.get("type")
-        if schema_type == "boolean":
-            return False
-        if schema_type in {"integer", "number"}:
-            minimum = schema.get("minimum")
-            if isinstance(minimum, (int, float)):
-                return minimum
-            return 0
-        if schema_type == "array":
-            items = schema.get("items")
-            if isinstance(items, dict):
-                return [cls._default_schema_value(items, name)]
-            return []
-        if schema_type == "object":
-            properties = schema.get("properties")
-            if not isinstance(properties, dict):
-                return {}
-            required = schema.get("required")
-            if not isinstance(required, list):
-                required = []
-            built: dict[str, Any] = {}
-            for key in required:
-                prop_schema = properties.get(key)
-                if isinstance(key, str) and isinstance(prop_schema, dict):
-                    built[key] = cls._default_schema_value(prop_schema, key)
-            return built
-        if schema_type == "null":
-            return None
-        return f"{name}-value"
-
-    @staticmethod
     def _looks_like_task(value: Any) -> bool:
         return (
             isinstance(value, dict)
@@ -648,16 +577,6 @@ class ProtocolClient:
         task_id = task["taskId"]
         self._observed_tasks[task_id] = copy.deepcopy(task)
 
-    @staticmethod
-    def _tool_task_support(tool: dict[str, Any]) -> str:
-        execution = tool.get("execution")
-        if not isinstance(execution, dict):
-            return "forbidden"
-        task_support = execution.get("taskSupport")
-        if isinstance(task_support, str):
-            return task_support
-        return "forbidden"
-
     def _choose_observed_tool(
         self,
         *,
@@ -667,7 +586,7 @@ class ProtocolClient:
         tools = list(self._observed_tools.values())
         random.shuffle(tools)
         for tool in tools:
-            task_support = self._tool_task_support(tool)
+            task_support = _tool_task_support(tool)
             if require_task_support and task_support not in {"optional", "required"}:
                 continue
             if not allow_task_required and task_support == "required":
@@ -682,21 +601,7 @@ class ProtocolClient:
         return copy.deepcopy(self._observed_tasks[task_id])
 
     def _build_tool_arguments(self, tool: dict[str, Any]) -> dict[str, Any]:
-        schema = tool.get("inputSchema")
-        if not isinstance(schema, dict):
-            return {}
-        properties = schema.get("properties")
-        if not isinstance(properties, dict):
-            return {}
-        required = schema.get("required")
-        if not isinstance(required, list):
-            required = []
-        arguments: dict[str, Any] = {}
-        for key in required:
-            prop_schema = properties.get(key)
-            if isinstance(key, str) and isinstance(prop_schema, dict):
-                arguments[key] = self._default_schema_value(prop_schema, key)
-        return arguments
+        return _build_tool_arguments(tool)
 
     async def _fetch_listed_resources(self) -> list[dict[str, Any]]:
         try:
@@ -722,7 +627,11 @@ class ProtocolClient:
         except Exception as exc:
             self._logger.warning("Failed to list tools: %s", exc)
             return []
-        items = [item for item in self._extract_list_items(result, "tools") if isinstance(item, dict)]
+        items = [
+            item
+            for item in self._extract_list_items(result, "tools")
+            if isinstance(item, dict)
+        ]
         for tool in items:
             self._remember_tool(tool)
         return items
@@ -733,7 +642,11 @@ class ProtocolClient:
         except Exception as exc:
             self._logger.warning("Failed to list tasks: %s", exc)
             return []
-        items = [item for item in self._extract_list_items(result, "tasks") if isinstance(item, dict)]
+        items = [
+            item
+            for item in self._extract_list_items(result, "tasks")
+            if isinstance(item, dict)
+        ]
         for task in items:
             self._remember_task(task)
         return items

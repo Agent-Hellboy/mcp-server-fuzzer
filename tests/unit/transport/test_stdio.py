@@ -963,7 +963,10 @@ class TestStdioDriverExtended:
             ),
         ):
             mock_uuid4.return_value = "stream-id"
-            items = [item async for item in transport._stream_request({"method": "ping"})]
+            items = [
+                item
+                async for item in transport._stream_request({"method": "ping"})
+            ]
 
         assert items == [{"result": 3}]
         sent_message = mock_send.await_args.args[0]
@@ -983,7 +986,12 @@ class TestStdioDriverExtended:
                 new=AsyncMock(return_value=None),
             ),
         ):
-            items = [item async for item in transport._stream_request({"method": "ping", "id": "fixed-id"})]
+            items = [
+                item
+                async for item in transport._stream_request(
+                    {"method": "ping", "id": "fixed-id"}
+                )
+            ]
 
         assert items == []
         sent_message = mock_send.await_args.args[0]
@@ -1012,7 +1020,10 @@ class TestStdioDriverExtended:
             ),
         ):
             mock_uuid4.return_value = "stream-id"
-            items = [item async for item in transport._stream_request({"method": "ping"})]
+            items = [
+                item
+                async for item in transport._stream_request({"method": "ping"})
+            ]
 
         assert items == [{"ok": "stream"}]
         assert mock_send.await_count == 2

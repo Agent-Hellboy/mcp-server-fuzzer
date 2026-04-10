@@ -34,6 +34,7 @@ from .spec_checks import (
     check_prompts_get,
     check_tool_schema_fields,
 )
+from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
 
 _TOOLS_SPEC = TOOLS_SPEC
 _SCHEMA_SPEC = SCHEMA_SPEC
@@ -53,77 +54,6 @@ def _parse_prompt_args(raw: str | None) -> dict[str, Any] | None:
     if not isinstance(parsed, dict):
         raise ValueError("spec_prompt_args must be a JSON object")
     return parsed
-
-
-def _default_schema_value(name: str, schema: dict[str, Any]) -> Any:
-    if "default" in schema:
-        return schema["default"]
-
-    enum_values = schema.get("enum")
-    if isinstance(enum_values, list) and enum_values:
-        return enum_values[0]
-
-    for key in ("oneOf", "anyOf"):
-        variants = schema.get(key)
-        if not isinstance(variants, list):
-            continue
-        for variant in variants:
-            if isinstance(variant, dict) and "const" in variant:
-                return variant["const"]
-
-    schema_type = schema.get("type")
-    if schema_type == "boolean":
-        return False
-    if schema_type in {"integer", "number"}:
-        minimum = schema.get("minimum")
-        if isinstance(minimum, (int, float)):
-            return minimum
-        return 0
-    if schema_type == "array":
-        items = schema.get("items")
-        if isinstance(items, dict):
-            return [_default_schema_value(name, items)]
-        return []
-    if schema_type == "object":
-        properties = schema.get("properties")
-        if not isinstance(properties, dict):
-            return {}
-        required = schema.get("required")
-        if not isinstance(required, list):
-            required = []
-        return {
-            key: _default_schema_value(key, prop_schema)
-            for key, prop_schema in properties.items()
-            if key in required and isinstance(prop_schema, dict)
-        }
-    return f"{name}-value"
-
-
-def _build_tool_arguments(tool: dict[str, Any]) -> dict[str, Any]:
-    schema = tool.get("inputSchema")
-    if not isinstance(schema, dict):
-        return {}
-    properties = schema.get("properties")
-    if not isinstance(properties, dict):
-        return {}
-    required = schema.get("required")
-    if not isinstance(required, list):
-        required = []
-    return {
-        key: _default_schema_value(key, prop_schema)
-        for key, prop_schema in properties.items()
-        if key in required and isinstance(prop_schema, dict)
-    }
-
-
-def _tool_task_support(tool: dict[str, Any]) -> str:
-    execution = tool.get("execution")
-    if not isinstance(execution, dict):
-        return "forbidden"
-    task_support = execution.get("taskSupport")
-    if isinstance(task_support, str):
-        return task_support
-    return "forbidden"
 
 
 def _client_capabilities() -> dict[str, Any]:
@@ -506,7 +436,9 @@ async def run_spec_suite(
                 tested_methods.add("tasks/get")
                 checks.extend(check_task_result(result))
             except Exception as exc:
-                checks.append(_fail("tasks-get", f"tasks/get failed: {exc}", _TASKS_SPEC))
+                checks.append(
+                    _fail("tasks-get", f"tasks/get failed: {exc}", _TASKS_SPEC)
+                )
 
             try:
                 result = await transport.send_request(

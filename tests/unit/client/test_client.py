@@ -18,6 +18,7 @@ from mcp_fuzzer import spec_guard
 from mcp_fuzzer.reports import FuzzerReporter
 from mcp_fuzzer.auth import AuthManager
 from mcp_fuzzer.exceptions import MCPError
+from mcp_fuzzer.client.protocol_client import ProtocolClient
 
 
 class TestUnifiedMCPFuzzerClient:
@@ -791,40 +792,15 @@ class TestUnifiedMCPFuzzerClient:
             data: The data to pass to the method
             mock_response: The mock response to return
         """
-        # Get the method to call
-        method_to_call = getattr(self.mock_protocol_client, f"_send_{method_name}")
+        protocol_client = ProtocolClient(self.mock_transport)
+        target_method = f"_send_{method_name}"
+        method_to_call = AsyncMock(return_value=mock_response)
+        setattr(protocol_client, target_method, method_to_call)
 
-        # Create a new mock for _send_protocol_request that will call the real
-        # implementation
-        original_send_protocol_request = (
-            self.mock_protocol_client._send_protocol_request
-        )
+        result = await protocol_client._send_protocol_request(protocol_type, data)
 
-        # Create a custom implementation that will call the appropriate method
-        async def mock_send_protocol_request(p_type, p_data):
-            if p_type == protocol_type:
-                return await method_to_call(p_data)
-            return mock_response
-
-        # Replace the mock with our custom implementation
-        self.mock_protocol_client._send_protocol_request = mock_send_protocol_request
-
-        # Set up the mock return value
-        method_to_call.return_value = mock_response
-
-        # Call the method under test
-        result = await self.mock_protocol_client._send_protocol_request(
-            protocol_type, data
-        )
-
-        # Verify the result and that the correct method was called
         assert result == mock_response
-        method_to_call.assert_called_once_with(data)
-
-        # Restore the original mock
-        self.mock_protocol_client._send_protocol_request = (
-            original_send_protocol_request
-        )
+        method_to_call.assert_awaited_once_with(data)
 
     @pytest.mark.asyncio
     async def test_send_protocol_request_cancel(self):

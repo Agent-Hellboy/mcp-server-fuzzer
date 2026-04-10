@@ -26,7 +26,8 @@ _TOOLS_SPEC = spec_variant(
     TOOLS_SPEC,
     spec_id="MCP-Tools-Call",
     spec_url=(
-        "https://modelcontextprotocol.io/specification/{version}/server/tools#calling-tools"
+        "https://modelcontextprotocol.io/specification/{version}/server/"
+        "tools#calling-tools"
     ),
 )
 _LOGGING_SPEC = LOGGING_SPEC
@@ -56,43 +57,42 @@ def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
         return checks
 
     name = tool.get("name")
-    if not isinstance(name, str) or not name:
+    if name is not None and (not isinstance(name, str) or not name):
         checks.append(
             _fail("tool-name", "Tool is missing a non-empty name", _TOOLS_SPEC)
         )
 
     schema = tool.get("inputSchema")
-    if not isinstance(schema, dict):
-        return checks
-
-    if "$schema" in schema and not isinstance(schema.get("$schema"), str):
-        checks.append(
-            _fail(
-                "tool-schema-$schema",
-                "Tool inputSchema has non-string $schema",
-                _SCHEMA_SPEC,
-            )
-        )
-
-    if "$defs" in schema and not isinstance(schema.get("$defs"), dict):
-        checks.append(
-            _fail(
-                "tool-schema-$defs",
-                "Tool inputSchema has non-object $defs",
-                _SCHEMA_SPEC,
-            )
-        )
-
-    if "additionalProperties" in schema:
-        additional = schema.get("additionalProperties")
-        if not isinstance(additional, (bool, dict)):
+    schema_is_dict = isinstance(schema, dict)
+    if schema_is_dict:
+        if "$schema" in schema and not isinstance(schema.get("$schema"), str):
             checks.append(
                 _fail(
-                    "tool-schema-additional-properties",
-                    "Tool inputSchema has invalid additionalProperties type",
+                    "tool-schema-$schema",
+                    "Tool inputSchema has non-string $schema",
                     _SCHEMA_SPEC,
                 )
             )
+
+        if "$defs" in schema and not isinstance(schema.get("$defs"), dict):
+            checks.append(
+                _fail(
+                    "tool-schema-$defs",
+                    "Tool inputSchema has non-object $defs",
+                    _SCHEMA_SPEC,
+                )
+            )
+
+        if "additionalProperties" in schema:
+            additional = schema.get("additionalProperties")
+            if not isinstance(additional, (bool, dict)):
+                checks.append(
+                    _fail(
+                        "tool-schema-additional-properties",
+                        "Tool inputSchema has invalid additionalProperties type",
+                        _SCHEMA_SPEC,
+                    )
+                )
 
     icons = tool.get("icons")
     if icons is not None and not isinstance(icons, list):
@@ -233,7 +233,11 @@ def check_task_payload_result(result: Any) -> list[SpecCheck]:
     checks: list[SpecCheck] = []
     if not isinstance(result, dict):
         checks.append(
-            _fail("tasks-result-type", "tasks/result payload is not an object", _TASKS_SPEC)
+            _fail(
+                "tasks-result-type",
+                "tasks/result payload is not an object",
+                _TASKS_SPEC,
+            )
         )
         return checks
 
@@ -282,7 +286,8 @@ def check_create_message_result(result: Any) -> list[SpecCheck]:
         checks.append(
             _fail("sampling-model", "CreateMessageResult missing model", _SAMPLING_SPEC)
         )
-    if not isinstance(result.get("role"), str) or not result.get("role"):
+    role = result.get("role")
+    if role is not None and (not isinstance(role, str) or not role):
         checks.append(
             _fail("sampling-role", "CreateMessageResult missing role", _SAMPLING_SPEC)
         )
@@ -318,7 +323,11 @@ def check_elicit_result(result: Any) -> list[SpecCheck]:
 
     if result.get("action") not in {"accept", "cancel", "decline"}:
         checks.append(
-            _fail("elicitation-action", "ElicitResult action is invalid", _ELICITATION_SPEC)
+            _fail(
+                "elicitation-action",
+                "ElicitResult action is invalid",
+                _ELICITATION_SPEC,
+            )
         )
     if "content" in result and not isinstance(result.get("content"), dict):
         checks.append(
@@ -605,7 +614,9 @@ def check_elicitation_complete_notification(
         )
         return checks
 
-    if not isinstance(params.get("elicitationId"), str) or not params.get("elicitationId"):
+    if not isinstance(params.get("elicitationId"), str) or not params.get(
+        "elicitationId"
+    ):
         checks.append(
             _fail(
                 "elicitation-complete-id",

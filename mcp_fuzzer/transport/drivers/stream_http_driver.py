@@ -19,8 +19,11 @@ from ..interfaces.behaviors import (
     ResponseParserBehavior,
     NetworkError as DriverNetworkError,
 )
+from typing import Callable
+
 from ..interfaces.server_requests import (
-    ServerRequestState,
+    ServerRequestHandler,
+    ServerRequestHandlerProtocol,
     is_server_request,
 )
 from ...auth.discovery import (
@@ -69,6 +72,9 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         timeout: float = DEFAULT_TIMEOUT,
         auth_headers: dict[str, str | None] = None,
         safety_enabled: bool = True,
+        server_request_handler: ServerRequestHandlerProtocol | None = None,
+        server_request_handler_factory: Callable[[], ServerRequestHandlerProtocol]
+        | None = None,
     ):
         """Initialize streamable HTTP transport.
 
@@ -99,7 +105,12 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         self._initialized: bool = False
         self._init_lock: asyncio.Lock = asyncio.Lock()
         self._initializing: bool = False
-        self._server_request_state = ServerRequestState()
+        if server_request_handler is not None:
+            self._server_request_handler = server_request_handler
+        elif server_request_handler_factory is not None:
+            self._server_request_handler = server_request_handler_factory()
+        else:
+            self._server_request_handler = ServerRequestHandler()
 
     def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
         """Prepare headers with optional safety sanitization and auth headers."""
@@ -259,7 +270,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                         if handled:
                             event = {"event": "message", "data": []}
                             continue
-                    elif self._server_request_state.handle_notification(payload):
+                    elif self._server_request_handler.handle_notification(payload):
                         event = {"event": "message", "data": []}
                         continue
                     # JSON-RPC error passthrough
@@ -302,11 +313,11 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
     async def _handle_server_request(self, payload: dict[str, Any]) -> bool:
         """Handle server->client requests delivered over SSE."""
-        response_payload = self._server_request_state.handle_request(payload)
+        response_payload = self._server_request_handler.handle_request(payload)
         if response_payload is not None:
             await self._send_client_response(response_payload)
             return True
-        return self._server_request_state.handle_notification(payload)
+        return self._server_request_handler.handle_notification(payload)
 
     async def _send_client_response(self, payload: dict[str, Any]) -> None:
         """Send a JSON-RPC response back to the server."""
@@ -698,27 +709,37 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         safe_headers = self._prepare_headers_with_auth(headers)
 
         async with self._create_http_client(self.timeout) as client:
-            async with client.stream("GET", self.url, headers=safe_headers) as response:
-                self.last_auth_challenge = self._build_auth_discovery_hints(response)
-                redirect_url = self._resolve_redirect(response)
-                if redirect_url:
-                    await response.aclose()
-                    async with client.stream(
-                        "GET", redirect_url, headers=safe_headers
-                    ) as redirected:
-                        self.last_auth_challenge = self._build_auth_discovery_hints(
-                            redirected
-                        )
-                        self._handle_http_response_error(redirected)
-                        self._maybe_extract_session_headers(redirected)
-                        async for item in self._yield_sse_events(redirected):
-                            yield item
-                    return
+            try:
+                async with client.stream(
+                    "GET", self.url, headers=safe_headers
+                ) as response:
+                    self.last_auth_challenge = self._build_auth_discovery_hints(
+                        response
+                    )
+                    redirect_url = self._resolve_redirect(response)
+                    if redirect_url:
+                        await response.aclose()
+                        async with client.stream(
+                            "GET", redirect_url, headers=safe_headers
+                        ) as redirected:
+                            self.last_auth_challenge = (
+                                self._build_auth_discovery_hints(redirected)
+                            )
+                            self._handle_http_response_error(redirected)
+                            self._maybe_extract_session_headers(redirected)
+                            async for item in self._yield_sse_events(redirected):
+                                yield item
+                        return
 
-                self._handle_http_response_error(response)
-                self._maybe_extract_session_headers(response)
-                async for item in self._yield_sse_events(response):
-                    yield item
+                    self._handle_http_response_error(response)
+                    self._maybe_extract_session_headers(response)
+                    async for item in self._yield_sse_events(response):
+                        yield item
+            except httpx.HTTPError as exc:
+                raise TransportError(
+                    f"Stream GET failed: {exc}",
+                    context={"url": self.url, "method": "GET"},
+                ) from exc
 
     async def terminate_session(self) -> None:
         """Terminate the current Streamable HTTP session with HTTP DELETE."""
@@ -733,6 +754,10 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         async with self._create_http_client(self.timeout) as client:
             response = await client.delete(self.url, headers=safe_headers)
             self.last_auth_challenge = self._build_auth_discovery_hints(response)
+            redirect_url = self._resolve_redirect(response)
+            if redirect_url:
+                response = await client.delete(redirect_url, headers=safe_headers)
+                self.last_auth_challenge = self._build_auth_discovery_hints(response)
             if response.status_code != HTTP_NOT_FOUND:
                 self._handle_http_response_error(response)
 
@@ -748,14 +773,19 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         async with self._create_http_client(self.timeout) as client:
             response = await self._get_with_retries(client, self.url, safe_headers)
-            hints = self._build_auth_discovery_hints(response) or {
-                "protected_resource_metadata_urls": build_protected_resource_metadata_urls(
-                    self.url
-                ),
+            redirect_url = self._resolve_redirect(response)
+            if redirect_url:
+                response = await self._get_with_retries(
+                    client, redirect_url, safe_headers
+                )
+            protected_urls = build_protected_resource_metadata_urls(self.url)
+            fallback_hints = {
+                "protected_resource_metadata_urls": protected_urls,
                 "required_scopes": [],
                 "resource_metadata_url": None,
                 "www_authenticate": response.headers.get("www-authenticate"),
             }
+            hints = self._build_auth_discovery_hints(response) or fallback_hints
             hints["status"] = response.status_code
             return hints
 
@@ -772,14 +802,16 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 continue
             try:
                 data = json.loads(line)
-                if isinstance(data, dict) and await self._handle_server_request(data):
+                is_dict = isinstance(data, dict)
+                if is_dict and await self._handle_server_request(data):
                     continue
                 yield data
             except json.JSONDecodeError:
                 if line.startswith("data:"):
                     try:
                         data = json.loads(line[len("data:") :].strip())
-                        if isinstance(data, dict) and await self._handle_server_request(data):
+                        is_dict = isinstance(data, dict)
+                        if is_dict and await self._handle_server_request(data):
                             continue
                         yield data
                     except json.JSONDecodeError:

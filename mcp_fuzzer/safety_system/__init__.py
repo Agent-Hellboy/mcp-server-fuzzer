@@ -7,6 +7,8 @@ Re-exports safety filtering and system command blocking helpers for convenient i
 
 from .safety import (  # noqa: F401
     SafetyProvider,
+    ProtocolSafetyProvider,
+    CombinedSafetyProvider,
     SafetyFilter,
 )
 

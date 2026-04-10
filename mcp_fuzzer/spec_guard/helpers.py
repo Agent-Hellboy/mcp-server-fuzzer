@@ -1,4 +1,9 @@
-"""Shared helpers for spec guard checks and runners."""
+"""Shared helpers for spec guard checks and runners.
+
+Some spec metadata below targets experimental MCP extensions (roots, sampling,
+elicitation, tasks). These constants include an ``experimental`` flag so test
+runs clearly mark the non-standard surface area under validation.
+"""
 
 from __future__ import annotations
 
@@ -41,32 +46,46 @@ SCHEMA_SPEC = {
 
 RESOURCES_SPEC = {
     "spec_id": "MCP-Resources",
-    "spec_url": "https://modelcontextprotocol.io/specification/{version}/server/resources",
+    "spec_url": (
+        "https://modelcontextprotocol.io/specification/{version}/server/resources"
+    ),
 }
 
 PROMPTS_SPEC = {
     "spec_id": "MCP-Prompts",
-    "spec_url": "https://modelcontextprotocol.io/specification/{version}/server/prompts",
+    "spec_url": (
+        "https://modelcontextprotocol.io/specification/{version}/server/prompts"
+    ),
 }
 
 ROOTS_SPEC = {
     "spec_id": "MCP-Roots",
     "spec_url": "https://modelcontextprotocol.io/specification/{version}/client/roots",
+    "experimental": True,
 }
 
 SAMPLING_SPEC = {
     "spec_id": "MCP-Sampling",
-    "spec_url": "https://modelcontextprotocol.io/specification/{version}/client/sampling",
+    "spec_url": (
+        "https://modelcontextprotocol.io/specification/{version}/client/sampling"
+    ),
+    "experimental": True,
 }
 
 ELICITATION_SPEC = {
     "spec_id": "MCP-Elicitation",
-    "spec_url": "https://modelcontextprotocol.io/specification/{version}/client/elicitation",
+    "spec_url": (
+        "https://modelcontextprotocol.io/specification/{version}/client/elicitation"
+    ),
+    "experimental": True,
 }
 
 TASKS_SPEC = {
     "spec_id": "MCP-Tasks",
-    "spec_url": "https://modelcontextprotocol.io/specification/{version}/basic/utilities/tasks",
+    "spec_url": (
+        "https://modelcontextprotocol.io/specification/{version}/basic/utilities/tasks"
+    ),
+    "experimental": True,
 }
 
 COMPLETIONS_SPEC = {
@@ -86,7 +105,8 @@ LOGGING_SPEC = {
 SSE_SPEC = {
     "spec_id": "MCP-SSE",
     "spec_url": (
-        "https://modelcontextprotocol.io/specification/{version}/basic/transports#sse-transport"
+        "https://modelcontextprotocol.io/specification/{version}/basic/transports#sse-"
+        "transport"
     ),
 }
 

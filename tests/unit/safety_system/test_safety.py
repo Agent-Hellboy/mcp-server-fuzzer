@@ -23,6 +23,8 @@ def test_init(safety_filter):
     assert isinstance(safety_filter.detector.command_patterns, tuple)
     assert isinstance(safety_filter.dangerous_argument_names, set)
     assert isinstance(safety_filter.blocked_operations, list)
+    assert not hasattr(safety_filter, "url_patterns")
+    assert not hasattr(safety_filter, "command_patterns")
 
 
 def test_contains_dangerous_url_edge_cases(safety_filter):

@@ -18,6 +18,11 @@ from ...exceptions import (
     TransportError,
 )
 from ...spec_version import maybe_update_spec_version_from_result
+from ..interfaces.server_requests import (
+    ServerRequestHandler,
+    ServerRequestHandlerProtocol,
+    is_server_request,
+)
 
 if TYPE_CHECKING:
     from ...fuzz_engine.runtime import ProcessManager, WatchdogConfig
@@ -27,8 +32,6 @@ else:
 from ...safety_system.policy import sanitize_subprocess_env
 from ...config import PROCESS_WAIT_TIMEOUT
 from ..controller.process_supervisor import ProcessSupervisor
-from ..interfaces import server_requests
-
 
 class StdioDriver(TransportDriver):
     def __init__(
@@ -36,6 +39,10 @@ class StdioDriver(TransportDriver):
         command: str,
         timeout: float = 30.0,
         process_manager: ProcessManager | None = None,
+        server_request_handler: ServerRequestHandlerProtocol | None = None,
+        server_request_handler_factory: Callable[
+            [], ServerRequestHandlerProtocol
+        ] | None = None,
     ):
         self.command = command
         self.timeout = timeout
@@ -48,7 +55,12 @@ class StdioDriver(TransportDriver):
         self._last_activity = time.time()
         self.process_manager = process_manager
         self.manager = ProcessSupervisor(logger=logging.getLogger(__name__))
-        self._server_request_state = server_requests.ServerRequestState()
+        if server_request_handler is not None:
+            self._server_request_handler = server_request_handler
+        elif server_request_handler_factory is not None:
+            self._server_request_handler = server_request_handler_factory()
+        else:
+            self._server_request_handler = ServerRequestHandler()
 
     def _get_lock(self):
         """Get or create the lock lazily."""
@@ -210,13 +222,13 @@ class StdioDriver(TransportDriver):
 
     async def _handle_server_request(self, message: Any) -> bool:
         """Handle server->client requests while waiting for a response."""
-        if not isinstance(message, dict):
+        if not isinstance(message, dict) or not is_server_request(message):
             return False
-        response = self._server_request_state.handle_request(message)
+        response = self._server_request_handler.handle_request(message)
         if response is not None:
             await self._send_message(response)
             return True
-        return self._server_request_state.handle_notification(message)
+        return self._server_request_handler.handle_notification(message)
 
     async def _readline_with_cap(self) -> bytes | None:
         """Read a single line from stdout, capping size to avoid limit overruns."""

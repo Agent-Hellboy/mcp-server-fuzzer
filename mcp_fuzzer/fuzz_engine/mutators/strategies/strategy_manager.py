@@ -13,6 +13,7 @@ from .realistic import fuzz_tool_arguments_realistic
 from .aggressive import fuzz_tool_arguments_aggressive
 from .spec_protocol import get_spec_protocol_fuzzer_method
 from .registry import strategy_registry
+from ....protocol_registry import DEFAULT_PROTOCOL_TYPES
 
 
 class ProtocolStrategies:
@@ -20,29 +21,7 @@ class ProtocolStrategies:
 
     REALISTIC_PHASE = "realistic"
     AGGRESSIVE_PHASE = "aggressive"
-    DEFAULT_PROTOCOL_TYPES = (
-        "InitializeRequest",
-        "InitializedNotification",
-        "ListToolsRequest",
-        "CallToolRequest",
-        "ListResourcesRequest",
-        "ReadResourceRequest",
-        "ListPromptsRequest",
-        "GetPromptRequest",
-        "ListRootsRequest",
-        "SetLevelRequest",
-        "CompleteRequest",
-        "ListResourceTemplatesRequest",
-        "ElicitRequest",
-        "PingRequest",
-        "SubscribeRequest",
-        "UnsubscribeRequest",
-        "CreateMessageRequest",
-        "ListTasksRequest",
-        "GetTaskRequest",
-        "GetTaskPayloadRequest",
-        "CancelTaskRequest",
-    )
+    DEFAULT_PROTOCOL_TYPES = DEFAULT_PROTOCOL_TYPES
 
     @staticmethod
     def get_protocol_fuzzer_method(
