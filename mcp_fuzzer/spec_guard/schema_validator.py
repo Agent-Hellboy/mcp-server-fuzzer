@@ -54,21 +54,21 @@ def get_all_result_definitions(version: str | None = None) -> list[str]:
     """Discover all Result-type definitions from the schema."""
     if version is None:
         version = _spec_version()
-    
+
     try:
         schema = _load_schema(version)
     except Exception:  # noqa: BLE001 - schema load errors
         return []
-    
+
     defs_key = "$defs" if "$defs" in schema else "definitions"
     definitions = schema.get(defs_key, {})
-    
+
     # Find all definitions that end with "Result"
     result_types = [
-        name for name in definitions.keys() 
+        name for name in definitions.keys()
         if name.endswith("Result") and name != "Result"
     ]
-    
+
     return sorted(result_types)
 
 
@@ -90,13 +90,14 @@ def get_result_to_method_mapping() -> dict[str, tuple[str, str | None]]:
         "ListPromptsResult": ("prompts/list", "prompts"),
         "GetPromptResult": ("prompts/get", "prompts"),
         "CompleteResult": ("completion/complete", "completions"),
-        "CreateTaskResult": ("tasks/create", "tasks"),
+        "ListRootsResult": ("roots/list", "roots"),
+        "CreateTaskResult": ("tools/call", "tasks"),
         "GetTaskResult": ("tasks/get", "tasks"),
-        "GetTaskPayloadResult": ("tasks/getPayload", "tasks"),
+        "GetTaskPayloadResult": ("tasks/result", "tasks"),
         "CancelTaskResult": ("tasks/cancel", "tasks"),
         "ListTasksResult": ("tasks/list", "tasks"),
         "CreateMessageResult": ("sampling/createMessage", "sampling"),
-        "ElicitResult": ("sampling/elicit", "sampling"),
+        "ElicitResult": ("elicitation/create", "elicitation"),
     }
 
 
@@ -111,11 +112,11 @@ def discover_testable_schemas(
     """
     if version is None:
         version = _spec_version()
-    
+
     result_types = get_all_result_definitions(version)
     mapping = get_result_to_method_mapping()
     capabilities = capabilities or {}
-    
+
     testable = []
     for result_type in result_types:
         if result_type in mapping:

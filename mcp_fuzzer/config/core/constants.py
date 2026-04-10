@@ -2,7 +2,7 @@
 """Configuration constants for MCP Fuzzer."""
 
 # MCP protocol version fallback used in initialize requests when none provided
-DEFAULT_PROTOCOL_VERSION: str = "2025-06-18"
+DEFAULT_PROTOCOL_VERSION: str = "2025-11-25"
 
 # HTTP headers and content-types
 CONTENT_TYPE_HEADER: str = "content-type"

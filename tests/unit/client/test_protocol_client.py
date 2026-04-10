@@ -266,12 +266,12 @@ async def test_send_progress_notification():
 
 
 @pytest.mark.asyncio
-async def test_send_cancel_notification():
+async def test_send_cancelled_notification():
     transport = MagicMock()
     transport.send_notification = AsyncMock()
     client = ProtocolClient(transport=transport, safety_system=MagicMock())
 
-    result = await client._send_cancel_notification({"params": {"requestId": 1}})
+    result = await client._send_cancelled_notification({"params": {"requestId": 1}})
 
     assert result == {"status": "notification_sent"}
     transport.send_notification.assert_called_once_with(

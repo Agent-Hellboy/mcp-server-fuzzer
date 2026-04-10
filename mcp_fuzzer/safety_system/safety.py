@@ -84,10 +84,6 @@ class SafetyFilter(SafetyProvider):
             dangerous_script_patterns or DEFAULT_DANGEROUS_SCRIPT_PATTERNS,
             dangerous_command_patterns or DEFAULT_DANGEROUS_COMMAND_PATTERNS,
         )
-        # Backwards-compatible attributes used by unit tests/documentation
-        self.dangerous_url_patterns = list(self.detector.url_patterns)
-        self.dangerous_script_patterns = list(self.detector.script_patterns)
-        self.dangerous_command_patterns = list(self.detector.command_patterns)
         # Normalize argument names for case-insensitive membership checks
         self.dangerous_argument_names = {
             n.lower()

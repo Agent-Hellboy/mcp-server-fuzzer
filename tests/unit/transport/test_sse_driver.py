@@ -553,14 +553,18 @@ async def test_handle_server_request(monkeypatch):
         pass
     monkeypatch.setattr(driver, "_send_client_response", mock_send_client_response)
 
-    request_data = {"method": "sampling/createMessage", "id": 1}
+    request_data = {"jsonrpc": "2.0", "method": "sampling/createMessage", "id": 1}
     result = await driver._handle_server_request(request_data)
     assert result is True
 
-    result = await driver._handle_server_request({"method": "other", "id": 1})
+    result = await driver._handle_server_request(
+        {"jsonrpc": "2.0", "method": "other", "id": 1}
+    )
     assert result is False
 
-    result = await driver._handle_server_request({"method": "sampling/createMessage"})
+    result = await driver._handle_server_request(
+        {"jsonrpc": "2.0", "method": "sampling/createMessage"}
+    )
     assert result is False
 
 

@@ -7,7 +7,6 @@ import shlex
 import subprocess
 import signal as _signal
 import sys
-import inspect
 import time
 from typing import Any, Callable, TYPE_CHECKING
 
@@ -40,8 +39,6 @@ class StdioDriver(TransportDriver):
     ):
         self.command = command
         self.timeout = timeout
-        # Backwards-compat: some tests expect a numeric request counter
-        self.request_id = 1
         self.process = None
         self.stdin = None
         self.stdout = None
@@ -51,6 +48,7 @@ class StdioDriver(TransportDriver):
         self._last_activity = time.time()
         self.process_manager = process_manager
         self.manager = ProcessSupervisor(logger=logging.getLogger(__name__))
+        self._server_request_state = server_requests.ServerRequestState()
 
     def _get_lock(self):
         """Get or create the lock lazily."""
@@ -212,19 +210,13 @@ class StdioDriver(TransportDriver):
 
     async def _handle_server_request(self, message: Any) -> bool:
         """Handle server->client requests while waiting for a response."""
-        if not server_requests.is_server_request(message):
+        if not isinstance(message, dict):
             return False
-
-        method = message.get("method")
-        request_id = message.get("id")
-        if method == "sampling/createMessage" and request_id is not None:
-            response = (
-                server_requests.build_sampling_create_message_response(request_id)
-            )
+        response = self._server_request_state.handle_request(message)
+        if response is not None:
             await self._send_message(response)
             return True
-
-        return False
+        return self._server_request_state.handle_notification(message)
 
     async def _readline_with_cap(self) -> bytes | None:
         """Read a single line from stdout, capping size to avoid limit overruns."""
@@ -341,28 +333,6 @@ class StdioDriver(TransportDriver):
             context={"payload": payload, "iterations": iteration_count},
         )
 
-    async def _send_request(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Compatibility method for tests expecting sys-based stdio behavior.
-
-        Writes the request to module-level sys.stdout and reads a single line
-        from sys.stdin (which may be async in tests) and returns the parsed JSON.
-        """
-        message = {**payload, "id": self.request_id, "jsonrpc": "2.0"}
-        # Do not append a newline here; some tests assert exact written content
-        sys.stdout.write(json.dumps(message))
-
-        line = sys.stdin.readline()
-        if inspect.isawaitable(line):
-            line = await line
-        if isinstance(line, bytes):
-            line = line.decode()
-        if not line:
-            raise TransportError(
-                "No response received on stdio",
-                context={"payload": payload},
-            )
-        return json.loads(line)
-
     async def send_notification(
         self, method: str, params: dict[str, Any | None] | None = None
     ) -> None:
@@ -375,30 +345,31 @@ class StdioDriver(TransportDriver):
         await self._send_message(message)
 
     async def _stream_request(self, payload: dict[str, Any]):
-        """Compatibility streaming: write once, then yield each stdin line as JSON.
+        """Stream responses from the subprocess for a single JSON-RPC request."""
+        message = dict(payload)
+        message.setdefault("jsonrpc", "2.0")
+        if "id" not in message and "method" in message:
+            message["id"] = str(uuid.uuid4())
 
-        This mirrors how tests patch the module's sys.stdin/stdout to simulate
-        a stdio-based streaming protocol.
-        """
-        # Use module-level sys patched by tests
-        io = sys
-        # Write the request once
-        message = {**payload, "id": self.request_id, "jsonrpc": "2.0"}
-        io.stdout.write(json.dumps(message))
+        await self._send_message(message)
 
-        while True:
-            line = io.stdin.readline()
-            if inspect.isawaitable(line):
-                line = await line
-            if isinstance(line, bytes):
-                line = line.decode()
-            if not line:
+        max_iterations = 1000
+        iteration_count = 0
+        while iteration_count < max_iterations:
+            iteration_count += 1
+            response = await self._receive_message()
+            if response is None:
                 return
-            try:
-                yield json.loads(line)
-            except Exception:
-                logging.error("Failed to parse stdio stream JSON")
+
+            if await self._handle_server_request(response):
                 continue
+
+            yield response
+
+        raise TransportError(
+            "Too many responses received while streaming request",
+            context={"payload": payload, "iterations": iteration_count},
+        )
 
     async def close(self):
         """Close the transport and cleanup resources."""

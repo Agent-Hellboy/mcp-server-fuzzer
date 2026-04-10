@@ -177,16 +177,15 @@ def load_auth_config(config_file: str) -> AuthManager:
                 f"Error configuring auth provider '{name}': {str(e)}"
             ) from e
 
-    tool_mappings = config.get("tool_mapping")
-    legacy_tool_mappings = config.get("tool_mappings")
-    if tool_mappings and legacy_tool_mappings:
+    if "tool_mappings" in config:
         raise AuthConfigError(
-            "Both 'tool_mapping' and legacy 'tool_mappings' are defined. "
-            "Please use only 'tool_mapping'."
+            "'tool_mappings' is no longer supported. Use 'tool_mapping'."
         )
 
-    final_tool_mappings = tool_mappings or legacy_tool_mappings or {}
-    if final_tool_mappings and not isinstance(final_tool_mappings, dict):
+    final_tool_mappings = config.get("tool_mapping")
+    if final_tool_mappings is None:
+        final_tool_mappings = {}
+    if not isinstance(final_tool_mappings, dict):
         raise AuthConfigError(
             f"'tool_mapping' must be a dict, got {type(final_tool_mappings).__name__}"
         )

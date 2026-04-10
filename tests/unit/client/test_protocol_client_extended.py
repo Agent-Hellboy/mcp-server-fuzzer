@@ -42,10 +42,10 @@ class TestProtocolRequestDispatch:
         client.transport.send_notification.assert_called()
 
     @pytest.mark.asyncio
-    async def test_dispatch_cancel_notification(self, client):
-        """Test dispatching CancelNotification."""
+    async def test_dispatch_cancelled_notification(self, client):
+        """Test dispatching CancelledNotification."""
         result = await client._send_protocol_request(
-            "CancelNotification", {"params": {"requestId": "req1"}}
+            "CancelledNotification", {"params": {"requestId": "req1"}}
         )
         assert result == {"status": "notification_sent"}
         client.transport.send_notification.assert_called()

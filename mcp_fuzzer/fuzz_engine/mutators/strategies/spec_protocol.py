@@ -52,11 +52,6 @@ MALICIOUS_NUMBERS = [
     -999999999,
 ]
 
-_PROTOCOL_TYPE_OVERRIDES = {
-    "CancelNotification": "CancelledNotification",
-}
-
-
 def _repo_root() -> Path:
     current = Path(__file__).resolve()
     for parent in current.parents:
@@ -152,8 +147,7 @@ def _definition_for(protocol_type: str, version: str | None) -> dict[str, Any] |
     definitions = schema.get("definitions")
     if not isinstance(definitions, dict):
         definitions = schema.get("$defs", {})
-    key = _PROTOCOL_TYPE_OVERRIDES.get(protocol_type, protocol_type)
-    definition = definitions.get(key)
+    definition = definitions.get(protocol_type)
     if not isinstance(definition, dict):
         return None
     return _resolve_refs(definition, definitions)

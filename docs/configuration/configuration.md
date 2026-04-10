@@ -117,7 +117,7 @@ Accepted values:
 
 - `InitializeRequest`: Client initialization request.
 - `ProgressNotification`: Progress notification message.
-- `CancelNotification`: Cancellation notification message.
+- `CancelledNotification`: Cancellation notification message.
 - `ListResourcesRequest`: List available resources request.
 - `ReadResourceRequest`: Read a resource by URI request.
 - `SetLevelRequest`: Set server logging level request.

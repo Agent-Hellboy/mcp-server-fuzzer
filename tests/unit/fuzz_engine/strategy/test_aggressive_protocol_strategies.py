@@ -102,7 +102,7 @@ class TestAggressiveProtocolStrategies:
         from mcp_fuzzer.fuzz_engine.executor import ProtocolExecutor
         
         expected_types = [
-            "InitializeRequest", "ProgressNotification", "CancelNotification",
+            "InitializeRequest", "ProgressNotification", "CancelledNotification",
             "ListResourcesRequest", "ReadResourceRequest", "SetLevelRequest",
             "GenericJSONRPCRequest", "CreateMessageRequest", "ListPromptsRequest",
             "GetPromptRequest", "ListRootsRequest", "SubscribeRequest",

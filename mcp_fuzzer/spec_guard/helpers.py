@@ -7,7 +7,7 @@ from typing import Any, TypedDict
 
 
 def _spec_version() -> str:
-    return os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
+    return os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-11-25")
 
 
 def _resolve_spec(spec: dict[str, str]) -> dict[str, str]:
@@ -47,6 +47,26 @@ RESOURCES_SPEC = {
 PROMPTS_SPEC = {
     "spec_id": "MCP-Prompts",
     "spec_url": "https://modelcontextprotocol.io/specification/{version}/server/prompts",
+}
+
+ROOTS_SPEC = {
+    "spec_id": "MCP-Roots",
+    "spec_url": "https://modelcontextprotocol.io/specification/{version}/client/roots",
+}
+
+SAMPLING_SPEC = {
+    "spec_id": "MCP-Sampling",
+    "spec_url": "https://modelcontextprotocol.io/specification/{version}/client/sampling",
+}
+
+ELICITATION_SPEC = {
+    "spec_id": "MCP-Elicitation",
+    "spec_url": "https://modelcontextprotocol.io/specification/{version}/client/elicitation",
+}
+
+TASKS_SPEC = {
+    "spec_id": "MCP-Tasks",
+    "spec_url": "https://modelcontextprotocol.io/specification/{version}/basic/utilities/tasks",
 }
 
 COMPLETIONS_SPEC = {

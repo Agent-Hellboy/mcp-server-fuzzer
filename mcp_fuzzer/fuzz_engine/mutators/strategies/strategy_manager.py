@@ -22,6 +22,9 @@ class ProtocolStrategies:
     AGGRESSIVE_PHASE = "aggressive"
     DEFAULT_PROTOCOL_TYPES = (
         "InitializeRequest",
+        "InitializedNotification",
+        "ListToolsRequest",
+        "CallToolRequest",
         "ListResourcesRequest",
         "ReadResourceRequest",
         "ListPromptsRequest",
@@ -35,6 +38,10 @@ class ProtocolStrategies:
         "SubscribeRequest",
         "UnsubscribeRequest",
         "CreateMessageRequest",
+        "ListTasksRequest",
+        "GetTaskRequest",
+        "GetTaskPayloadRequest",
+        "CancelTaskRequest",
     )
 
     @staticmethod

@@ -27,8 +27,11 @@ class ProtocolExecutor:
     # Protocol types supported for fuzzing
     PROTOCOL_TYPES: ClassVar[tuple[str, ...]] = (
         "InitializeRequest",
+        "InitializedNotification",
         "ProgressNotification",
-        "CancelNotification",
+        "CancelledNotification",
+        "ListToolsRequest",
+        "CallToolRequest",
         "ListResourcesRequest",
         "ReadResourceRequest",
         "SetLevelRequest",
@@ -56,7 +59,12 @@ class ProtocolExecutor:
         "CompleteResult",
         "CreateMessageResult",
         "ListRootsResult",
-        "PingResult",
+        "CreateTaskResult",
+        "GetTaskResult",
+        "GetTaskPayloadResult",
+        "ListTasksResult",
+        "CancelTaskResult",
+        "EmptyResult",
         "ElicitResult",
         # Notification schemas
         "LoggingMessageNotification",
@@ -65,6 +73,13 @@ class ProtocolExecutor:
         "PromptListChangedNotification",
         "ToolListChangedNotification",
         "RootsListChangedNotification",
+        "ElicitationCompleteNotification",
+        "TaskStatusNotification",
+        # Task request schemas
+        "ListTasksRequest",
+        "GetTaskRequest",
+        "GetTaskPayloadRequest",
+        "CancelTaskRequest",
         # Content block schemas
         "TextContent",
         "ImageContent",

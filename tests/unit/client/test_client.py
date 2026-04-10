@@ -59,6 +59,7 @@ class TestUnifiedMCPFuzzerClient:
         self.mock_protocol_client._send_protocol_request = AsyncMock()
         self.mock_protocol_client._send_initialize_request = AsyncMock()
         self.mock_protocol_client._send_progress_notification = AsyncMock()
+        self.mock_protocol_client._send_cancelled_notification = AsyncMock()
         self.mock_protocol_client._send_unsubscribe_request = AsyncMock()
         self.mock_protocol_client._send_list_resources_request = AsyncMock()
         self.mock_protocol_client._send_read_resource_request = AsyncMock()
@@ -472,11 +473,18 @@ class TestUnifiedMCPFuzzerClient:
         assert result == mock_response
 
     @pytest.mark.asyncio
-    async def test_send_cancel_notification(self):
-        """Test sending a cancel notification."""
-        # Skip this test as _send_cancel_notification has been removed in the
-        # refactoring
-        pytest.skip("_send_cancel_notification has been removed in the refactoring")
+    async def test_send_cancelled_notification(self):
+        """Test sending a cancelled notification."""
+        data = {"params": {"requestId": 123}}
+        mock_response = {"status": "notification_sent"}
+        self.mock_transport.send_notification.return_value = None
+        self.mock_protocol_client._send_cancelled_notification.return_value = (
+            mock_response
+        )
+
+        result = await self.mock_protocol_client._send_cancelled_notification(data)
+
+        assert result == mock_response
 
     @pytest.mark.asyncio
     @patch("mcp_fuzzer.client.base.logging")
@@ -821,17 +829,17 @@ class TestUnifiedMCPFuzzerClient:
     @pytest.mark.asyncio
     async def test_send_protocol_request_cancel(self):
         """Test _send_protocol_request with cancel type."""
-        protocol_type = "CancelNotification"
+        protocol_type = "CancelledNotification"
         data = {"params": {"id": 123}}
         mock_response = {"status": "notification_sent"}
 
-        # Make sure _send_cancel_notification is an AsyncMock
-        self.mock_protocol_client._send_cancel_notification = AsyncMock(
+        # Make sure _send_cancelled_notification is an AsyncMock
+        self.mock_protocol_client._send_cancelled_notification = AsyncMock(
             return_value=mock_response
         )
 
         await self._test_protocol_request_helper(
-            protocol_type, "cancel_notification", data, mock_response
+            protocol_type, "cancelled_notification", data, mock_response
         )
 
     @pytest.mark.asyncio

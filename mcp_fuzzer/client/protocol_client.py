@@ -27,8 +27,11 @@ from ..safety_system.safety import SafetyProvider
 ALLOWED_PROTOCOL_TYPES = frozenset(
     {
         "InitializeRequest",
+        "InitializedNotification",
         "ProgressNotification",
-        "CancelNotification",
+        "CancelledNotification",
+        "ListToolsRequest",
+        "CallToolRequest",
         "ListResourcesRequest",
         READ_RESOURCE_REQUEST,
         "ListResourceTemplatesRequest",
@@ -41,6 +44,10 @@ ALLOWED_PROTOCOL_TYPES = frozenset(
         "UnsubscribeRequest",
         "CompleteRequest",
         "ElicitRequest",
+        "ListTasksRequest",
+        "GetTaskRequest",
+        "GetTaskPayloadRequest",
+        "CancelTaskRequest",
         "PingRequest",
         "GenericJSONRPCRequest",
     }
@@ -75,6 +82,8 @@ class ProtocolClient:
         self._logger = logging.getLogger(__name__)
         self._observed_resources: set[str] = set()
         self._observed_prompts: set[str] = set()
+        self._observed_tools: dict[str, dict[str, Any]] = {}
+        self._observed_tasks: dict[str, dict[str, Any]] = {}
         self._successful_requests: dict[str, list[dict[str, Any]]] = {}
         self._max_successful_requests = 25
 
@@ -270,6 +279,8 @@ class ProtocolClient:
         sequence: list[tuple[str, dict[str, Any]]] = []
         for protocol_type in (
             "InitializeRequest",
+            "InitializedNotification",
+            "ListToolsRequest",
             "ListResourcesRequest",
             "ListPromptsRequest",
         ):
@@ -292,6 +303,48 @@ class ProtocolClient:
                 params["arguments"] = {}
             prompt_req["params"] = params
             sequence.append((GET_PROMPT_REQUEST, prompt_req))
+
+        direct_tool = self._choose_observed_tool(allow_task_required=False)
+        if direct_tool is not None:
+            tool_req = await self._pick_learned_request("CallToolRequest", phase)
+            params = self._extract_params(tool_req)
+            params["name"] = direct_tool["name"]
+            params["arguments"] = self._build_tool_arguments(direct_tool)
+            params.pop("task", None)
+            tool_req["params"] = params
+            sequence.append(("CallToolRequest", tool_req))
+
+        task_tool = self._choose_observed_tool(require_task_support=True)
+        if task_tool is not None:
+            task_tool_req = await self._pick_learned_request("CallToolRequest", phase)
+            params = self._extract_params(task_tool_req)
+            params["name"] = task_tool["name"]
+            params["arguments"] = self._build_tool_arguments(task_tool)
+            params["task"] = {"ttl": 60000}
+            task_tool_req["params"] = params
+            sequence.append(("CallToolRequest", task_tool_req))
+            sequence.append(
+                ("ListTasksRequest", await self._pick_learned_request("ListTasksRequest", phase))
+            )
+
+        if self._observed_tasks:
+            sequence.append(
+                ("ListTasksRequest", await self._pick_learned_request("ListTasksRequest", phase))
+            )
+
+            task = self._choose_observed_task()
+            if task is not None:
+                task_id = task["taskId"]
+                for protocol_type in (
+                    "GetTaskRequest",
+                    "GetTaskPayloadRequest",
+                    "CancelTaskRequest",
+                ):
+                    task_req = await self._pick_learned_request(protocol_type, phase)
+                    params = self._extract_params(task_req)
+                    params["taskId"] = task_id
+                    task_req["params"] = params
+                    sequence.append((protocol_type, task_req))
 
         sequence.append(
             ("PingRequest", await self._pick_learned_request("PingRequest", phase))
@@ -327,18 +380,31 @@ class ProtocolClient:
             if len(pool) > self._max_successful_requests:
                 del pool[0 : len(pool) - self._max_successful_requests]
 
-        if protocol_type == "ListResourcesRequest":
-            for resource in self._extract_list_items(response, "resources"):
-                if isinstance(resource, dict):
-                    uri = resource.get("uri")
-                    if isinstance(uri, str):
-                        self._observed_resources.add(uri)
-        if protocol_type == "ListPromptsRequest":
-            for prompt in self._extract_list_items(response, "prompts"):
-                if isinstance(prompt, dict):
-                    name = prompt.get("name")
-                    if isinstance(name, str):
-                        self._observed_prompts.add(name)
+        for resource in self._extract_list_items(response, "resources"):
+            if isinstance(resource, dict):
+                uri = resource.get("uri")
+                if isinstance(uri, str):
+                    self._observed_resources.add(uri)
+
+        for prompt in self._extract_list_items(response, "prompts"):
+            if isinstance(prompt, dict):
+                name = prompt.get("name")
+                if isinstance(name, str):
+                    self._observed_prompts.add(name)
+
+        for tool in self._extract_list_items(response, "tools"):
+            self._remember_tool(tool)
+
+        for task in self._extract_list_items(response, "tasks"):
+            self._remember_task(task)
+
+        for payload in self._extract_payload_dicts(response):
+            task = payload.get("task")
+            if isinstance(task, dict):
+                self._remember_task(task)
+                continue
+            if self._looks_like_task(payload):
+                self._remember_task(payload)
 
     async def _process_single_protocol_fuzz(
         self,
@@ -393,6 +459,15 @@ class ProtocolClient:
             results.extend(await self._fuzz_listed_resources())
         elif protocol_type == GET_PROMPT_REQUEST:
             results.extend(await self._fuzz_listed_prompts())
+        elif protocol_type == "CallToolRequest":
+            results.extend(await self._fuzz_listed_tools())
+        elif protocol_type in {
+            "ListTasksRequest",
+            "GetTaskRequest",
+            "GetTaskPayloadRequest",
+            "CancelTaskRequest",
+        }:
+            results.extend(await self._fuzz_observed_tasks(protocol_type))
 
         return results
 
@@ -441,6 +516,18 @@ class ProtocolClient:
                 all_results[GET_PROMPT_REQUEST].extend(
                     await self._fuzz_listed_prompts()
                 )
+            if "CallToolRequest" in all_results:
+                all_results["CallToolRequest"].extend(await self._fuzz_listed_tools())
+            for protocol_type in (
+                "ListTasksRequest",
+                "GetTaskRequest",
+                "GetTaskPayloadRequest",
+                "CancelTaskRequest",
+            ):
+                if protocol_type in all_results:
+                    all_results[protocol_type].extend(
+                        await self._fuzz_observed_tasks(protocol_type)
+                    )
             return all_results
         except Exception as e:
             self._logger.error(f"Failed to fuzz all protocol types: {e}")
@@ -475,6 +562,142 @@ class ProtocolClient:
             return inner[key]
         return []
 
+    @staticmethod
+    def _extract_payload_dicts(result: Any) -> list[dict[str, Any]]:
+        payloads: list[dict[str, Any]] = []
+        if isinstance(result, dict):
+            payloads.append(result)
+            inner = result.get("result")
+            if isinstance(inner, dict):
+                payloads.append(inner)
+        return payloads
+
+    @staticmethod
+    def _first_schema_choice(schema: dict[str, Any]) -> Any:
+        enum_values = schema.get("enum")
+        if isinstance(enum_values, list) and enum_values:
+            return copy.deepcopy(enum_values[0])
+
+        for key in ("oneOf", "anyOf"):
+            variants = schema.get(key)
+            if not isinstance(variants, list):
+                continue
+            for variant in variants:
+                if isinstance(variant, dict) and "const" in variant:
+                    return copy.deepcopy(variant["const"])
+        return None
+
+    @classmethod
+    def _default_schema_value(cls, schema: dict[str, Any], name: str) -> Any:
+        if "default" in schema:
+            return copy.deepcopy(schema["default"])
+
+        chosen = cls._first_schema_choice(schema)
+        if chosen is not None:
+            return chosen
+
+        schema_type = schema.get("type")
+        if schema_type == "boolean":
+            return False
+        if schema_type in {"integer", "number"}:
+            minimum = schema.get("minimum")
+            if isinstance(minimum, (int, float)):
+                return minimum
+            return 0
+        if schema_type == "array":
+            items = schema.get("items")
+            if isinstance(items, dict):
+                return [cls._default_schema_value(items, name)]
+            return []
+        if schema_type == "object":
+            properties = schema.get("properties")
+            if not isinstance(properties, dict):
+                return {}
+            required = schema.get("required")
+            if not isinstance(required, list):
+                required = []
+            built: dict[str, Any] = {}
+            for key in required:
+                prop_schema = properties.get(key)
+                if isinstance(key, str) and isinstance(prop_schema, dict):
+                    built[key] = cls._default_schema_value(prop_schema, key)
+            return built
+        if schema_type == "null":
+            return None
+        return f"{name}-value"
+
+    @staticmethod
+    def _looks_like_task(value: Any) -> bool:
+        return (
+            isinstance(value, dict)
+            and isinstance(value.get("taskId"), str)
+            and isinstance(value.get("status"), str)
+        )
+
+    def _remember_tool(self, tool: Any) -> None:
+        if not isinstance(tool, dict):
+            return
+        name = tool.get("name")
+        if not isinstance(name, str) or not name:
+            return
+        self._observed_tools[name] = copy.deepcopy(tool)
+
+    def _remember_task(self, task: Any) -> None:
+        if not self._looks_like_task(task):
+            return
+        task_id = task["taskId"]
+        self._observed_tasks[task_id] = copy.deepcopy(task)
+
+    @staticmethod
+    def _tool_task_support(tool: dict[str, Any]) -> str:
+        execution = tool.get("execution")
+        if not isinstance(execution, dict):
+            return "forbidden"
+        task_support = execution.get("taskSupport")
+        if isinstance(task_support, str):
+            return task_support
+        return "forbidden"
+
+    def _choose_observed_tool(
+        self,
+        *,
+        allow_task_required: bool = True,
+        require_task_support: bool = False,
+    ) -> dict[str, Any] | None:
+        tools = list(self._observed_tools.values())
+        random.shuffle(tools)
+        for tool in tools:
+            task_support = self._tool_task_support(tool)
+            if require_task_support and task_support not in {"optional", "required"}:
+                continue
+            if not allow_task_required and task_support == "required":
+                continue
+            return copy.deepcopy(tool)
+        return None
+
+    def _choose_observed_task(self) -> dict[str, Any] | None:
+        if not self._observed_tasks:
+            return None
+        task_id = random.choice(sorted(self._observed_tasks))
+        return copy.deepcopy(self._observed_tasks[task_id])
+
+    def _build_tool_arguments(self, tool: dict[str, Any]) -> dict[str, Any]:
+        schema = tool.get("inputSchema")
+        if not isinstance(schema, dict):
+            return {}
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            return {}
+        required = schema.get("required")
+        if not isinstance(required, list):
+            required = []
+        arguments: dict[str, Any] = {}
+        for key in required:
+            prop_schema = properties.get(key)
+            if isinstance(key, str) and isinstance(prop_schema, dict):
+                arguments[key] = self._default_schema_value(prop_schema, key)
+        return arguments
+
     async def _fetch_listed_resources(self) -> list[dict[str, Any]]:
         try:
             result = await self.transport.send_request("resources/list", {})
@@ -492,6 +715,28 @@ class ProtocolClient:
             return []
         items = self._extract_list_items(result, "prompts")
         return [item for item in items if isinstance(item, dict)]
+
+    async def _fetch_listed_tools(self) -> list[dict[str, Any]]:
+        try:
+            result = await self.transport.send_request("tools/list", {})
+        except Exception as exc:
+            self._logger.warning("Failed to list tools: %s", exc)
+            return []
+        items = [item for item in self._extract_list_items(result, "tools") if isinstance(item, dict)]
+        for tool in items:
+            self._remember_tool(tool)
+        return items
+
+    async def _fetch_listed_tasks(self) -> list[dict[str, Any]]:
+        try:
+            result = await self.transport.send_request("tasks/list", {})
+        except Exception as exc:
+            self._logger.warning("Failed to list tasks: %s", exc)
+            return []
+        items = [item for item in self._extract_list_items(result, "tasks") if isinstance(item, dict)]
+        for task in items:
+            self._remember_task(task)
+        return items
 
     async def _process_protocol_request(
         self,
@@ -537,14 +782,108 @@ class ProtocolClient:
             )
         return results
 
+    async def _fuzz_listed_tools(self) -> list[ProtocolFuzzResult]:
+        results: list[ProtocolFuzzResult] = []
+        tools = await self._fetch_listed_tools()
+        for tool in tools:
+            name = tool.get("name")
+            if not isinstance(name, str) or not name:
+                continue
+
+            arguments = self._build_tool_arguments(tool)
+            task_support = self._tool_task_support(tool)
+            if task_support != "required":
+                results.append(
+                    await self._process_protocol_request(
+                        "CallToolRequest",
+                        "tools/call",
+                        {"name": name, "arguments": arguments},
+                        f"tool:{name}",
+                    )
+                )
+
+            if task_support in {"optional", "required"}:
+                results.append(
+                    await self._process_protocol_request(
+                        "CallToolRequest",
+                        "tools/call",
+                        {
+                            "name": name,
+                            "arguments": arguments,
+                            "task": {"ttl": 60000},
+                        },
+                        f"tool-task:{name}",
+                    )
+                )
+        return results
+
+    async def _fuzz_observed_tasks(
+        self, protocol_type: str | None = None
+    ) -> list[ProtocolFuzzResult]:
+        results: list[ProtocolFuzzResult] = []
+        tasks = await self._fetch_listed_tasks()
+        if not tasks:
+            tasks = [copy.deepcopy(task) for task in self._observed_tasks.values()]
+
+        if protocol_type in {None, "ListTasksRequest"}:
+            results.append(
+                await self._process_protocol_request(
+                    "ListTasksRequest",
+                    "tasks/list",
+                    {},
+                    "tasks:list",
+                )
+            )
+            if protocol_type == "ListTasksRequest":
+                return results
+
+        for task in tasks:
+            task_id = task.get("taskId")
+            if not isinstance(task_id, str) or not task_id:
+                continue
+
+            if protocol_type in {None, "GetTaskRequest"}:
+                results.append(
+                    await self._process_protocol_request(
+                        "GetTaskRequest",
+                        "tasks/get",
+                        {"taskId": task_id},
+                        f"task:{task_id}",
+                    )
+                )
+
+            if protocol_type in {None, "GetTaskPayloadRequest"}:
+                results.append(
+                    await self._process_protocol_request(
+                        "GetTaskPayloadRequest",
+                        "tasks/result",
+                        {"taskId": task_id},
+                        f"task-result:{task_id}",
+                    )
+                )
+
+            if protocol_type in {None, "CancelTaskRequest"}:
+                results.append(
+                    await self._process_protocol_request(
+                        "CancelTaskRequest",
+                        "tasks/cancel",
+                        {"taskId": task_id},
+                        f"task-cancel:{task_id}",
+                    )
+                )
+        return results
+
     async def _send_protocol_request(
         self, protocol_type: str, data: dict[str, Any]
     ) -> dict[str, Any]:
         """Send a protocol request based on the type."""
         handler = {
             "InitializeRequest": self._send_initialize_request,
+            "InitializedNotification": self._send_initialized_notification,
             "ProgressNotification": self._send_progress_notification,
-            "CancelNotification": self._send_cancel_notification,
+            "CancelledNotification": self._send_cancelled_notification,
+            "ListToolsRequest": self._send_list_tools_request,
+            "CallToolRequest": self._send_call_tool_request,
             "ListResourcesRequest": self._send_list_resources_request,
             READ_RESOURCE_REQUEST: self._send_read_resource_request,
             "ListResourceTemplatesRequest": self._send_list_resource_templates_request,
@@ -556,6 +895,12 @@ class ProtocolClient:
             "SubscribeRequest": self._send_subscribe_request,
             "UnsubscribeRequest": self._send_unsubscribe_request,
             "CompleteRequest": self._send_complete_request,
+            "ElicitRequest": self._send_elicit_request,
+            "ListTasksRequest": self._send_list_tasks_request,
+            "GetTaskRequest": self._send_get_task_request,
+            "GetTaskPayloadRequest": self._send_get_task_payload_request,
+            "CancelTaskRequest": self._send_cancel_task_request,
+            "PingRequest": self._send_ping_request,
         }.get(protocol_type, self._send_generic_request)
         return await handler(data)
 
@@ -568,13 +913,25 @@ class ProtocolClient:
         """Send an initialize request."""
         return await self._send_request("initialize", data)
 
+    async def _send_initialized_notification(self, data: Any) -> dict[str, str]:
+        """Send the initialized notification."""
+        return await self._send_notification("notifications/initialized", data)
+
     async def _send_progress_notification(self, data: Any) -> dict[str, str]:
         """Send a progress notification as JSON-RPC notification (no id)."""
         return await self._send_notification("notifications/progress", data)
 
-    async def _send_cancel_notification(self, data: Any) -> dict[str, str]:
-        """Send a cancel notification as JSON-RPC notification (no id)."""
+    async def _send_cancelled_notification(self, data: Any) -> dict[str, str]:
+        """Send a cancelled notification as JSON-RPC notification (no id)."""
         return await self._send_notification("notifications/cancelled", data)
+
+    async def _send_list_tools_request(self, data: Any) -> dict[str, Any]:
+        """Send a list tools request."""
+        return await self._send_request("tools/list", data)
+
+    async def _send_call_tool_request(self, data: Any) -> dict[str, Any]:
+        """Send a tool call request."""
+        return await self._send_request("tools/call", data)
 
     async def _send_list_resources_request(self, data: Any) -> dict[str, Any]:
         """Send a list resources request."""
@@ -619,6 +976,30 @@ class ProtocolClient:
     async def _send_complete_request(self, data: Any) -> dict[str, Any]:
         """Send a complete request."""
         return await self._send_request("completion/complete", data)
+
+    async def _send_elicit_request(self, data: Any) -> dict[str, Any]:
+        """Send an elicitation request."""
+        return await self._send_request("elicitation/create", data)
+
+    async def _send_list_tasks_request(self, data: Any) -> dict[str, Any]:
+        """Send a list tasks request."""
+        return await self._send_request("tasks/list", data)
+
+    async def _send_get_task_request(self, data: Any) -> dict[str, Any]:
+        """Send a get task request."""
+        return await self._send_request("tasks/get", data)
+
+    async def _send_get_task_payload_request(self, data: Any) -> dict[str, Any]:
+        """Send a get task payload request."""
+        return await self._send_request("tasks/result", data)
+
+    async def _send_cancel_task_request(self, data: Any) -> dict[str, Any]:
+        """Send a cancel task request."""
+        return await self._send_request("tasks/cancel", data)
+
+    async def _send_ping_request(self, data: Any) -> dict[str, Any]:
+        """Send a ping request."""
+        return await self._send_request("ping", data)
 
     async def _send_request(self, method: str, data: Any) -> dict[str, Any]:
         return await self.transport.send_request(method, self._extract_params(data))

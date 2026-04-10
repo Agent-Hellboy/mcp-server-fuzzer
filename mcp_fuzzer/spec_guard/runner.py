@@ -12,6 +12,7 @@ from .helpers import (
     PROMPTS_SPEC,
     RESOURCES_SPEC,
     SCHEMA_SPEC,
+    TASKS_SPEC,
     TOOLS_SPEC,
     SpecCheck,
     fail as _fail,
@@ -23,6 +24,9 @@ from .schema_validator import (
     validate_definition,
 )
 from .spec_checks import (
+    check_task_payload_result,
+    check_task_result,
+    check_tasks_list,
     check_resources_list,
     check_resources_read,
     check_resource_templates_list,
@@ -36,6 +40,7 @@ _SCHEMA_SPEC = SCHEMA_SPEC
 _RESOURCES_SPEC = RESOURCES_SPEC
 _PROMPTS_SPEC = PROMPTS_SPEC
 _COMPLETIONS_SPEC = COMPLETIONS_SPEC
+_TASKS_SPEC = TASKS_SPEC
 
 
 def _parse_prompt_args(raw: str | None) -> dict[str, Any] | None:
@@ -50,6 +55,94 @@ def _parse_prompt_args(raw: str | None) -> dict[str, Any] | None:
     return parsed
 
 
+def _default_schema_value(name: str, schema: dict[str, Any]) -> Any:
+    if "default" in schema:
+        return schema["default"]
+
+    enum_values = schema.get("enum")
+    if isinstance(enum_values, list) and enum_values:
+        return enum_values[0]
+
+    for key in ("oneOf", "anyOf"):
+        variants = schema.get(key)
+        if not isinstance(variants, list):
+            continue
+        for variant in variants:
+            if isinstance(variant, dict) and "const" in variant:
+                return variant["const"]
+
+    schema_type = schema.get("type")
+    if schema_type == "boolean":
+        return False
+    if schema_type in {"integer", "number"}:
+        minimum = schema.get("minimum")
+        if isinstance(minimum, (int, float)):
+            return minimum
+        return 0
+    if schema_type == "array":
+        items = schema.get("items")
+        if isinstance(items, dict):
+            return [_default_schema_value(name, items)]
+        return []
+    if schema_type == "object":
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            return {}
+        required = schema.get("required")
+        if not isinstance(required, list):
+            required = []
+        return {
+            key: _default_schema_value(key, prop_schema)
+            for key, prop_schema in properties.items()
+            if key in required and isinstance(prop_schema, dict)
+        }
+    return f"{name}-value"
+
+
+def _build_tool_arguments(tool: dict[str, Any]) -> dict[str, Any]:
+    schema = tool.get("inputSchema")
+    if not isinstance(schema, dict):
+        return {}
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return {}
+    required = schema.get("required")
+    if not isinstance(required, list):
+        required = []
+    return {
+        key: _default_schema_value(key, prop_schema)
+        for key, prop_schema in properties.items()
+        if key in required and isinstance(prop_schema, dict)
+    }
+
+
+def _tool_task_support(tool: dict[str, Any]) -> str:
+    execution = tool.get("execution")
+    if not isinstance(execution, dict):
+        return "forbidden"
+    task_support = execution.get("taskSupport")
+    if isinstance(task_support, str):
+        return task_support
+    return "forbidden"
+
+
+def _client_capabilities() -> dict[str, Any]:
+    return {
+        "elicitation": {"form": {}, "url": {}},
+        "experimental": {},
+        "roots": {"listChanged": True},
+        "sampling": {"context": {}, "tools": {}},
+        "tasks": {
+            "cancel": {},
+            "list": {},
+            "requests": {
+                "elicitation": {"create": {}},
+                "sampling": {"createMessage": {}},
+            },
+        },
+    }
+
+
 async def run_spec_suite(
     transport: Any,
     resource_uri: str | None = None,
@@ -59,18 +152,18 @@ async def run_spec_suite(
     """Run targeted spec guard checks against core MCP endpoints."""
     checks: list[SpecCheck] = []
     capabilities: dict[str, Any] = {}
-    protocol_version = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
+    protocol_version = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-11-25")
     version_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
     task_id: str | None = None
-    sampling_messages: list[dict[str, Any]] | None = None
+    task_origin_method: str | None = None
 
     try:
         result = await transport.send_request(
             "initialize",
             {
                 "protocolVersion": protocol_version,
-                "capabilities": {},
-                "clientInfo": {"name": "mcp-fuzzer", "version": "0.0.0"},
+                "capabilities": _client_capabilities(),
+                "clientInfo": {"name": "mcp-fuzzer", "version": "0.1.0"},
             },
         )
         if isinstance(result, dict):
@@ -131,6 +224,24 @@ async def run_spec_suite(
     except Exception as exc:
         checks.append(_fail("ping", f"ping failed: {exc}", _SCHEMA_SPEC))
 
+    tasks_capability = (
+        capabilities.get("tasks") if isinstance(capabilities, dict) else None
+    )
+    task_request_caps = (
+        tasks_capability.get("requests")
+        if isinstance(tasks_capability, dict)
+        else None
+    )
+    tool_task_capability = (
+        task_request_caps.get("tools")
+        if isinstance(task_request_caps, dict)
+        else None
+    )
+    supports_task_augmented_tools = (
+        isinstance(tool_task_capability, dict)
+        and tool_task_capability.get("call") is not None
+    )
+
     if isinstance(capabilities, dict) and capabilities.get("tools") is not None:
         tools: list[Any] = []
         try:
@@ -147,21 +258,39 @@ async def run_spec_suite(
             checks.append(_fail("tools-list", f"tools/list failed: {exc}", _TOOLS_SPEC))
             tools = []
 
-        callable_tool = None
+        callable_tool: dict[str, Any] | None = None
+        task_callable_tool: dict[str, Any] | None = None
         for tool in tools:
             if not isinstance(tool, dict):
                 continue
-            schema = tool.get("inputSchema") or {}
+            schema = tool.get("inputSchema")
             required = schema.get("required") if isinstance(schema, dict) else []
-            if not required:
+            if not isinstance(required, list):
+                required = []
+            arguments = _build_tool_arguments(tool)
+            has_all_required_args = not required or len(arguments) == len(required)
+            task_support = _tool_task_support(tool)
+            if (
+                callable_tool is None
+                and task_support != "required"
+                and has_all_required_args
+            ):
                 callable_tool = tool
-                break
+            if (
+                task_callable_tool is None
+                and task_support in {"optional", "required"}
+                and has_all_required_args
+            ):
+                task_callable_tool = tool
 
         if callable_tool:
             try:
                 result = await transport.send_request(
                     "tools/call",
-                    {"name": callable_tool.get("name"), "arguments": {}},
+                    {
+                        "name": callable_tool.get("name"),
+                        "arguments": _build_tool_arguments(callable_tool),
+                    },
                 )
                 checks.extend(
                     validate_definition(
@@ -177,10 +306,42 @@ async def run_spec_suite(
             checks.append(
                 _warn(
                     "tools-call",
-                    "No tool found without required arguments; skipping tools/call",
+                    "No directly callable tool found; skipping non-task tools/call",
                     _TOOLS_SPEC,
                 )
             )
+
+        if supports_task_augmented_tools and task_callable_tool:
+            try:
+                result = await transport.send_request(
+                    "tools/call",
+                    {
+                        "name": task_callable_tool.get("name"),
+                        "arguments": _build_tool_arguments(task_callable_tool),
+                        "task": {"ttl": 60000},
+                    },
+                )
+                checks.extend(
+                    validate_definition(
+                        "CreateTaskResult", result, version=protocol_version
+                    )
+                )
+                if isinstance(result, dict):
+                    task = result.get("task")
+                    if isinstance(task, dict):
+                        task_id_candidate = task.get("taskId")
+                        if isinstance(task_id_candidate, str) and task_id_candidate:
+                            task_id = task_id_candidate
+                            task_origin_method = "tools/call"
+                            checks.extend(check_task_result(task))
+            except Exception as exc:
+                checks.append(
+                    _fail(
+                        "tools-call-task",
+                        f"task-augmented tools/call failed: {exc}",
+                        _TOOLS_SPEC,
+                    )
+                )
 
     if isinstance(capabilities, dict) and capabilities.get("resources") is not None:
         try:
@@ -306,6 +467,90 @@ async def run_spec_suite(
                 )
             )
 
+    if isinstance(tasks_capability, dict):
+        if tasks_capability.get("list") is not None:
+            try:
+                result = await transport.send_request("tasks/list")
+                checks.extend(
+                    validate_definition(
+                        "ListTasksResult", result, version=protocol_version
+                    )
+                )
+                tested_methods.add("tasks/list")
+                checks.extend(check_tasks_list(result))
+                if task_id is None and isinstance(result, dict):
+                    tasks = result.get("tasks")
+                    if isinstance(tasks, list):
+                        for task in tasks:
+                            if isinstance(task, dict):
+                                task_id_candidate = task.get("taskId")
+                                if (
+                                    isinstance(task_id_candidate, str)
+                                    and task_id_candidate
+                                ):
+                                    task_id = task_id_candidate
+                                    break
+            except Exception as exc:
+                checks.append(
+                    _fail("tasks-list", f"tasks/list failed: {exc}", _TASKS_SPEC)
+                )
+
+        if task_id:
+            try:
+                result = await transport.send_request("tasks/get", {"taskId": task_id})
+                checks.extend(
+                    validate_definition(
+                        "GetTaskResult", result, version=protocol_version
+                    )
+                )
+                tested_methods.add("tasks/get")
+                checks.extend(check_task_result(result))
+            except Exception as exc:
+                checks.append(_fail("tasks-get", f"tasks/get failed: {exc}", _TASKS_SPEC))
+
+            try:
+                result = await transport.send_request(
+                    "tasks/result", {"taskId": task_id}
+                )
+                checks.extend(
+                    validate_definition(
+                        "GetTaskPayloadResult", result, version=protocol_version
+                    )
+                )
+                tested_methods.add("tasks/result")
+                checks.extend(check_task_payload_result(result))
+                if task_origin_method == "tools/call":
+                    checks.extend(
+                        validate_definition(
+                            "CallToolResult", result, version=protocol_version
+                        )
+                    )
+            except Exception as exc:
+                checks.append(
+                    _fail("tasks-result", f"tasks/result failed: {exc}", _TASKS_SPEC)
+                )
+
+            if tasks_capability.get("cancel") is not None:
+                try:
+                    result = await transport.send_request(
+                        "tasks/cancel", {"taskId": task_id}
+                    )
+                    checks.extend(
+                        validate_definition(
+                            "CancelTaskResult", result, version=protocol_version
+                        )
+                    )
+                    tested_methods.add("tasks/cancel")
+                    checks.extend(check_task_result(result))
+                except Exception as exc:
+                    checks.append(
+                        _fail(
+                            "tasks-cancel",
+                            f"tasks/cancel failed: {exc}",
+                            _TASKS_SPEC,
+                        )
+                    )
+
     # Test all discovered schemas that haven't been tested yet
     # This ensures we validate all Result types from the schema if server supports them
     for result_type, method, capability_key in testable_schemas:
@@ -313,7 +558,16 @@ async def run_spec_suite(
             continue  # Already tested above with specific logic
         
         # Skip methods that need special handling (already covered above)
-        if method in ("initialize", "ping", "tools/call", "completion/complete"):
+        if method in (
+            "initialize",
+            "ping",
+            "tools/call",
+            "completion/complete",
+            "tasks/list",
+            "tasks/get",
+            "tasks/result",
+            "tasks/cancel",
+        ):
             continue
         
         # Skip methods that require specific parameters we don't have
@@ -323,9 +577,11 @@ async def run_spec_suite(
             continue
         if method == "tasks/get" and not task_id:
             continue
-        if method == "sampling/createMessage" and not sampling_messages:
+        if method == "tasks/result" and not task_id:
             continue
-        
+        if method == "tasks/cancel" and not task_id:
+            continue
+
         try:
             # Build request params based on method
             params: dict[str, Any] = {}
@@ -334,6 +590,8 @@ async def run_spec_suite(
             elif method == "prompts/get":
                 args = _parse_prompt_args(prompt_args) or {}
                 params = {"name": prompt_name, "arguments": args}
+            elif method in {"tasks/get", "tasks/result", "tasks/cancel"}:
+                params = {"taskId": task_id}
             # For other methods (roots/list, tasks/list, etc.), use empty params
             
             result = await transport.send_request(method, params)

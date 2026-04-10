@@ -153,7 +153,7 @@ class ProtocolMutator(BaseMutator):
 
 **Supported Protocol Types:**
 - Requests: InitializeRequest, ListResourcesRequest, CallToolRequest, etc.
-- Notifications: ProgressNotification, CancelNotification, etc.
+- Notifications: ProgressNotification, CancelledNotification, etc.
 - Results: InitializeResult, ListToolsResult, etc.
 - Content Types: TextContent, ImageContent, AudioContent
 - Resources: Resource, ResourceTemplate, Tool definitions
@@ -246,7 +246,7 @@ class ProtocolExecutor:
     """Orchestrates fuzzing of MCP protocol types."""
 
     PROTOCOL_TYPES = (
-        "InitializeRequest", "ProgressNotification", "CancelNotification",
+        "InitializeRequest", "ProgressNotification", "CancelledNotification",
         "ListResourcesRequest", "ReadResourceRequest", "SetLevelRequest",
         # ... 30+ protocol types
     )

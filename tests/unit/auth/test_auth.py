@@ -618,8 +618,8 @@ def test_load_auth_config_rejects_non_dict_provider():
         os.unlink(config_file)
 
 
-def test_load_auth_config_supports_tool_mappings_alias():
-    """Legacy tool_mappings key should still work."""
+def test_load_auth_config_rejects_tool_mappings_key():
+    """Legacy tool_mappings key should be rejected."""
     config_data = {
         "providers": {"api_key": {"type": "api_key", "api_key": "secret"}},
         "tool_mappings": {"demo": "api_key"},
@@ -628,14 +628,16 @@ def test_load_auth_config_supports_tool_mappings_alias():
         json.dump(config_data, f)
         config_file = f.name
     try:
-        auth_manager = load_auth_config(config_file)
-        assert auth_manager.tool_auth_mapping["demo"] == "api_key"
+        with pytest.raises(
+            AuthConfigError, match="'tool_mappings' is no longer supported"
+        ):
+            load_auth_config(config_file)
     finally:
         os.unlink(config_file)
 
 
 def test_load_auth_config_rejects_both_tool_mapping_keys():
-    """Providing both tool_mapping keys should raise an error."""
+    """Providing the legacy alias alongside tool_mapping should raise an error."""
     config_data = {
         "providers": {},
         "tool_mapping": {"demo": "api_key"},
@@ -645,7 +647,9 @@ def test_load_auth_config_rejects_both_tool_mapping_keys():
         json.dump(config_data, f)
         config_file = f.name
     try:
-        with pytest.raises(AuthConfigError, match="Both 'tool_mapping' and legacy"):
+        with pytest.raises(
+            AuthConfigError, match="'tool_mappings' is no longer supported"
+        ):
             load_auth_config(config_file)
     finally:
         os.unlink(config_file)
