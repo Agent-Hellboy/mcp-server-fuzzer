@@ -7,11 +7,15 @@ reducing code duplication significantly (~100 lines).
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Callable
 
+import mcp_fuzzer.transport.interfaces.server_requests as server_requests  # noqa: F401
 from ..interfaces.driver import TransportDriver
 from ..interfaces.behaviors import HttpClientBehavior, ResponseParserBehavior
-from ..interfaces import server_requests
+from ..interfaces.server_requests import (
+    ServerRequestHandler,
+    ServerRequestHandlerProtocol,
+)
 from ...exceptions import TransportError
 from ...spec_version import maybe_update_spec_version_from_result
 
@@ -34,6 +38,10 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
         timeout: float = 30.0,
         auth_headers: dict[str, str | None] | None = None,
         safety_enabled: bool = True,
+        server_request_handler: ServerRequestHandlerProtocol | None = None,
+        server_request_handler_factory: Callable[
+            [], ServerRequestHandlerProtocol
+        ] | None = None,
     ):
         """Initialize SSE transport.
 
@@ -53,6 +61,12 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
         self.auth_headers = {
             k: v for k, v in (auth_headers or {}).items() if v is not None
         }
+        if server_request_handler is not None:
+            self._server_request_handler = server_request_handler
+        elif server_request_handler_factory is not None:
+            self._server_request_handler = server_request_handler_factory()
+        else:
+            self._server_request_handler = ServerRequestHandler()
 
     def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
         """Prepare headers with optional safety sanitization and auth headers."""
@@ -117,7 +131,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                         return None
                     if data is None:
                         return None
-                    if server_requests.is_server_request(data):
+                    if isinstance(data, dict):
                         handled = await self._handle_server_request(data)
                         if handled:
                             return None
@@ -232,9 +246,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                                         event_text = "\n".join(buffer)
                                         parsed = self.parse_sse_event(event_text)
                                         if parsed is not None:
-                                            if server_requests.is_server_request(
-                                                parsed
-                                            ):
+                                            if isinstance(parsed, dict):
                                                 handled = (
                                                     await self._handle_server_request(
                                                         parsed
@@ -266,9 +278,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                                         event_text = "\n".join(buffer)
                                         parsed = self.parse_sse_event(event_text)
                                         if parsed is not None:
-                                            if server_requests.is_server_request(
-                                                parsed
-                                            ):
+                                            if isinstance(parsed, dict):
                                                 handled = (
                                                     await self._handle_server_request(
                                                         parsed
@@ -290,7 +300,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                         event_text = "\n".join(buffer)
                         parsed = self.parse_sse_event(event_text)
                         if parsed is not None:
-                            if server_requests.is_server_request(parsed):
+                            if isinstance(parsed, dict):
                                 handled = await self._handle_server_request(parsed)
                                 if handled:
                                     return
@@ -300,15 +310,11 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
 
     async def _handle_server_request(self, payload: dict[str, Any]) -> bool:
         """Handle server->client requests delivered over SSE."""
-        method = payload.get("method")
-        request_id = payload.get("id")
-        if method == "sampling/createMessage" and request_id is not None:
-            response_payload = (
-                server_requests.build_sampling_create_message_response(request_id)
-            )
+        response_payload = self._server_request_handler.handle_request(payload)
+        if response_payload is not None:
             await self._send_client_response(response_payload)
             return True
-        return False
+        return self._server_request_handler.handle_notification(payload)
 
     async def _send_client_response(self, payload: dict[str, Any]) -> None:
         """Send a JSON-RPC response back to the server."""

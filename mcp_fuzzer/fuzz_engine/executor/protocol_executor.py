@@ -10,6 +10,7 @@ import logging
 from typing import Any, ClassVar
 
 from ...types import FuzzDataResult
+from ...protocol_registry import EXECUTABLE_PROTOCOL_TYPES
 from .async_executor import AsyncFuzzExecutor
 from .invariants import (
     verify_response_invariants,
@@ -25,58 +26,7 @@ class ProtocolExecutor:
     """Orchestrates protocol fuzzing execution."""
 
     # Protocol types supported for fuzzing
-    PROTOCOL_TYPES: ClassVar[tuple[str, ...]] = (
-        "InitializeRequest",
-        "ProgressNotification",
-        "CancelNotification",
-        "ListResourcesRequest",
-        "ReadResourceRequest",
-        "SetLevelRequest",
-        "GenericJSONRPCRequest",
-        "CallToolResult",
-        "SamplingMessage",
-        "CreateMessageRequest",
-        "ListPromptsRequest",
-        "GetPromptRequest",
-        "ListRootsRequest",
-        "SubscribeRequest",
-        "UnsubscribeRequest",
-        "CompleteRequest",
-        "ListResourceTemplatesRequest",
-        "ElicitRequest",
-        "PingRequest",
-        # Result schemas
-        "InitializeResult",
-        "ListResourcesResult",
-        "ListResourceTemplatesResult",
-        "ReadResourceResult",
-        "ListPromptsResult",
-        "GetPromptResult",
-        "ListToolsResult",
-        "CompleteResult",
-        "CreateMessageResult",
-        "ListRootsResult",
-        "PingResult",
-        "ElicitResult",
-        # Notification schemas
-        "LoggingMessageNotification",
-        "ResourceListChangedNotification",
-        "ResourceUpdatedNotification",
-        "PromptListChangedNotification",
-        "ToolListChangedNotification",
-        "RootsListChangedNotification",
-        # Content block schemas
-        "TextContent",
-        "ImageContent",
-        "AudioContent",
-        # Resource schemas
-        "Resource",
-        "ResourceTemplate",
-        "TextResourceContents",
-        "BlobResourceContents",
-        # Tool schemas
-        "Tool",
-    )
+    PROTOCOL_TYPES: ClassVar[tuple[str, ...]] = EXECUTABLE_PROTOCOL_TYPES
     # Seconds to wait for invariant validation of batch responses
     BATCH_VALIDATION_TIMEOUT: ClassVar[float] = 5.0
 

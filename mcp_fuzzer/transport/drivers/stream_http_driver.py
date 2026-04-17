@@ -19,9 +19,17 @@ from ..interfaces.behaviors import (
     ResponseParserBehavior,
     NetworkError as DriverNetworkError,
 )
+from typing import Callable
+
 from ..interfaces.server_requests import (
-    build_sampling_create_message_response,
+    ServerRequestHandler,
+    ServerRequestHandlerProtocol,
     is_server_request,
+)
+from ...auth.discovery import (
+    build_protected_resource_metadata_urls,
+    extract_requested_scopes,
+    extract_resource_metadata_url,
 )
 from ...config import (
     DEFAULT_PROTOCOL_VERSION,
@@ -44,14 +52,6 @@ from ...exceptions import TransportError
 from ...safety_system.policy import resolve_redirect_safely
 from ...spec_version import maybe_update_spec_version
 
-# Back-compat local aliases (referenced by tests)
-MCP_SESSION_ID = MCP_SESSION_ID_HEADER
-MCP_PROTOCOL_VERSION = MCP_PROTOCOL_VERSION_HEADER
-CONTENT_TYPE = CONTENT_TYPE_HEADER
-JSON_CT = JSON_CONTENT_TYPE
-SSE_CT = SSE_CONTENT_TYPE
-
-
 class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
     """Streamable HTTP transport with MCP session management.
 
@@ -72,6 +72,9 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         timeout: float = DEFAULT_TIMEOUT,
         auth_headers: dict[str, str | None] = None,
         safety_enabled: bool = True,
+        server_request_handler: ServerRequestHandlerProtocol | None = None,
+        server_request_handler_factory: Callable[[], ServerRequestHandlerProtocol]
+        | None = None,
     ):
         """Initialize streamable HTTP transport.
 
@@ -86,7 +89,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         self.safety_enabled = safety_enabled
         self.headers: dict[str, str] = {
             "Accept": DEFAULT_HTTP_ACCEPT,
-            "Content-Type": JSON_CT,
+            "Content-Type": JSON_CONTENT_TYPE,
         }
         self.auth_headers = {
             k: v for k, v in (auth_headers or {}).items() if v is not None
@@ -94,9 +97,20 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         self.session_id: str | None = None
         self.protocol_version: str | None = None
+        self.extra_headers: dict[str, str] = {}
+        self.origin: str | None = None
+        self.last_event_id: str | None = None
+        self.retry_delay_ms: int | None = None
+        self.last_auth_challenge: dict[str, Any] | None = None
         self._initialized: bool = False
         self._init_lock: asyncio.Lock = asyncio.Lock()
         self._initializing: bool = False
+        if server_request_handler is not None:
+            self._server_request_handler = server_request_handler
+        elif server_request_handler_factory is not None:
+            self._server_request_handler = server_request_handler_factory()
+        else:
+            self._server_request_handler = ServerRequestHandler()
 
     def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
         """Prepare headers with optional safety sanitization and auth headers."""
@@ -115,10 +129,22 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             Headers dict with session information
         """
         headers = dict(self.headers)
+        headers.update(self.extra_headers)
+        if self.origin and "Origin" not in headers:
+            headers["Origin"] = self.origin
         if self.session_id:
-            headers[MCP_SESSION_ID] = self.session_id
+            headers[MCP_SESSION_ID_HEADER] = self.session_id
         if self.protocol_version:
-            headers[MCP_PROTOCOL_VERSION] = self.protocol_version
+            headers[MCP_PROTOCOL_VERSION_HEADER] = self.protocol_version
+        return headers
+
+    def _prepare_listen_headers(self) -> dict[str, str]:
+        """Prepare headers for GET-based SSE listening."""
+        headers = self._prepare_headers()
+        headers["Accept"] = SSE_CONTENT_TYPE
+        headers.pop("Content-Type", None)
+        if self.last_event_id:
+            headers["Last-Event-ID"] = self.last_event_id
         return headers
 
     def _maybe_extract_session_headers(self, response: httpx.Response) -> None:
@@ -127,12 +153,12 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Args:
             response: HTTP response to extract from
         """
-        sid = response.headers.get(MCP_SESSION_ID)
+        sid = response.headers.get(MCP_SESSION_ID_HEADER)
         if sid:
             self.session_id = sid
             self._logger.debug("Received session id: %s", sid)
 
-        protocol_header = response.headers.get(MCP_PROTOCOL_VERSION)
+        protocol_header = response.headers.get(MCP_PROTOCOL_VERSION_HEADER)
         if protocol_header:
             self.protocol_version = protocol_header
             self._logger.debug("Received protocol version header: %s", protocol_header)
@@ -153,6 +179,28 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                     maybe_update_spec_version(pv)
         except Exception:
             pass
+
+    def _build_auth_discovery_hints(
+        self, response: httpx.Response
+    ) -> dict[str, Any] | None:
+        """Extract authorization discovery hints from an HTTP 401 response."""
+        if response.status_code != 401:
+            return None
+
+        www_authenticate = response.headers.get("www-authenticate")
+        resource_metadata_url = extract_resource_metadata_url(www_authenticate)
+        endpoint_url = str(getattr(response, "url", None) or self.url)
+        protected_resource_metadata_urls = (
+            [resource_metadata_url]
+            if resource_metadata_url
+            else build_protected_resource_metadata_urls(endpoint_url)
+        )
+        return {
+            "required_scopes": extract_requested_scopes(www_authenticate),
+            "protected_resource_metadata_urls": protected_resource_metadata_urls,
+            "resource_metadata_url": resource_metadata_url,
+            "www_authenticate": www_authenticate,
+        }
 
     def _resolve_redirect(self, response: httpx.Response) -> str | None:
         """Resolve redirect target with safety checks.
@@ -189,7 +237,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Returns:
             Content type string (lowercase)
         """
-        return response.headers.get(CONTENT_TYPE, "").lower()
+        return response.headers.get(CONTENT_TYPE_HEADER, "").lower()
 
     async def _parse_sse_response_for_result(self, response: httpx.Response) -> Any:
         """Parse SSE stream and return first JSON-RPC response/error.
@@ -205,6 +253,12 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         async for line in response.aiter_lines():
             if line == "":
                 # dispatch event
+                event_id = event.get("id")
+                if isinstance(event_id, str) and event_id:
+                    self.last_event_id = event_id
+                retry = event.get("retry")
+                if isinstance(retry, int):
+                    self.retry_delay_ms = retry
                 data_text = "\n".join(event.get("data", []))
                 try:
                     payload = json.loads(data_text) if data_text else None
@@ -217,6 +271,9 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                         if handled:
                             event = {"event": "message", "data": []}
                             continue
+                    elif self._server_request_handler.handle_notification(payload):
+                        event = {"event": "message", "data": []}
+                        continue
                     # JSON-RPC error passthrough
                     if "error" in payload:
                         return payload
@@ -239,6 +296,13 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             if line.startswith("id:"):
                 event["id"] = line[len("id:") :].strip()
                 continue
+            if line.startswith("retry:"):
+                retry_text = line[len("retry:") :].strip()
+                try:
+                    event["retry"] = int(retry_text)
+                except ValueError:
+                    pass
+                continue
             if line.startswith("data:"):
                 event.setdefault("data", []).append(line[len("data:") :].lstrip())
                 continue
@@ -250,13 +314,11 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
     async def _handle_server_request(self, payload: dict[str, Any]) -> bool:
         """Handle server->client requests delivered over SSE."""
-        method = payload.get("method")
-        request_id = payload.get("id")
-        if method == "sampling/createMessage" and request_id is not None:
-            response_payload = build_sampling_create_message_response(request_id)
+        response_payload = self._server_request_handler.handle_request(payload)
+        if response_payload is not None:
             await self._send_client_response(response_payload)
             return True
-        return False
+        return self._server_request_handler.handle_notification(payload)
 
     async def _send_client_response(self, payload: dict[str, Any]) -> None:
         """Send a JSON-RPC response back to the server."""
@@ -347,6 +409,38 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 delay *= 2
                 attempt += 1
 
+    async def _get_with_retries(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        headers: dict[str, str],
+        retries: int = 2,
+    ) -> httpx.Response:
+        """GET with exponential backoff for transient network errors."""
+        delay = RETRY_DELAY
+        attempt = 0
+        while True:
+            try:
+                return await client.get(url, headers=headers)
+            except (
+                httpx.ConnectError,
+                httpx.ReadTimeout,
+                httpx.WriteTimeout,
+                httpx.PoolTimeout,
+            ) as e:
+                if attempt >= retries:
+                    raise TransportError(
+                        "Connection failed while listening to server",
+                        context={
+                            "attempts": attempt + 1,
+                            "error_type": type(e).__name__,
+                            "url": url,
+                        },
+                    ) from e
+                await asyncio.sleep(delay)
+                delay *= 2
+                attempt += 1
+
     async def send_request(
         self, method: str, params: dict[str, Any] | None = None
     ) -> Any:
@@ -400,6 +494,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             response = await self._post_with_retries(
                 client, self.url, payload, safe_headers
             )
+            self.last_auth_challenge = self._build_auth_discovery_hints(response)
 
             # Handle redirect
             redirect_url = self._resolve_redirect(response)
@@ -409,6 +504,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 response = await self._post_with_retries(
                     client, redirect_url, payload, safe_headers
                 )
+                self.last_auth_challenge = self._build_auth_discovery_hints(response)
 
             # Update session headers if available
             self._maybe_extract_session_headers(response)
@@ -434,7 +530,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
             ct = self._extract_content_type(response)
 
-            if ct.startswith(JSON_CT):
+            if ct.startswith(JSON_CONTENT_TYPE):
                 # Use shared JSON parsing (returns JSON-RPC result payload)
                 data = self._parse_http_response_json(response, fallback_to_sse=False)
 
@@ -444,7 +540,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
                 return data if isinstance(data, dict) else {"result": data}
 
-            if ct.startswith(SSE_CT):
+            if ct.startswith(SSE_CONTENT_TYPE):
                 parsed = await self._parse_sse_response_for_result(response)
                 if method == "initialize":
                     self._initialized = True
@@ -478,12 +574,14 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             response = await self._post_with_retries(
                 client, self.url, payload, safe_headers
             )
+            self.last_auth_challenge = self._build_auth_discovery_hints(response)
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 # Follow at most one redirect to avoid unbounded chains.
                 response = await self._post_with_retries(
                     client, redirect_url, payload, safe_headers
                 )
+                self.last_auth_challenge = self._build_auth_discovery_hints(response)
             self._handle_http_response_error(response)
 
     async def _do_initialize(self) -> None:
@@ -495,9 +593,18 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             "params": {
                 "protocolVersion": self.protocol_version or DEFAULT_PROTOCOL_VERSION,
                 "capabilities": {
-                    "elicitation": {},
+                    "elicitation": {"form": {}, "url": {}},
                     "experimental": {},
-                    "sampling": {},
+                    "roots": {"listChanged": True},
+                    "sampling": {"context": {}, "tools": {}},
+                    "tasks": {
+                        "cancel": {},
+                        "list": {},
+                        "requests": {
+                            "elicitation": {"create": {}},
+                            "sampling": {"createMessage": {}},
+                        },
+                    },
                 },
                 "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},
             },
@@ -550,6 +657,152 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 async for item in self._yield_streamed_lines(response):
                     yield item
 
+    async def _yield_sse_events(
+        self, response: httpx.Response
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Yield parsed SSE events while tracking resumability fields."""
+        event: dict[str, Any] = {"event": "message", "data": []}
+        async for line in response.aiter_lines():
+            if line == "":
+                event_id = event.get("id")
+                if isinstance(event_id, str) and event_id:
+                    self.last_event_id = event_id
+                retry = event.get("retry")
+                if isinstance(retry, int):
+                    self.retry_delay_ms = retry
+                data_text = "\n".join(event.get("data", []))
+                event = {"event": "message", "data": []}
+                if not data_text:
+                    continue
+                try:
+                    payload = json.loads(data_text)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(payload, dict):
+                    if await self._handle_server_request(payload):
+                        continue
+                    yield payload
+                continue
+
+            if line.startswith(":"):
+                continue
+            if line.startswith("event:"):
+                event["event"] = line[len("event:") :].strip()
+                continue
+            if line.startswith("id:"):
+                event["id"] = line[len("id:") :].strip()
+                continue
+            if line.startswith("retry:"):
+                retry_text = line[len("retry:") :].strip()
+                try:
+                    event["retry"] = int(retry_text)
+                except ValueError:
+                    pass
+                continue
+            if line.startswith("data:"):
+                event.setdefault("data", []).append(line[len("data:") :].lstrip())
+
+    async def listen(self) -> AsyncIterator[dict[str, Any]]:
+        """Open a GET-based SSE stream for polling or resumption."""
+        headers = self._prepare_listen_headers()
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
+        safe_headers = self._prepare_headers_with_auth(headers)
+
+        async with self._create_http_client(self.timeout) as client:
+            try:
+                async with client.stream(
+                    "GET", self.url, headers=safe_headers
+                ) as response:
+                    self.last_auth_challenge = self._build_auth_discovery_hints(
+                        response
+                    )
+                    redirect_url = self._resolve_redirect(response)
+                    if redirect_url:
+                        await response.aclose()
+                        async with client.stream(
+                            "GET", redirect_url, headers=safe_headers
+                        ) as redirected:
+                            self.last_auth_challenge = (
+                                self._build_auth_discovery_hints(redirected)
+                            )
+                            self._handle_http_response_error(redirected)
+                            self._maybe_extract_session_headers(redirected)
+                            async for item in self._yield_sse_events(redirected):
+                                yield item
+                        return
+
+                    self._handle_http_response_error(response)
+                    self._maybe_extract_session_headers(response)
+                    async for item in self._yield_sse_events(response):
+                        yield item
+            except httpx.HTTPError as exc:
+                raise TransportError(
+                    f"Stream GET failed: {exc}",
+                    context={"url": self.url, "method": "GET"},
+                ) from exc
+
+    async def terminate_session(self) -> None:
+        """Terminate the current Streamable HTTP session with HTTP DELETE."""
+        if not self.session_id:
+            return
+
+        headers = self._prepare_listen_headers()
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
+        safe_headers = self._prepare_headers_with_auth(headers)
+
+        async with self._create_http_client(self.timeout) as client:
+            try:
+                response = await client.delete(self.url, headers=safe_headers)
+            except httpx.HTTPError as exc:
+                raise TransportError(
+                    f"Stream DELETE failed: {exc}",
+                    context={"url": self.url, "method": "DELETE"},
+                ) from exc
+            self.last_auth_challenge = self._build_auth_discovery_hints(response)
+            redirect_url = self._resolve_redirect(response)
+            if redirect_url:
+                try:
+                    response = await client.delete(redirect_url, headers=safe_headers)
+                except httpx.HTTPError as exc:
+                    raise TransportError(
+                        f"Stream DELETE failed: {exc}",
+                        context={"url": redirect_url, "method": "DELETE"},
+                    ) from exc
+                self.last_auth_challenge = self._build_auth_discovery_hints(response)
+            if response.status_code != HTTP_NOT_FOUND:
+                self._handle_http_response_error(response)
+
+        self.session_id = None
+        self.last_event_id = None
+
+    async def probe_auth_discovery(self) -> dict[str, Any]:
+        """Probe the MCP endpoint for authorization discovery hints."""
+        headers = self._prepare_listen_headers()
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
+        safe_headers = self._prepare_headers_with_auth(headers)
+
+        async with self._create_http_client(self.timeout) as client:
+            response = await self._get_with_retries(client, self.url, safe_headers)
+            redirect_url = self._resolve_redirect(response)
+            if redirect_url:
+                response = await self._get_with_retries(
+                    client, redirect_url, safe_headers
+                )
+            endpoint_url = str(getattr(response, "url", None) or self.url)
+            protected_urls = build_protected_resource_metadata_urls(endpoint_url)
+            fallback_hints = {
+                "protected_resource_metadata_urls": protected_urls,
+                "required_scopes": [],
+                "resource_metadata_url": None,
+                "www_authenticate": response.headers.get("www-authenticate"),
+            }
+            hints = self._build_auth_discovery_hints(response) or fallback_hints
+            hints["status"] = response.status_code
+            return hints
+
     async def _yield_streamed_lines(
         self, response: httpx.Response
     ) -> AsyncIterator[dict[str, Any]]:
@@ -563,11 +816,17 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 continue
             try:
                 data = json.loads(line)
+                is_dict = isinstance(data, dict)
+                if is_dict and await self._handle_server_request(data):
+                    continue
                 yield data
             except json.JSONDecodeError:
                 if line.startswith("data:"):
                     try:
                         data = json.loads(line[len("data:") :].strip())
+                        is_dict = isinstance(data, dict)
+                        if is_dict and await self._handle_server_request(data):
+                            continue
                         yield data
                     except json.JSONDecodeError:
                         self._logger.error("Failed to parse SSE data as JSON")

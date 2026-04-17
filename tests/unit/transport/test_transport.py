@@ -451,7 +451,9 @@ def stdio_transport():
 @pytest.mark.asyncio
 async def test_stdio_transport_init(stdio_transport):
     """Test StdioDriver initialization."""
-    assert stdio_transport.request_id == 1
+    assert stdio_transport.command == "test_command"
+    assert stdio_transport.process is None
+    assert stdio_transport._initialized is False
 
 
 @pytest.mark.skip(

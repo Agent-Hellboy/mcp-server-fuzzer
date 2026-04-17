@@ -18,6 +18,7 @@ from mcp_fuzzer import spec_guard
 from mcp_fuzzer.reports import FuzzerReporter
 from mcp_fuzzer.auth import AuthManager
 from mcp_fuzzer.exceptions import MCPError
+from mcp_fuzzer.client.protocol_client import ProtocolClient
 
 
 class TestUnifiedMCPFuzzerClient:
@@ -59,6 +60,7 @@ class TestUnifiedMCPFuzzerClient:
         self.mock_protocol_client._send_protocol_request = AsyncMock()
         self.mock_protocol_client._send_initialize_request = AsyncMock()
         self.mock_protocol_client._send_progress_notification = AsyncMock()
+        self.mock_protocol_client._send_cancelled_notification = AsyncMock()
         self.mock_protocol_client._send_unsubscribe_request = AsyncMock()
         self.mock_protocol_client._send_list_resources_request = AsyncMock()
         self.mock_protocol_client._send_read_resource_request = AsyncMock()
@@ -472,11 +474,18 @@ class TestUnifiedMCPFuzzerClient:
         assert result == mock_response
 
     @pytest.mark.asyncio
-    async def test_send_cancel_notification(self):
-        """Test sending a cancel notification."""
-        # Skip this test as _send_cancel_notification has been removed in the
-        # refactoring
-        pytest.skip("_send_cancel_notification has been removed in the refactoring")
+    async def test_send_cancelled_notification(self):
+        """Test sending a cancelled notification."""
+        data = {"params": {"requestId": 123}}
+        mock_response = {"status": "notification_sent"}
+        self.mock_transport.send_notification.return_value = None
+        self.mock_protocol_client._send_cancelled_notification.return_value = (
+            mock_response
+        )
+
+        result = await self.mock_protocol_client._send_cancelled_notification(data)
+
+        assert result == mock_response
 
     @pytest.mark.asyncio
     @patch("mcp_fuzzer.client.base.logging")
@@ -783,55 +792,30 @@ class TestUnifiedMCPFuzzerClient:
             data: The data to pass to the method
             mock_response: The mock response to return
         """
-        # Get the method to call
-        method_to_call = getattr(self.mock_protocol_client, f"_send_{method_name}")
+        protocol_client = ProtocolClient(self.mock_transport)
+        target_method = f"_send_{method_name}"
+        method_to_call = AsyncMock(return_value=mock_response)
+        setattr(protocol_client, target_method, method_to_call)
 
-        # Create a new mock for _send_protocol_request that will call the real
-        # implementation
-        original_send_protocol_request = (
-            self.mock_protocol_client._send_protocol_request
-        )
+        result = await protocol_client._send_protocol_request(protocol_type, data)
 
-        # Create a custom implementation that will call the appropriate method
-        async def mock_send_protocol_request(p_type, p_data):
-            if p_type == protocol_type:
-                return await method_to_call(p_data)
-            return mock_response
-
-        # Replace the mock with our custom implementation
-        self.mock_protocol_client._send_protocol_request = mock_send_protocol_request
-
-        # Set up the mock return value
-        method_to_call.return_value = mock_response
-
-        # Call the method under test
-        result = await self.mock_protocol_client._send_protocol_request(
-            protocol_type, data
-        )
-
-        # Verify the result and that the correct method was called
         assert result == mock_response
-        method_to_call.assert_called_once_with(data)
-
-        # Restore the original mock
-        self.mock_protocol_client._send_protocol_request = (
-            original_send_protocol_request
-        )
+        method_to_call.assert_awaited_once_with(data)
 
     @pytest.mark.asyncio
     async def test_send_protocol_request_cancel(self):
         """Test _send_protocol_request with cancel type."""
-        protocol_type = "CancelNotification"
-        data = {"params": {"id": 123}}
+        protocol_type = "CancelledNotification"
+        data = {"params": {"requestId": 123}}
         mock_response = {"status": "notification_sent"}
 
-        # Make sure _send_cancel_notification is an AsyncMock
-        self.mock_protocol_client._send_cancel_notification = AsyncMock(
+        # Make sure _send_cancelled_notification is an AsyncMock
+        self.mock_protocol_client._send_cancelled_notification = AsyncMock(
             return_value=mock_response
         )
 
         await self._test_protocol_request_helper(
-            protocol_type, "cancel_notification", data, mock_response
+            protocol_type, "cancelled_notification", data, mock_response
         )
 
     @pytest.mark.asyncio
@@ -2156,7 +2140,8 @@ async def test_print_comprehensive_safety_report_collects_examples():
         get_statistics=MagicMock(),
         get_blocked_examples=MagicMock(),
     )
-    client = UnifiedMCPFuzzerClient(transport=MagicMock(), safety_system=safety)
+    client = UnifiedMCPFuzzerClient(transport=MagicMock(), safety_enabled=False)
+    client.safety_system = safety
     client.print_comprehensive_safety_report()
 
     safety.get_statistics.assert_called_once()
@@ -2304,9 +2289,10 @@ def test_print_blocked_operations_summary_collects_stats():
     reporter = MagicMock()
     client = UnifiedMCPFuzzerClient(
         transport=MagicMock(),
-        safety_system=safety,
+        safety_enabled=False,
         reporter=reporter,
     )
+    client.safety_system = safety
 
     client.print_blocked_operations_summary()
 
@@ -2332,6 +2318,27 @@ async def test_generate_reports_delegate():
         output_types=["json"], include_safety=False
     )
     reporter.generate_final_report.assert_called_once_with(include_safety=False)
+
+
+def test_protocol_client_requires_protocol_safety_hooks():
+    class IncompleteSafety:
+        def set_fs_root(self, root):
+            return None
+
+        def sanitize_tool_arguments(self, tool_name, arguments):
+            return arguments
+
+        def should_skip_tool_call(self, tool_name, arguments):
+            return False
+
+        def create_safe_mock_response(self, tool_name):
+            return {}
+
+        def log_blocked_operation(self, tool_name, arguments, reason):
+            return None
+
+    with pytest.raises(TypeError):
+        ProtocolClient(MagicMock(), safety_system=IncompleteSafety())
 
 
 if __name__ == "__main__":

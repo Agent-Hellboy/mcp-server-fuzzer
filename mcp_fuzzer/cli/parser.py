@@ -271,7 +271,7 @@ Examples:
         "--spec-schema-version",
         help=(
             "Use a specific MCP schema version "
-            "(e.g., 2025-06-18) for schema-driven fuzzing."
+            "(e.g., 2025-11-25) for schema-driven fuzzing."
         ),
     )
     parser.add_argument(

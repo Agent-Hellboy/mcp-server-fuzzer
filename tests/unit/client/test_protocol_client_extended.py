@@ -15,18 +15,9 @@ def mock_transport():
 
 
 @pytest.fixture
-def mock_safety():
-    """Create a mock safety system."""
-    safety = MagicMock()
-    safety.should_skip_protocol_message = MagicMock(return_value=False)
-    safety.sanitize_protocol_message = MagicMock(side_effect=lambda m: m)
-    return safety
-
-
-@pytest.fixture
-def client(mock_transport, mock_safety):
+def client(mock_transport):
     """Create a ProtocolClient with mocked dependencies."""
-    return ProtocolClient(transport=mock_transport, safety_system=mock_safety)
+    return ProtocolClient(transport=mock_transport, safety_system=None)
 
 
 class TestProtocolRequestDispatch:
@@ -42,10 +33,10 @@ class TestProtocolRequestDispatch:
         client.transport.send_notification.assert_called()
 
     @pytest.mark.asyncio
-    async def test_dispatch_cancel_notification(self, client):
-        """Test dispatching CancelNotification."""
+    async def test_dispatch_cancelled_notification(self, client):
+        """Test dispatching CancelledNotification."""
         result = await client._send_protocol_request(
-            "CancelNotification", {"params": {"requestId": "req1"}}
+            "CancelledNotification", {"params": {"requestId": "req1"}}
         )
         assert result == {"status": "notification_sent"}
         client.transport.send_notification.assert_called()

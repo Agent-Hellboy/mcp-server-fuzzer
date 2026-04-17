@@ -8,7 +8,7 @@ def client():
     transport = MagicMock()
     transport.send_request = AsyncMock(return_value={"ok": True})
     transport.send_notification = AsyncMock(return_value=None)
-    return ProtocolClient(transport=transport, safety_system=MagicMock())
+    return ProtocolClient(transport=transport, safety_system=None)
 
 @pytest.mark.asyncio
 async def test_send_initialize_request(client):
@@ -151,7 +151,7 @@ async def test_send_generic_request_non_string_method(client):
 
 @pytest.mark.asyncio
 async def test_get_protocol_types_exception():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     with patch(
         "mcp_fuzzer.client.protocol_client.ProtocolExecutor",
         side_effect=Exception("boom"),
@@ -161,7 +161,7 @@ async def test_get_protocol_types_exception():
 
 @pytest.mark.asyncio
 async def test_fuzz_all_protocol_types_exception():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client._get_protocol_types = AsyncMock(side_effect=Exception("boom"))
     result = await client.fuzz_all_protocol_types()
     assert result == {}

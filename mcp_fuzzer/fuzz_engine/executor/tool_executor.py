@@ -9,7 +9,7 @@ import asyncio
 import logging
 from typing import Any
 
-from ...safety_system.safety import SafetyFilter, SafetyProvider
+from ...safety_system.safety import SafetyFilter, CombinedSafetyProvider
 from .async_executor import AsyncFuzzExecutor
 from ..mutators import ToolMutator
 from ..fuzzerreporter import ResultBuilder, ResultCollector
@@ -23,7 +23,7 @@ class ToolExecutor:
         mutator: ToolMutator | None = None,
         executor: AsyncFuzzExecutor | None = None,
         result_builder: ResultBuilder | None = None,
-        safety_system: SafetyProvider | None = None,
+        safety_system: CombinedSafetyProvider | None = None,
         enable_safety: bool = True,
         max_concurrency: int = 5,
     ):

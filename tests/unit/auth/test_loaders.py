@@ -46,14 +46,13 @@ def test_load_auth_config_missing_required_fields(tmp_path):
         loaders.load_auth_config(str(path))
 
 
-def test_load_auth_config_tool_mapping_conflict(tmp_path):
+def test_load_auth_config_rejects_legacy_tool_mappings_key(tmp_path):
     config = {
         "providers": {},
-        "tool_mapping": {"tool": "api"},
         "tool_mappings": {"tool": "basic"},
     }
     path = tmp_path / "conflict.json"
     path.write_text(json.dumps(config))
 
-    with pytest.raises(exceptions.AuthConfigError):
+    with pytest.raises(exceptions.AuthConfigError, match="no longer supported"):
         loaders.load_auth_config(str(path))

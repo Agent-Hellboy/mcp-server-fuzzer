@@ -5,11 +5,15 @@ from datetime import date
 from typing import Any
 
 from .helpers import (
+    ELICITATION_SPEC,
     LOGGING_SPEC,
     PROMPTS_SPEC,
     RESOURCES_SPEC,
+    ROOTS_SPEC,
+    SAMPLING_SPEC,
     SCHEMA_SPEC,
     SSE_SPEC,
+    TASKS_SPEC,
     TOOLS_SPEC,
     SpecCheck,
     fail as _fail,
@@ -22,7 +26,8 @@ _TOOLS_SPEC = spec_variant(
     TOOLS_SPEC,
     spec_id="MCP-Tools-Call",
     spec_url=(
-        "https://modelcontextprotocol.io/specification/{version}/server/tools#calling-tools"
+        "https://modelcontextprotocol.io/specification/{version}/server/"
+        "tools#calling-tools"
     ),
 )
 _LOGGING_SPEC = LOGGING_SPEC
@@ -30,10 +35,14 @@ _SCHEMA_SPEC = spec_variant(SCHEMA_SPEC, spec_id="MCP-JSON-Schema")
 _RESOURCES_SPEC = RESOURCES_SPEC
 _PROMPTS_SPEC = PROMPTS_SPEC
 _SSE_SPEC = SSE_SPEC
+_ROOTS_SPEC = ROOTS_SPEC
+_SAMPLING_SPEC = SAMPLING_SPEC
+_ELICITATION_SPEC = ELICITATION_SPEC
+_TASKS_SPEC = TASKS_SPEC
 
 
 def _spec_at_least(target: str) -> bool:
-    current = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
+    current = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-11-25")
     try:
         # Compare ISO dates when possible.
         return date.fromisoformat(current) >= date.fromisoformat(target)
@@ -44,38 +53,293 @@ def _spec_at_least(target: str) -> bool:
 def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
     """Validate JSON Schema keywords in tool definitions."""
     checks: list[SpecCheck] = []
-    schema = tool.get("inputSchema")
-    if not isinstance(schema, dict):
+    if not isinstance(tool, dict):
         return checks
 
-    if "$schema" in schema and not isinstance(schema.get("$schema"), str):
+    name = tool.get("name")
+    if name is not None and (not isinstance(name, str) or not name):
         checks.append(
-            _fail(
-                "tool-schema-$schema",
-                "Tool inputSchema has non-string $schema",
-                _SCHEMA_SPEC,
-            )
+            _fail("tool-name", "Tool is missing a non-empty name", _TOOLS_SPEC)
         )
 
-    if "$defs" in schema and not isinstance(schema.get("$defs"), dict):
-        checks.append(
-            _fail(
-                "tool-schema-$defs",
-                "Tool inputSchema has non-object $defs",
-                _SCHEMA_SPEC,
-            )
-        )
-
-    if "additionalProperties" in schema:
-        additional = schema.get("additionalProperties")
-        if not isinstance(additional, (bool, dict)):
+    schema = tool.get("inputSchema")
+    schema_is_dict = isinstance(schema, dict)
+    if schema_is_dict:
+        if "$schema" in schema and not isinstance(schema.get("$schema"), str):
             checks.append(
                 _fail(
-                    "tool-schema-additional-properties",
-                    "Tool inputSchema has invalid additionalProperties type",
+                    "tool-schema-$schema",
+                    "Tool inputSchema has non-string $schema",
                     _SCHEMA_SPEC,
                 )
             )
+
+        if "$defs" in schema and not isinstance(schema.get("$defs"), dict):
+            checks.append(
+                _fail(
+                    "tool-schema-$defs",
+                    "Tool inputSchema has non-object $defs",
+                    _SCHEMA_SPEC,
+                )
+            )
+
+        if "additionalProperties" in schema:
+            additional = schema.get("additionalProperties")
+            if not isinstance(additional, (bool, dict)):
+                checks.append(
+                    _fail(
+                        "tool-schema-additional-properties",
+                        "Tool inputSchema has invalid additionalProperties type",
+                        _SCHEMA_SPEC,
+                    )
+                )
+
+    icons = tool.get("icons")
+    if icons is not None and not isinstance(icons, list):
+        checks.append(
+            _fail("tool-icons-type", "Tool icons is not an array", _TOOLS_SPEC)
+        )
+    elif isinstance(icons, list):
+        for idx, icon in enumerate(icons):
+            if not isinstance(icon, dict):
+                checks.append(
+                    _fail(
+                        "tool-icon-item",
+                        f"Tool icon {idx} is not an object",
+                        _TOOLS_SPEC,
+                    )
+                )
+                continue
+            if not isinstance(icon.get("src"), str) or not icon.get("src"):
+                checks.append(
+                    _fail(
+                        "tool-icon-src",
+                        f"Tool icon {idx} missing src",
+                        _TOOLS_SPEC,
+                    )
+                )
+
+    execution = tool.get("execution")
+    if execution is not None and not isinstance(execution, dict):
+        checks.append(
+            _fail(
+                "tool-execution-type",
+                "Tool execution is not an object",
+                _TOOLS_SPEC,
+            )
+        )
+    elif isinstance(execution, dict) and "taskSupport" in execution:
+        task_support = execution.get("taskSupport")
+        if task_support not in {"forbidden", "optional", "required"}:
+            checks.append(
+                _fail(
+                    "tool-execution-task-support",
+                    "Tool execution.taskSupport is invalid",
+                    _TOOLS_SPEC,
+                )
+            )
+
+    return checks
+
+
+def check_tools_list(result: Any) -> list[SpecCheck]:
+    """Validate tools/list response shape."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        return checks
+
+    tools = result.get("tools")
+    if tools is None:
+        checks.append(_fail("tools-list-missing", "Missing tools array", _TOOLS_SPEC))
+        return checks
+
+    if not isinstance(tools, list):
+        checks.append(_fail("tools-list-type", "tools is not an array", _TOOLS_SPEC))
+        return checks
+
+    for tool in tools:
+        if not isinstance(tool, dict):
+            checks.append(
+                _fail("tools-list-item", "Tool entry is not an object", _TOOLS_SPEC)
+            )
+            continue
+        checks.extend(check_tool_schema_fields(tool))
+
+    return checks
+
+
+def _check_task_shape(task: Any, *, prefix: str) -> list[SpecCheck]:
+    checks: list[SpecCheck] = []
+    if not isinstance(task, dict):
+        checks.append(_fail(f"{prefix}-type", "Task is not an object", _TASKS_SPEC))
+        return checks
+
+    for field in ("taskId", "status", "createdAt", "lastUpdatedAt"):
+        if not isinstance(task.get(field), str) or not task.get(field):
+            checks.append(
+                _fail(
+                    f"{prefix}-{field}",
+                    f"Task missing valid {field}",
+                    _TASKS_SPEC,
+                )
+            )
+
+    ttl = task.get("ttl")
+    if not isinstance(ttl, int) or isinstance(ttl, bool):
+        checks.append(
+            _fail(f"{prefix}-ttl", "Task ttl must be an integer", _TASKS_SPEC)
+        )
+
+    poll_interval = task.get("pollInterval")
+    if poll_interval is not None and (
+        not isinstance(poll_interval, int) or isinstance(poll_interval, bool)
+    ):
+        checks.append(
+            _fail(
+                f"{prefix}-poll-interval",
+                "Task pollInterval must be an integer",
+                _TASKS_SPEC,
+            )
+        )
+
+    return checks
+
+
+def check_tasks_list(result: Any) -> list[SpecCheck]:
+    """Validate tasks/list response shape."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        return checks
+
+    tasks = result.get("tasks")
+    if tasks is None:
+        checks.append(_fail("tasks-list-missing", "Missing tasks array", _TASKS_SPEC))
+        return checks
+
+    if not isinstance(tasks, list):
+        checks.append(_fail("tasks-list-type", "tasks is not an array", _TASKS_SPEC))
+        return checks
+
+    for idx, task in enumerate(tasks):
+        checks.extend(_check_task_shape(task, prefix=f"tasks-list-{idx}"))
+
+    return checks
+
+
+def check_task_result(result: Any) -> list[SpecCheck]:
+    """Validate a single-task response shape."""
+    return _check_task_shape(result, prefix="task")
+
+
+def check_task_payload_result(result: Any) -> list[SpecCheck]:
+    """Validate tasks/result payloads when they resemble known result shapes."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        checks.append(
+            _fail(
+                "tasks-result-type",
+                "tasks/result payload is not an object",
+                _TASKS_SPEC,
+            )
+        )
+        return checks
+
+    if "content" in result:
+        checks.extend(check_tool_result_content(result))
+
+    return checks
+
+
+def check_roots_list(result: Any) -> list[SpecCheck]:
+    """Validate roots/list response shape."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        return checks
+
+    roots = result.get("roots")
+    if roots is None:
+        checks.append(_fail("roots-list-missing", "Missing roots array", _ROOTS_SPEC))
+        return checks
+
+    if not isinstance(roots, list):
+        checks.append(_fail("roots-list-type", "roots is not an array", _ROOTS_SPEC))
+        return checks
+
+    for idx, root in enumerate(roots):
+        if not isinstance(root, dict):
+            checks.append(
+                _fail("roots-list-item", f"Root {idx} is not an object", _ROOTS_SPEC)
+            )
+            continue
+        if not isinstance(root.get("uri"), str) or not root.get("uri"):
+            checks.append(
+                _fail("roots-list-uri", f"Root {idx} missing uri", _ROOTS_SPEC)
+            )
+
+    return checks
+
+
+def check_create_message_result(result: Any) -> list[SpecCheck]:
+    """Validate sampling/createMessage response shape."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        return checks
+
+    if not isinstance(result.get("model"), str) or not result.get("model"):
+        checks.append(
+            _fail("sampling-model", "CreateMessageResult missing model", _SAMPLING_SPEC)
+        )
+    role = result.get("role")
+    if role is not None and (not isinstance(role, str) or not role):
+        checks.append(
+            _fail("sampling-role", "CreateMessageResult missing role", _SAMPLING_SPEC)
+        )
+
+    content = result.get("content")
+    if not isinstance(content, (dict, list)):
+        checks.append(
+            _fail(
+                "sampling-content",
+                "CreateMessageResult content must be an object or array",
+                _SAMPLING_SPEC,
+            )
+        )
+
+    stop_reason = result.get("stopReason")
+    if stop_reason is not None and not isinstance(stop_reason, str):
+        checks.append(
+            _fail(
+                "sampling-stop-reason",
+                "CreateMessageResult stopReason is not a string",
+                _SAMPLING_SPEC,
+            )
+        )
+
+    return checks
+
+
+def check_elicit_result(result: Any) -> list[SpecCheck]:
+    """Validate elicitation/create response shape."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        return checks
+
+    if result.get("action") not in {"accept", "cancel", "decline"}:
+        checks.append(
+            _fail(
+                "elicitation-action",
+                "ElicitResult action is invalid",
+                _ELICITATION_SPEC,
+            )
+        )
+    if "content" in result and not isinstance(result.get("content"), dict):
+        checks.append(
+            _fail(
+                "elicitation-content",
+                "ElicitResult content must be an object when present",
+                _ELICITATION_SPEC,
+            )
+        )
 
     return checks
 
@@ -325,6 +589,42 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
                 "logging-logger-type",
                 "Logging notification logger is not a string",
                 _LOGGING_SPEC,
+            )
+        )
+
+    return checks
+
+
+def check_task_status_notification(payload: dict[str, Any]) -> list[SpecCheck]:
+    """Validate notifications/tasks/status payload shape."""
+    params = payload.get("params")
+    return _check_task_shape(params, prefix="tasks-status")
+
+
+def check_elicitation_complete_notification(
+    payload: dict[str, Any],
+) -> list[SpecCheck]:
+    """Validate notifications/elicitation/complete payload shape."""
+    checks: list[SpecCheck] = []
+    params = payload.get("params")
+    if not isinstance(params, dict):
+        checks.append(
+            _fail(
+                "elicitation-complete-params",
+                "Elicitation completion params missing",
+                _ELICITATION_SPEC,
+            )
+        )
+        return checks
+
+    if not isinstance(params.get("elicitationId"), str) or not params.get(
+        "elicitationId"
+    ):
+        checks.append(
+            _fail(
+                "elicitation-complete-id",
+                "Elicitation completion missing elicitationId",
+                _ELICITATION_SPEC,
             )
         )
 

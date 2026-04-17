@@ -1,5 +1,4 @@
 import asyncio
-import io
 import json
 import os
 import sys
@@ -18,20 +17,7 @@ from mcp_fuzzer.exceptions import (
     ServerError,
     TransportError,
 )
-
-
-class FakeStdin:
-    def __init__(self, lines=None, async_mode=False):
-        self._lines = list(lines) if lines else []
-        self._async = async_mode
-
-    def readline(self):
-        if self._async:
-            return self._async_readline()
-        return self._lines.pop(0) if self._lines else ""
-
-    async def _async_readline(self):
-        return self._lines.pop(0) if self._lines else ""
+from mcp_fuzzer.transport.methods import NOTIFY_TASKS_STATUS
 
 
 class TestStdioDriver:
@@ -756,8 +742,20 @@ class TestStdioDriver:
     async def test_handle_server_request_non_matching_method(self):
         """Test _handle_server_request with non-matching method."""
         message = {"jsonrpc": "2.0", "method": "other/method", "id": 1}
+        self.transport._send_message = AsyncMock()
         result = await self.transport._handle_server_request(message)
-        assert result is False
+        assert result is True
+        self.transport._send_message.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_handle_server_request_notification(self):
+        message = {
+            "jsonrpc": "2.0",
+            "method": NOTIFY_TASKS_STATUS,
+            "params": {"taskId": "task-1", "status": "running"},
+        }
+        result = await self.transport._handle_server_request(message)
+        assert result is True
 
     @pytest.mark.asyncio
     async def test_readline_with_cap_no_stdout(self):
@@ -963,113 +961,107 @@ class TestStdioDriverExtended:
     
     
     @pytest.mark.asyncio
-    async def test_send_request_reads_json(self, monkeypatch):
+    async def test_stream_request_yields_messages(self):
         transport = StdioDriver("echo")
-        transport.request_id = 7
 
-        stdout = io.StringIO()
-        stdin = FakeStdin([b'{"jsonrpc": "2.0", "id": 7, "result": 3}'])
-        monkeypatch.setattr(
-            stdio_driver,
-            "sys",
-            SimpleNamespace(stdin=stdin, stdout=stdout),
-        )
-    
-        result = await transport._send_request({"method": "ping"})
-        assert result["result"] == 3
+        with (
+            patch.object(transport, "_send_message", new=AsyncMock()) as mock_send,
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.uuid.uuid4"
+            ) as mock_uuid4,
+            patch.object(
+                transport,
+                "_receive_message",
+                new=AsyncMock(side_effect=[{"result": 3}, None]),
+            ),
+        ):
+            mock_uuid4.return_value = "stream-id"
+            items = [
+                item
+                async for item in transport._stream_request({"method": "ping"})
+            ]
+
+        assert items == [{"result": 3}]
+        sent_message = mock_send.await_args.args[0]
+        assert sent_message["id"] == "stream-id"
+        assert sent_message["jsonrpc"] == "2.0"
     
     
     @pytest.mark.asyncio
-    async def test_send_request_no_line(self, monkeypatch):
+    async def test_stream_request_preserves_explicit_id(self):
         transport = StdioDriver("echo")
 
-        stdout = io.StringIO()
-        stdin = FakeStdin()
-        monkeypatch.setattr(
-            stdio_driver,
-            "sys",
-            SimpleNamespace(stdin=stdin, stdout=stdout),
-        )
-    
-        with pytest.raises(TransportError):
-            await transport._send_request({"method": "ping"})
+        with (
+            patch.object(transport, "_send_message", new=AsyncMock()) as mock_send,
+            patch.object(
+                transport,
+                "_receive_message",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            items = [
+                item
+                async for item in transport._stream_request(
+                    {"method": "ping", "id": "fixed-id"}
+                )
+            ]
+
+        assert items == []
+        sent_message = mock_send.await_args.args[0]
+        assert sent_message["id"] == "fixed-id"
     
     
     @pytest.mark.asyncio
-    async def test_send_request_awaitable_line(self, monkeypatch):
+    async def test_stream_request_handles_sampling_request(self):
         transport = StdioDriver("echo")
 
-        stdout = io.StringIO()
-        stdin = FakeStdin(
-            ['{"jsonrpc": "2.0", "id": 1, "result": "ok"}'],
-            async_mode=True,
-        )
-        monkeypatch.setattr(
-            stdio_driver,
-            "sys",
-            SimpleNamespace(stdin=stdin, stdout=stdout),
-        )
-    
-        result = await transport._send_request({"method": "ping"})
-        assert result["result"] == "ok"
+        server_request = {
+            "jsonrpc": "2.0",
+            "id": "srv-id",
+            "method": "sampling/createMessage",
+            "params": {"messages": [], "maxTokens": 1},
+        }
+        with (
+            patch.object(transport, "_send_message", new=AsyncMock()) as mock_send,
+            patch(
+                "mcp_fuzzer.transport.drivers.stdio_driver.uuid.uuid4"
+            ) as mock_uuid4,
+            patch.object(
+                transport,
+                "_receive_message",
+                new=AsyncMock(side_effect=[server_request, {"ok": "stream"}, None]),
+            ),
+        ):
+            mock_uuid4.return_value = "stream-id"
+            items = [
+                item
+                async for item in transport._stream_request({"method": "ping"})
+            ]
+
+        assert items == [{"ok": "stream"}]
+        assert mock_send.await_count == 2
+        outbound_request = mock_send.await_args_list[0].args[0]
+        sampling_reply = mock_send.await_args_list[1].args[0]
+        assert outbound_request["id"] == "stream-id"
+        assert sampling_reply["id"] == "srv-id"
+        assert sampling_reply["result"]["role"] == "assistant"
     
     
     @pytest.mark.asyncio
-    async def test_stream_request_skips_invalid_json(self, monkeypatch):
+    async def test_stream_request_raises_after_iteration_cap(self):
         transport = StdioDriver("echo")
-        transport.request_id = 2
 
-        stdout = io.StringIO()
-        stdin = FakeStdin(['{bad json}', '{"ok": 1}', ""])
-        monkeypatch.setattr(
-            stdio_driver,
-            "sys",
-            SimpleNamespace(stdin=stdin, stdout=stdout),
-        )
-    
-        items = []
-        async for item in transport._stream_request({"method": "stream"}):
-            items.append(item)
-        assert items == [{"ok": 1}]
-    
-    
-    @pytest.mark.asyncio
-    async def test_stream_request_bytes(self, monkeypatch):
-        transport = StdioDriver("echo")
-        transport.request_id = 3
-
-        stdout = io.StringIO()
-        stdin = FakeStdin([b'{"ok": 2}', b""])
-        monkeypatch.setattr(
-            stdio_driver,
-            "sys",
-            SimpleNamespace(stdin=stdin, stdout=stdout),
-        )
-    
-        items = []
-        async for item in transport._stream_request({"method": "stream"}):
-            items.append(item)
-        assert items == [{"ok": 2}]
-    
-    
-    @pytest.mark.asyncio
-    async def test_stream_request_awaitable_line(self, monkeypatch):
-        transport = StdioDriver("echo")
-        transport.request_id = 4
-
-        stdout = io.StringIO()
-        stdin = FakeStdin(['{"ok": 4}', ""], async_mode=True)
-        monkeypatch.setattr(
-            stdio_driver,
-            "sys",
-            SimpleNamespace(stdin=stdin, stdout=stdout),
-        )
-    
-        items = []
-        async for item in transport._stream_request({"method": "stream"}):
-            items.append(item)
-            break
-        assert items == [{"ok": 4}]
+        with (
+            patch.object(transport, "_send_message", new=AsyncMock()),
+            patch.object(
+                transport,
+                "_receive_message",
+                new=AsyncMock(side_effect=[{"ok": 1}] * 1001),
+            ),
+        ):
+            with pytest.raises(TransportError, match="Too many responses"):
+                async for _ in transport._stream_request({"method": "stream"}):
+                    pass
     
     
     @pytest.mark.asyncio

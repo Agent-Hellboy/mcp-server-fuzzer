@@ -50,6 +50,26 @@ class SafetyProvider(Protocol):
 
 
 @runtime_checkable
+class ProtocolSafetyProvider(Protocol):
+    """Protocol for blocking/sanitizing protocol messages."""
+
+    def should_block_protocol_message(
+        self, protocol_type: str, fuzz_data: dict[str, Any]
+    ) -> bool: ...
+
+    def sanitize_protocol_message(
+        self, protocol_type: str, fuzz_data: dict[str, Any]
+    ) -> dict[str, Any]: ...
+
+    def get_blocking_reason(self) -> str | None: ...
+
+
+class CombinedSafetyProvider(SafetyProvider, ProtocolSafetyProvider, Protocol):
+    """Provider that supports both tool and protocol safety hooks."""
+
+
+
+@runtime_checkable
 class SandboxProvider(Protocol):
     """Protocol for pluggable sandbox providers."""
 
@@ -67,7 +87,7 @@ class DefaultSandboxProvider(SandboxProvider):
         return fs_get_sandbox()
 
 
-class SafetyFilter(SafetyProvider):
+class SafetyFilter(SafetyProvider, ProtocolSafetyProvider):
     """Filters and suppresses dangerous operations during fuzzing."""
 
     def __init__(
@@ -84,10 +104,6 @@ class SafetyFilter(SafetyProvider):
             dangerous_script_patterns or DEFAULT_DANGEROUS_SCRIPT_PATTERNS,
             dangerous_command_patterns or DEFAULT_DANGEROUS_COMMAND_PATTERNS,
         )
-        # Backwards-compatible attributes used by unit tests/documentation
-        self.dangerous_url_patterns = list(self.detector.url_patterns)
-        self.dangerous_script_patterns = list(self.detector.script_patterns)
-        self.dangerous_command_patterns = list(self.detector.command_patterns)
         # Normalize argument names for case-insensitive membership checks
         self.dangerous_argument_names = {
             n.lower()
@@ -154,6 +170,20 @@ class SafetyFilter(SafetyProvider):
             True if dangerous command pattern found, False otherwise
         """
         return self.detector.contains(value, DangerType.COMMAND)
+
+    # Protocol message safety hooks (no-op defaults to satisfy ProtocolSafetyProvider)
+    def should_block_protocol_message(
+        self, protocol_type: str, fuzz_data: dict[str, Any]
+    ) -> bool:
+        return False
+
+    def sanitize_protocol_message(
+        self, protocol_type: str, fuzz_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        return fuzz_data
+
+    def get_blocking_reason(self) -> str | None:
+        return None
 
     def sanitize_tool_arguments(
         self, tool_name: str, arguments: dict[str, Any]

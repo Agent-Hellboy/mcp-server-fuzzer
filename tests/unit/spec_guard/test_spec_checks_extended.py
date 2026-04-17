@@ -1,6 +1,7 @@
 """Extended tests for spec_checks.py to improve coverage."""
 
 import pytest
+import mcp_fuzzer.spec_guard.spec_checks as spec_checks
 from mcp_fuzzer.spec_guard.spec_checks import (
     check_tool_schema_fields,
     check_tool_result_content,
@@ -11,6 +12,12 @@ from mcp_fuzzer.spec_guard.spec_checks import (
     check_prompts_list,
     check_prompts_get,
     check_sse_event_text,
+    check_tools_list,
+    check_tasks_list,
+    check_roots_list,
+    check_create_message_result,
+    check_elicit_result,
+    check_task_result,
 )
 
 
@@ -120,7 +127,6 @@ class TestCheckToolResultContent:
             {"content": [{"type": "image", "data": "base64..."}]}
         )
         assert any(c["id"] == "tools-content-image-mime" for c in result)
-
     def test_audio_content_missing_data(self):
         """Test audio content missing data field."""
         result = check_tool_result_content(
@@ -444,3 +450,86 @@ class TestCheckSseEventText:
         result = check_sse_event_text("{\"foo\": \"bar\"}")
         # Should warn about missing data field
         assert any(c.get("status") == "WARN" for c in result)
+
+
+def test_check_task_result_rejects_bool_fields():
+    checks = check_task_result(
+        {
+            "taskId": "task-1",
+            "status": "running",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "lastUpdatedAt": "2024-01-01T00:00:00Z",
+            "ttl": True,
+            "pollInterval": False,
+        }
+    )
+    ids = {check["id"] for check in checks}
+    assert "task-ttl" in ids
+    assert "task-poll-interval" in ids
+
+
+def test_spec_at_least_handles_invalid_version(monkeypatch):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "0000")
+    assert spec_checks._spec_at_least("9999-01-01") is False
+
+
+def test_tool_schema_icons_and_execution_validation():
+    ids = {check["id"] for check in check_tool_schema_fields({"icons": "nope"})}
+    assert "tool-icons-type" in ids
+
+    ids = {
+        check["id"]
+        for check in check_tool_schema_fields({"icons": ["bad", {"src": ""}]})
+    }
+    assert "tool-icon-item" in ids
+    assert "tool-icon-src" in ids
+
+    ids = {check["id"] for check in check_tool_schema_fields({"execution": "nope"})}
+    assert "tool-execution-type" in ids
+
+    ids = {
+        check["id"]
+        for check in check_tool_schema_fields({"execution": {"taskSupport": "maybe"}})
+    }
+    assert "tool-execution-task-support" in ids
+
+
+def test_tools_and_tasks_list_shape_errors():
+    ids = {check["id"] for check in check_tools_list({})}
+    assert "tools-list-missing" in ids
+    ids = {check["id"] for check in check_tools_list({"tools": "nope"})}
+    assert "tools-list-type" in ids
+    ids = {check["id"] for check in check_tools_list({"tools": ["bad"]})}
+    assert "tools-list-item" in ids
+
+    ids = {check["id"] for check in check_tasks_list({})}
+    assert "tasks-list-missing" in ids
+    ids = {check["id"] for check in check_tasks_list({"tasks": "nope"})}
+    assert "tasks-list-type" in ids
+
+
+def test_roots_sampling_and_elicitation_validation():
+    ids = {
+        check["id"]
+        for check in check_roots_list({"roots": ["bad", {"uri": ""}]})
+    }
+    assert "roots-list-item" in ids
+    assert "roots-list-uri" in ids
+
+    ids = {
+        check["id"]
+        for check in check_create_message_result(
+            {"model": "", "role": 123, "content": "bad", "stopReason": 5}
+        )
+    }
+    assert "sampling-model" in ids
+    assert "sampling-role" in ids
+    assert "sampling-content" in ids
+    assert "sampling-stop-reason" in ids
+
+    ids = {
+        check["id"]
+        for check in check_elicit_result({"action": "unknown", "content": "bad"})
+    }
+    assert "elicitation-action" in ids
+    assert "elicitation-content" in ids

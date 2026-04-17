@@ -245,6 +245,55 @@ async def test_run_spec_suite_warns_when_no_callable_tool():
 
 
 @pytest.mark.asyncio
+async def test_run_spec_suite_accepts_list_argument_names(monkeypatch):
+    """Ensure list-based argument shapes are accepted for required checks."""
+    monkeypatch.setattr(runner, "validate_definition", lambda *_a, **_k: [])
+    monkeypatch.setattr(runner, "check_tool_schema_fields", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        runner, "_build_tool_arguments", lambda _tool: [{"name": "foo"}]
+    )
+    monkeypatch.setattr(runner, "_tool_task_support", lambda _tool: "allowed")
+
+    responses = {
+        "initialize": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {"tools": True},
+        },
+        "notifications/initialized": None,
+        "ping": {},
+        "tools/list": {
+            "tools": [
+                {
+                    "name": "t",
+                    "inputSchema": {
+                        "required": ["foo"],
+                        "properties": {"foo": {"type": "string"}},
+                    },
+                }
+            ]
+        },
+        "tools/call": {},
+    }
+    transport = DummyTransport(responses)
+    called: list[str] = []
+
+    async def send_request(method: str, params: object | None = None) -> object:
+        called.append(method)
+        if method not in transport.responses:
+            raise AssertionError(f"Unexpected request: {method}")
+        response = transport.responses[method]
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    transport.send_request = send_request  # type: ignore[assignment]
+
+    await runner.run_spec_suite(transport)
+
+    assert "tools/call" in called
+
+
+@pytest.mark.asyncio
 async def test_run_spec_suite_resource_failures():
     transport = DummyTransport(
         {

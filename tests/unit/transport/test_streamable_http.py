@@ -4,11 +4,8 @@ from typing import Any, Dict, List, Optional, Union
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from mcp_fuzzer.transport.drivers.stream_http_driver import (
-    StreamHttpDriver,
-    CONTENT_TYPE,
-)
-from mcp_fuzzer.config import DEFAULT_PROTOCOL_VERSION
+from mcp_fuzzer.transport.drivers.stream_http_driver import StreamHttpDriver
+from mcp_fuzzer.config import CONTENT_TYPE_HEADER, DEFAULT_PROTOCOL_VERSION
 from mcp_fuzzer.exceptions import TransportError
 
 
@@ -29,7 +26,7 @@ class _DummyResponse:
     ) -> None:
         self.status_code = status_code
         self._json = json_body
-        self.headers = {CONTENT_TYPE: content_type}
+        self.headers = {CONTENT_TYPE_HEADER: content_type}
         if headers:
             self.headers.update(headers)
 
@@ -49,7 +46,7 @@ class _DummySSEStreamResponse:
         lines: Union[List[str], None] = None,
     ) -> None:
         self.status_code = 200
-        self.headers = {CONTENT_TYPE: "text/event-stream"}
+        self.headers = {CONTENT_TYPE_HEADER: "text/event-stream"}
         if headers:
             self.headers.update(headers)
         self._lines = lines or []

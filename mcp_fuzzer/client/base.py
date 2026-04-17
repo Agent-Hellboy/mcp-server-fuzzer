@@ -11,7 +11,7 @@ from typing import Any
 
 from ..auth import AuthManager
 from ..reports import FuzzerReporter
-from ..safety_system.safety import SafetyProvider, SafetyFilter
+from ..safety_system.safety import CombinedSafetyProvider, SafetyFilter
 
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
@@ -32,7 +32,7 @@ class MCPFuzzerClient:
         auth_manager: AuthManager | None = None,
         tool_timeout: float | None = None,
         reporter: FuzzerReporter | None = None,
-        safety_system: SafetyProvider | None = None,
+        safety_system: CombinedSafetyProvider | None = None,
         safety_enabled: bool = True,
         max_concurrency: int = 5,
         tool_client: ToolClient | None = None,

@@ -11,6 +11,28 @@ import pytest
 from mcp_fuzzer.client.protocol_client import ProtocolClient
 
 
+class DummySafety:
+    def __init__(
+        self,
+        *,
+        block: bool = False,
+        sanitized: dict | None = None,
+        reason: str | None = None,
+    ) -> None:
+        self._block = block
+        self._sanitized = sanitized
+        self._reason = reason
+
+    def should_block_protocol_message(self, protocol_type, fuzz_data) -> bool:
+        return self._block
+
+    def sanitize_protocol_message(self, protocol_type, fuzz_data):
+        return self._sanitized if self._sanitized is not None else fuzz_data
+
+    def get_blocking_reason(self):
+        return self._reason
+
+
 @pytest.mark.asyncio
 async def test_check_safety_no_system():
     client = ProtocolClient(transport=MagicMock(), safety_system=None)
@@ -29,9 +51,7 @@ async def test_check_safety_no_system():
 
 @pytest.mark.asyncio
 async def test_check_safety_blocks_message():
-    safety = MagicMock()
-    safety.should_block_protocol_message.return_value = True
-    safety.get_blocking_reason.return_value = "too_risky"
+    safety = DummySafety(block=True, reason="too_risky")
     client = ProtocolClient(transport=MagicMock(), safety_system=safety)
 
     result = await client._check_safety_for_protocol_message(
@@ -45,9 +65,7 @@ async def test_check_safety_blocks_message():
 
 @pytest.mark.asyncio
 async def test_check_safety_sanitizes_message():
-    safety = MagicMock()
-    safety.should_block_protocol_message.return_value = False
-    safety.sanitize_protocol_message.return_value = {"params": {"x": "clean"}}
+    safety = DummySafety(sanitized={"params": {"x": "clean"}})
     client = ProtocolClient(transport=MagicMock(), safety_system=safety)
 
     result = await client._check_safety_for_protocol_message(
@@ -61,7 +79,7 @@ async def test_check_safety_sanitizes_message():
 
 @pytest.mark.asyncio
 async def test_process_single_protocol_fuzz_blocked():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client.protocol_mutator.mutate = AsyncMock(return_value={"method": "x"})
     client._check_safety_for_protocol_message = AsyncMock(
         return_value={
@@ -81,7 +99,7 @@ async def test_process_single_protocol_fuzz_blocked():
 
 @pytest.mark.asyncio
 async def test_process_single_protocol_fuzz_success_with_spec_checks():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client.protocol_mutator.mutate = AsyncMock(return_value={"method": "prompts/list"})
     client._check_safety_for_protocol_message = AsyncMock(
         return_value={
@@ -107,7 +125,7 @@ async def test_process_single_protocol_fuzz_success_with_spec_checks():
 
 @pytest.mark.asyncio
 async def test_process_single_protocol_fuzz_send_error():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client.protocol_mutator.mutate = AsyncMock(return_value={"method": "x"})
     client._check_safety_for_protocol_message = AsyncMock(
         return_value={
@@ -127,7 +145,7 @@ async def test_process_single_protocol_fuzz_send_error():
 
 @pytest.mark.asyncio
 async def test_process_single_protocol_fuzz_mutator_none():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client.protocol_mutator.mutate = AsyncMock(return_value=None)
 
     result = await client._process_single_protocol_fuzz("ListRootsRequest", 0, 1)
@@ -138,7 +156,7 @@ async def test_process_single_protocol_fuzz_mutator_none():
 
 @pytest.mark.asyncio
 async def test_fuzz_all_protocol_types_empty_list():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client._get_protocol_types = AsyncMock(return_value=[])
 
     result = await client.fuzz_all_protocol_types()
@@ -148,7 +166,7 @@ async def test_fuzz_all_protocol_types_empty_list():
 
 @pytest.mark.asyncio
 async def test_fuzz_all_protocol_types_runs():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client._get_protocol_types = AsyncMock(return_value=["InitializeRequest"])
     client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
 
@@ -159,7 +177,7 @@ async def test_fuzz_all_protocol_types_runs():
 
 @pytest.mark.asyncio
 async def test_fuzz_all_protocol_types_appends_listed_results():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client._get_protocol_types = AsyncMock(
         return_value=["ReadResourceRequest", "GetPromptRequest"]
     )
@@ -181,7 +199,7 @@ async def test_fuzz_all_protocol_types_appends_listed_results():
 
 @pytest.mark.asyncio
 async def test_fuzz_protocol_type_collects_runs():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
 
     result = await client.fuzz_protocol_type("InitializeRequest", runs=3)
@@ -192,7 +210,7 @@ async def test_fuzz_protocol_type_collects_runs():
 
 @pytest.mark.asyncio
 async def test_fuzz_protocol_type_appends_listed_resources():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
     client._fuzz_listed_resources = AsyncMock(
         return_value=[{"success": True, "fuzz_data": {"params": {"uri": "u"}}}]
@@ -206,7 +224,7 @@ async def test_fuzz_protocol_type_appends_listed_resources():
 
 @pytest.mark.asyncio
 async def test_fuzz_protocol_type_appends_listed_prompts():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
     client._fuzz_listed_prompts = AsyncMock(
         return_value=[{"success": True, "fuzz_data": {"params": {"name": "p"}}}]
@@ -219,7 +237,7 @@ async def test_fuzz_protocol_type_appends_listed_prompts():
 
 
 def test_extract_params_handles_non_dict():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
 
     assert client._extract_params({"params": {"x": 1}}) == {"x": 1}
     assert client._extract_params({"params": "nope"}) == {}
@@ -227,7 +245,7 @@ def test_extract_params_handles_non_dict():
 
 
 def test_extract_list_items_handles_wrapped_results():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
 
     assert client._extract_list_items({"resources": [{"uri": "u"}]}, "resources") == [
         {"uri": "u"}
@@ -240,7 +258,7 @@ def test_extract_list_items_handles_wrapped_results():
 
 @pytest.mark.asyncio
 async def test_send_protocol_request_dispatch():
-    client = ProtocolClient(transport=MagicMock(), safety_system=MagicMock())
+    client = ProtocolClient(transport=MagicMock(), safety_system=None)
     client._send_initialize_request = AsyncMock(return_value={"ok": True})
 
     result = await client._send_protocol_request(
@@ -255,7 +273,7 @@ async def test_send_protocol_request_dispatch():
 async def test_send_progress_notification():
     transport = MagicMock()
     transport.send_notification = AsyncMock()
-    client = ProtocolClient(transport=transport, safety_system=MagicMock())
+    client = ProtocolClient(transport=transport, safety_system=None)
 
     result = await client._send_progress_notification({"params": {"token": "t"}})
 
@@ -266,12 +284,12 @@ async def test_send_progress_notification():
 
 
 @pytest.mark.asyncio
-async def test_send_cancel_notification():
+async def test_send_cancelled_notification():
     transport = MagicMock()
     transport.send_notification = AsyncMock()
-    client = ProtocolClient(transport=transport, safety_system=MagicMock())
+    client = ProtocolClient(transport=transport, safety_system=None)
 
-    result = await client._send_cancel_notification({"params": {"requestId": 1}})
+    result = await client._send_cancelled_notification({"params": {"requestId": 1}})
 
     assert result == {"status": "notification_sent"}
     transport.send_notification.assert_called_once_with(
@@ -283,7 +301,7 @@ async def test_send_cancel_notification():
 async def test_send_list_resources_request():
     transport = MagicMock()
     transport.send_request = AsyncMock(return_value={"ok": True})
-    client = ProtocolClient(transport=transport, safety_system=MagicMock())
+    client = ProtocolClient(transport=transport, safety_system=None)
 
     result = await client._send_list_resources_request({"params": {"cursor": "c"}})
 
@@ -295,7 +313,7 @@ async def test_send_list_resources_request():
 async def test_send_generic_request_missing_method():
     transport = MagicMock()
     transport.send_request = AsyncMock(return_value={"ok": True})
-    client = ProtocolClient(transport=transport, safety_system=MagicMock())
+    client = ProtocolClient(transport=transport, safety_system=None)
 
     result = await client._send_generic_request({"params": {"x": 1}})
 
@@ -343,10 +361,7 @@ async def test_fetch_listed_resources_handles_error():
 
 @pytest.mark.asyncio
 async def test_process_protocol_request_blocked():
-    safety = SimpleNamespace(
-        should_block_protocol_message=lambda *_args, **_kwargs: True,
-        get_blocking_reason=lambda: "blocked",
-    )
+    safety = DummySafety(block=True, reason="blocked")
     transport = MagicMock()
     client = ProtocolClient(transport=transport, safety_system=safety)
 

@@ -13,7 +13,7 @@ from typing import Any
 from ..auth import AuthManager
 from .. import spec_guard
 from ..fuzz_engine.mutators import ToolMutator
-from ..safety_system.safety import SafetyFilter, SafetyProvider
+from ..safety_system.safety import SafetyFilter, CombinedSafetyProvider
 
 # Import constants directly from config (constants are values, not behavior)
 from ..config.core.constants import (
@@ -32,7 +32,7 @@ class ToolClient:
         self,
         transport,
         auth_manager: AuthManager | None = None,
-        safety_system: SafetyProvider | None = None,
+        safety_system: CombinedSafetyProvider | None = None,
         max_concurrency: int = 5,
         enable_safety: bool = True,
         corpus_root: Path | None = None,
