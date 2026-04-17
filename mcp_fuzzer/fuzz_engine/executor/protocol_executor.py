@@ -10,7 +10,7 @@ import logging
 from typing import Any, ClassVar
 
 from ...types import FuzzDataResult
-from ...protocol_registry import PROTOCOL_TYPES
+from ...protocol_registry import EXECUTABLE_PROTOCOL_TYPES
 from .async_executor import AsyncFuzzExecutor
 from .invariants import (
     verify_response_invariants,
@@ -26,7 +26,7 @@ class ProtocolExecutor:
     """Orchestrates protocol fuzzing execution."""
 
     # Protocol types supported for fuzzing
-    PROTOCOL_TYPES: ClassVar[tuple[str, ...]] = PROTOCOL_TYPES
+    PROTOCOL_TYPES: ClassVar[tuple[str, ...]] = EXECUTABLE_PROTOCOL_TYPES
     # Seconds to wait for invariant validation of batch responses
     BATCH_VALIDATION_TIMEOUT: ClassVar[float] = 5.0
 

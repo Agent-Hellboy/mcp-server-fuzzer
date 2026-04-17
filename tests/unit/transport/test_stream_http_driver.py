@@ -15,11 +15,12 @@ from mcp_fuzzer.exceptions import TransportError
 
 
 class FakeResponse:
-    def __init__(self, status_code=200, headers=None, lines=None, text=""):
+    def __init__(self, status_code=200, headers=None, lines=None, text="", url="http://localhost"):
         self.status_code = status_code
         self.headers = headers or {}
         self._lines = lines or []
         self.text = text
+        self.url = url
 
     async def aiter_lines(self):
         for line in self._lines:
@@ -33,8 +34,8 @@ class FakeResponse:
 
 
 class FakeJsonResponse(FakeResponse):
-    def __init__(self, status_code=200, headers=None, lines=None, json_data=None):
-        super().__init__(status_code=status_code, headers=headers, lines=lines)
+    def __init__(self, status_code=200, headers=None, lines=None, json_data=None, url="http://localhost"):
+        super().__init__(status_code=status_code, headers=headers, lines=lines, url=url)
         self._json_data = json_data
         self.text = ""
 
@@ -978,15 +979,19 @@ async def test_probe_auth_discovery_falls_back_to_well_known(monkeypatch):
     driver = StreamHttpDriver(
         "https://mcp.example.com/public/mcp", safety_enabled=False
     )
-    response = FakeResponse(status_code=401, headers={})
+    response = FakeResponse(
+        status_code=401,
+        headers={},
+        url="https://redirected.example.com/alt/mcp",
+    )
     client = FakeClient([response])
     monkeypatch.setattr(driver, "_create_http_client", lambda _timeout: client)
 
     result = await driver.probe_auth_discovery()
 
     assert result["protected_resource_metadata_urls"] == [
-        "https://mcp.example.com/.well-known/oauth-protected-resource/public/mcp",
-        "https://mcp.example.com/.well-known/oauth-protected-resource",
+        "https://redirected.example.com/.well-known/oauth-protected-resource/alt/mcp",
+        "https://redirected.example.com/.well-known/oauth-protected-resource",
     ]
     assert result["required_scopes"] == []
 
@@ -1006,3 +1011,17 @@ async def test_terminate_session_sends_delete_and_clears_state(monkeypatch):
     assert client.delete_calls[0]["headers"]["mcp-session-id"] == "sess-1"
     assert driver.session_id is None
     assert driver.last_event_id is None
+
+
+@pytest.mark.asyncio
+async def test_terminate_session_wraps_http_errors(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    driver.session_id = "sess-2"
+    client = FakeClient([])
+    client.delete = AsyncMock(side_effect=httpx.HTTPError("boom"))
+    monkeypatch.setattr(
+        driver, "_create_http_client", lambda _timeout: MockClientContext(client)
+    )
+
+    with pytest.raises(TransportError):
+        await driver.terminate_session()

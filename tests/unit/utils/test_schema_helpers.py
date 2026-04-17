@@ -14,9 +14,28 @@ def test_first_schema_choice_prefers_enum():
 
 
 def test_default_schema_value_uses_default_and_choice_and_types():
+    default_src = {"items": [1]}
+    result = _default_schema_value("field", {"default": default_src})
+    assert result == {"items": [1]}
+    result["items"].append(2)
+    assert default_src == {"items": [1]}
+
+    enum_src = [{"name": "x"}]
+    enum_result = _default_schema_value("field", {"enum": enum_src})
+    assert enum_result == {"name": "x"}
+    enum_result["name"] = "y"
+    assert enum_src == [{"name": "x"}]
+
+    const_src = {"k": ["v"]}
+    const_result = _default_schema_value("field", {"oneOf": [{"const": const_src}]})
+    assert const_result == {"k": ["v"]}
+    const_result["k"].append("w")
+    assert const_src == {"k": ["v"]}
+
     assert _default_schema_value("field", {"default": 7}) == 7
     assert _default_schema_value("field", {"enum": ["x", "y"]}) == "x"
     assert _default_schema_value("field", {"oneOf": [{"const": "k"}]}) == "k"
+    assert _default_schema_value("field", {"oneOf": [{"const": None}]}) is None
     assert _default_schema_value("flag", {"type": "boolean"}) is False
     assert _default_schema_value("num", {"type": "integer", "minimum": 3}) == 3
     assert _default_schema_value("num", {"type": "number"}) == 0

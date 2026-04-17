@@ -17,6 +17,7 @@ from mcp_fuzzer.exceptions import (
     ServerError,
     TransportError,
 )
+from mcp_fuzzer.transport.methods import NOTIFY_TASKS_STATUS
 
 
 class TestStdioDriver:
@@ -741,8 +742,20 @@ class TestStdioDriver:
     async def test_handle_server_request_non_matching_method(self):
         """Test _handle_server_request with non-matching method."""
         message = {"jsonrpc": "2.0", "method": "other/method", "id": 1}
+        self.transport._send_message = AsyncMock()
         result = await self.transport._handle_server_request(message)
-        assert result is False
+        assert result is True
+        self.transport._send_message.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_handle_server_request_notification(self):
+        message = {
+            "jsonrpc": "2.0",
+            "method": NOTIFY_TASKS_STATUS,
+            "params": {"taskId": "task-1", "status": "running"},
+        }
+        result = await self.transport._handle_server_request(message)
+        assert result is True
 
     @pytest.mark.asyncio
     async def test_readline_with_cap_no_stdout(self):

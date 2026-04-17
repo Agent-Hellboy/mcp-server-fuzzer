@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+_NO_SCHEMA_CHOICE = object()
+
 
 def _first_schema_choice(schema: dict[str, Any]) -> Any:
     enum_values = schema.get("enum")
@@ -18,7 +20,7 @@ def _first_schema_choice(schema: dict[str, Any]) -> Any:
         for variant in variants:
             if isinstance(variant, dict) and "const" in variant:
                 return copy.deepcopy(variant["const"])
-    return None
+    return _NO_SCHEMA_CHOICE
 
 
 def _default_schema_value(name: str, schema: dict[str, Any]) -> Any:
@@ -27,7 +29,7 @@ def _default_schema_value(name: str, schema: dict[str, Any]) -> Any:
         return copy.deepcopy(schema["default"])
 
     chosen = _first_schema_choice(schema)
-    if chosen is not None:
+    if chosen is not _NO_SCHEMA_CHOICE:
         return chosen
 
     schema_type = schema.get("type")

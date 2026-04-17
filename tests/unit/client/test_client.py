@@ -806,7 +806,7 @@ class TestUnifiedMCPFuzzerClient:
     async def test_send_protocol_request_cancel(self):
         """Test _send_protocol_request with cancel type."""
         protocol_type = "CancelledNotification"
-        data = {"params": {"id": 123}}
+        data = {"params": {"requestId": 123}}
         mock_response = {"status": "notification_sent"}
 
         # Make sure _send_cancelled_notification is an AsyncMock
@@ -2140,7 +2140,8 @@ async def test_print_comprehensive_safety_report_collects_examples():
         get_statistics=MagicMock(),
         get_blocked_examples=MagicMock(),
     )
-    client = UnifiedMCPFuzzerClient(transport=MagicMock(), safety_system=safety)
+    client = UnifiedMCPFuzzerClient(transport=MagicMock(), safety_enabled=False)
+    client.safety_system = safety
     client.print_comprehensive_safety_report()
 
     safety.get_statistics.assert_called_once()
@@ -2288,9 +2289,10 @@ def test_print_blocked_operations_summary_collects_stats():
     reporter = MagicMock()
     client = UnifiedMCPFuzzerClient(
         transport=MagicMock(),
-        safety_system=safety,
+        safety_enabled=False,
         reporter=reporter,
     )
+    client.safety_system = safety
 
     client.print_blocked_operations_summary()
 
@@ -2316,6 +2318,27 @@ async def test_generate_reports_delegate():
         output_types=["json"], include_safety=False
     )
     reporter.generate_final_report.assert_called_once_with(include_safety=False)
+
+
+def test_protocol_client_requires_protocol_safety_hooks():
+    class IncompleteSafety:
+        def set_fs_root(self, root):
+            return None
+
+        def sanitize_tool_arguments(self, tool_name, arguments):
+            return arguments
+
+        def should_skip_tool_call(self, tool_name, arguments):
+            return False
+
+        def create_safe_mock_response(self, tool_name):
+            return {}
+
+        def log_blocked_operation(self, tool_name, arguments, reason):
+            return None
+
+    with pytest.raises(TypeError):
+        ProtocolClient(MagicMock(), safety_system=IncompleteSafety())
 
 
 if __name__ == "__main__":

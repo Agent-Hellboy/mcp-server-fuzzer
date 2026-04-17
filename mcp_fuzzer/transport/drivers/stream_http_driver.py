@@ -189,10 +189,11 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         www_authenticate = response.headers.get("www-authenticate")
         resource_metadata_url = extract_resource_metadata_url(www_authenticate)
+        endpoint_url = str(getattr(response, "url", None) or self.url)
         protected_resource_metadata_urls = (
             [resource_metadata_url]
             if resource_metadata_url
-            else build_protected_resource_metadata_urls(self.url)
+            else build_protected_resource_metadata_urls(endpoint_url)
         )
         return {
             "required_scopes": extract_requested_scopes(www_authenticate),
@@ -752,11 +753,23 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         safe_headers = self._prepare_headers_with_auth(headers)
 
         async with self._create_http_client(self.timeout) as client:
-            response = await client.delete(self.url, headers=safe_headers)
+            try:
+                response = await client.delete(self.url, headers=safe_headers)
+            except httpx.HTTPError as exc:
+                raise TransportError(
+                    f"Stream DELETE failed: {exc}",
+                    context={"url": self.url, "method": "DELETE"},
+                ) from exc
             self.last_auth_challenge = self._build_auth_discovery_hints(response)
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
-                response = await client.delete(redirect_url, headers=safe_headers)
+                try:
+                    response = await client.delete(redirect_url, headers=safe_headers)
+                except httpx.HTTPError as exc:
+                    raise TransportError(
+                        f"Stream DELETE failed: {exc}",
+                        context={"url": redirect_url, "method": "DELETE"},
+                    ) from exc
                 self.last_auth_challenge = self._build_auth_discovery_hints(response)
             if response.status_code != HTTP_NOT_FOUND:
                 self._handle_http_response_error(response)
@@ -778,7 +791,8 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 response = await self._get_with_retries(
                     client, redirect_url, safe_headers
                 )
-            protected_urls = build_protected_resource_metadata_urls(self.url)
+            endpoint_url = str(getattr(response, "url", None) or self.url)
+            protected_urls = build_protected_resource_metadata_urls(endpoint_url)
             fallback_hints = {
                 "protected_resource_metadata_urls": protected_urls,
                 "required_scopes": [],

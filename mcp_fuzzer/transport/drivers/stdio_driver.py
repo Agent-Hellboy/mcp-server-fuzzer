@@ -222,12 +222,14 @@ class StdioDriver(TransportDriver):
 
     async def _handle_server_request(self, message: Any) -> bool:
         """Handle server->client requests while waiting for a response."""
-        if not isinstance(message, dict) or not is_server_request(message):
+        if not isinstance(message, dict):
             return False
-        response = self._server_request_handler.handle_request(message)
-        if response is not None:
-            await self._send_message(response)
-            return True
+        if is_server_request(message):
+            response = self._server_request_handler.handle_request(message)
+            if response is not None:
+                await self._send_message(response)
+                return True
+            return False
         return self._server_request_handler.handle_notification(message)
 
     async def _readline_with_cap(self) -> bytes | None:

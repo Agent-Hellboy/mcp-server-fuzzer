@@ -24,6 +24,7 @@ from ..methods import (
 
 JSONRPC_CANCELLED = -32800
 JSONRPC_INVALID_PARAMS = -32602
+JSONRPC_METHOD_NOT_FOUND = -32601
 
 
 def is_server_request(payload: Any) -> bool:
@@ -117,6 +118,20 @@ def _default_form_value(name: str, schema: dict[str, Any]) -> Any:
                 return [nested_default]
             return nested_default
         return []
+    if schema_type == "object":
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            return {}
+        required = (
+            schema.get("required") if isinstance(schema.get("required"), list) else None
+        )
+        keys = required if required else list(properties.keys())
+        content: dict[str, Any] = {}
+        for key in keys:
+            prop_schema = properties.get(key)
+            if isinstance(key, str) and isinstance(prop_schema, dict):
+                content[key] = _default_form_value(key, prop_schema)
+        return content
     return f"{name}-value"
 
 
@@ -462,7 +477,11 @@ class ServerRequestHandler:
         handler = self._request_handlers.get(method)
         if handler:
             return handler(request_id, params)
-        return None
+        if not isinstance(method, str) or not method:
+            message = "Unknown method"
+        else:
+            message = f"Unknown method: {method}"
+        return _jsonrpc_error(request_id, JSONRPC_METHOD_NOT_FOUND, message)
 
     def handle_notification(self, payload: dict[str, Any]) -> bool:
         if not is_server_notification(payload):
@@ -509,6 +528,7 @@ class ServerRequestHandlerProtocol(Protocol):
 __all__ = [
     "JSONRPC_CANCELLED",
     "JSONRPC_INVALID_PARAMS",
+    "JSONRPC_METHOD_NOT_FOUND",
     "ServerRequestHandler",
     "ServerRequestHandlerProtocol",
     "TaskRecord",

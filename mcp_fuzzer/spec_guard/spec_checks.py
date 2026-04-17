@@ -184,13 +184,16 @@ def _check_task_shape(task: Any, *, prefix: str) -> list[SpecCheck]:
                 )
             )
 
-    if not isinstance(task.get("ttl"), int):
+    ttl = task.get("ttl")
+    if not isinstance(ttl, int) or isinstance(ttl, bool):
         checks.append(
             _fail(f"{prefix}-ttl", "Task ttl must be an integer", _TASKS_SPEC)
         )
 
     poll_interval = task.get("pollInterval")
-    if poll_interval is not None and not isinstance(poll_interval, int):
+    if poll_interval is not None and (
+        not isinstance(poll_interval, int) or isinstance(poll_interval, bool)
+    ):
         checks.append(
             _fail(
                 f"{prefix}-poll-interval",

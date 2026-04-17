@@ -560,7 +560,7 @@ async def test_handle_server_request(monkeypatch):
     result = await driver._handle_server_request(
         {"jsonrpc": "2.0", "method": "other", "id": 1}
     )
-    assert result is False
+    assert result is True
 
     result = await driver._handle_server_request(
         {"jsonrpc": "2.0", "method": "sampling/createMessage"}

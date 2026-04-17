@@ -198,7 +198,21 @@ async def run_spec_suite(
             if not isinstance(required, list):
                 required = []
             arguments = _build_tool_arguments(tool)
-            has_all_required_args = not required or len(arguments) == len(required)
+            argument_names: set[str] = set()
+            if isinstance(arguments, dict):
+                argument_names = {
+                    name for name in arguments.keys() if isinstance(name, str)
+                }
+            elif isinstance(arguments, list):
+                for arg in arguments:
+                    if isinstance(arg, dict):
+                        name = arg.get("name")
+                        if isinstance(name, str):
+                            argument_names.add(name)
+            required_names = [name for name in required if isinstance(name, str)]
+            has_all_required_args = not required_names or all(
+                name in argument_names for name in required_names
+            )
             task_support = _tool_task_support(tool)
             if (
                 callable_tool is None

@@ -15,28 +15,18 @@ from typing import Any
 
 from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
 from ..protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
-from ..protocol_registry import DEFAULT_PROTOCOL_TYPES
+from ..protocol_registry import EXECUTABLE_PROTOCOL_TYPES
 from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
 
 from ..fuzz_engine.mutators import ProtocolMutator
 from ..fuzz_engine.mutators.seed_mutation import mutate_seed_payload
 from .. import spec_guard
 from ..fuzz_engine.executor import ProtocolExecutor
-from ..safety_system.safety import CombinedSafetyProvider
+from ..safety_system.safety import CombinedSafetyProvider, ProtocolSafetyProvider
 
-# Centralized allow-list for protocol types that can be fuzzed
-# This should stay in sync with ProtocolExecutor.PROTOCOL_TYPES
-ALLOWED_PROTOCOL_TYPES = frozenset(DEFAULT_PROTOCOL_TYPES + (
-    "InitializedNotification",
-    "ProgressNotification",
-    READ_RESOURCE_REQUEST,
-    "ListResourceTemplatesRequest",
-    "CompleteRequest",
-    "ElicitRequest",
-    "SubscribeRequest",
-    "UnsubscribeRequest",
-    "GenericJSONRPCRequest",
-))
+# Centralized allow-list for protocol types that can be fuzzed.
+# This should stay in sync with ProtocolExecutor.PROTOCOL_TYPES.
+ALLOWED_PROTOCOL_TYPES = frozenset(EXECUTABLE_PROTOCOL_TYPES)
 
 
 class ProtocolClient:
@@ -60,6 +50,14 @@ class ProtocolClient:
         """
         self.transport = transport
         self.safety_system = safety_system
+        if self.safety_system is not None and not isinstance(
+            self.safety_system, ProtocolSafetyProvider
+        ):
+            raise TypeError(
+                "safety_system must implement protocol safety hooks "
+                "(should_block_protocol_message, sanitize_protocol_message, "
+                "get_blocking_reason)"
+            )
         # Important: let ProtocolClient own sending (safety checks happen here)
         self.protocol_mutator = ProtocolMutator(
             corpus_dir=corpus_root, havoc_mode=havoc_mode
@@ -704,7 +702,7 @@ class ProtocolClient:
                 continue
 
             arguments = self._build_tool_arguments(tool)
-            task_support = self._tool_task_support(tool)
+            task_support = _tool_task_support(tool)
             if task_support != "required":
                 results.append(
                     await self._process_protocol_request(

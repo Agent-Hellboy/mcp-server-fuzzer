@@ -25,7 +25,14 @@ class _DummyUUID:
 @pytest.fixture(autouse=True)
 def _stable_time_and_uuid(monkeypatch):
     monkeypatch.setattr(sr, "_utc_now", lambda: "2024-01-01T00:00:00Z")
-    monkeypatch.setattr(sr.uuid, "uuid4", lambda: _DummyUUID("1234abcd"))
+    counter = {"value": 0}
+    base = 0x1234ABCD
+
+    def _next_uuid() -> _DummyUUID:
+        counter["value"] += 1
+        return _DummyUUID(f"{base + counter['value'] - 1:08x}")
+
+    monkeypatch.setattr(sr.uuid, "uuid4", _next_uuid)
 
 
 def test_is_server_request_and_notification_flags():
@@ -81,9 +88,13 @@ def test_task_manager_get_and_result_errors():
 
 def test_handler_notification_updates_status_and_logs():
     handler = sr.ServerRequestHandler()
-    created = handler.tasks._create_task(
-        origin_method="tools/call", ttl=None, result={"ok": True}
+    response = handler.tasks.task_aware_result(
+        request_id=0,
+        params={"task": {"ttl": None}},
+        origin_method="tools/call",
+        final_result={"ok": True},
     )
+    created = response["result"]["task"]
     payload = {
         "jsonrpc": "2.0",
         "method": NOTIFY_TASKS_STATUS,
@@ -99,7 +110,8 @@ def test_handle_request_roots_and_unknown():
     payload = {"jsonrpc": "2.0", "id": 7, "method": ROOTS_LIST}
     result = handler.handle_request(payload)
     assert result["result"]["roots"][0]["name"] == "x"
-    assert handler.handle_request({"jsonrpc": "2.0", "id": 1, "method": "nope"}) is None
+    unknown = handler.handle_request({"jsonrpc": "2.0", "id": 1, "method": "nope"})
+    assert unknown["error"]["code"] == sr.JSONRPC_METHOD_NOT_FOUND
 
 
 def test_elicitation_create_tracks_pending_and_creates_task():
@@ -149,7 +161,9 @@ def test_first_enum_and_default_form_value_fallbacks():
     assert sr._default_form_value("arr", {"type": "array", "items": "x"}) == []
     assert sr._default_form_value("num", {"type": "number", "minimum": 2.5}) == 2.5
     assert sr._default_form_value("num", {"type": "number"}) == 0
-    # object types ignored in _default_form_value
+    assert sr._default_form_value(
+        "obj", {"type": "object", "properties": {"k": {"type": "string"}}}
+    ) == {"k": "k-value"}
     assert sr._default_form_value("x", {"type": "string"}) == "x-value"
     assert sr._default_form_value(
         "nested", {"type": "array", "items": {"default": ["y"]}}
@@ -195,10 +209,9 @@ def test_handler_notifications_and_unknowns():
     handler = sr.ServerRequestHandler()
     # unknown notification -> False
     assert handler.handle_notification({"jsonrpc": "2.0", "method": "noop"}) is False
-    # unknown request -> None
-    assert (
-        handler.handle_request({"jsonrpc": "2.0", "id": 1, "method": "noop"}) is None
-    )
+    # unknown request -> error response
+    unknown = handler.handle_request({"jsonrpc": "2.0", "id": 1, "method": "noop"})
+    assert unknown["error"]["code"] == sr.JSONRPC_METHOD_NOT_FOUND
     # tracked notification without handler -> True and logged
     notified = handler.handle_notification(
         {"jsonrpc": "2.0", "method": sr.NOTIFY_MESSAGE, "params": {"text": "hi"}}

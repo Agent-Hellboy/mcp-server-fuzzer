@@ -91,3 +91,10 @@ DEFAULT_PROTOCOL_TYPES: tuple[str, ...] = (
     "GetTaskPayloadRequest",
     "CancelTaskRequest",
 )
+
+# Protocol types that can be executed/sent by the client (requests/notifications).
+EXECUTABLE_PROTOCOL_TYPES: tuple[str, ...] = DEFAULT_PROTOCOL_TYPES + (
+    "ProgressNotification",
+    "CancelledNotification",
+    "GenericJSONRPCRequest",
+)
