@@ -210,17 +210,14 @@ mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint http://loca
 mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 20
 ```
 
-#### Protocol Fuzzing with Both Phases
+#### Protocol Fuzzing Phases
 
 ```bash
-# Two-phase protocol fuzzing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase both --protocol http --endpoint http://localhost:8000 --runs-per-type 10
-
-# Realistic protocol testing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase realistic --protocol http --endpoint http://localhost:8000 --runs-per-type 8
+# Realistic protocol testing (default)
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase realistic --protocol http --endpoint http://localhost:8000 --runs-per-type 8
 
 # Aggressive protocol testing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
 ```
 
 ## Configuration Examples
@@ -268,7 +265,7 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --e
 mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api.example.com --runs 10
 
 # Test protocol compliance
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase realistic --protocol http --endpoint https://api.example.com --runs-per-type 5
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase realistic --protocol http --endpoint https://api.example.com --runs-per-type 5
 
 # Test with authentication
 mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api.example.com --auth-config auth.json
@@ -281,11 +278,11 @@ mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api
 mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 25
 
 # Protocol security testing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
 
 # Combined security testing
 mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 20
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 10
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 10
 ```
 
 ## Reporting Examples
@@ -318,13 +315,18 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --ru
 
 ### Generated Report Files
 
-Each fuzzing session creates timestamped reports:
+Each fuzzing session creates session-id based reports plus standardized outputs:
 
 ```text
 reports/
-| -- fuzzing_report_20250812_143000.json    # Complete structured data
-| -- fuzzing_report_20250812_143000.txt     # Human-readable summary
-| -- safety_report_20250812_143000.json     # Safety system data
+|-- fuzzing_report_550e8400-e29b-41d4-a716-446655440000.json    # Complete structured report
+|-- fuzzing_report_550e8400-e29b-41d4-a716-446655440000.txt     # Human-readable summary
+|-- safety_report_550e8400-e29b-41d4-a716-446655440000.json     # Safety system data (if enabled)
+|-- sessions/
+|   |-- 550e8400-e29b-41d4-a716-446655440000/
+|   |   |-- 20240101_000000_fuzzing_results.json
+|   |   |-- 20240101_000001_error_report.json     # When --output-types includes error_report
+|   |   |-- 20240101_000002_safety_summary.json   # When safety reporting is enabled
 ```
 
 ### Report Content Examples
@@ -333,7 +335,7 @@ reports/
 ```json
 {
   "metadata": {
-    "session_id": "20250812_143000",
+    "session_id": "550e8400-e29b-41d4-a716-446655440000",
     "start_time": "2025-08-12T14:30:00.123456",
     "mode": "tools",
     "protocol": "stdio",
@@ -366,7 +368,7 @@ MCP FUZZER REPORT
 
 FUZZING SESSION METADATA
 ----------------------------------------
-session_id: 20250812_143000
+session_id: 550e8400-e29b-41d4-a716-446655440000
 start_time: 2025-08-12T14:30:00.123456
 mode: tools
 protocol: stdio

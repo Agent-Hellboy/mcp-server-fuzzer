@@ -12,6 +12,10 @@ The fuzz engine has been refactored into three distinct, specialized modules tha
 
 This modular design enables better testability, maintainability, and extensibility while maintaining high performance through asynchronous execution.
 
+Note: The CLI runtime primarily uses the `client` package (`ToolClient` /
+`ProtocolClient`) and the newer reporting pipeline. The `fuzz_engine` package
+remains available as a lower-level API for direct integration or legacy use.
+
 ## Architecture Diagram
 
 ```mermaid
@@ -56,7 +60,7 @@ graph TD
     subgraph External[External Systems]
         SS[SafetySystem]
         TR[Transport]
-        CL[Client]
+        CL[Direct Engine API]
     end
 
     TE --> TM
@@ -434,7 +438,7 @@ class MetricsCalculator:
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant EngineUser
     participant ToolExecutor
     participant ToolMutator
     participant AsyncExecutor
@@ -442,7 +446,7 @@ sequenceDiagram
     participant ResultBuilder
     participant ResultCollector
 
-    Client->>ToolExecutor: execute(tool, runs=10)
+    EngineUser->>ToolExecutor: execute(tool, runs=10)
     ToolExecutor->>AsyncExecutor: execute_batch(operations)
 
     loop For each run (concurrent)
@@ -463,14 +467,17 @@ sequenceDiagram
     AsyncExecutor-->>ToolExecutor: batch_results
     ToolExecutor->>ResultCollector: collect_results(batch_results)
     ResultCollector-->>ToolExecutor: aggregated_results
-    ToolExecutor-->>Client: results
+    ToolExecutor-->>EngineUser: results
 ```
+
+Note: the default `SafetyFilter` does not block tool calls; the "Blocked" branch
+applies when custom safety providers enforce blocking.
 
 ### Protocol Fuzzing Flow
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant EngineUser
     participant ProtocolExecutor
     participant ProtocolMutator
     participant AsyncExecutor
@@ -478,7 +485,7 @@ sequenceDiagram
     participant Invariants
     participant ResultBuilder
 
-    Client->>ProtocolExecutor: execute(protocol_type, runs=10)
+    EngineUser->>ProtocolExecutor: execute(protocol_type, runs=10)
     ProtocolExecutor->>AsyncExecutor: execute_batch(operations)
 
     loop For each run (concurrent)
@@ -502,42 +509,34 @@ sequenceDiagram
     end
 
     AsyncExecutor-->>ProtocolExecutor: batch_results
-    ProtocolExecutor-->>Client: results
+    ProtocolExecutor-->>EngineUser: results
 ```
 
 ## Integration Points
 
-### Client Integration
+### Client Integration (Current)
 
-The fuzz engine integrates with clients through executor classes:
+The CLI uses `MCPFuzzerClient`, which delegates to `ToolClient` and
+`ProtocolClient` built on mutators and the `JsonRpcAdapter`:
 
 ```python
-# Tool Client
-class ToolClient:
-    def __init__(self, transport, safety_system):
-        mutator = ToolMutator()
-        self.executor = ToolExecutor(
-            mutator=mutator,
-            safety_system=safety_system,
-            max_concurrency=5
-        )
+from mcp_fuzzer.client import MCPFuzzerClient
+from mcp_fuzzer.transport.catalog import build_driver
 
-    async def fuzz_tool(self, tool, runs=10):
-        return await self.executor.execute(tool, runs)
+transport = build_driver("http", "http://localhost:8000")
+client = MCPFuzzerClient(transport)
 
-# Protocol Client
-class ProtocolClient:
-    def __init__(self, transport):
-        self.mutator = ProtocolMutator()
-        self.executor = ProtocolExecutor(
-            mutator=self.mutator,
-            transport=transport,
-            max_concurrency=5
-        )
-
-    async def fuzz_protocol_type(self, protocol_type, runs=10):
-        return await self.executor.execute(protocol_type, runs)
+tool_results = await client.fuzz_all_tools(runs_per_tool=5)
+protocol_results = await client.fuzz_all_protocol_types(
+    runs_per_type=3,
+    phase="realistic",
+)
 ```
+
+### Direct Engine Integration (Optional)
+
+`ToolExecutor`/`ProtocolExecutor` remain available for direct embedding when you
+want to drive the `fuzz_engine` module independently of the CLI.
 
 ### Safety System Integration
 

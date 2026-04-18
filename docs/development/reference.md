@@ -22,6 +22,7 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol|resources|prompts|all} --protocol {h
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `--config` | Path | - | Path to YAML configuration file |
 | `--validate-config` | Path | - | Validate configuration file and exit |
 | `--check-env` | Flag | False | Validate environment variables and exit |
 
@@ -38,6 +39,11 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol|resources|prompts|all} --protocol {h
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--timeout` | Float | 30.0 | Request timeout in seconds |
+| `--transport-retries` | Integer | 1 | Total attempts for transport requests (1 disables retries) |
+| `--transport-retry-delay` | Float | 0.5 | Base delay between transport retries (seconds) |
+| `--transport-retry-backoff` | Float | 2.0 | Backoff multiplier for transport retry delay |
+| `--transport-retry-max-delay` | Float | 5.0 | Maximum delay between retries (seconds) |
+| `--transport-retry-jitter` | Float | 0.1 | Jitter factor for retry delay |
 | `--auth-config` | Path | - | Path to authentication configuration file |
 | `--auth-env` | Flag | False | Use authentication from environment variables |
 
@@ -54,9 +60,20 @@ Notes:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--phase` | Choice | aggressive | Fuzzing phase: `realistic`, `aggressive`, or `both` |
+| `--protocol-phase` | Choice | realistic | Protocol fuzzing phase: `realistic` or `aggressive` |
 | `--runs` | Integer | 10 | Number of fuzzing runs per tool (tool mode only) |
 | `--runs-per-type` | Integer | 5 | Number of runs per protocol/resource/prompt type |
+| `--tool` | String | - | Fuzz only a specific tool (tool mode only) |
 | `--protocol-type` | String | - | Fuzz only a specific protocol type (protocol mode only; required by the CLI when using `--mode protocol`) |
+| `--stateful` | Flag | False | Enable learned stateful protocol sequences (runs after protocol/resources/prompts) |
+| `--stateful-runs` | Integer | 5 | Number of learned stateful sequences to run |
+| `--corpus` / `--no-corpus` | Flag | True | Enable/disable per-target corpus save/load |
+| `--havoc` | Flag | False | Enable stacked corpus mutations (havoc mode) |
+
+Notes:
+
+- `--phase` applies to tool fuzzing. `--protocol-phase` applies to protocol,
+  resources, prompts, and stateful sequences.
 
 ### Spec Guard Options
 
@@ -66,13 +83,14 @@ Notes:
 | `--spec-resource-uri` | String | - | Resource URI used for spec guard resources/read checks |
 | `--spec-prompt-name` | String | - | Prompt name used for spec guard prompts/get checks |
 | `--spec-prompt-args` | String | - | JSON string of prompt arguments for spec guard prompts/get checks |
+| `--spec-schema-version` | String | - | Override MCP schema version used for initialize/spec guard (e.g., 2025-11-25) |
 
 ### Safety Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--enable-safety-system` | Flag | False | Enable system-level safety features |
-| `--no-safety` | Flag | False | Disable argument-level safety filtering |
+| `--no-safety` | Flag | False | Disable argument-level safety hooks |
 | `--fs-root` | Path | ~/.mcp_fuzzer | Restrict filesystem operations to specified directory |
 | `--retry-with-safety-on-interrupt` | Flag | False | Retry once with safety system enabled on Ctrl-C |
 
@@ -91,14 +109,17 @@ Notes:
 | `--safety-report` | Flag | False | Show comprehensive safety report at end of fuzzing |
 | `--export-safety-data` | String | - | Export safety data to JSON file (optional filename) |
 | `--output-format` | Choice | json | Output format for standardized reports |
-| `--output-types` | List | - | Output types to generate (fuzzing_results, error_report, safety_summary, performance_metrics, configuration_dump) |
+| `--output-types` | List | - | Output types to generate (fuzzing_results, error_report, safety_summary; performance_metrics/configuration_dump reserved) |
 | `--output-schema` | Path | - | Path to custom output schema file |
 | `--output-compress` | Flag | False | Compress output files |
 | `--output-session-id` | String | - | Custom session ID for output files |
 
 Notes:
 
-- Standardized output files are currently emitted as JSON regardless of `--output-format`; other values are reserved for future formats.
+- Standardized output files are currently emitted as JSON regardless of
+  `--output-format`; other values are reserved for future formats.
+- `--output-schema` and `--output-session-id` are parsed today but not yet
+  applied by the output writer.
 
 ### Export Options
 
@@ -142,6 +163,8 @@ Notes:
 | `MCP_FUZZER_HTTP_TIMEOUT` | 30.0 | HTTP transport timeout |
 | `MCP_FUZZER_SSE_TIMEOUT` | 30.0 | SSE transport timeout |
 | `MCP_FUZZER_STDIO_TIMEOUT` | 30.0 | Stdio transport timeout |
+| `MCP_FUZZER_ICON_THEME` | ascii | Icon theme (ascii, unicode, emoji) |
+| `MCP_SPEC_SCHEMA_VERSION` | 2025-11-25 | MCP schema version used in initialize/spec guard |
 
 ### Authentication Environment Variables
 
@@ -623,16 +646,15 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --enable-
 
 #### Rich Console Output
 
-Enhanced console output with better formatting:
+The CLI uses Rich tables for startup configuration and summary output:
 
 ```bash
-# Colorized output with better table formatting
+# Startup configuration table + summary tables (when available)
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
 # Output includes:
-# - Color-coded success/failure indicators
-# - Progress bars for long operations
-# - Formatted tables with proper alignment
-# - Summary statistics with visual indicators
+# - Startup configuration table
+# - Tool/protocol summary tables (if results are present)
+# - Safety summary tables when --safety-report is enabled
 ```
 
 #### Report Generation
@@ -646,78 +668,45 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 20
     --export-safety-data \
     --output-dir "detailed_reports"
 # Generates:
-# - Comprehensive JSON report with metadata
-# - Human-readable text summary
-# - Safety-specific report with risk analysis
-# - Session metadata and configuration
+# - fuzzing_report_<session_id>.json (full structured report)
+# - fuzzing_report_<session_id>.txt (human-readable summary)
+# - safety_report_<session_id>.json (if --export-safety-data is enabled)
+# - Standardized JSON outputs under reports/sessions/<session_id>/...
 ```
 
 ### Configuration Validation
 
 #### Environment Variable Validation
 
-The CLI validates environment variables and provides helpful messages:
+Environment variables are validated only when `--check-env` is provided. The
+validation set is defined in `mcp_fuzzer/env.py`.
 
 ```bash
-# Invalid environment variable detection
-export MCP_FUZZER_TIMEOUT="invalid"
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000
-# Error: Invalid timeout value 'invalid'. Must be a positive number.
-#        Current value: MCP_FUZZER_TIMEOUT=invalid
-#        Suggested fix: export MCP_FUZZER_TIMEOUT=30.0
+# Validate known environment variables
+mcp-fuzzer --check-env
 ```
 
 #### Configuration File Validation
 
-Enhanced configuration file validation:
+`--validate-config` checks YAML parseability and that the top-level value is a
+mapping/object. It does not perform schema validation.
 
 ```bash
 # Configuration file validation
-mcp-fuzzer --mode tools --config invalid_config.yaml
-# Error: Configuration file validation failed:
-#        - Line 5: 'timeout' must be a number, got 'invalid'
-#        - Line 10: 'protocol' must be one of ['http', 'sse', 'stdio', 'streamablehttp']
-#        Suggested fixes:
-#        - Fix timeout value on line 5
-#        - Use valid protocol on line 10
+mcp-fuzzer --validate-config config.yaml
 ```
 
 ### Performance Monitoring
 
-#### Real-time Performance Metrics
-
-The CLI provides real-time performance monitoring:
-
-```bash
-# Performance monitoring during execution
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 100 --verbose
-# Output includes:
-# - Requests per second
-# - Average response time
-# - Memory usage
-# - CPU usage
-# - Error rate trends
-```
-
-#### Resource Usage Reporting
-
-Enhanced resource usage reporting:
-
-```bash
-# Resource usage summary
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 50
-# Output: "Resource usage summary:"
-#         "  CPU usage: 15.2% average"
-#         "  Memory usage: 45.3 MB peak"
-#         "  Network I/O: 2.1 MB total"
-#         "  Process count: 3 managed"
-```
+There is no built-in real-time performance metrics stream today. Use external
+tools (e.g., `top`, `ps`, or `psutil` in a wrapper) if you need CPU/memory
+reporting.
 
 ### Debugging and Troubleshooting
 
 #### Enhanced Debug Output
 
-Improved debug output for troubleshooting:
+Debug logging provides deeper visibility into runtime behavior:
 
 ```bash
 # Debug mode with detailed information
@@ -725,8 +714,7 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --log-l
 # Output includes:
 # - Detailed request/response logging
 # - Safety system decision logging
-# - Process management events
-# - Performance timing information
+# - Transport retries and process management events
 ```
 
 #### Diagnostic Information
@@ -799,7 +787,7 @@ Notes:
 
 For detailed fuzzing results and security analysis of popular open source MCP servers, see the [Fuzz Results](../testing/fuzz-results.md) documentation.
 
-This section provides comprehensive testing results for various MCP server implementations, including vulnerability assessments, performance metrics, and security recommendations.
+This section provides testing results for various MCP server implementations, including vulnerability assessments and security recommendations.
 
 ## API Reference
 
@@ -1057,16 +1045,14 @@ safety.set_fs_root("/tmp/mcp_sandbox")
 
 tool_args = {"url": "https://example.com", "output_path": "/etc/passwd"}
 sanitized = safety.sanitize_tool_arguments("web_tool", tool_args)
-
-if safety.should_skip_tool_call("web_tool", tool_args):
-    safe_response = safety.create_safe_mock_response("web_tool")
-else:
-    # Proceed with sanitized arguments
-    transport.call_tool("web_tool", sanitized)
+# Proceed with sanitized arguments (filesystem paths are rewritten if sandboxed)
+transport.call_tool("web_tool", sanitized)
 ```
 
-`SafetyFilter` combines the pattern-based `DangerDetector`, filesystem path
-sanitization, and blocked operation logging. For system-level protection call
+`SafetyFilter` provides optional filesystem path sanitization when a sandbox
+root is set and exposes `DangerDetector` helpers for custom blocking. The
+default implementation does not block URL/script/command payloads. For
+system-level protection call
 `mcp_fuzzer.safety_system.blocking.start_system_blocking()` to install PATH
 shims that intercept browser launches.
 
@@ -1120,54 +1106,39 @@ class AggressiveToolStrategy:
 
 ## Output Format
 
-### Tool Fuzzer Results
+### Report Snapshot (JSON)
 
-```python
+```json
 {
-    "tools": [
-        {
-            "name": "tool_name",
-            "success_rate": 85.0,
-            "total_runs": 10,
-            "successful_runs": 8,
-            "exception_count": 2,
-            "exceptions": [
-                "Invalid argument type",
-                "Missing required parameter"
-            ],
-            "average_response_time": 0.15
-        }
-    ],
-    "overall": {
-        "total_tools": 3,
-        "total_runs": 30,
-        "overall_success_rate": 90.0,
-        "total_exceptions": 3
-    }
-}
-```
-
-### Protocol Fuzzer Results
-
-```python
-{
-    "protocol_types": [
-        {
-            "name": "InitializeRequest",
-            "total_runs": 5,
-            "successful_runs": 5,
-            "exception_count": 0,
-            "success_rate": 100.0,
-            "exceptions": [],
-            "average_response_time": 0.12
-        }
-    ],
-    "overall": {
-        "total_protocol_types": 19,
-        "total_runs": 95,
-        "overall_success_rate": 93.3,
-        "total_exceptions": 5
-    }
+  "metadata": {
+    "session_id": "550e8400-e29b-41d4-a716-446655440000",
+    "mode": "tools",
+    "protocol": "stdio",
+    "endpoint": "python server.py",
+    "runs": 10,
+    "runs_per_type": null,
+    "fuzzer_version": "1.0.0",
+    "start_time": "2025-01-01T00:00:00Z",
+    "end_time": "2025-01-01T00:00:10Z"
+  },
+  "tool_results": {
+    "example_tool": [
+      {"run": 1, "success": true, "args": {"param": "value"}},
+      {"run": 2, "success": false, "exception": "Invalid argument"}
+    ]
+  },
+  "protocol_results": {
+    "InitializeRequest": [
+      {"success": true, "result": {"response": {"result": {}}}}
+    ]
+  },
+  "summary": {
+    "tools": {"total_tools": 1, "total_runs": 2, "success_rate": 50.0},
+    "protocols": {"total_protocol_types": 1, "total_runs": 1, "success_rate": 100.0}
+  },
+  "spec_summary": {},
+  "safety": {},
+  "runtime": {}
 }
 ```
 
@@ -1175,10 +1146,10 @@ class AggressiveToolStrategy:
 
 The safety system focuses on containment and preventing external references during fuzzing.
 
-- Argument-level filtering (`mcp_fuzzer.safety_system.safety.SafetyFilter`):
-  - Blocks URLs and risky commands in tool arguments; recursively sanitizes dicts/lists.
-  - CLI provides `--fs-root` to redirect sandbox.
-  - `set_fs_root(path)` records a sandbox root (for future path checks).
+- Argument-level hooks (`mcp_fuzzer.safety_system.safety.SafetyFilter`):
+  - Default implementation passes URL/script/command payloads through for fuzzing.
+  - Filesystem paths are sanitized when a sandbox root is set (`--fs-root`).
+  - `set_fs_root(path)` initializes the sandbox for path sanitization.
 
 - System-level blocking (`mcp_fuzzer.safety_system.blocking.command_blocker.SystemCommandBlocker`):
   - Creates PATH shims for `xdg-open`, `open`, `start`, and common browsers to prevent app launches.

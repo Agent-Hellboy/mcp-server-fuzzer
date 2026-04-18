@@ -25,6 +25,38 @@ _POLICY_DENY_NETWORK_DEFAULT_OVERRIDE: bool | None = None
 _POLICY_EXTRA_ALLOWED_HOSTS: set[str] = set()
 
 
+def _normalize_host(host: str | None) -> str:
+    """Normalize hostnames for policy comparisons."""
+    if not host:
+        return ""
+
+    s = host.strip().lower()
+    if not s:
+        return ""
+
+    # Accept full URLs and use parsed hostname when available.
+    if "://" in s:
+        parsed = urlparse(s)
+        normalized = parsed.hostname or s
+    # Handle bracketed IPv6 with optional port: [::1]:8080 -> ::1
+    elif s.startswith("["):
+        end = s.find("]")
+        if end != -1:
+            normalized = s[1:end]
+        else:
+            normalized = s.strip("[]")
+    # Handle host:port without protocol.
+    elif s.count(":") == 1:
+        normalized = s.split(":", 1)[0]
+    # Bare IPv6 literals contain multiple colons and should not be split.
+    elif ":" in s:
+        normalized = s
+    else:
+        normalized = s
+
+    return normalized.strip().lower().rstrip(".")
+
+
 def configure_network_policy(
     deny_network_by_default: bool | None = None,
     extra_allowed_hosts: Iterable[str] | None = None,
@@ -45,24 +77,6 @@ def configure_network_policy(
     if reset_allowed_hosts:
         _POLICY_EXTRA_ALLOWED_HOSTS = set()
 
-    def _normalize_host(host: str) -> str:
-        """Normalize host to handle URLs, mixed case, etc."""
-        if not host:
-            return ""
-        s = host.strip().lower()
-        # Accept bare host or URL; extract hostname if URL-like
-        if "://" in s:
-            parsed = urlparse(s)
-            host = parsed.hostname or s
-        else:
-            # For cases like "example.com:80" without protocol
-            if ":" in s and not s.startswith("["):
-                # Handle IPv6 addresses
-                host = s.split(":", 1)[0]
-            else:
-                host = s
-        return host.strip().lower()
-
     if extra_allowed_hosts is not None:
         normalized_hosts = {_normalize_host(h) for h in extra_allowed_hosts if h}
         _POLICY_EXTRA_ALLOWED_HOSTS |= {h for h in normalized_hosts if h}
@@ -75,8 +89,8 @@ def is_host_allowed(
 ) -> bool:
     """Return True if the URL's host is permitted by policy.
 
-    - By default, only localhost/loopback hosts are allowed.
-    - If deny_network_by_default is False, allow any host.
+    - When deny_network_by_default is True, only allowed hosts are permitted.
+    - When deny_network_by_default is False, allow any host.
     """
     # Resolve deny flag with runtime override first
     if _POLICY_DENY_NETWORK_DEFAULT_OVERRIDE is not None:
@@ -88,25 +102,19 @@ def is_host_allowed(
 
     parsed = urlparse(url)
     raw_host = parsed.hostname or ""
+    if not raw_host:
+        raw_host = url.split("/", 1)[0] if "://" not in url else url
 
-    # Normalize the host from the URL
-    if not raw_host and ":" in url and not url.startswith("["):
-        # Handle non-URL format with port
-        parts = url.split(":", 1)
-        raw_host = parts[0]
-
-    host = raw_host.lower()
+    host = _normalize_host(raw_host)
 
     # Collect and normalize all allowed hosts
-    allowed_set = set()
-    for h in allowed_hosts or SAFETY_LOCAL_HOSTS:
-        # Use same normalization logic as in configure_network_policy
-        if "://" in h:
-            h_parsed = urlparse(h)
-            norm_h = h_parsed.hostname or h
-        else:
-            norm_h = h.split(":")[0] if ":" in h and not h.startswith("[") else h
-        allowed_set.add(norm_h.lower())
+    allowed_set = {
+        normalized
+        for h in (allowed_hosts or SAFETY_LOCAL_HOSTS)
+        if h
+        for normalized in [_normalize_host(h)]
+        if normalized
+    }
 
     if _POLICY_EXTRA_ALLOWED_HOSTS:
         allowed_set |= _POLICY_EXTRA_ALLOWED_HOSTS

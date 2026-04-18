@@ -110,6 +110,7 @@ python3 -m mcp_fuzzer \
     --verbose \
     --enable-safety-system \
     --spec-schema-version "$SCHEMA_VERSION" \
+    "$@" \
     --output-dir "$FUZZ_OUTPUT_DIR"
 
 FUZZ_EXIT_CODE=$?

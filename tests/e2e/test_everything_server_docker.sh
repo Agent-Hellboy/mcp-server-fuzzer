@@ -33,6 +33,6 @@ docker run --rm \
     -e MCP_FUZZER_IN_DOCKER=1 \
     -e "MCP_SPEC_SCHEMA_VERSION=$SCHEMA_VERSION" \
     "$IMAGE_NAME" \
-    bash -lc "./tests/e2e/test_everything_server.sh"
+    bash ./tests/e2e/test_everything_server.sh "$@"
 
 echo -e "${GREEN}✅ Docker e2e test completed${NC}"

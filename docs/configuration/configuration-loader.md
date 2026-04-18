@@ -183,7 +183,7 @@ output:
     - "fuzzing_results"
     - "error_report"
     - "safety_summary"
-    - "performance_metrics"
+  # performance_metrics and configuration_dump are reserved
   retention:
     days: 30                     # Retain files for N days
     max_size: "1GB"              # Maximum directory size

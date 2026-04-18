@@ -28,14 +28,22 @@ Create a `mcp-fuzzer.yaml` or `mcp-fuzzer.yml` file:
 #   - all: Run tools + protocol fuzzing with spec checks
 mode: tools
 phase: aggressive
+# protocol_phase applies to protocol/resources/prompts/stateful fuzzing
+protocol_phase: realistic
 protocol: http
 endpoint: "http://localhost:8000/mcp/"
 runs: 10
 runs_per_type: 5
 # protocol_type: Protocol message schema to fuzz in protocol mode.
-# See ProtocolExecutor.PROTOCOL_TYPES in
-# mcp_fuzzer/fuzz_engine/executor/protocol_executor.py for the canonical list.
+# See EXECUTABLE_PROTOCOL_TYPES in
+# mcp_fuzzer/protocol_registry.py for the canonical list.
 protocol_type: "InitializeRequest"
+
+# Stateful + corpus controls
+stateful: false
+stateful_runs: 5
+corpus_enabled: true
+havoc_mode: false
 
 # Spec guard configuration
 # spec_guard: Enable deterministic MCP spec checks for protocol/resources/prompts
@@ -46,6 +54,8 @@ spec_guard: true
 spec_resource_uri: "file:///tmp/resource.txt"
 spec_prompt_name: "example_prompt"
 spec_prompt_args: '{"name":"value"}'
+# Optional: override MCP schema version used in initialize/spec guard
+spec_schema_version: "2025-11-25"
 
 # Timeouts and logging
 timeout: 30.0
@@ -110,42 +120,37 @@ mcp-fuzzer --config /path/to/config.yaml
 Use `protocol_type` in `mode: protocol` to select a specific MCP message schema
 to fuzz (for example, when you want to simulate a single request/notification
 shape rather than full protocol behavior). The canonical list lives in
-`mcp_fuzzer/fuzz_engine/executor/protocol_executor.py` under
-`ProtocolExecutor.PROTOCOL_TYPES`.
+`mcp_fuzzer/protocol_registry.py` under `EXECUTABLE_PROTOCOL_TYPES`.
 
-Accepted values:
+Accepted values (requests/notifications sent by the client):
 
 - `InitializeRequest`: Client initialization request.
-- `ProgressNotification`: Progress notification message.
-- `CancelledNotification`: Cancellation notification message.
+- `InitializedNotification`: Initialization complete notification.
+- `ListToolsRequest`: List available tools request.
+- `CallToolRequest`: Call a tool request.
 - `ListResourcesRequest`: List available resources request.
 - `ReadResourceRequest`: Read a resource by URI request.
-- `SetLevelRequest`: Set server logging level request.
-- `GenericJSONRPCRequest`: Arbitrary JSON-RPC method payload.
-- `CallToolResult`: Tool call result schema.
-- `SamplingMessage`: Sampling message payload.
-- `CreateMessageRequest`: Sampling create message request.
 - `ListPromptsRequest`: List available prompts request.
 - `GetPromptRequest`: Get a prompt by name request.
 - `ListRootsRequest`: List roots request.
-- `SubscribeRequest`: Subscribe to resource updates request.
-- `UnsubscribeRequest`: Unsubscribe from resource updates request.
+- `SetLevelRequest`: Set server logging level request.
 - `CompleteRequest`: Completion request.
 - `ListResourceTemplatesRequest`: List resource templates request.
 - `ElicitRequest`: Elicitation request.
 - `PingRequest`: Ping request.
-- `InitializeResult`: Initialization result schema.
-- `ListResourcesResult`: List resources result schema.
-- `ListResourceTemplatesResult`: List resource templates result schema.
-- `ReadResourceResult`: Read resource result schema.
-- `ListPromptsResult`: List prompts result schema.
-- `GetPromptResult`: Get prompt result schema.
-- `ListToolsResult`: List tools result schema.
-- `CompleteResult`: Completion result schema.
-- `CreateMessageResult`: Create message result schema.
-- `ListRootsResult`: List roots result schema.
-- `PingResult`: Ping result schema.
-- `ElicitResult`: Elicitation result schema.
+- `SubscribeRequest`: Subscribe to resource updates request.
+- `UnsubscribeRequest`: Unsubscribe from resource updates request.
+- `CreateMessageRequest`: Sampling create message request.
+- `ListTasksRequest`: List tasks request.
+- `GetTaskRequest`: Get task request.
+- `GetTaskPayloadRequest`: Get task payload request.
+- `CancelTaskRequest`: Cancel task request.
+- `ProgressNotification`: Progress notification message.
+- `CancelledNotification`: Cancellation notification message.
+- `GenericJSONRPCRequest`: Arbitrary JSON-RPC method payload.
+
+Result schemas are validated via spec guard but are not valid `protocol_type`
+values.
 
 ## Environment Variables
 
@@ -159,6 +164,7 @@ The following environment variables are currently read at startup:
 - `MCP_FUZZER_SSE_TIMEOUT`
 - `MCP_FUZZER_STDIO_TIMEOUT`
 - `MCP_FUZZER_ICON_THEME` (ascii | unicode | emoji; defaults to ascii)
+- `MCP_SPEC_SCHEMA_VERSION` (e.g., 2025-11-25)
 
 ## Migration From Pre-Redesign Configs (<=3d61ee4)
 
@@ -212,7 +218,9 @@ export_html: "reports/results.html"
 ```
 
 Standardized output files are currently emitted as JSON regardless of
-`output.format`; other values are reserved for future formats.
+`output.format`; other values are reserved for future formats. Only
+`fuzzing_results`, `safety_summary`, and `error_report` are emitted today;
+`performance_metrics` and `configuration_dump` are reserved.
 
 ## Authentication Configuration
 

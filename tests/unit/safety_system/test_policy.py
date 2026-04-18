@@ -1,13 +1,36 @@
 #!/usr/bin/env python3
 import os
+import pytest
 
 from mcp_fuzzer.safety_system.policy import (
+    _normalize_host,
     is_host_allowed,
     resolve_redirect_safely,
     sanitize_subprocess_env,
     sanitize_headers,
     configure_network_policy,
 )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("https://Example.COM/path", "example.com"),
+        ("http://Example.COM/path", "example.com"),
+        ("EXAMPLE.com", "example.com"),
+        ("example.com:443", "example.com"),
+        ("::1", "::1"),
+        ("[2001:db8::1]:8443", "2001:db8::1"),
+        ("[::1", "::1"),
+        ("localhost.", "localhost"),
+        ("  localhost  ", "localhost"),
+        ("", ""),
+        ("   ", ""),
+        (None, ""),
+    ],
+)
+def test_normalize_host_variants(value, expected):
+    assert _normalize_host(value) == expected
 
 
 def test_is_host_allowed_defaults():
@@ -19,6 +42,27 @@ def test_is_host_allowed_defaults():
 def test_is_host_allowed_strict_mode_local_only():
     assert is_host_allowed("http://example.com", deny_network_by_default=True) is False
     assert is_host_allowed("http://localhost", deny_network_by_default=True) is True
+
+
+def test_is_host_allowed_trailing_dot_variants():
+    assert is_host_allowed(
+        "http://localhost.",
+        allowed_hosts=["localhost"],
+        deny_network_by_default=True,
+    )
+    assert is_host_allowed(
+        "http://localhost",
+        allowed_hosts=["localhost."],
+        deny_network_by_default=True,
+    )
+
+
+def test_is_host_allowed_bare_ipv6_loopback():
+    assert is_host_allowed(
+        "::1",
+        allowed_hosts=["::1"],
+        deny_network_by_default=True,
+    )
 
 
 def test_resolve_redirect_safely_same_origin():

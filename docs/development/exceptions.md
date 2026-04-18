@@ -13,6 +13,12 @@ Exception
     │   ├── ConnectionError
     │   ├── ResponseError
     │   └── AuthenticationError
+    │   ├── NetworkError
+    │   ├── PayloadValidationError
+    │   └── TransportRegistrationError
+    ├── AuthError
+    │   ├── AuthConfigError
+    │   └── AuthProviderError
     ├── MCPTimeoutError
     │   ├── ProcessTimeoutError
     │   └── RequestTimeoutError
@@ -23,9 +29,19 @@ Exception
     ├── ServerError
     │   ├── ServerUnavailableError
     │   └── ProtocolError
+    ├── CLIError
+    │   └── ArgumentValidationError
+    ├── ReportError
+    │   └── ReportValidationError
     ├── ConfigurationError
     │   ├── ConfigFileError
     │   └── ValidationError
+    ├── RuntimeSubsystemError
+    │   ├── ProcessStartError
+    │   ├── ProcessStopError
+    │   ├── ProcessSignalError
+    │   ├── ProcessRegistrationError
+    │   └── WatchdogStartError
     └── FuzzingError
         ├── StrategyError
         └── ExecutorError
@@ -39,6 +55,15 @@ Exception
   - **ConnectionError**: Raised when a connection to the server cannot be established
   - **ResponseError**: Raised when the server response cannot be parsed
   - **AuthenticationError**: Raised when authentication with the server fails
+  - **NetworkError**: Raised for network policy or connectivity failures
+  - **PayloadValidationError**: Raised when a JSON-RPC payload is invalid
+  - **TransportRegistrationError**: Raised when transport registration/selection fails
+
+### Authentication Exceptions
+
+- **AuthError**: Base class for authentication subsystem errors
+  - **AuthConfigError**: Raised for invalid authentication configuration
+  - **AuthProviderError**: Raised when an auth provider definition is invalid
 
 ### Timeout-related Exceptions
 
@@ -70,6 +95,25 @@ Exception
 - **FuzzingError**: Base class for errors during fuzzing operations
   - **StrategyError**: Raised when a fuzzing strategy encounters an error
   - **ExecutorError**: Raised when the async executor encounters an error
+
+### CLI Exceptions
+
+- **CLIError**: Base class for CLI errors
+  - **ArgumentValidationError**: Raised when CLI arguments are invalid
+
+### Reporting Exceptions
+
+- **ReportError**: Base class for reporting/output errors
+  - **ReportValidationError**: Raised when report/output validation fails
+
+### Runtime Exceptions
+
+- **RuntimeSubsystemError**: Base class for runtime management errors
+  - **ProcessStartError**: Failed to start a managed process
+  - **ProcessStopError**: Failed to stop a managed process
+  - **ProcessSignalError**: Failed to send a signal to a process
+  - **ProcessRegistrationError**: Failed to register/unregister a process
+  - **WatchdogStartError**: Failed to start the watchdog
 
 ## Handling Exceptions
 

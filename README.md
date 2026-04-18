@@ -33,12 +33,12 @@ If your server conforms to the [MCP schema](https://github.com/modelcontextproto
 
 ### Why Choose MCP Server Fuzzer?
 
-- Safety First: Built-in safety system prevents dangerous operations
+- Safety First: Optional system-level safety controls (command blocking, sandboxing, network policy)
 - High Performance: Asynchronous execution with configurable concurrency
 - Beautiful Output: Rich, colorized terminal output with detailed reporting
 - Flexible Configuration: CLI args, YAML configs, environment variables
 - Comprehensive Reporting: Multiple output formats (JSON, CSV, HTML, Markdown)
-- Production Ready: PATH shims, sandbox defaults, and CI-friendly controls
+- Production Ready: PATH shims, sandbox controls, and CI-friendly defaults
 - Intelligent Testing: Hypothesis-based data generation with custom strategies
 - More Than Conformance: Goes beyond the checks in [modelcontextprotocol/conformance](https://github.com/modelcontextprotocol/conformance) with fuzzing, reporting, and safety tooling
 
@@ -60,7 +60,7 @@ It does **not** use instrumentation-based fuzzing (no coverage or binary/source 
 MCP Server Fuzzer is designed for easy extension while keeping CLI usage simple:
 
 - **Custom Transports**: Add support for new protocols via config or self-registration (see [docs/transport/custom-transports.md](docs/transport/custom-transports.md)).
-- **Pluggable Safety**: Swap safety providers for custom filtering rules.
+- **Pluggable Safety**: Swap safety providers for custom safety rules.
 - **Injectable Components**: Advanced users can inject custom clients/reporters for testing or plugins.
 
 The modularity improvements (dependency injection, registries) make it maintainer-friendly without complicating the core CLI experience.
@@ -150,6 +150,10 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --en
 ```bash
 # Two-phase fuzzing (realistic + aggressive)
 mcp-fuzzer --mode all --phase both --protocol http --endpoint http://localhost:8000
+
+# Aggressive protocol fuzzing (protocol phase is separate from --phase)
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase aggressive \
+  --protocol http --endpoint http://localhost:8000
 
 # With safety system enabled
 mcp-fuzzer --mode tools --enable-safety-system --safety-report
@@ -410,21 +414,21 @@ mcp-fuzzer --timeout 120 --process-retry-count 5 --process-retry-delay 2.0
 |---------|-------------|
 | Two-Phase Fuzzing | Realistic testing + aggressive security testing |
 | Multi-Protocol Support | HTTP, SSE, Stdio, and StreamableHTTP transports |
-| Built-in Safety | Pattern-based filtering, sandboxing, and PATH shims |
+| Built-in Safety | System command blocking, optional sandboxing, and safety reports |
 | Intelligent Testing | Hypothesis-based data generation with custom strategies |
 | Rich Reporting | Detailed output with exception tracking and safety reports |
 | Multiple Output Formats | JSON, CSV, HTML, Markdown, and XML export options |
 | Flexible Configuration | CLI args, YAML configs, environment variables |
 | Asynchronous Execution | Efficient concurrent fuzzing with configurable limits |
-| Comprehensive Monitoring | Process watchdog, timeout handling, and resource management |
+| Comprehensive Monitoring | Process watchdog and timeout handling for subprocesses |
 | Authentication Support | API keys, basic auth, OAuth, and custom providers |
-| Performance Metrics | Built-in benchmarking and performance analysis |
+| Stateful Sequences | Optional learned protocol sequences for realistic flows |
 | Schema Validation | Automatic MCP protocol compliance checking |
 
 ### Performance
 
-- Concurrent Operations: Up to 20 simultaneous fuzzing tasks
-- Memory Efficient: Streaming responses and configurable resource limits
+- Concurrent Operations: Configurable concurrency limits per run
+- Memory Efficient: Async I/O with streaming where supported
 - Fast Execution: Optimized async I/O and connection pooling
 - Scalable: Configurable timeouts and retry mechanisms
 

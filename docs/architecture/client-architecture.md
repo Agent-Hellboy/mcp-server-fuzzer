@@ -9,11 +9,17 @@ The client package is organized into several modules, each with a specific respo
 ```
 mcp_fuzzer/
 ├── client/
-│   ├── __init__.py              # Exports main client class
-│   ├── base.py                  # Base client class with common functionality
+│   ├── __init__.py              # Exports client APIs
+│   ├── base.py                  # MCPFuzzerClient orchestration
+│   ├── main.py                  # Unified runner used by the CLI
+│   ├── settings.py              # ClientSettings / config access
 │   ├── tool_client.py           # Tool fuzzing functionality
 │   ├── protocol_client.py       # Protocol fuzzing functionality
-│   └── utils.py                 # Utility functions
+│   ├── runtime/                 # Run plan + execution pipeline
+│   ├── transport/               # Transport factory + auth integration
+│   ├── adapters/                # Config adapter (port/adapter)
+│   ├── ports/                   # Port interfaces
+│   └── safety/                  # Safety system wiring
 ```
 
 ## Components
@@ -46,14 +52,26 @@ The `ProtocolClient` class in `protocol_client.py` handles all protocol-related 
 - Safety checks for protocol messages
 - Sending different types of protocol requests
 
-### Utilities (`utils.py`)
+### Unified Runner (`main.py`)
 
-The `utils.py` module provides common utility functions used across the client package:
+The unified runner wires CLI settings into the client and run plan:
 
-- Getting tool names with fallbacks
-- Creating standardized error results
-- Calculating success rates
-- Running operations with timeouts
+- Builds the transport with auth via `build_driver_with_auth`
+- Initializes `MCPFuzzerClient` and `FuzzerReporter`
+- Executes the run plan (tools, spec guard, protocol, stateful)
+
+### Runtime Pipeline (`client/runtime/`)
+
+The runtime package includes:
+
+- `run_plan.py` - Ordered run steps per mode
+- `pipeline.py` - Execution pipeline (tools/protocol/resources/prompts/stateful)
+- `argv_builder.py` and `async_runner.py` - Inner-argv handling and execution
+
+### Settings and Adapters
+
+- `settings.py` encapsulates merged config into `ClientSettings`.
+- `adapters/` + `ports/` provide a Port & Adapter boundary around config access.
 
 ## Benefits of the New Architecture
 

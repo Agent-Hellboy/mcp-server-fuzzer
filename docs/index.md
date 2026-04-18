@@ -28,7 +28,7 @@ pip install -e .
 
 ### Basic Usage
 
-1. **Set up your MCP server** (HTTP, SSE, or Stdio)
+1. **Set up your MCP server** (HTTP, SSE, Stdio, or StreamableHTTP)
 2. **Run basic fuzzing**:
    ```bash
    # Fuzz tools on an HTTP server
@@ -57,15 +57,17 @@ pip install -e .
 
 - **Stdio** - Command-line interface for local testing
 
+- **StreamableHTTP** - HTTP with MCP session negotiation and streaming support
+
 ### Safety & Security
 
-- **Built-in Safety System** - Pattern-based filtering plus safety reports
+- **Safety System** - System command blocking, optional sandboxing, and safety reports
 
 - **System Command Blocking** - PATH shims stop browser/app launches
 
-- **Filesystem Sandboxing** - Confines file operations
+- **Filesystem Sandboxing** - Confines file operations when `--fs-root` is set
 
-- **Process Isolation** - Safe subprocess handling with timeouts
+- **Process Management** - Safe subprocess handling with timeouts
 
 ### Comprehensive Testing
 
@@ -87,7 +89,7 @@ pip install -e .
 
 - **Multiple Output Formats** - Console, JSON, and text for different use cases
 
-- **Session Tracking** - Timestamped reports with unique session identification
+- **Session Tracking** - Session-id based reports with timestamps in metadata
 
 ## Architecture
 
@@ -102,7 +104,7 @@ The MCP Fuzzer uses a modular architecture with clear separation of concerns:
 
 - **Strategy System** - Realistic and aggressive data generation
 
-- **Safety System** - Pattern-based filtering, sandboxing, and PATH shims
+- **Safety System** - System command blocking, optional sandboxing, and safety reports
 
 - **Reporting System** - Centralized output management and comprehensive reporting
 

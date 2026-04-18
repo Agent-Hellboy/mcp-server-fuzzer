@@ -9,10 +9,10 @@ The e2e test script can be safely run in GitHub Actions with the following secur
 ## 🔒 Security Safeguards
 
 ### 1. **Safety System Integration**
-- **Command Blocking**: Prevents execution of dangerous system commands
-- **Filesystem Sandboxing**: All file operations confined to designated directories
-- **Process Isolation**: Each test runs in isolated process environment
-- **Network Restrictions**: No external network access allowed
+- **Command Blocking**: Prevents execution of dangerous system commands when `--enable-safety-system` is set
+- **Filesystem Sandboxing**: Constrains file paths when `--fs-root` (or `MCP_FUZZER_FS_ROOT`) is set
+- **Process Management**: Stdio servers run as managed subprocesses with watchdog timeouts when tests launch server processes
+- **Network Restrictions**: Enforced when `--no-network` is enabled, with optional host exceptions via `--allow-host`
 
 ### 2. **CI Environment Protections**
 - **Ephemeral Runners**: GitHub Actions runners are destroyed after each run
@@ -20,9 +20,9 @@ The e2e test script can be safely run in GitHub Actions with the following secur
 - **Resource Limits**: GitHub enforces CPU, memory, and time limits
 - **Artifact Isolation**: Test results are isolated and controlled
 
-### 3. **Built-in Safety Features**
+### 3. **Flag-Driven Safety Features**
 
-#### Command Blocking (Active)
+#### Command Blocking (When Enabled)
 ```bash
 # Blocked commands include:
 xdg-open, open, start, firefox, chrome, chromium
@@ -30,14 +30,12 @@ google-chrome, safari, edge, opera, brave
 ```
 
 #### Filesystem Controls
-- All file operations use sandboxed directories
-- No access to system-critical files
-- Temporary files automatically cleaned up
+- File arguments are sanitized when a sandbox root is set (`--fs-root` or `MCP_FUZZER_FS_ROOT`)
+- System directories are rejected or rewritten into the sandbox
 
 #### Process Management
-- Process watchdog monitors all subprocesses
+- Process watchdog monitors subprocesses
 - Automatic termination of hanging processes
-- Resource usage tracking and limits
 
 ## 🚀 CI/CD Implementation
 
@@ -70,11 +68,18 @@ jobs:
 
     - name: Run e2e test
       env:
-        MCP_FUZZER_SAFETY_ENABLED: 'true'
+        MCP_FUZZER_SAFETY_ENABLED: 'true'   # argument-level safety hooks
         MCP_FUZZER_TIMEOUT: '30'
+        MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
       run: |
         chmod +x tests/e2e/test_everything_server_docker.sh
-        ./tests/e2e/test_everything_server_docker.sh
+        ./tests/e2e/test_everything_server_docker.sh \
+          --enable-safety-system \
+          --fs-root /tmp/mcp_fuzzer_sandbox \
+          --no-network \
+          --allow-host localhost \
+          --allow-host 127.0.0.1 \
+          --allow-host ::1
 
     - name: Upload results
       uses: actions/upload-artifact@v4
@@ -89,15 +94,15 @@ jobs:
 
 1. **File System Access**
    - **Risk**: Could potentially access sensitive files
-   - **Mitigation**: Sandboxed to `/tmp` and project directories only
+   - **Mitigation**: Use `--fs-root` (or `MCP_FUZZER_FS_ROOT`) to enforce a sandbox
 
 2. **Process Execution**
    - **Risk**: Could spawn malicious processes
-   - **Mitigation**: Command blocking prevents dangerous executables
+   - **Mitigation**: Use `--enable-safety-system` to install command blockers
 
 3. **Resource Consumption**
    - **Risk**: Could exhaust CI resources
-   - **Mitigation**: GitHub Actions timeouts and resource limits
+   - **Mitigation**: GitHub Actions timeouts + watchdog timeouts
 
 4. **Data Exposure**
    - **Risk**: Test results could contain sensitive information
@@ -111,6 +116,7 @@ jobs:
 MCP_FUZZER_SAFETY_ENABLED=true
 MCP_FUZZER_TIMEOUT=30
 MCP_FUZZER_FS_ROOT=/tmp/mcp_fuzzer_sandbox
+MCP_FUZZER_ICON_THEME=ascii
 ```
 
 ### Resource Limits
@@ -126,26 +132,26 @@ MCP_FUZZER_FS_ROOT=/tmp/mcp_fuzzer_sandbox
 ## ✅ Safety Verification
 
 ### Pre-Flight Checks
-- [x] Safety system enabled by default
-- [x] Command blocking active
-- [x] Filesystem sandboxing configured
-- [x] Process isolation working
-- [x] Network restrictions applied
+- [x] Argument-level safety enabled (default unless `--no-safety`)
+- [x] Command blocking enabled (`--enable-safety-system`)
+- [x] Filesystem sandboxing configured (`--fs-root` or `MCP_FUZZER_FS_ROOT`)
+- [x] Process watchdog active
+- [x] Network restrictions configured (`--no-network` + `--allow-host`) when needed
 
 ### Runtime Monitoring
 - [x] Process watchdog active
-- [x] Resource usage tracking
+- [x] Watchdog monitoring
 - [x] Automatic cleanup on failure
 - [x] Comprehensive logging
 
 ## 🎯 Conclusion
 
-**The e2e test script is SAFE for GitHub Actions execution** with:
+**The e2e test script is SAFE for GitHub Actions execution when recommended safety flags are enabled**, including:
 
-- ✅ **Comprehensive safety system** preventing dangerous operations
+- ✅ **Flag-driven safety controls** (command blocking, sandboxing, and network policy)
 - ✅ **CI environment isolation** providing additional security layer
 - ✅ **Resource controls** preventing resource exhaustion
 - ✅ **Artifact isolation** controlling data exposure
 - ✅ **Automatic cleanup** preventing persistent state
 
-The combination of the MCP fuzzer's built-in safety system and GitHub Actions' security model provides multiple layers of protection, making this e2e test suitable for automated CI/CD pipelines.
+The combination of MCP fuzzer safety controls and GitHub Actions security boundaries provides multiple layers of protection, making this e2e test suitable for automated CI/CD pipelines.
