@@ -246,6 +246,17 @@ class TestFuzzerReporter:
         # Verify results were stored
         assert "test_tool" in reporter.tool_results
 
+    def test_print_tool_execution_summary(self, reporter):
+        """Test printing tool execution summary."""
+        results = {"test_tool": [{"success": True}, {"exception": "boom"}]}
+
+        reporter.print_tool_execution_summary(results)
+
+        reporter.console_formatter.print_tool_execution_summary.assert_called_once_with(
+            results
+        )
+        assert "test_tool" in reporter.tool_results
+
     def test_print_protocol_summary(self, reporter):
         """Test printing protocol summary."""
         results = {"test_protocol": [{"success": True}, {"error": "test_error"}]}

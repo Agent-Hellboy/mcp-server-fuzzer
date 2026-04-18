@@ -52,7 +52,8 @@ async def test_fuzz_tool_safety_blocked():
     results = await client.fuzz_tool({"name": "alpha"}, runs=1)
 
     assert results[0]["safety_blocked"] is True
-    assert results[0]["exception"] == "safety_blocked"
+    assert results[0]["error"] == "safety_blocked"
+    assert "exception" not in results[0]
     client._rpc.call_tool.assert_not_called()
 
 
@@ -141,7 +142,7 @@ async def test_process_fuzz_results_safety_blocked():
 
     results = await client._process_fuzz_results("alpha", [{"args": {"x": 1}}])
 
-    assert results[0]["exception"] == "safety_blocked"
+    assert results[0]["error"] == "safety_blocked"
     assert results[0]["safety_blocked"] is True
 
 

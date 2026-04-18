@@ -207,6 +207,13 @@ class FuzzerReporter:
             runs, _ = extract_tool_runs(tool_results)
             self.add_tool_results(tool_name, runs)
 
+    def print_tool_execution_summary(self, results: dict[str, Any]) -> None:
+        """Print tool summary plus aggregate run statistics."""
+        self.console_formatter.print_tool_execution_summary(results)
+        for tool_name, tool_results in results.items():
+            runs, _ = extract_tool_runs(tool_results)
+            self.add_tool_results(tool_name, runs)
+
     def print_protocol_summary(
         self,
         results: dict[str, list[dict[str, Any]]],
@@ -245,6 +252,10 @@ class FuzzerReporter:
     def print_safety_summary(self):
         """Print safety system summary to console."""
         self.safety_reporter.print_safety_summary()
+
+    def print_safety_system_summary(self):
+        """Print safety-system blocked operation details."""
+        self.safety_reporter.print_safety_system_summary()
 
     def print_comprehensive_safety_report(self):
         """Print comprehensive safety report to console."""
@@ -375,6 +386,22 @@ class FuzzerReporter:
         return self.formatter_registry.save(
             format_name, snapshot, self.output_dir, filename
         )
+
+    async def export_requested_formats(
+        self,
+        export_targets: Mapping[str, str],
+        *,
+        include_safety: bool = False,
+    ) -> dict[str, str]:
+        """Export all requested named formats and return written file names."""
+        exported: dict[str, str] = {}
+        for format_name, filename in export_targets.items():
+            exported[format_name] = await self.export_format(
+                format_name,
+                filename,
+                include_safety=include_safety,
+            )
+        return exported
 
     async def _prepare_snapshot(
         self, include_safety: bool, finalize: bool

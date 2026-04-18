@@ -21,12 +21,10 @@ from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
 from ..fuzz_engine.mutators import ProtocolMutator
 from ..fuzz_engine.mutators.seed_mutation import mutate_seed_payload
 from .. import spec_guard
-from ..fuzz_engine.executor import ProtocolExecutor
 from ..safety_system.safety import CombinedSafetyProvider, ProtocolSafetyProvider
 
-# Centralized allow-list for protocol types that can be fuzzed.
-# This should stay in sync with ProtocolExecutor.PROTOCOL_TYPES.
-ALLOWED_PROTOCOL_TYPES = frozenset(EXECUTABLE_PROTOCOL_TYPES)
+# ProtocolClient owns the executable protocol list it can iterate over.
+SUPPORTED_PROTOCOL_TYPES = tuple(EXECUTABLE_PROTOCOL_TYPES)
 
 
 class ProtocolClient:
@@ -458,17 +456,7 @@ class ProtocolClient:
         Returns:
             List of protocol type strings
         """
-        try:
-            # Use the class-level protocol type list from ProtocolExecutor
-            # Filter to only request/notification types (exclude result types)
-            return [
-                pt
-                for pt in getattr(ProtocolExecutor, "PROTOCOL_TYPES", ())
-                if pt in ALLOWED_PROTOCOL_TYPES
-            ]
-        except Exception as e:
-            self._logger.error(f"Failed to get protocol types: {e}")
-            return []
+        return list(SUPPORTED_PROTOCOL_TYPES)
 
     async def fuzz_all_protocol_types(
         self, runs_per_type: int = 5, phase: str = "realistic"

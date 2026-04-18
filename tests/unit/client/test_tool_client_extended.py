@@ -109,7 +109,8 @@ class TestFuzzTool:
         
         assert len(results) == 1
         assert results[0]["safety_blocked"] is True
-        assert results[0]["exception"] == "safety_blocked"
+        assert results[0]["error"] == "safety_blocked"
+        assert "exception" not in results[0]
 
     @pytest.mark.asyncio
     async def test_fuzz_tool_safety_sanitized(self, tool_client, mock_safety):
@@ -280,6 +281,7 @@ class TestFuzzToolBothPhases:
         
         assert "error" in results
         assert "mutator error" in results["error"]
+        assert results["runs"][0]["error"] == "phase_execution_failed"
 
 
 class TestProcessFuzzResults:
@@ -418,6 +420,7 @@ class TestFuzzSingleToolBothPhases:
         result = await tool_client._fuzz_single_tool_both_phases(tool, 2)
         
         assert "error" in result
+        assert result["error"] == "some error"
 
     @pytest.mark.asyncio
     async def test_single_tool_both_phases_exception(self, tool_client):
@@ -429,6 +432,7 @@ class TestFuzzSingleToolBothPhases:
         
         assert "error" in result
         assert "boom" in result["error"]
+        assert result["runs"][0]["exception"] == "boom"
 
 
 class TestSafetyDisabled:

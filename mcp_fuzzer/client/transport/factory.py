@@ -3,24 +3,39 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
-import sys
 from typing import Any
-
-from rich.console import Console
-
 from ...transport.catalog import build_driver as base_build_driver
 from ...transport.wrappers import RetryingTransport, RetryPolicy
+from ...exceptions import TransportRegistrationError
 
 logger = logging.getLogger(__name__)
 AUTH_PROTOCOLS = ("http", "https", "streamablehttp", "sse")
 
 
-def build_driver_with_auth(args: Any, client_args: dict[str, Any]):
+@dataclass(frozen=True)
+class TransportBuildRequest:
+    """Typed transport settings used by the client runtime."""
+
+    protocol: str
+    endpoint: str
+    timeout: float = 30.0
+    transport_retries: int = 1
+    transport_retry_delay: float = 0.5
+    transport_retry_backoff: float = 2.0
+    transport_retry_max_delay: float = 5.0
+    transport_retry_jitter: float = 0.1
+    auth_manager: Any = None
+    safety_enabled: bool = True
+
+
+def build_driver_with_auth(request: TransportBuildRequest):
     """Create a transport with authentication headers when available."""
+    resolved = request
     try:
         auth_headers = None
-        auth_manager = client_args.get("auth_manager")
+        auth_manager = resolved.auth_manager
 
         if auth_manager:
             auth_headers = auth_manager.get_default_auth_headers()
@@ -38,26 +53,28 @@ def build_driver_with_auth(args: Any, client_args: dict[str, Any]):
                     "No auth headers found for default tool mapping"
                 )  # pragma: no cover
 
-        factory_kwargs = {"timeout": args.timeout}
-        safety_enabled = client_args.get("safety_enabled", True)
+        factory_kwargs = {"timeout": resolved.timeout}
+        safety_enabled = resolved.safety_enabled
 
-        if args.protocol in AUTH_PROTOCOLS:
+        if resolved.protocol in AUTH_PROTOCOLS:
             factory_kwargs["safety_enabled"] = safety_enabled
-        if args.protocol in AUTH_PROTOCOLS and auth_headers:
+        if resolved.protocol in AUTH_PROTOCOLS and auth_headers:
             factory_kwargs["auth_headers"] = auth_headers
-            logger.debug("Adding auth headers to %s transport", args.protocol.upper())
+            logger.debug(
+                "Adding auth headers to %s transport", resolved.protocol.upper()
+            )
 
         logger.debug(
             "Creating %s transport to %s",
-            args.protocol.upper(),
-            args.endpoint,
+            resolved.protocol.upper(),
+            resolved.endpoint,
         )
         transport = base_build_driver(
-            args.protocol,
-            args.endpoint,
+            resolved.protocol,
+            resolved.endpoint,
             **factory_kwargs,
         )
-        retry_attempts = getattr(args, "transport_retries", 1)
+        retry_attempts = resolved.transport_retries
         try:
             retry_attempts = int(retry_attempts)
         except (TypeError, ValueError):
@@ -65,18 +82,23 @@ def build_driver_with_auth(args: Any, client_args: dict[str, Any]):
         if retry_attempts > 1:
             policy = RetryPolicy(
                 max_attempts=retry_attempts,
-                base_delay=getattr(args, "transport_retry_delay", 0.5),
-                max_delay=getattr(args, "transport_retry_max_delay", 5.0),
-                backoff_factor=getattr(args, "transport_retry_backoff", 2.0),
-                jitter=getattr(args, "transport_retry_jitter", 0.1),
+                base_delay=resolved.transport_retry_delay,
+                max_delay=resolved.transport_retry_max_delay,
+                backoff_factor=resolved.transport_retry_backoff,
+                jitter=resolved.transport_retry_jitter,
             )
             transport = RetryingTransport(transport, policy=policy)
         return transport
     except Exception as transport_error:  # pragma: no cover
-        console = Console()
-        console.print(f"[bold red]Unexpected error:[/bold red] {transport_error}")
         logger.exception("Transport creation failed")
-        sys.exit(1)
+        raise TransportRegistrationError(
+            "Transport creation failed",
+            context={
+                "protocol": getattr(resolved, "protocol", "unknown"),
+                "endpoint": getattr(resolved, "endpoint", "unknown"),
+                "details": str(transport_error),
+            },
+        ) from transport_error
 
 
-__all__ = ["build_driver_with_auth"]
+__all__ = ["TransportBuildRequest", "build_driver_with_auth"]

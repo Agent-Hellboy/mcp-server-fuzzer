@@ -38,6 +38,23 @@ def extract_tool_runs(
         combined.extend(realistic)
     if isinstance(aggressive, list):
         combined.extend(aggressive)
+    if combined:
+        return combined, tool_entry
+    if "error" in tool_entry or "exception" in tool_entry:
+        synthetic_run: dict[str, Any] = {
+            "success": bool(tool_entry.get("success", False)),
+            "safety_blocked": bool(tool_entry.get("safety_blocked", False)),
+            "safety_sanitized": bool(tool_entry.get("safety_sanitized", False)),
+        }
+        if "args" in tool_entry:
+            synthetic_run["args"] = tool_entry.get("args")
+        if "label" in tool_entry:
+            synthetic_run["label"] = tool_entry.get("label")
+        if "error" in tool_entry:
+            synthetic_run["error"] = tool_entry.get("error")
+        if "exception" in tool_entry:
+            synthetic_run["exception"] = tool_entry.get("exception")
+        return [synthetic_run], tool_entry
     return combined, tool_entry
 
 
@@ -50,6 +67,50 @@ def calculate_tool_success_rate(
         return 0.0
     successful_runs = max(0, total_runs - exceptions - safety_blocked)
     return (successful_runs / total_runs) * 100
+
+
+def tool_run_has_exception(result: dict[str, Any] | None) -> bool:
+    """Return True when a tool result has a non-safety exception."""
+    if not isinstance(result, dict):
+        return False
+    if result.get("safety_blocked", False):
+        return False
+    return bool(result.get("exception"))
+
+
+def tool_run_has_failure(result: dict[str, Any] | None) -> bool:
+    """Return True when a tool result should count as a failed run."""
+    if not isinstance(result, dict):
+        return True
+    if result.get("safety_blocked", False):
+        return True
+    return bool(
+        tool_run_has_exception(result)
+        or not result.get("success", True)
+        or result.get("error")
+        or result.get("server_error")
+    )
+
+
+def summarize_tool_runs(runs: list[dict[str, Any]]) -> dict[str, int | float]:
+    """Return non-overlapping summary counters for tool run reporting."""
+    total_runs = len(runs)
+    exceptions = sum(1 for run in runs if tool_run_has_exception(run))
+    safety_blocked = sum(1 for run in runs if run.get("safety_blocked", False))
+    failures = sum(1 for run in runs if tool_run_has_failure(run))
+    successful = max(total_runs - failures, 0)
+    return {
+        "total_runs": total_runs,
+        "exceptions": exceptions,
+        "safety_blocked": safety_blocked,
+        "failures": failures,
+        "successful": successful,
+        "success_rate": calculate_tool_success_rate(
+            total_runs,
+            exceptions,
+            safety_blocked,
+        ),
+    }
 
 
 def calculate_protocol_success_rate(total_runs: int, errors: int) -> float:

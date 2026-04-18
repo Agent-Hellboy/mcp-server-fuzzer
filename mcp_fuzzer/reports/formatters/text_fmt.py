@@ -6,9 +6,9 @@ from typing import Any
 
 from .common import (
     calculate_protocol_success_rate,
-    calculate_tool_success_rate,
     extract_tool_runs,
     normalize_report_data,
+    summarize_tool_runs,
 )
 
 
@@ -106,21 +106,14 @@ class TextFormatter:
                 f.write("-" * 40 + "\n")
                 for tool_name, results in data["tool_results"].items():
                     runs, _ = extract_tool_runs(results)
+                    stats = summarize_tool_runs(runs)
                     f.write(f"\nTool: {tool_name}\n")
-                    f.write(f"  Total Runs: {len(runs)}\n")
-
-                    exceptions = sum(1 for r in runs if "exception" in r)
-                    safety_blocked = sum(
-                        1 for r in runs if r.get("safety_blocked", False)
-                    )
-                    f.write(f"  Exceptions: {exceptions}\n")
-                    f.write(f"  Safety Blocked: {safety_blocked}\n")
+                    f.write(f"  Total Runs: {stats['total_runs']}\n")
+                    f.write(f"  Exceptions: {stats['exceptions']}\n")
+                    f.write(f"  Safety Blocked: {stats['safety_blocked']}\n")
 
                     if runs:
-                        success_rate = calculate_tool_success_rate(
-                            len(runs), exceptions, safety_blocked
-                        )
-                        f.write(f"  Success Rate: {success_rate:.1f}%\n")
+                        f.write(f"  Success Rate: {stats['success_rate']:.1f}%\n")
 
             if "protocol_results" in data:
                 f.write("\n\nPROTOCOL FUZZING RESULTS\n")

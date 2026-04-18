@@ -6,11 +6,11 @@ from typing import Any
 
 from .common import (
     calculate_protocol_success_rate,
-    calculate_tool_success_rate,
     collect_and_summarize_protocol_items,
     extract_tool_runs,
     normalize_report_data,
     result_has_failure,
+    summarize_tool_runs,
 )
 from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
@@ -52,18 +52,13 @@ class JSONFormatter:
         summary = {}
         for tool_name, tool_results in results.items():
             runs, _ = extract_tool_runs(tool_results)
-            total_runs = len(runs)
-            exceptions = sum(1 for r in runs if "exception" in r)
-            safety_blocked = sum(1 for r in runs if r.get("safety_blocked", False))
-            success_rate = calculate_tool_success_rate(
-                total_runs, exceptions, safety_blocked
-            )
+            stats = summarize_tool_runs(runs)
 
             summary[tool_name] = {
-                "total_runs": total_runs,
-                "exceptions": exceptions,
-                "safety_blocked": safety_blocked,
-                "success_rate": round(success_rate, 2),
+                "total_runs": stats["total_runs"],
+                "exceptions": stats["exceptions"],
+                "safety_blocked": stats["safety_blocked"],
+                "success_rate": round(float(stats["success_rate"]), 2),
             }
 
         return summary

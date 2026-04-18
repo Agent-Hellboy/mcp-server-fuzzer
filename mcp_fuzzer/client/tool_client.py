@@ -61,6 +61,130 @@ class ToolClient:
         self._logger = logging.getLogger(__name__)
         self._tool_schema_checks: dict[str, list[dict[str, Any]]] = {}
 
+    @staticmethod
+    def _build_tool_run_result(
+        *,
+        args: dict[str, Any] | None,
+        label: str | None,
+        success: bool,
+        safety_blocked: bool,
+        safety_sanitized: bool,
+        result: Any = None,
+        error: str | None = None,
+        exception: str | None = None,
+        spec_checks: list[dict[str, Any]] | None = None,
+        spec_scope: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "args": args,
+            "success": success,
+            "safety_blocked": safety_blocked,
+            "safety_sanitized": safety_sanitized,
+        }
+        if label is not None:
+            payload["label"] = label
+        if result is not None:
+            payload["result"] = result
+        if error is not None:
+            payload["error"] = error
+        if exception is not None:
+            payload["exception"] = exception
+        if spec_checks:
+            payload["spec_checks"] = spec_checks
+        if spec_scope is not None:
+            payload["spec_scope"] = spec_scope
+        return payload
+
+    @staticmethod
+    def _build_phase_error(tool_name: str, message: str) -> dict[str, Any]:
+        return {
+            "runs": [
+                ToolClient._build_tool_run_result(
+                    args=None,
+                    label=f"tool:{tool_name}",
+                    success=False,
+                    safety_blocked=False,
+                    safety_sanitized=False,
+                    error="phase_execution_failed",
+                    exception=message,
+                )
+            ],
+            "error": message,
+        }
+
+    async def _execute_tool_call(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        *,
+        label: str | None = None,
+    ) -> dict[str, Any]:
+        """Run one fuzzed tool call through safety, auth, RPC, and result shaping."""
+        if self.safety_system and self.safety_system.should_skip_tool_call(
+            tool_name, args
+        ):
+            self._logger.warning("Safety system blocked tool call for %s", tool_name)
+            return self._build_tool_run_result(
+                args=args,
+                label=label,
+                success=False,
+                safety_blocked=True,
+                safety_sanitized=False,
+                error="safety_blocked",
+            )
+
+        sanitized_args = args
+        safety_sanitized = False
+        if self.safety_system:
+            sanitized_args = self.safety_system.sanitize_tool_arguments(
+                tool_name, args
+            )
+            safety_sanitized = sanitized_args != args
+
+        auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
+
+        # Merge auth params only into the call payload; never persist secrets.
+        args_for_call = {**sanitized_args}
+        if auth_params:
+            args_for_call.update(auth_params)
+
+        try:
+            result = await self._rpc.call_tool(tool_name, args_for_call)
+            spec_checks = spec_guard.check_tool_result_content(result)
+            response_signature = _response_shape_signature(result)
+            self.tool_mutator.record_feedback(
+                tool_name,
+                sanitized_args,
+                spec_checks=spec_checks,
+                response_signature=response_signature,
+            )
+            call_result = self._build_tool_run_result(
+                args=sanitized_args,
+                label=label,
+                success=True,
+                safety_blocked=False,
+                safety_sanitized=safety_sanitized,
+                result=result,
+                spec_checks=spec_checks,
+                spec_scope="tool_result" if spec_checks else None,
+            )
+        except Exception as e:
+            self._logger.warning("Exception calling tool %s: %s", tool_name, e)
+            self.tool_mutator.record_feedback(
+                tool_name, sanitized_args, exception=str(e)
+            )
+            call_result = self._build_tool_run_result(
+                args=sanitized_args,
+                label=label,
+                success=False,
+                safety_blocked=False,
+                safety_sanitized=safety_sanitized,
+                error="tool_call_failed",
+                exception=str(e),
+            )
+
+        return call_result
+
     async def _get_tools_from_server(self) -> list[dict[str, Any]]:
         """Get tools from the server.
 
@@ -126,14 +250,29 @@ class ToolClient:
                 ):
                     pass
                 return [
-                    {
-                        "error": "tool_timeout",
-                        "exception": "Tool fuzzing timed out",
-                    }
+                    self._build_tool_run_result(
+                        args=None,
+                        label=f"tool:{tool_name}",
+                        success=False,
+                        safety_blocked=False,
+                        safety_sanitized=False,
+                        error="tool_timeout",
+                        exception="Tool fuzzing timed out",
+                    )
                 ]
         except Exception as e:
             self._logger.error(f"Failed to fuzz tool {tool_name}: {e}")
-            return [{"error": str(e)}]
+            return [
+                self._build_tool_run_result(
+                    args=None,
+                    label=f"tool:{tool_name}",
+                    success=False,
+                    safety_blocked=False,
+                    safety_sanitized=False,
+                    error=str(e),
+                    exception=str(e),
+                )
+            ]
 
     async def fuzz_tool(
         self,
@@ -150,94 +289,28 @@ class ToolClient:
                 # Generate fuzz arguments using the mutator
                 args = await self.tool_mutator.mutate(tool)
 
-                # Check safety before proceeding
-                if self.safety_system and self.safety_system.should_skip_tool_call(
-                    tool_name, args
-                ):
-                    self._logger.warning(
-                        "Safety system blocked tool call for %s", tool_name
-                    )
-                    results.append(
-                        {
-                            "args": args,
-                            "exception": "safety_blocked",
-                            "safety_blocked": True,
-                            "safety_sanitized": False,
-                        }
-                    )
-                    continue
-
-                # Sanitize arguments if safety system is enabled
-                sanitized_args = args
-                safety_sanitized = False
-                if self.safety_system:
-                    sanitized_args = self.safety_system.sanitize_tool_arguments(
-                        tool_name, args
-                    )
-                    safety_sanitized = sanitized_args != args
-
-                # Get authentication for this tool
-                auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
-
-                # Merge auth params only into the call payload; never persist secrets
-                args_for_call = {**sanitized_args}
-                if auth_params:
-                    args_for_call.update(auth_params)
-
                 # High-level run progress at DEBUG to avoid noise
                 self._logger.debug("Fuzzing %s (run %d/%d)", tool_name, i + 1, runs)
-
-                # Call the tool with the generated arguments
-                try:
-                    result = await self._rpc.call_tool(tool_name, args_for_call)
-                    spec_checks = spec_guard.check_tool_result_content(result)
-                    spec_payload = (
-                        {"spec_checks": spec_checks, "spec_scope": "tool_result"}
-                        if spec_checks
-                        else {}
-                    )
-                    response_signature = _response_shape_signature(result)
-                    self.tool_mutator.record_feedback(
+                results.append(
+                    await self._execute_tool_call(
                         tool_name,
-                        sanitized_args,
-                        spec_checks=spec_checks,
-                        response_signature=response_signature,
+                        args,
+                        label=f"tool:{tool_name}",
                     )
-                    results.append(
-                        {
-                            "args": sanitized_args,
-                            "result": result,
-                            "safety_blocked": False,
-                            "safety_sanitized": safety_sanitized,
-                            "success": True,
-                            **spec_payload,
-                        }
-                    )
-                except Exception as e:
-                    self._logger.warning("Exception calling tool %s: %s", tool_name, e)
-                    self.tool_mutator.record_feedback(
-                        tool_name, sanitized_args, exception=str(e)
-                    )
-                    results.append(
-                        {
-                            "args": sanitized_args,
-                            "exception": str(e),
-                            "safety_blocked": False,
-                            "safety_sanitized": safety_sanitized,
-                            "success": False,
-                        }
-                    )
+                )
 
             except Exception as e:
                 self._logger.warning("Exception during fuzzing %s: %s", tool_name, e)
                 results.append(
-                    {
-                        "args": None,
-                        "exception": str(e),
-                        "safety_blocked": False,
-                        "safety_sanitized": False,
-                        "success": False,
-                    }
+                    self._build_tool_run_result(
+                        args=None,
+                        label=f"tool:{tool_name}",
+                        success=False,
+                        safety_blocked=False,
+                        safety_sanitized=False,
+                        error="tool_mutation_failed",
+                        exception=str(e),
+                    )
                 )
 
         return results
@@ -341,13 +414,13 @@ class ToolClient:
                 self._logger.error(
                     f"Error in two-phase fuzzing {tool_name}: {phase_results['error']}"
                 )
-                return {"error": phase_results["error"]}
+                return phase_results
 
             return phase_results
 
         except Exception as e:
             self._logger.error(f"Error in two-phase fuzzing {tool_name}: {e}")
-            return {"error": str(e)}
+            return self._build_phase_error(tool_name, str(e))
 
     async def _process_fuzz_results(
         self,
@@ -366,81 +439,13 @@ class ToolClient:
         processed = []
         for fuzz_result in fuzz_results:
             args = fuzz_result["args"]
-
-            # Skip if safety system blocks this call
-            if self.safety_system and self.safety_system.should_skip_tool_call(
-                tool_name, args
-            ):
-                processed.append(
-                    {
-                        "args": args,
-                        "label": f"tool:{tool_name}",
-                        "exception": "safety_blocked",
-                        "safety_blocked": True,
-                        "safety_sanitized": False,
-                        "success": False,
-                    }
-                )
-                continue
-
-            # Sanitize arguments if needed
-            sanitized_args = args
-            safety_sanitized = False
-            if self.safety_system:
-                sanitized_args = self.safety_system.sanitize_tool_arguments(
-                    tool_name, args
-                )
-                safety_sanitized = sanitized_args != args
-
-            # Get authentication for this tool
-            auth_params = self.auth_manager.get_auth_params_for_tool(tool_name)
-
-            # Merge auth params only into call payload
-            args_for_call = {**sanitized_args}
-            if auth_params:
-                args_for_call.update(auth_params)
-
-            # Call the tool with the generated arguments
-            try:
-                result = await self._rpc.call_tool(tool_name, args_for_call)
-                spec_checks = spec_guard.check_tool_result_content(result)
-                spec_payload = (
-                    {"spec_checks": spec_checks, "spec_scope": "tool_result"}
-                    if spec_checks
-                    else {}
-                )
-                response_signature = _response_shape_signature(result)
-                self.tool_mutator.record_feedback(
+            processed.append(
+                await self._execute_tool_call(
                     tool_name,
-                    sanitized_args,
-                    spec_checks=spec_checks,
-                    response_signature=response_signature,
+                    args,
+                    label=f"tool:{tool_name}",
                 )
-                processed.append(
-                    {
-                        "args": sanitized_args,
-                        "label": f"tool:{tool_name}",
-                        "result": result,
-                        "safety_blocked": False,
-                        "safety_sanitized": safety_sanitized,
-                        "success": True,
-                        **spec_payload,
-                    }
-                )
-            except Exception as e:
-                self.tool_mutator.record_feedback(
-                    tool_name, sanitized_args, exception=str(e)
-                )
-                processed.append(
-                    {
-                        "args": sanitized_args,
-                        "label": f"tool:{tool_name}",
-                        "exception": str(e),
-                        "safety_blocked": False,
-                        "safety_sanitized": safety_sanitized,
-                        "success": False,
-                    }
-                )
+            )
 
         return processed
 
@@ -481,7 +486,7 @@ class ToolClient:
             self._logger.error(
                 f"Error during two-phase fuzzing of tool {tool_name}: {e}"
             )
-            return {"error": str(e)}
+            return self._build_phase_error(tool_name, str(e))
 
     async def fuzz_all_tools_both_phases(
         self, runs_per_phase: int = 5

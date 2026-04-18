@@ -14,7 +14,11 @@ from importlib.metadata import PackageNotFoundError, version
 
 from ...exceptions import ValidationError
 from ..core import ReportSnapshot
-from ..formatters.common import extract_tool_runs
+from ..formatters.common import (
+    extract_tool_runs,
+    summarize_tool_runs,
+    tool_run_has_exception,
+)
 
 try:
     TOOL_VERSION = version("mcp-fuzzer")
@@ -270,19 +274,15 @@ class OutputProtocol:
         formatted = []
         for tool_name, results in tool_results.items():
             runs, _ = extract_tool_runs(results)
-            total_runs = len(runs)
-            exceptions = sum(1 for r in runs if "exception" in r)
-            safety_blocked = sum(1 for r in runs if r.get("safety_blocked", False))
-            successful = max(total_runs - exceptions - safety_blocked, 0)
-            success_rate = _rate(total_runs, exceptions + safety_blocked)
+            stats = summarize_tool_runs(runs)
             formatted.append(
                 {
                     "name": tool_name,
-                    "runs": total_runs,
-                    "successful": successful,
-                    "exceptions": exceptions,
-                    "safety_blocked": safety_blocked,
-                    "success_rate": success_rate,
+                    "runs": stats["total_runs"],
+                    "successful": stats["successful"],
+                    "exceptions": stats["exceptions"],
+                    "safety_blocked": stats["safety_blocked"],
+                    "success_rate": stats["success_rate"],
                     "exception_details": [
                         {
                             "type": (
@@ -294,7 +294,7 @@ class OutputProtocol:
                             "arguments": r.get("args", {}),
                         }
                         for r in runs
-                        if "exception" in r
+                        if tool_run_has_exception(r)
                     ],
                 }
             )
