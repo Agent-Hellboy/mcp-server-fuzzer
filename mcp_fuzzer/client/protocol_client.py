@@ -26,6 +26,124 @@ from ..safety_system.safety import CombinedSafetyProvider, ProtocolSafetyProvide
 # ProtocolClient owns the executable protocol list it can iterate over.
 SUPPORTED_PROTOCOL_TYPES = tuple(EXECUTABLE_PROTOCOL_TYPES)
 
+_PROTOCOL_SPECS: dict[str, dict[str, Any]] = {
+    "InitializeRequest": {
+        "handler_name": "_send_initialize_request",
+        "method": "initialize",
+        "is_notification": False,
+    },
+    "InitializedNotification": {
+        "handler_name": "_send_initialized_notification",
+        "method": "notifications/initialized",
+        "is_notification": True,
+    },
+    "ProgressNotification": {
+        "handler_name": "_send_progress_notification",
+        "method": "notifications/progress",
+        "is_notification": True,
+    },
+    "CancelledNotification": {
+        "handler_name": "_send_cancelled_notification",
+        "method": "notifications/cancelled",
+        "is_notification": True,
+    },
+    "ListToolsRequest": {
+        "handler_name": "_send_list_tools_request",
+        "method": "tools/list",
+        "is_notification": False,
+    },
+    "CallToolRequest": {
+        "handler_name": "_send_call_tool_request",
+        "method": "tools/call",
+        "is_notification": False,
+    },
+    "ListResourcesRequest": {
+        "handler_name": "_send_list_resources_request",
+        "method": "resources/list",
+        "is_notification": False,
+    },
+    READ_RESOURCE_REQUEST: {
+        "handler_name": "_send_read_resource_request",
+        "method": "resources/read",
+        "is_notification": False,
+    },
+    "ListResourceTemplatesRequest": {
+        "handler_name": "_send_list_resource_templates_request",
+        "method": "resources/templates/list",
+        "is_notification": False,
+    },
+    "SetLevelRequest": {
+        "handler_name": "_send_set_level_request",
+        "method": "logging/setLevel",
+        "is_notification": False,
+    },
+    "CreateMessageRequest": {
+        "handler_name": "_send_create_message_request",
+        "method": "sampling/createMessage",
+        "is_notification": False,
+    },
+    "ListPromptsRequest": {
+        "handler_name": "_send_list_prompts_request",
+        "method": "prompts/list",
+        "is_notification": False,
+    },
+    GET_PROMPT_REQUEST: {
+        "handler_name": "_send_get_prompt_request",
+        "method": "prompts/get",
+        "is_notification": False,
+    },
+    "ListRootsRequest": {
+        "handler_name": "_send_list_roots_request",
+        "method": "roots/list",
+        "is_notification": False,
+    },
+    "SubscribeRequest": {
+        "handler_name": "_send_subscribe_request",
+        "method": "resources/subscribe",
+        "is_notification": False,
+    },
+    "UnsubscribeRequest": {
+        "handler_name": "_send_unsubscribe_request",
+        "method": "resources/unsubscribe",
+        "is_notification": False,
+    },
+    "CompleteRequest": {
+        "handler_name": "_send_complete_request",
+        "method": "completion/complete",
+        "is_notification": False,
+    },
+    "ElicitRequest": {
+        "handler_name": "_send_elicit_request",
+        "method": "elicitation/create",
+        "is_notification": False,
+    },
+    "ListTasksRequest": {
+        "handler_name": "_send_list_tasks_request",
+        "method": "tasks/list",
+        "is_notification": False,
+    },
+    "GetTaskRequest": {
+        "handler_name": "_send_get_task_request",
+        "method": "tasks/get",
+        "is_notification": False,
+    },
+    "GetTaskPayloadRequest": {
+        "handler_name": "_send_get_task_payload_request",
+        "method": "tasks/result",
+        "is_notification": False,
+    },
+    "CancelTaskRequest": {
+        "handler_name": "_send_cancel_task_request",
+        "method": "tasks/cancel",
+        "is_notification": False,
+    },
+    "PingRequest": {
+        "handler_name": "_send_ping_request",
+        "method": "ping",
+        "is_notification": False,
+    },
+}
+
 
 class ProtocolClient:
     """Client for fuzzing MCP protocol types."""
@@ -434,20 +552,7 @@ class ProtocolClient:
             )
             results.append(result)
 
-        if protocol_type == READ_RESOURCE_REQUEST:
-            results.extend(await self._fuzz_listed_resources())
-        elif protocol_type == GET_PROMPT_REQUEST:
-            results.extend(await self._fuzz_listed_prompts())
-        elif protocol_type == "CallToolRequest":
-            results.extend(await self._fuzz_listed_tools())
-        elif protocol_type in {
-            "ListTasksRequest",
-            "GetTaskRequest",
-            "GetTaskPayloadRequest",
-            "CancelTaskRequest",
-        }:
-            results.extend(await self._fuzz_observed_tasks(protocol_type))
-
+        await self._append_follow_up_results(results, protocol_type)
         return results
 
     async def _get_protocol_types(self) -> list[str]:
@@ -477,30 +582,34 @@ class ProtocolClient:
                         )
                     )
                 all_results[pt] = per_type
-            if READ_RESOURCE_REQUEST in all_results:
-                all_results[READ_RESOURCE_REQUEST].extend(
-                    await self._fuzz_listed_resources()
-                )
-            if GET_PROMPT_REQUEST in all_results:
-                all_results[GET_PROMPT_REQUEST].extend(
-                    await self._fuzz_listed_prompts()
-                )
-            if "CallToolRequest" in all_results:
-                all_results["CallToolRequest"].extend(await self._fuzz_listed_tools())
-            for protocol_type in (
-                "ListTasksRequest",
-                "GetTaskRequest",
-                "GetTaskPayloadRequest",
-                "CancelTaskRequest",
-            ):
-                if protocol_type in all_results:
-                    all_results[protocol_type].extend(
-                        await self._fuzz_observed_tasks(protocol_type)
-                    )
+            for protocol_type, results in all_results.items():
+                await self._append_follow_up_results(results, protocol_type)
             return all_results
         except Exception as e:
             self._logger.error(f"Failed to fuzz all protocol types: {e}")
             return {}
+
+    async def _append_follow_up_results(
+        self,
+        results: list[ProtocolFuzzResult],
+        protocol_type: str,
+    ) -> None:
+        if protocol_type == READ_RESOURCE_REQUEST:
+            results.extend(await self._fuzz_listed_resources())
+            return
+        if protocol_type == GET_PROMPT_REQUEST:
+            results.extend(await self._fuzz_listed_prompts())
+            return
+        if protocol_type == "CallToolRequest":
+            results.extend(await self._fuzz_listed_tools())
+            return
+        if protocol_type in {
+            "ListTasksRequest",
+            "GetTaskRequest",
+            "GetTaskPayloadRequest",
+            "CancelTaskRequest",
+        }:
+            results.extend(await self._fuzz_observed_tasks(protocol_type))
 
     def _extract_params(self, data: Any) -> dict[str, Any]:
         """Extract parameters from data, safely handling non-dict inputs.
@@ -589,53 +698,59 @@ class ProtocolClient:
     def _build_tool_arguments(self, tool: dict[str, Any]) -> dict[str, Any]:
         return _build_tool_arguments(tool)
 
-    async def _fetch_listed_resources(self) -> list[dict[str, Any]]:
+    async def _fetch_listed_items(
+        self,
+        *,
+        method: str,
+        key: str,
+        entity_name: str,
+        remember: Any | None = None,
+    ) -> list[dict[str, Any]]:
         try:
-            result = await self.transport.send_request("resources/list", {})
+            result = await self.transport.send_request(method, {})
         except Exception as exc:
-            self._logger.warning("Failed to list resources: %s", exc)
+            self._logger.warning("Failed to list %s: %s", entity_name, exc)
             return []
-        items = self._extract_list_items(result, "resources")
-        return [item for item in items if isinstance(item, dict)]
+
+        items = [
+            item
+            for item in self._extract_list_items(result, key)
+            if isinstance(item, dict)
+        ]
+        if remember is not None:
+            for item in items:
+                remember(item)
+        return items
+
+    async def _fetch_listed_resources(self) -> list[dict[str, Any]]:
+        return await self._fetch_listed_items(
+            method="resources/list",
+            key="resources",
+            entity_name="resources",
+        )
 
     async def _fetch_listed_prompts(self) -> list[dict[str, Any]]:
-        try:
-            result = await self.transport.send_request("prompts/list", {})
-        except Exception as exc:
-            self._logger.warning("Failed to list prompts: %s", exc)
-            return []
-        items = self._extract_list_items(result, "prompts")
-        return [item for item in items if isinstance(item, dict)]
+        return await self._fetch_listed_items(
+            method="prompts/list",
+            key="prompts",
+            entity_name="prompts",
+        )
 
     async def _fetch_listed_tools(self) -> list[dict[str, Any]]:
-        try:
-            result = await self.transport.send_request("tools/list", {})
-        except Exception as exc:
-            self._logger.warning("Failed to list tools: %s", exc)
-            return []
-        items = [
-            item
-            for item in self._extract_list_items(result, "tools")
-            if isinstance(item, dict)
-        ]
-        for tool in items:
-            self._remember_tool(tool)
-        return items
+        return await self._fetch_listed_items(
+            method="tools/list",
+            key="tools",
+            entity_name="tools",
+            remember=self._remember_tool,
+        )
 
     async def _fetch_listed_tasks(self) -> list[dict[str, Any]]:
-        try:
-            result = await self.transport.send_request("tasks/list", {})
-        except Exception as exc:
-            self._logger.warning("Failed to list tasks: %s", exc)
-            return []
-        items = [
-            item
-            for item in self._extract_list_items(result, "tasks")
-            if isinstance(item, dict)
-        ]
-        for task in items:
-            self._remember_task(task)
-        return items
+        return await self._fetch_listed_items(
+            method="tasks/list",
+            key="tasks",
+            entity_name="tasks",
+            remember=self._remember_task,
+        )
 
     async def _process_protocol_request(
         self,
@@ -776,31 +891,11 @@ class ProtocolClient:
         self, protocol_type: str, data: dict[str, Any]
     ) -> dict[str, Any]:
         """Send a protocol request based on the type."""
-        handler = {
-            "InitializeRequest": self._send_initialize_request,
-            "InitializedNotification": self._send_initialized_notification,
-            "ProgressNotification": self._send_progress_notification,
-            "CancelledNotification": self._send_cancelled_notification,
-            "ListToolsRequest": self._send_list_tools_request,
-            "CallToolRequest": self._send_call_tool_request,
-            "ListResourcesRequest": self._send_list_resources_request,
-            READ_RESOURCE_REQUEST: self._send_read_resource_request,
-            "ListResourceTemplatesRequest": self._send_list_resource_templates_request,
-            "SetLevelRequest": self._send_set_level_request,
-            "CreateMessageRequest": self._send_create_message_request,
-            "ListPromptsRequest": self._send_list_prompts_request,
-            GET_PROMPT_REQUEST: self._send_get_prompt_request,
-            "ListRootsRequest": self._send_list_roots_request,
-            "SubscribeRequest": self._send_subscribe_request,
-            "UnsubscribeRequest": self._send_unsubscribe_request,
-            "CompleteRequest": self._send_complete_request,
-            "ElicitRequest": self._send_elicit_request,
-            "ListTasksRequest": self._send_list_tasks_request,
-            "GetTaskRequest": self._send_get_task_request,
-            "GetTaskPayloadRequest": self._send_get_task_payload_request,
-            "CancelTaskRequest": self._send_cancel_task_request,
-            "PingRequest": self._send_ping_request,
-        }.get(protocol_type, self._send_generic_request)
+        spec = _PROTOCOL_SPECS.get(protocol_type)
+        handler_name = (
+            spec["handler_name"] if spec is not None else "_send_generic_request"
+        )
+        handler = getattr(self, handler_name)
         return await handler(data)
 
     async def _send_notification(self, method: str, data: Any) -> dict[str, str]:
@@ -810,95 +905,104 @@ class ProtocolClient:
 
     async def _send_initialize_request(self, data: Any) -> dict[str, Any]:
         """Send an initialize request."""
-        return await self._send_request("initialize", data)
+        return await self._send_protocol_action("InitializeRequest", data)
 
     async def _send_initialized_notification(self, data: Any) -> dict[str, str]:
         """Send the initialized notification."""
-        return await self._send_notification("notifications/initialized", data)
+        return await self._send_protocol_action("InitializedNotification", data)
 
     async def _send_progress_notification(self, data: Any) -> dict[str, str]:
         """Send a progress notification as JSON-RPC notification (no id)."""
-        return await self._send_notification("notifications/progress", data)
+        return await self._send_protocol_action("ProgressNotification", data)
 
     async def _send_cancelled_notification(self, data: Any) -> dict[str, str]:
         """Send a cancelled notification as JSON-RPC notification (no id)."""
-        return await self._send_notification("notifications/cancelled", data)
+        return await self._send_protocol_action("CancelledNotification", data)
 
     async def _send_list_tools_request(self, data: Any) -> dict[str, Any]:
         """Send a list tools request."""
-        return await self._send_request("tools/list", data)
+        return await self._send_protocol_action("ListToolsRequest", data)
 
     async def _send_call_tool_request(self, data: Any) -> dict[str, Any]:
         """Send a tool call request."""
-        return await self._send_request("tools/call", data)
+        return await self._send_protocol_action("CallToolRequest", data)
 
     async def _send_list_resources_request(self, data: Any) -> dict[str, Any]:
         """Send a list resources request."""
-        return await self._send_request("resources/list", data)
+        return await self._send_protocol_action("ListResourcesRequest", data)
 
     async def _send_read_resource_request(self, data: Any) -> dict[str, Any]:
         """Send a read resource request."""
-        return await self._send_request("resources/read", data)
+        return await self._send_protocol_action(READ_RESOURCE_REQUEST, data)
 
     async def _send_list_resource_templates_request(self, data: Any) -> dict[str, Any]:
         """Send a list resource templates request."""
-        return await self._send_request("resources/templates/list", data)
+        return await self._send_protocol_action("ListResourceTemplatesRequest", data)
 
     async def _send_set_level_request(self, data: Any) -> dict[str, Any]:
         """Send a set level request."""
-        return await self._send_request("logging/setLevel", data)
+        return await self._send_protocol_action("SetLevelRequest", data)
 
     async def _send_create_message_request(self, data: Any) -> dict[str, Any]:
         """Send a create message request."""
-        return await self._send_request("sampling/createMessage", data)
+        return await self._send_protocol_action("CreateMessageRequest", data)
 
     async def _send_list_prompts_request(self, data: Any) -> dict[str, Any]:
         """Send a list prompts request."""
-        return await self._send_request("prompts/list", data)
+        return await self._send_protocol_action("ListPromptsRequest", data)
 
     async def _send_get_prompt_request(self, data: Any) -> dict[str, Any]:
         """Send a get prompt request."""
-        return await self._send_request("prompts/get", data)
+        return await self._send_protocol_action(GET_PROMPT_REQUEST, data)
 
     async def _send_list_roots_request(self, data: Any) -> dict[str, Any]:
         """Send a list roots request."""
-        return await self._send_request("roots/list", data)
+        return await self._send_protocol_action("ListRootsRequest", data)
 
     async def _send_subscribe_request(self, data: Any) -> dict[str, Any]:
         """Send a subscribe request."""
-        return await self._send_request("resources/subscribe", data)
+        return await self._send_protocol_action("SubscribeRequest", data)
 
     async def _send_unsubscribe_request(self, data: Any) -> dict[str, Any]:
         """Send an unsubscribe request."""
-        return await self._send_request("resources/unsubscribe", data)
+        return await self._send_protocol_action("UnsubscribeRequest", data)
 
     async def _send_complete_request(self, data: Any) -> dict[str, Any]:
         """Send a complete request."""
-        return await self._send_request("completion/complete", data)
+        return await self._send_protocol_action("CompleteRequest", data)
 
     async def _send_elicit_request(self, data: Any) -> dict[str, Any]:
         """Send an elicitation request."""
-        return await self._send_request("elicitation/create", data)
+        return await self._send_protocol_action("ElicitRequest", data)
 
     async def _send_list_tasks_request(self, data: Any) -> dict[str, Any]:
         """Send a list tasks request."""
-        return await self._send_request("tasks/list", data)
+        return await self._send_protocol_action("ListTasksRequest", data)
 
     async def _send_get_task_request(self, data: Any) -> dict[str, Any]:
         """Send a get task request."""
-        return await self._send_request("tasks/get", data)
+        return await self._send_protocol_action("GetTaskRequest", data)
 
     async def _send_get_task_payload_request(self, data: Any) -> dict[str, Any]:
         """Send a get task payload request."""
-        return await self._send_request("tasks/result", data)
+        return await self._send_protocol_action("GetTaskPayloadRequest", data)
 
     async def _send_cancel_task_request(self, data: Any) -> dict[str, Any]:
         """Send a cancel task request."""
-        return await self._send_request("tasks/cancel", data)
+        return await self._send_protocol_action("CancelTaskRequest", data)
 
     async def _send_ping_request(self, data: Any) -> dict[str, Any]:
         """Send a ping request."""
-        return await self._send_request("ping", data)
+        return await self._send_protocol_action("PingRequest", data)
+
+    async def _send_protocol_action(
+        self, protocol_type: str, data: Any
+    ) -> dict[str, Any] | dict[str, str]:
+        spec = _PROTOCOL_SPECS[protocol_type]
+        method = spec["method"]
+        if spec["is_notification"]:
+            return await self._send_notification(method, data)
+        return await self._send_request(method, data)
 
     async def _send_request(self, method: str, data: Any) -> dict[str, Any]:
         return await self.transport.send_request(method, self._extract_params(data))

@@ -71,7 +71,15 @@ def test_extract_tool_runs_from_unexpected_value():
 def test_extract_tool_runs_from_error_only_entry():
     entry = {"success": False, "error": "phase failed", "exception": "boom"}
     runs, metadata = extract_tool_runs(entry)
-    assert runs == [{"success": False, "error": "phase failed", "exception": "boom", "safety_blocked": False, "safety_sanitized": False}]
+    assert runs == [
+        {
+            "success": False,
+            "error": "phase failed",
+            "exception": "boom",
+            "safety_blocked": False,
+            "safety_sanitized": False,
+        }
+    ]
     assert metadata is entry
 
 

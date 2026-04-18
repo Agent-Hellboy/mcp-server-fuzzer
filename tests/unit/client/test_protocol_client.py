@@ -236,6 +236,20 @@ async def test_fuzz_protocol_type_appends_listed_prompts():
     client._fuzz_listed_prompts.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_fetch_listed_tools_remembers_tools():
+    transport = MagicMock()
+    transport.send_request = AsyncMock(
+        return_value={"result": {"tools": [{"name": "alpha"}]}}
+    )
+    client = ProtocolClient(transport=transport, safety_system=None)
+
+    tools = await client._fetch_listed_tools()
+
+    assert tools == [{"name": "alpha"}]
+    assert "alpha" in client._observed_tools
+
+
 def test_extract_params_handles_non_dict():
     client = ProtocolClient(transport=MagicMock(), safety_system=None)
 

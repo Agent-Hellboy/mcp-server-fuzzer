@@ -129,6 +129,7 @@ async def test_fuzz_single_tool_with_timeout_returns_timeout_error():
         results = await client._fuzz_single_tool_with_timeout(tool, runs_per_tool=1)
 
     assert results[0]["error"] == "tool_timeout"
+    assert results[0]["timeout_scope"] == "session"
 
 
 @pytest.mark.asyncio
@@ -186,3 +187,34 @@ async def test_fuzz_tool_both_phases_runs():
 
     assert result["realistic"] == [{"ok": True}]
     assert result["aggressive"] == [{"ok": False}]
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_applies_per_call_timeout():
+    safety = MagicMock()
+    safety.should_skip_tool_call.return_value = False
+    safety.sanitize_tool_arguments.side_effect = lambda _name, args: args
+    client = ToolClient(
+        MagicMock(),
+        auth_manager=MagicMock(),
+        safety_system=safety,
+    )
+    client.tool_mutator.mutate = AsyncMock(return_value={"x": 1})
+
+    async def _slow_call(*_args, **_kwargs):
+        await asyncio.sleep(0.05)
+        return {"ok": True}
+
+    client._rpc = MagicMock()
+    client._rpc.call_tool = _slow_call
+
+    results = await client.fuzz_tool(
+        {"name": "alpha"},
+        runs=1,
+        tool_timeout=0.01,
+    )
+
+    assert results[0]["success"] is False
+    assert results[0]["error"] == "tool_timeout"
+    assert results[0]["timeout_scope"] == "call"
+    assert "timed out" in results[0]["exception"]

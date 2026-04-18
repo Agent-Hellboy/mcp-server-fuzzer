@@ -72,6 +72,7 @@ class ToolClient:
         result: Any = None,
         error: str | None = None,
         exception: str | None = None,
+        timeout_scope: str | None = None,
         spec_checks: list[dict[str, Any]] | None = None,
         spec_scope: str | None = None,
     ) -> dict[str, Any]:
@@ -89,6 +90,8 @@ class ToolClient:
             payload["error"] = error
         if exception is not None:
             payload["exception"] = exception
+        if timeout_scope is not None:
+            payload["timeout_scope"] = timeout_scope
         if spec_checks:
             payload["spec_checks"] = spec_checks
         if spec_scope is not None:
@@ -118,6 +121,7 @@ class ToolClient:
         args: dict[str, Any],
         *,
         label: str | None = None,
+        tool_timeout: float | None = None,
     ) -> dict[str, Any]:
         """Run one fuzzed tool call through safety, auth, RPC, and result shaping."""
         if self.safety_system and self.safety_system.should_skip_tool_call(
@@ -149,7 +153,9 @@ class ToolClient:
             args_for_call.update(auth_params)
 
         try:
-            result = await self._rpc.call_tool(tool_name, args_for_call)
+            result = await self._call_tool(
+                tool_name, args_for_call, tool_timeout=tool_timeout
+            )
             spec_checks = spec_guard.check_tool_result_content(result)
             response_signature = _response_shape_signature(result)
             self.tool_mutator.record_feedback(
@@ -168,6 +174,24 @@ class ToolClient:
                 spec_checks=spec_checks,
                 spec_scope="tool_result" if spec_checks else None,
             )
+        except asyncio.TimeoutError:
+            exception = self._tool_timeout_message(tool_timeout)
+            self._logger.warning("Tool %s call timed out: %s", tool_name, exception)
+            self.tool_mutator.record_feedback(
+                tool_name,
+                sanitized_args,
+                exception=exception,
+            )
+            call_result = self._build_tool_run_result(
+                args=sanitized_args,
+                label=label,
+                success=False,
+                safety_blocked=False,
+                safety_sanitized=safety_sanitized,
+                error="tool_timeout",
+                exception=exception,
+                timeout_scope="call",
+            )
         except Exception as e:
             self._logger.warning("Exception calling tool %s: %s", tool_name, e)
             self.tool_mutator.record_feedback(
@@ -184,6 +208,26 @@ class ToolClient:
             )
 
         return call_result
+
+    async def _call_tool(
+        self,
+        tool_name: str,
+        args_for_call: dict[str, Any],
+        *,
+        tool_timeout: float | None = None,
+    ) -> Any:
+        if tool_timeout is None:
+            return await self._rpc.call_tool(tool_name, args_for_call)
+        return await asyncio.wait_for(
+            self._rpc.call_tool(tool_name, args_for_call),
+            timeout=tool_timeout,
+        )
+
+    @staticmethod
+    def _tool_timeout_message(tool_timeout: float | None) -> str:
+        if tool_timeout is None:
+            return "Tool execution timed out"
+        return f"Tool execution timed out after {tool_timeout}s"
 
     async def _get_tools_from_server(self) -> list[dict[str, Any]]:
         """Get tools from the server.
@@ -258,6 +302,7 @@ class ToolClient:
                         safety_sanitized=False,
                         error="tool_timeout",
                         exception="Tool fuzzing timed out",
+                        timeout_scope="session",
                     )
                 ]
         except Exception as e:
@@ -296,6 +341,7 @@ class ToolClient:
                         tool_name,
                         args,
                         label=f"tool:{tool_name}",
+                        tool_timeout=tool_timeout,
                     )
                 )
 
@@ -426,6 +472,8 @@ class ToolClient:
         self,
         tool_name: str,
         fuzz_results: list[dict[str, Any]],
+        *,
+        tool_timeout: float | None = None,
     ) -> list[dict[str, Any]]:
         """Process fuzz results with safety checks and tool calls.
 
@@ -444,10 +492,30 @@ class ToolClient:
                     tool_name,
                     args,
                     label=f"tool:{tool_name}",
+                    tool_timeout=tool_timeout,
                 )
             )
 
         return processed
+
+    async def _run_tool_phase(
+        self,
+        tool: dict[str, Any],
+        *,
+        phase_name: str,
+        mutate_phase: str | None,
+        runs: int,
+    ) -> list[dict[str, Any]]:
+        tool_name = tool.get("name", "unknown")
+        self._logger.info("%s phase: %s", phase_name.title(), tool_name)
+        fuzz_results = []
+        for _ in range(runs):
+            if mutate_phase is None:
+                args = await self.tool_mutator.mutate(tool)
+            else:
+                args = await self.tool_mutator.mutate(tool, phase=mutate_phase)
+            fuzz_results.append({"args": args})
+        return await self._process_fuzz_results(tool_name, fuzz_results)
 
     async def fuzz_tool_both_phases(
         self, tool: dict[str, Any], runs_per_phase: int = 5
@@ -457,24 +525,17 @@ class ToolClient:
         self._logger.info(f"Starting two-phase fuzzing for tool: {tool_name}")
 
         try:
-            # Phase 1: Realistic fuzzing
-            self._logger.info(f"Phase 1 (Realistic): {tool_name}")
-            realistic_results = []
-            for i in range(runs_per_phase):
-                args = await self.tool_mutator.mutate(tool, phase="realistic")
-                realistic_results.append({"args": args})
-            realistic_processed = await self._process_fuzz_results(
-                tool_name, realistic_results
+            realistic_processed = await self._run_tool_phase(
+                tool,
+                phase_name="realistic",
+                mutate_phase="realistic",
+                runs=runs_per_phase,
             )
-
-            # Phase 2: Aggressive fuzzing
-            self._logger.info(f"Phase 2 (Aggressive): {tool_name}")
-            aggressive_results = []
-            for i in range(runs_per_phase):
-                args = await self.tool_mutator.mutate(tool)
-                aggressive_results.append({"args": args})
-            aggressive_processed = await self._process_fuzz_results(
-                tool_name, aggressive_results
+            aggressive_processed = await self._run_tool_phase(
+                tool,
+                phase_name="aggressive",
+                mutate_phase=None,
+                runs=runs_per_phase,
             )
 
             return {
