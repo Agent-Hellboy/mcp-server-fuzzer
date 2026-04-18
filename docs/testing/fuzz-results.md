@@ -71,7 +71,7 @@ python3 -m mcp_fuzzer --mode protocol --protocol-type InitializeRequest --protoc
 - **Input Validation**: ✅ Excellent validation - properly rejects invalid inputs with detailed error messages
 - **Enum Validation**: ✅ Robust enum validation for all parameters
 - **Type Safety**: ✅ Strong type validation using Zod schemas
-- **Safety System**: ✅ Successfully blocked XSS attempts and dangerous scripts
+- **Safety System**: ✅ Contained filesystem path escapes and prevented external app launches during testing
 - **Error Handling**: ✅ Comprehensive error messages for developers
 
 ##### Detailed Tool Performance
@@ -134,7 +134,7 @@ python3 -m mcp_fuzzer --mode protocol --protocol-type InitializeRequest --protoc
 - **Excellent Input Validation**: Server properly rejects invalid enum values, type mismatches, and malformed inputs
 - **Robust Type Safety**: Strong Zod schema validation catches type errors (boolean vs null, string vs number)
 - **Enum Validation Working**: All enum parameters properly validate against allowed values
-- **Safety System Effective**: Successfully blocked XSS attempts and dangerous script injections
+- **Safety System Effective**: Contained filesystem path escapes and prevented external side effects while leaving payload content intact for fuzzing
 - **Detailed Error Messages**: Clear, helpful error messages for developers
 - **Production Ready**: 90% success rate indicates robust, well-tested server
 - **Browser Automation**: All core browser automation tools work perfectly (100% success rate)
@@ -153,9 +153,9 @@ python3 -m mcp_fuzzer --mode protocol --protocol-type InitializeRequest --protoc
 - `take_screenshot.fullPage`: Rejects `number` and `string` values, expects `boolean`
 
 **Safety System Working:**
-- Blocked XSS attempts: `<script>alert('xss')</script>`
+- Dangerous payload strings were still delivered to the target for fuzzing coverage
 - Blocked dangerous file paths: `../../../etc/passwd`
-- Blocked SQL injection attempts: `' OR '1'='1`
+- Prevented browser/app launches via PATH-based command blocking
 
 ### DesktopCommanderMCP Server
 
@@ -311,7 +311,7 @@ python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode al
 - **Input Validation**: ✅ Server properly rejects malformed inputs with detailed error messages
 - **Error Handling**: ✅ Comprehensive validation for data types, array constraints, and enum values
 - **Schema Compliance**: ✅ Server validates complex chart data structures correctly
-- **Safety System**: ✅ Successfully blocked dangerous content (XSS, file paths, SQL injection)
+- **Safety System**: ✅ Successfully constrained filesystem access and blocked risky external operations during fuzzing
 
 ##### Detailed Fuzzing Results Summary
 
@@ -350,7 +350,7 @@ python -m mcp_fuzzer --protocol stdio --endpoint "node build/index.js" --mode al
 - **Input Validation Issues:** Type mismatches, missing required fields, empty arrays
 - **Schema Validation Errors:** Invalid enum values for themes and parameters
 - **Performance Issues:** Some tools exceeded timeout limits (60+ seconds)
-- **Safety System Effectiveness:** Successfully blocked XSS attempts, file path injections, and other dangerous content
+- **Safety System Effectiveness:** Successfully constrained filesystem paths and blocked risky external operations during fuzzing
 
 ##### Common Error Patterns Found
 - Invalid data types (string vs object, boolean vs number, array vs string)

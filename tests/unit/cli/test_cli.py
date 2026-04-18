@@ -515,6 +515,40 @@ def test_run_cli_orchestration_invokes_runner():
         mock_runner.assert_called_once()
 
 
+def test_run_cli_uses_endpoint_loaded_from_config():
+    args = _base_args(endpoint=None, config="custom.yml")
+
+    def _build_config(_args):
+        _args.endpoint = "http://localhost:8000"
+        return CliConfig(
+            args=_args,
+            merged={
+                "enable_safety_system": False,
+                "endpoint": "http://localhost:8000",
+            },
+        )
+
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
+        patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
+        patch("mcp_fuzzer.cli.entrypoint.build_cli_config", side_effect=_build_config),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+        patch("mcp_fuzzer.cli.entrypoint.prepare_inner_argv", return_value=["prog"]),
+        patch("mcp_fuzzer.cli.entrypoint.ClientSettings"),
+        patch("mcp_fuzzer.cli.entrypoint.SafetyController"),
+        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt"),
+    ):
+        mock_validator = mock_vm_cls.return_value
+
+        def _validate_arguments(received_args):
+            assert received_args.endpoint == "http://localhost:8000"
+
+        mock_validator.validate_arguments.side_effect = _validate_arguments
+        mock_validator.validate_transport.return_value = None
+        run_cli()
+
+
 def test_run_cli_transport_error_exit(monkeypatch):
     args = _base_args()
     with (

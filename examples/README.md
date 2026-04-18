@@ -23,7 +23,7 @@ You should see log lines like:
 
 ```
 INFO:__main__:Test server started on http://localhost:8000
-INFO:__main__:Available tools: test_tool, echo_tool
+INFO:__main__:Available tools: test_tool, echo_tool, secure_tool
 Press Ctrl+C to stop
 ```
 

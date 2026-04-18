@@ -237,9 +237,9 @@ class ToolExecutor:
 
 **Safety Integration:**
 - Checks if tool calls should be skipped (e.g., dangerous file operations)
-- Sanitizes arguments to remove dangerous content
+- Sanitizes filesystem-path arguments when a sandbox root is configured
 - Tracks blocked operations and safety events
-- Generates safe mock responses for blocked operations
+- Returns structured blocked results when operations are skipped
 
 #### ProtocolExecutor
 

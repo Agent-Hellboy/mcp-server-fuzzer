@@ -123,7 +123,7 @@ graph TD
     K -.-> S[Stateful Sequences (optional)]
     S --> R
 
-    N --> T[Collect Results]
+    N --> T[Collect Results + Spec Checks]
     R --> T
     T --> U[Reporter + OutputManager]
     U --> V[Console/Files]
@@ -133,10 +133,10 @@ graph TD
 
 ```mermaid
 graph TD
-    A[Tool Call] --> B[Sanitize Arguments]
-    B --> C{Dangerous?}
+    A[Tool Call] --> B[Path Sanitization]
+    B --> C{Blocked by Provider?}
     C -->|Yes| D[log_blocked_operation]
-    D --> E[create_safe_mock_response]
+    D --> E[Skip or return mock response]
     C -->|No| F[Execute]
 
     subgraph CommandBlocker
@@ -250,7 +250,7 @@ The runtime management system provides robust, asynchronous subprocess lifecycle
 
 - `manager.py`: Fully async ProcessManager for start/stop processes, send signals, await exit, collect stats
 - `watchdog.py`: ProcessWatchdog for monitoring registered PIDs for hangs/inactivity and terminating them based on policy
-- `executor.py`: AsyncFuzzExecutor providing concurrency control, error handling, and result aggregation
+- `fuzz_engine/executor/async_executor.py`: AsyncFuzzExecutor providing concurrency control for fuzzing operations
 
 **Runtime Features:**
 
@@ -367,9 +367,10 @@ The safety system provides multiple layers of protection against dangerous opera
 
 - **Pluggable Safety Providers**: Protocol-based safety system allowing custom implementations
 - **Pattern Detection Helpers**: `DangerDetector` is available for custom providers
-- **SafetyFilter Class**: Default provider with optional filesystem path sanitization
+- **SafetyFilter Class**: Default provider with optional filesystem path sanitization and reporting hooks
 - **System Command Blocking**: When system-level safety is enabled, the `SystemCommandBlocker` PATH shim can be installed to prevent dangerous commands
 - **Filesystem Sandboxing**: Confines file operations to specified directories when enabled
+- **Network Policy**: Optional host allowlisting and redirect/header sanitization for networked transports and subprocesses
 - **Process Management**: Safe subprocess handling with timeouts
 - **Optional Mock Responses**: Helpers to build safe JSON-RPC errors if you choose to block
 

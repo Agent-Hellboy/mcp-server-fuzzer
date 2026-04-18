@@ -156,13 +156,15 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase ag
   --protocol http --endpoint http://localhost:8000
 
 # With safety system enabled
-mcp-fuzzer --mode tools --enable-safety-system --safety-report
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+  --enable-safety-system --safety-report
 
 # Export results to multiple formats
-mcp-fuzzer --mode tools --export-csv results.csv --export-html results.html
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+  --export-csv results.csv --export-html results.html
 
-# Use configuration file
-mcp-fuzzer --config my-config.yaml
+# Use configuration file (matching the example below)
+mcp-fuzzer --config config.yaml
 ```
 
 ## Examples
@@ -208,10 +210,14 @@ docker-compose run --rm fuzzer \
 
 **Using Local Installation:**
 ```bash
-# Local server testing
+# Local stdio server testing
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" \
            --enable-safety-system --fs-root /tmp/safe
 ```
+
+Replace `my_server.py` with your own stdio MCP server. This repository bundles
+HTTP and StreamableHTTP example servers under [`examples/`](examples/README.md),
+but it does not currently ship a stdio example server.
 
 ### Configuration File Usage
 
@@ -346,8 +352,7 @@ docker run --rm -it \
   --endpoint "node /servers/my-mcp-server.js stdio" \
   --runs 100 \
   --enable-safety-system \
-  --output-dir /output \
-  --export-json /output/results.json
+  --output-dir /output
 ```
 
 ### Example: Fuzzing an HTTP Server
@@ -402,10 +407,12 @@ export MCP_PASSWORD="your-password"
 
 ```bash
 # High concurrency for fast networks
-mcp-fuzzer --process-max-concurrency 20 --watchdog-check-interval 0.5
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+  --process-max-concurrency 20 --watchdog-check-interval 0.5
 
 # Conservative settings for slow/unreliable servers
-mcp-fuzzer --timeout 120 --process-retry-count 5 --process-retry-delay 2.0
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+  --timeout 120 --process-retry-count 5 --process-retry-delay 2.0
 ```
 
 ## Key Features
@@ -440,7 +447,7 @@ The system is built with a modular architecture:
 - **Transport Layer**: Protocol abstraction (HTTP/SSE/Stdio)
 - **Fuzzing Engine**: Test orchestration and execution
 - **Strategy System**: Data generation (realistic + aggressive)
-- **Safety System**: Core filter + SystemBlocker PATH shim; safe mock responses
+- **Safety System**: Core filter + PATH-based command blocker, plus blocked-operation reporting
 - **Runtime**: Fully async ProcessManager + ProcessWatchdog
 - **Authentication**: Multiple auth provider support
 - **Reporting**: FuzzerReporter, Console/JSON/Text formatters, SafetyReporter
@@ -484,20 +491,23 @@ mcp-fuzzer --validate-config config.yaml
 **Memory Issues**
 ```bash
 # Reduce concurrency for memory-constrained environments
-mcp-fuzzer --process-max-concurrency 2 --runs 25
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+  --process-max-concurrency 2 --runs 25
 ```
 
 **Permission Errors**
 ```bash
 # Run with appropriate permissions or use safety system
-mcp-fuzzer --enable-safety-system --fs-root /tmp/safe
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" \
+  --enable-safety-system --fs-root /tmp/safe
 ```
 
 ### Debug Mode
 
 ```bash
 # Enable verbose logging
-mcp-fuzzer --verbose --log-level DEBUG
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+  --verbose --log-level DEBUG
 
 # Check environment
 mcp-fuzzer --check-env

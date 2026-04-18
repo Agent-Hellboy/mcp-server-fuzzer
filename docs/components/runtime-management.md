@@ -60,8 +60,8 @@ async def basic_process_management():
 
     # Start a process
     config = ProcessConfig(
-        command=["python", "test_server.py"],
-        name="test_server",
+        command=["python", "my_server.py"],
+        name="stdio_server",
         timeout=60.0
     )
     process = await manager.start_process(config)
@@ -324,11 +324,11 @@ async def basic_watchdog_usage():
     watchdog = ProcessWatchdog(registry, signals, config, logger=logger)
     await watchdog.start()
 
-    process = await asyncio.create_subprocess_exec("python", "test_server.py")
+    process = await asyncio.create_subprocess_exec("python", "my_server.py")
     await registry.register(
         process.pid,
         process,
-        ProcessConfig(command=["python", "test_server.py"], name="test_server"),
+        ProcessConfig(command=["python", "my_server.py"], name="stdio_server"),
     )
     await watchdog.update_activity(process.pid)
 
@@ -617,8 +617,8 @@ async def complete_runtime_example():
     try:
         # Start a test server
         server_config = ProcessConfig(
-            command=["python", "test_server.py"],
-            name="test_server",
+            command=["python", "my_server.py"],
+            name="stdio_server",
             timeout=60.0
         )
         server_process = await manager.start_process(server_config)
@@ -679,7 +679,7 @@ class ManagedStdioTransport(StdioTransport):
 # Usage
 async def managed_transport_example():
     manager = ProcessManager.from_config()
-    transport = ManagedStdioTransport("python test_server.py", manager)
+    transport = ManagedStdioTransport("python my_server.py", manager)
 
     try:
         await transport.connect()

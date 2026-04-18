@@ -176,7 +176,7 @@ custom_transports:
 
 ```yaml
 output:
-  format: "json"                 # json, yaml, csv, xml
+  format: "json"                 # Parsed as json/yaml/csv/xml; JSON is what the writer emits today
   directory: "./reports"         # Output directory
   compress: true                 # Compress output files
   types:                         # Specific output types
@@ -185,8 +185,8 @@ output:
     - "safety_summary"
   # performance_metrics and configuration_dump are reserved
   retention:
-    days: 30                     # Retain files for N days
-    max_size: "1GB"              # Maximum directory size
+    days: 30                     # Accepted by schema; housekeeping is not enforced by the current reporter
+    max_size: "1GB"              # Accepted by schema; housekeeping is not enforced by the current reporter
 ```
 
 ## Advanced Examples
@@ -201,7 +201,7 @@ safety_enabled: false
 mode: "tools"
 phase: "realistic"
 protocol: "stdio"
-endpoint: "python test_server.py"
+endpoint: "python my_server.py"
 runs: 5
 max_concurrency: 2
 
@@ -219,7 +219,7 @@ log_level: "WARNING"
 safety_enabled: true
 mode: "all"
 phase: "aggressive"
-protocol: "https"
+protocol: "http"
 endpoint: "https://api.production.com/mcp/"
 runs: 50
 max_concurrency: 10
@@ -237,8 +237,8 @@ output:
   directory: "/var/log/mcp-fuzzer"
   compress: true
   retention:
-    days: 90
-    max_size: "10GB"
+    days: 90                     # Accepted by schema; not enforced by the current reporter
+    max_size: "10GB"             # Accepted by schema; not enforced by the current reporter
 ```
 
 ### CI/CD Pipeline

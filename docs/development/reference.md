@@ -112,7 +112,7 @@ Notes:
 | `--output-types` | List | - | Output types to generate (fuzzing_results, error_report, safety_summary; performance_metrics/configuration_dump reserved) |
 | `--output-schema` | Path | - | Path to custom output schema file |
 | `--output-compress` | Flag | False | Compress output files |
-| `--output-session-id` | String | - | Custom session ID for output files |
+| `--output-session-id` | String | - | Parsed session ID override (currently not applied by the output writer) |
 
 Notes:
 
@@ -359,8 +359,8 @@ async def process_manager_example():
 
     # Start a process
     config = ProcessConfig(
-        command=["python", "test_server.py"],
-        name="test_server",
+        command=["python", "my_server.py"],
+        name="stdio_server",
         timeout=60.0
     )
     process = await manager.start_process(config)
@@ -671,7 +671,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 20
 # - fuzzing_report_<session_id>.json (full structured report)
 # - fuzzing_report_<session_id>.txt (human-readable summary)
 # - safety_report_<session_id>.json (if --export-safety-data is enabled)
-# - Standardized JSON outputs under reports/sessions/<session_id>/...
+# - Standardized JSON outputs under detailed_reports/sessions/<session_id>/...
 ```
 
 ### Configuration Validation
@@ -819,7 +819,10 @@ mcp_fuzzer/
     runtime/
       manager.py           # Async ProcessManager (start/stop, signals)
       watchdog.py          # ProcessWatchdog (hang detection)
-      wrapper.py           # Async helpers/executor wrapper
+      lifecycle.py         # Async process start/stop lifecycle helpers
+      monitor.py           # Process inspection and monitoring helpers
+      signals.py           # Signal-dispatch strategies for termination
+      config.py            # Watchdog/runtime configuration
   transport/
     interfaces/driver.py   # TransportDriver interface
     drivers/http_driver.py # JSON over HTTP
@@ -1227,7 +1230,7 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --verbo
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --timeout 60.0
 
 # Retry with safety on interrupt
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --retry-with-safety-on-interrupt
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --retry-with-safety-on-interrupt
 
 # Custom tool timeout
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-timeout 30.0

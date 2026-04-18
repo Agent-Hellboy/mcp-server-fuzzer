@@ -206,7 +206,7 @@ mcp-fuzzer --output-schema ./custom_schema.json
 # Compress output files
 mcp-fuzzer --output-compress
 
-# Custom session ID
+# Parsed but currently ignored session ID override
 mcp-fuzzer --output-session-id my-session-123
 ```
 

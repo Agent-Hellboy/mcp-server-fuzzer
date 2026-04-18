@@ -13,8 +13,8 @@ Use `ProcessManager.from_config(...)` for the default runtime wiring, or build y
 
 ```python
 config = ProcessConfig(
-    command=["python", "test_server.py"],
-    name="test_server",  # Clear, descriptive name
+    command=["python", "my_server.py"],
+    name="stdio_server",  # Clear, descriptive name
     timeout=60.0
 )
 ```

@@ -70,7 +70,7 @@ First, ensure you have an MCP server running. You can use any of these transport
 
 - **SSE**: `http://localhost:8000/sse`
 
-- **Stdio**: `python test_server.py`
+- **Stdio**: `python my_server.py`
 
 - **StreamableHTTP**: `http://localhost:8000/mcp` (use `--protocol streamablehttp`)
 
@@ -85,8 +85,8 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 
 # With verbose output
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --verbose
 
-# With safety system enabled
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 5 --enable-safety-system
+# With safety system enabled for a local stdio server
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 5 --enable-safety-system
 ```
 
 #### Single Tool Fuzzing
@@ -130,19 +130,19 @@ The MCP Fuzzer automatically generates comprehensive reports for each fuzzing se
 
 ```bash
 # Generate reports in default 'reports' directory
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
 
 # Specify custom output directory
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --output-dir "my_reports"
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --output-dir "my_reports"
 
 # Generate comprehensive safety report
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --safety-report
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --safety-report
 
 # Export safety data to JSON
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --export-safety-data
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --export-safety-data
 ```
 
-Each fuzzing session creates session-id based reports:
+Each fuzzing session creates `session_id`-based reports:
 - **`fuzzing_report_<session_id>.json`** - Complete structured data for analysis
 - **`fuzzing_report_<session_id>.txt`** - Human-readable summary for sharing
 - **`safety_report_<session_id>.json`** - Detailed safety system data (if enabled)
@@ -274,7 +274,7 @@ Create `auth_config.json`:
 Use with fuzzer:
 
 ```bash
-mcp-fuzzer --mode tools --auth-config auth_config.json --endpoint http://localhost:8000
+mcp-fuzzer --mode tools --protocol http --auth-config auth_config.json --endpoint http://localhost:8000
 ```
 
 ### Using Environment Variables
@@ -284,7 +284,7 @@ export MCP_API_KEY="sk-your-api-key"
 export MCP_USERNAME="user"
 export MCP_PASSWORD="password"
 
-mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
+mcp-fuzzer --mode tools --protocol http --auth-env --endpoint http://localhost:8000
 ```
 
 ## Safety System
@@ -293,13 +293,13 @@ mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
 
 ```bash
 # Enable system command blocking (argument-level safety hooks are already on)
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --enable-safety-system
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --enable-safety-system
 
 # Set filesystem root
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --fs-root /tmp/safe_dir
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --fs-root /tmp/safe_dir
 
 # Disable argument-level safety (not recommended)
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no-safety
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --no-safety
 
 ```
 
@@ -321,23 +321,23 @@ The MCP Fuzzer automatically generates comprehensive reports for each fuzzing se
 
 ```bash
 # Generate reports in default 'reports' directory
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
 
 # Specify custom output directory
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --output-dir "my_reports"
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --output-dir "my_reports"
 ```
 
 ### Enhanced Safety Reporting
 
 ```bash
 # Show comprehensive safety report
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --safety-report
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --safety-report
 
 # Export safety data to JSON
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --export-safety-data
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --export-safety-data
 
 # Combine both features
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --safety-report --export-safety-data
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --safety-report --export-safety-data
 ```
 
 ### Generated Reports
@@ -368,7 +368,7 @@ Standardized JSON outputs are also written under
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20
 
 # Test local stdio server with safety
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --enable-safety-system
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10 --enable-safety-system
 ```
 
 ### Testing Production-Like Environment

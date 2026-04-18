@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 REQUIRED_AUTH_SCHEME = "Bearer"
 BIND_HOST = os.getenv("BIND_HOST", "0.0.0.0")
-BIND_PORT = int(os.getenv("BIND_PORT", "8003"))
-REQUIRED_TOKEN = os.getenv("REQUIRED_TOKEN", "xxx")
+BIND_PORT = int(os.getenv("BIND_PORT", "8000"))
+REQUIRED_TOKEN = os.getenv("REQUIRED_TOKEN", "secret123")
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", f"http://{BIND_HOST}:{BIND_PORT}")
 
 

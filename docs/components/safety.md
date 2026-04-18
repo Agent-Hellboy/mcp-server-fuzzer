@@ -128,7 +128,7 @@ Example:
 mcp-fuzzer \
   --mode tools \
   --protocol stdio \
-  --endpoint "python test_server.py" \
+  --endpoint "python my_server.py" \
   --enable-safety-system \
   --fs-root /tmp/mcp_sandbox \
   --safety-report \

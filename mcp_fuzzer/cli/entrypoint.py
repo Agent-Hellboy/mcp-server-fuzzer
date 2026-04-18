@@ -33,7 +33,6 @@ def run_cli() -> None:
         args = parse_arguments()
         setup_logging(args)
         validator = ValidationManager()
-        validator.validate_arguments(args)
         if args.validate_config:
             validator.validate_config_file(args.validate_config)
             sys.exit(0)
@@ -43,6 +42,7 @@ def run_cli() -> None:
 
         cli_config = build_cli_config(args)
         config = cli_config.merged
+        validator.validate_arguments(args)
 
         is_utility_command = (
             getattr(args, "check_env", False)

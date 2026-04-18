@@ -89,7 +89,7 @@ mcp-fuzzer --mode protocol --protocol-type CreateMessageRequest --protocol sse -
 
 ```bash
 # Fuzz Python script
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10
 
 # Fuzz Node.js server
 mcp-fuzzer --mode tools --protocol stdio --endpoint "node server.js" --runs 10
@@ -102,13 +102,13 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "./bin/mcp-server" --runs 10
 
 ```bash
 # Enable safety system for stdio
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --enable-safety-system
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10 --enable-safety-system
 
 # With filesystem sandboxing
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --enable-safety-system --fs-root /tmp/safe_dir
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10 --enable-safety-system --fs-root /tmp/safe_dir
 
 # Retry with safety on interrupt
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --retry-with-safety-on-interrupt
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10 --retry-with-safety-on-interrupt
 ```
 
 ## Authentication Examples
@@ -143,7 +143,7 @@ Create `auth_config.json`:
 Use with fuzzer:
 
 ```bash
-mcp-fuzzer --mode tools --auth-config auth_config.json --endpoint http://localhost:8000
+mcp-fuzzer --mode tools --protocol http --auth-config auth_config.json --endpoint http://localhost:8000
 ```
 
 #### Environment Variables Approach
@@ -152,7 +152,7 @@ mcp-fuzzer --mode tools --auth-config auth_config.json --endpoint http://localho
 export MCP_API_KEY="sk-your-api-key"
 export MCP_HEADER_NAME="Authorization"
 
-mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
+mcp-fuzzer --mode tools --protocol http --auth-env --endpoint http://localhost:8000
 ```
 
 ### Basic Authentication
@@ -161,7 +161,7 @@ mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
 export MCP_USERNAME="user"
 export MCP_PASSWORD="password"
 
-mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
+mcp-fuzzer --mode tools --protocol http --auth-env --endpoint http://localhost:8000
 ```
 
 ## Safety System Examples
@@ -170,13 +170,13 @@ mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
 
 ```bash
 # Enable safety system
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --enable-safety-system
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --enable-safety-system
 
 # Set custom filesystem root
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --fs-root /tmp/mcp_fuzzer_safe
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --fs-root /tmp/mcp_fuzzer_safe
 
 # Disable argument-level safety (not recommended)
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no-safety
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --no-safety
 
 ```
 
@@ -184,10 +184,10 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no
 
 ```bash
 # Retry with safety on interrupt
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --retry-with-safety-on-interrupt
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --retry-with-safety-on-interrupt
 
 # Combined safety options
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" \
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" \
   --enable-safety-system \
   --fs-root /tmp/safe_dir \
   --retry-with-safety-on-interrupt
@@ -251,7 +251,7 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --verbose
 
 # Test local stdio server with safety
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 10 --enable-safety-system
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10 --enable-safety-system
 
 # Test both modes on local server
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 15
@@ -291,23 +291,23 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase ag
 
 ```bash
 # Generate reports in default 'reports' directory
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
 
 # Specify custom output directory
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --output-dir "my_reports"
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --output-dir "my_reports"
 
 # Generate comprehensive safety report
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --safety-report
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --safety-report
 ```
 
 ### Advanced Reporting
 
 ```bash
 # Export safety data to JSON with custom filename
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --export-safety-data "safety_data.json"
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --export-safety-data "safety_data.json"
 
 # Combine all reporting features
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 \
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 \
     --safety-report \
     --export-safety-data \
     --output-dir "detailed_reports"
@@ -315,10 +315,10 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --ru
 
 ### Generated Report Files
 
-Each fuzzing session creates session-id based reports plus standardized outputs:
+Each fuzzing session creates `session_id`-based reports plus standardized outputs:
 
 ```text
-reports/
+detailed_reports/
 |-- fuzzing_report_550e8400-e29b-41d4-a716-446655440000.json    # Complete structured report
 |-- fuzzing_report_550e8400-e29b-41d4-a716-446655440000.txt     # Human-readable summary
 |-- safety_report_550e8400-e29b-41d4-a716-446655440000.json     # Safety system data (if enabled)
@@ -339,7 +339,7 @@ reports/
     "start_time": "2025-08-12T14:30:00.123456",
     "mode": "tools",
     "protocol": "stdio",
-    "endpoint": "python server.py",
+    "endpoint": "python my_server.py",
     "runs": 10,
     "fuzzer_version": "1.0.0",
     "end_time": "2025-08-12T14:30:15.654321"
@@ -372,7 +372,7 @@ session_id: 550e8400-e29b-41d4-a716-446655440000
 start_time: 2025-08-12T14:30:00.123456
 mode: tools
 protocol: stdio
-endpoint: python server.py
+endpoint: python my_server.py
 runs: 10
 
 SUMMARY STATISTICS
@@ -406,7 +406,7 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --verbo
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --timeout 120.0
 
 # Test with retry mechanism
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --retry-with-safety-on-interrupt
+mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --retry-with-safety-on-interrupt
 
 # Test with custom tool timeout
 mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-timeout 60.0
@@ -452,13 +452,13 @@ mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-
 
 ```bash
 # Generate comprehensive safety report
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 20 --safety-report
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --safety-report
 
 # Export safety data to JSON
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 20 --export-safety-data
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-safety-data
 
 # Combine safety reporting with custom output directory
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 20 \
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
     --safety-report \
     --export-safety-data \
     --output-dir "detailed_safety_reports"

@@ -8,7 +8,8 @@ between components.
 
 - Schema-first: always respect MCP JSON Schema while still exploring edges.
 - Two-phase fuzzing: realistic for conformance, aggressive for robustness.
-- Safety-first: gate risky actions and constrain filesystem/network access.
+- Safety-first: gate risky actions, constrain filesystem/network access, and
+  report blocked operations without mutating the dangerous payloads being fuzzed.
 - Deterministic where useful: cycle boundaries and enums for repeatability.
 - Feedback-aware: reuse interesting inputs without instrumentation.
 
@@ -34,7 +35,7 @@ graph TD
     Request --> Transport[Transport (HTTP/SSE/STDIO/StreamableHTTP)]
     Transport --> Target[MCP Server]
     Target --> Response[Response]
-    Response --> Checks[Spec + Safety Checks]
+    Response --> Checks[Spec Checks + Response Signatures]
     Checks --> Feedback[Signatures / Feedback]
     Feedback --> SeedPool
     Response --> Reports[Reports]
@@ -69,9 +70,12 @@ graph TD
 
 ## Safety considerations
 
-- Safety checks run before and after execution.
-- Unsafe operations are blocked or downgraded.
-- Reports include safety annotations for auditability.
+- Safety checks run before execution for tool/path sanitization, protocol
+  blocking hooks, command blocking, and network policy enforcement.
+- Fuzz payloads containing dangerous strings are generally preserved as test
+  inputs; the default safety filter mainly sanitizes filesystem paths.
+- After execution, the system records spec-check results, response signatures,
+  and blocked-operation reports for auditability and feedback-guided reseeding.
 
 ## Design trade-offs
 

@@ -433,8 +433,8 @@ async def basic_process_management():
     try:
         # Start a test server
         config = ProcessConfig(
-            command=["python", "test_server.py"],
-            name="test_server",
+            command=["python", "my_server.py"],
+            name="stdio_server",
             timeout=60.0
         )
         process = await manager.start_process(config)

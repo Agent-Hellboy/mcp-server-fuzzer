@@ -37,9 +37,12 @@ pip install -e .
    # Fuzz protocol types on an SSE server
    mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 5
 
-   # Fuzz with safety system enabled
-   mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 5 --enable-safety-system
+   # Fuzz a local stdio server with safety enabled
+   mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 5 --enable-safety-system
    ```
+
+   The repository bundles HTTP and StreamableHTTP example servers under
+   `examples/`, but it does not currently ship a stdio example server.
 3. **View results** in beautiful, colorized tables
 
 ## Key Features
@@ -89,7 +92,7 @@ pip install -e .
 
 - **Multiple Output Formats** - Console, JSON, and text for different use cases
 
-- **Session Tracking** - Session-id based reports with timestamps in metadata
+- **Session Tracking** - `session_id`-based reports with timestamps in metadata
 
 ## Architecture
 
