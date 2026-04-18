@@ -72,6 +72,8 @@ First, ensure you have an MCP server running. You can use any of these transport
 
 - **Stdio**: `python test_server.py`
 
+- **StreamableHTTP**: `http://localhost:8000/mcp` (use `--protocol streamablehttp`)
+
 ### 2. Run Basic Fuzzing
 
 #### Tool Fuzzing (Default Mode)
@@ -110,6 +112,8 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --e
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5 --verbose
 ```
 
+Use `--protocol-phase aggressive` when you want malformed protocol payloads.
+
 ### 3. View Results
 
 Results are displayed in beautiful, colorized tables showing:
@@ -138,10 +142,14 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --ru
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --runs 10 --export-safety-data
 ```
 
-Each fuzzing session creates timestamped reports:
-- **`fuzzing_report_YYYYMMDD_HHMMSS.json`** - Complete structured data for analysis
-- **`fuzzing_report_YYYYMMDD_HHMMSS.txt`** - Human-readable summary for sharing
-- **`safety_report_YYYYMMDD_HHMMSS.json`** - Detailed safety system data (if enabled)
+Each fuzzing session creates session-id based reports:
+- **`fuzzing_report_<session_id>.json`** - Complete structured data for analysis
+- **`fuzzing_report_<session_id>.txt`** - Human-readable summary for sharing
+- **`safety_report_<session_id>.json`** - Detailed safety system data (if enabled)
+
+Standardized JSON outputs are also written under
+`reports/sessions/<session_id>/` with timestamped filenames (for example,
+`*_fuzzing_results.json`).
 
 ## Configuration
 
@@ -165,6 +173,10 @@ fs_root: "~/.mcp_fuzzer"
 ```
 
 ## Fuzzing Modes
+
+Tool fuzzing uses `--phase` (`realistic`, `aggressive`, or `both`). Protocol,
+resource, prompt, and stateful fuzzing use `--protocol-phase` (`realistic` or
+`aggressive`, default: `realistic`).
 
 ### Tool Fuzzing Mode
 
@@ -196,10 +208,34 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --e
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000
 
 # Realistic protocol fuzzing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase realistic --protocol http --endpoint http://localhost:8000
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase realistic --protocol http --endpoint http://localhost:8000
 
 # Aggressive protocol fuzzing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase aggressive --protocol http --endpoint http://localhost:8000
+```
+
+### Resource and Prompt Modes
+
+These modes run spec-guard checks (unless `--spec-guard` is disabled) and then
+fuzz the related request types.
+
+```bash
+# Resource endpoints
+mcp-fuzzer --mode resources --protocol http --endpoint http://localhost:8000 \
+  --spec-resource-uri file:///tmp/resource.txt
+
+# Prompt endpoints
+mcp-fuzzer --mode prompts --protocol http --endpoint http://localhost:8000 \
+  --spec-prompt-name summarize \
+  --spec-prompt-args '{"text":"hello"}'
+```
+
+### Stateful Sequences (Optional)
+
+```bash
+# Run learned protocol sequences after protocol fuzzing
+mcp-fuzzer --mode protocol --protocol http --endpoint http://localhost:8000 \
+  --stateful --stateful-runs 3
 ```
 
 ## Authentication
@@ -256,7 +292,7 @@ mcp-fuzzer --mode tools --auth-env --endpoint http://localhost:8000
 ### Basic Safety Features
 
 ```bash
-# Enable system command blocking (argument-level filtering is already on)
+# Enable system command blocking (argument-level safety hooks are already on)
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --enable-safety-system
 
 # Set filesystem root
@@ -269,13 +305,13 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --no
 
 ### Safety System Features
 
-- **System Command Blocking**: Prevents execution of dangerous commands
+- **System Command Blocking**: Prevents execution of dangerous commands when `--enable-safety-system` is set
 
-- **Filesystem Sandboxing**: Confines file operations to specified directories
+- **Filesystem Sandboxing**: Confines file operations to specified directories when `--fs-root` is set
 
-- **Process Isolation**: Safe subprocess handling with timeouts
+- **Process Management**: Safe subprocess handling with watchdog timeouts
 
-- **Dangerous Content Filtering**: URL/script/command pattern detection with mock responses
+- **Safety Hooks**: Detection helpers available if you implement custom blocking
 
 ## Reporting and Output
 
@@ -308,17 +344,20 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --ru
 
 Each fuzzing session creates:
 
-- **`fuzzing_report_YYYYMMDD_HHMMSS.json`** - Complete structured data for analysis
-- **`fuzzing_report_YYYYMMDD_HHMMSS.txt`** - Human-readable summary for sharing
-- **`safety_report_YYYYMMDD_HHMMSS.json`** - Detailed safety system data (if enabled)
+- **`fuzzing_report_<session_id>.json`** - Complete structured data for analysis
+- **`fuzzing_report_<session_id>.txt`** - Human-readable summary for sharing
+- **`safety_report_<session_id>.json`** - Detailed safety system data (if enabled)
+
+Standardized JSON outputs are also written under
+`reports/sessions/<session_id>/` with timestamped filenames.
 
 ### Report Contents
 
-- **Session metadata**: Configuration, timestamps, and execution parameters
+- **Session metadata**: Mode, protocol, endpoint, runs, and timestamps
 - **Tool results**: Success rates, exceptions, and safety blocks
-- **Protocol results**: Error counts and security ratings
+- **Protocol results**: Error counts and success rates
 - **Safety data**: Blocked operations, risk assessments, and system status
-- **Summary statistics**: Overall success rates and performance metrics
+- **Summary statistics**: Overall success rates and execution timing
 
 ## Common Use Cases
 
@@ -339,7 +378,7 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python test_server.py" --ru
 mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api.example.com --runs 15
 
 # Test protocol compliance
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase realistic --protocol http --endpoint https://api.example.com --runs-per-type 8
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase realistic --protocol http --endpoint https://api.example.com --runs-per-type 8
 ```
 
 ### Security Testing
@@ -349,7 +388,7 @@ mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase realistic -
 mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 25
 
 # Protocol security testing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
+mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
 ```
 
 ## Troubleshooting

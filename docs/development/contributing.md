@@ -206,8 +206,8 @@ End-to-end tests often spawn local MCP servers and can trigger external
 processes. Use the same safety features that the CLI exposes when running tests
 manually:
 
-- Set `MCP_FUZZER_SAFETY_ENABLED=true` (or pass `--enable-safety-system` to CLI
-  invocations inside tests) so argument filtering stays active.
+- Argument-level safety hooks are enabled by default; avoid `--no-safety`.
+  Use `--enable-safety-system` when you need system command blocking.
 - Provide a dedicated sandbox directory via `MCP_FUZZER_FS_ROOT` or `--fs-root`
   to contain any files created by tools under test.
 - When you intentionally disable safety (for example, to fuzz filesystem-heavy
@@ -395,7 +395,7 @@ class CustomToolStrategy:
 
 To introduce new safety capabilities:
 
-1. **Extend or wrap `SafetyFilter`** (for argument-level filtering) or add helpers
+1. **Extend or wrap `SafetyFilter`** (for argument-level safety hooks) or add helpers
    under `safety_system/blocking`, `detection`, or `filesystem` as appropriate.
 2. **Expose configuration hooks** (CLI flags or config file entries) when needed.
 3. **Write unit tests** covering the new patterns, shims, or sandbox behaviors.
@@ -714,7 +714,9 @@ def analyze_fuzzing_report(report_path):
             print(f"  - {operation['operation']}: {operation['reason']}")
 
 # Usage
-analyze_fuzzing_report("reports/fuzzing_report_20250812_143000.json")
+analyze_fuzzing_report(
+    "reports/fuzzing_report_550e8400-e29b-41d4-a716-446655440000.json"
+)
 ```
 
 #### Safety Report Analysis
@@ -749,7 +751,9 @@ def analyze_safety_report(safety_report_path):
         print(f"  - {block['timestamp']}: {block['operation']}")
 
 # Usage
-analyze_safety_report("reports/safety_report_20250812_143000.json")
+analyze_safety_report(
+    "reports/safety_report_550e8400-e29b-41d4-a716-446655440000.json"
+)
 ```
 
 #### Programmatic Report Creation
@@ -856,8 +860,8 @@ def compare_reports(report1_path, report2_path):
 
 # Usage
 compare_reports(
-    "reports/fuzzing_report_20250812_143000.json",
-    "reports/fuzzing_report_20250812_150000.json"
+    "reports/fuzzing_report_550e8400-e29b-41d4-a716-446655440000.json",
+    "reports/fuzzing_report_1f4d2a77-1fda-4c5a-9f8b-9c1b2b73a5a1.json"
 )
 ```
 

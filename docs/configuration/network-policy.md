@@ -22,42 +22,16 @@ from urllib.parse import urlparse
 import ipaddress
 
 def _normalize_host(host: str) -> str:
-    """Normalize host to handle URLs, mixed case, etc."""
+    """Normalize host to handle URLs, mixed case, and host:port."""
     if not host:
         return ""
     s = host.strip().lower()
-    # Accept bare host or URL; extract hostname if URL-like
     if "://" in s:
         parsed = urlparse(s)
-        host = (parsed.hostname or "").strip().lower()
+        host = parsed.hostname or s
     else:
-        # Handle bracketed IPv6 like "[::1]:8080"
-        if s.startswith("["):
-            end = s.find("]")
-            host = s[1:end] if end != -1 else s
-        else:
-            # Handle unbracketed forms:
-            # 1) Plain IPv6 literal (multiple colons, no port)
-            # 2) IPv6 with trailing :port (non-standard but seen in the wild)
-            if s.count(":") > 1:
-                # Try to split off a trailing port only if it looks like one
-                left, sep, right = s.rpartition(":")
-                if sep and right.isdigit():
-                    try:
-                        port = int(right)
-                        if 0 <= port <= 65535 and isinstance(ipaddress.ip_address(left), ipaddress.IPv6Address):
-                            host = left
-                        else:
-                            host = s
-                    except ValueError:
-                        host = s
-                else:
-                    host = s
-            else:
-                # Otherwise, treat as hostname[:port]
-                host = s.split(":", 1)[0]
-    # Normalize trailing dot for FQDNs
-    return host.rstrip(".")
+        host = s.split(":", 1)[0] if ":" in s and not s.startswith("[") else s
+    return host.strip().lower()
 ```
 
 This ensures:
@@ -71,7 +45,7 @@ This ensures:
 
 The system enforces access control with the following features:
 
-- **Default-deny policy**: Only explicitly allowed hosts can be contacted
+- **Opt-in deny policy**: When enabled, only allowed hosts can be contacted
 - **Local host allowlist**: Standard local addresses (localhost, 127.0.0.1, etc.)
 - **Runtime configuration**: Dynamically adjust policy at runtime
 - **Additional allowed hosts**: Add specific hosts to the allowlist
@@ -124,14 +98,10 @@ The system uses these default settings:
 SAFETY_LOCAL_HOSTS = [
     "localhost", "127.0.0.1", "::1"
 ]
-SAFETY_NO_NETWORK_DEFAULT = True
+SAFETY_NO_NETWORK_DEFAULT = False
 
-# (Optional, recommended) Example explicit blocks to mitigate SSRF:
-# SAFETY_BLOCKED_CIDRS = [
-#   "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8",
-#   "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16",
-#   "::/128", "::1/128", "fc00::/7", "fe80::/10"
-# ]
+# No CIDR denylist is enforced today; use `--no-network` + `--allow-host`
+# for explicit control.
 ```
 
 ### Runtime Configuration

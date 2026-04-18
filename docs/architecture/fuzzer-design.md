@@ -31,7 +31,7 @@ graph TD
     Mutator --> SeedPool[Seed Pool]
     Strategy --> Payloads[Payload + Boundary Gen]
     Mutator --> Request[Build Request]
-    Request --> Transport[Transport (HTTP/SSE/stdio)]
+    Request --> Transport[Transport (HTTP/SSE/STDIO/StreamableHTTP)]
     Transport --> Target[MCP Server]
     Target --> Response[Response]
     Response --> Checks[Spec + Safety Checks]

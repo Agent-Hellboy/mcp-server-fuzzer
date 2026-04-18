@@ -381,11 +381,11 @@ The MCP Fuzzer provides comprehensive testing capabilities across multiple serve
 - **MCP Fuzzer:** Latest version with comprehensive safety systems
 - **Safety Features:**
   - Command blocking for dangerous system calls
-  - URL and file path sanitization
-  - Process isolation and monitoring
-  - Content filtering for malicious payloads
+  - File path sanitization when the sandbox is enabled
+  - Process management and monitoring
+  - Network policy controls when `--no-network` / `--allow-host` are used
 - **Testing Modes:** Tools, Protocol, and Combined testing
-- **Output:** Standardized reports with JSON, XML, HTML, and Markdown formats
+- **Output:** JSON reports plus optional CSV/XML/HTML/Markdown exports; standardized outputs are JSON
 
 ## How To Run These Tests
 
@@ -480,7 +480,7 @@ Our MCP fuzzing framework has proven highly effective across multiple server typ
 
 ## Key Framework Capabilities
 
-- **Safety Systems Work:** Command blocking, URL filtering, and content sanitization effectively prevent malicious operations
+- **Safety Systems Work:** Command blocking, optional filesystem sandboxing, and network policy controls help prevent dangerous side effects
 - **Comprehensive Testing:** Both tools and protocol-level testing provide thorough validation
 - **Input Validation:** Successfully detects and reports detailed validation errors across different server types
 - **Real-world Ready:** Production-ready safety features make it suitable for testing MCP servers in development and production environments

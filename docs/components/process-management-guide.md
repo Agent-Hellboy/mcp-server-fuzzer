@@ -469,6 +469,7 @@ debug_executor = AsyncFuzzExecutor(
 async def monitor_processes(manager):
     while True:
         stats = await manager.get_stats()
+        # stats includes status counts + watchdog stats
         print(f"Process stats: {stats}")
 
         # List all processes
@@ -489,17 +490,31 @@ async def monitor_watchdog(watchdog):
         await asyncio.sleep(5)
 ```
 
-#### Executor Statistics
+#### Executor Observability
+
+`AsyncFuzzExecutor` does not expose built-in counters. Track concurrency in the
+caller if you need it:
 
 ```python
-async def monitor_executor(executor):
-    # Monitor running tasks
-    running_count = len(executor._running_tasks)
-    print(f"Running tasks: {running_count}")
+stats = {"in_flight": 0, "completed": 0}
 
-    # Monitor semaphore
-    semaphore_count = executor._semaphore._value
-    print(f"Available semaphore slots: {semaphore_count}")
+def wrap(op, *args, **kwargs):
+    async def _wrapped():
+        stats["in_flight"] += 1
+        try:
+            if asyncio.iscoroutinefunction(op):
+                return await op(*args, **kwargs)
+            return await asyncio.to_thread(op, *args, **kwargs)
+        finally:
+            stats["in_flight"] -= 1
+            stats["completed"] += 1
+
+    return _wrapped
+
+# Wrap operations before passing to execute_batch
+operations = [(wrap(my_async_op), [], {}), (wrap(my_sync_op), [], {})]
+results = await executor.execute_batch(operations)
+print(f"In flight: {stats['in_flight']} Completed: {stats['completed']}")
 ```
 
 ### Error Recovery Patterns

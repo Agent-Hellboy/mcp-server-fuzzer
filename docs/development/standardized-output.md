@@ -10,7 +10,7 @@ The standardized output format provides:
 - **Versioned Protocol**: Protocol versioning for future compatibility
 - **Machine Readable**: Easily parseable by scripts and other tools
 - **Extensible**: Support for adding new output types without breaking existing parsers
-- **Validated**: Schema validation ensures output integrity
+- **Validated**: Lightweight structural checks before saving; JSON schema is provided for external tooling
 
 ## Protocol Structure
 
@@ -44,6 +44,10 @@ All standardized outputs follow this base structure:
 
 ## Output Types
 
+Currently, the fuzzer emits `fuzzing_results`, `error_report`, and
+`safety_summary`. The `performance_metrics` and `configuration_dump` types are
+reserved and not emitted yet; their schemas may change before release.
+
 ### Fuzzing Results
 
 Contains comprehensive fuzzing results including tool and protocol test outcomes.
@@ -69,7 +73,7 @@ Contains comprehensive fuzzing results including tool and protocol test outcomes
         "exceptions": 2,
         "safety_blocked": 0,
         "success_rate": 80.0,
-        "exceptions": [
+        "exception_details": [
           {
             "type": "ValueError",
             "message": "Invalid argument format",
@@ -86,7 +90,8 @@ Contains comprehensive fuzzing results including tool and protocol test outcomes
         "errors": 0,
         "success_rate": 100.0
       }
-    ]
+    ],
+    "spec_summary": {}
   },
   "metadata": {
     "execution_time": "PT2M30S",
@@ -177,63 +182,15 @@ Contains safety system statistics and blocked operations.
 }
 ```
 
-### Performance Metrics
+### Performance Metrics (Reserved)
 
-Contains timing and resource usage data.
+`performance_metrics` is reserved for future timing/resource reporting. The
+current CLI does not emit this output type.
 
-```json
-{
-  "protocol_version": "1.0.0",
-  "timestamp": "2024-01-01T00:00:00Z",
-  "tool_version": "0.1.6",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "output_type": "performance_metrics",
-  "data": {
-    "metrics": {
-      "total_execution_time": "PT5M30S",
-      "average_response_time": "PT0.5S",
-      "memory_peak_usage": "150MB",
-      "cpu_usage_percent": 75.5
-    },
-    "benchmarks": {
-      "tools_per_second": 2.1,
-      "requests_per_second": 45.8
-    }
-  },
-  "metadata": {
-    "collection_timestamp": "2024-01-01T00:00:00Z",
-    "metrics_count": 4
-  }
-}
-```
+### Configuration Dump (Reserved)
 
-### Configuration Dump
-
-Contains the current tool configuration state.
-
-```json
-{
-  "protocol_version": "1.0.0",
-  "timestamp": "2024-01-01T00:00:00Z",
-  "tool_version": "0.1.6",
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "output_type": "configuration_dump",
-  "data": {
-    "configuration": {
-      "mode": "tools",
-      "protocol": "http",
-      "endpoint": "http://localhost:8000",
-      "timeout": 30.0,
-      "runs": 10
-    },
-    "source": "runtime"
-  },
-  "metadata": {
-    "config_keys_count": 5,
-    "dump_timestamp": "2024-01-01T00:00:00Z"
-  }
-}
-```
+`configuration_dump` is reserved for future configuration snapshot exports. The
+current CLI does not emit this output type.
 
 ## CLI Options
 
@@ -253,6 +210,10 @@ mcp-fuzzer --output-compress
 mcp-fuzzer --output-session-id my-session-123
 ```
 
+Note: standardized outputs are always written as JSON today. `--output-format`,
+`--output-schema`, and `--output-session-id` are parsed but not yet applied by
+the output writer.
+
 ### Configuration File
 
 Output settings can be configured via YAML configuration file:
@@ -260,16 +221,13 @@ Output settings can be configured via YAML configuration file:
 ```yaml
 output:
   format: json
-  directory: ./output
-  compression: true
+  directory: ./reports
+  compress: true
   types:
     - fuzzing_results
     - error_report
     - safety_summary
   schema: ./schemas/output_v1.json
-  retention:
-    days: 30
-    max_size: "1GB"
 ```
 
 ## File Organization
@@ -277,31 +235,25 @@ output:
 ### Directory Structure
 
 ```
-output/
+reports/
 ├── sessions/
 │   └── {session_id}/
 │       ├── 20240101_000000_fuzzing_results.json
 │       ├── 20240101_000001_error_report.json
 │       └── 20240101_000002_safety_summary.json
-└── reports/
-    ├── daily/
-    ├── weekly/
-    └── monthly/
 ```
 
 ### Naming Conventions
 
-- **Session-based**: `{timestamp}_{session_id}_{type}.{format}`
-- **Time-based**: `{date}_{type}_{summary}.{format}`
-- **Custom**: User-defined naming patterns
+- **Session-based**: `sessions/{session_id}/{timestamp}_{output_type}.json`
 
 Example filenames:
-- `20240101_000000_550e8400-e29b-41d4-a716-446655440000_fuzzing_results.json`
-- `2024-01-01_fuzzing_summary.json`
+- `sessions/550e8400-e29b-41d4-a716-446655440000/20240101_000000_fuzzing_results.json`
+- `sessions/550e8400-e29b-41d4-a716-446655440000/20240101_000001_error_report.json`
 
 ## Schema Validation
 
-All outputs are validated against the protocol schema before saving. Invalid outputs will raise a `ValidationError`.
+Outputs are validated for required fields and valid `output_type` before saving. The JSON schema is provided for external tooling; invalid outputs raise a `ValidationError`.
 
 ```python
 from mcp_fuzzer.reports.output import OutputProtocol
@@ -310,7 +262,7 @@ protocol = OutputProtocol()
 output = protocol.create_fuzzing_results_output(...)
 
 if protocol.validate_output(output):
-    filepath = protocol.save_output(output, "./output")
+    filepath = protocol.save_output(output, "./reports")
 ```
 
 ## Integration Examples
@@ -325,11 +277,12 @@ mcp-fuzzer --mode all --output-types fuzzing_results,error_report --output-forma
 # Parse results in CI/CD
 python -c "
 import json
-with open('output/sessions/*/fuzzing_results.json') as f:
-    data = json.load(f)
-    success_rate = data['metadata']['success_rate']
-    if success_rate < 80:
-        exit(1)
+from pathlib import Path
+path = next(Path('reports/sessions').rglob('*_fuzzing_results.json'))
+data = json.loads(path.read_text())
+success_rate = data['metadata']['success_rate']
+if success_rate < 80:
+    exit(1)
 "
 ```
 
@@ -339,7 +292,7 @@ with open('output/sessions/*/fuzzing_results.json') as f:
 from mcp_fuzzer.reports.output import OutputManager
 
 # Create output manager
-manager = OutputManager("./output")
+manager = OutputManager("./reports")
 
 # Generate and save results
 filepath = manager.save_fuzzing_results(
@@ -380,7 +333,7 @@ def parse_fuzzing_results(filepath):
 
 # Process all results
 results = []
-for file in Path("./output/sessions").rglob("*fuzzing_results.json"):
+for file in Path("./reports/sessions").rglob("*fuzzing_results.json"):
     results.append(parse_fuzzing_results(file))
 ```
 
@@ -450,8 +403,8 @@ Each `output_type` maps to a data payload:
 - `fuzzing_results`: mode, protocol, endpoint, tool/protocol summaries, spec summary.
 - `error_report`: list of errors + warnings, execution context.
 - `safety_summary`: blocked operations, safety statistics, risk assessment.
-- `performance_metrics`: metrics and benchmarks.
-- `configuration_dump`: resolved configuration snapshot.
+- `performance_metrics`: reserved (not emitted yet).
+- `configuration_dump`: reserved (not emitted yet).
 
 ## API Reference
 

@@ -21,35 +21,34 @@ flowchart TB
     A1[Parser (cli/parser.py)]
     A2[Config Merge (cli/config_merge.py)]
     A3[Validation Manager (cli/validators.py)]
-    A4[Entrypoint runner (cli/entrypoint.py)]
+    A4[Entrypoint (cli/entrypoint.py)]
   end
 
   subgraph Client
-    B1[MCPFuzzerClient (client/main.py)]
-    B2[Safety Integration]
-    B3[Reporting Integration]
+    B0[Unified Runner (client/main.py)]
+    B1[MCPFuzzerClient (client/base.py)]
+    B2[ToolClient]
+    B3[ProtocolClient]
   end
 
   subgraph Transports
+    C0[Transport Drivers]
     C1[HTTP]
     C2[SSE]
     C3[STDIO]
-    C4[Custom Drivers]
+    C4[StreamableHTTP]
+    C5[Custom Drivers]
   end
 
-  subgraph Fuzz_Engine
-    D1[ToolExecutor]
-    D2[ProtocolExecutor]
-    D3[Mutators]
-    D4[AsyncFuzzExecutor]
-    D5[FuzzerReporter]
+  subgraph Mutators
+    D1[ToolMutator]
+    D2[ProtocolMutator]
+    D3[Seed Pool / Corpus]
   end
 
   subgraph Runtime[Async Runtime]
     R1[ProcessManager]
     R2[ProcessWatchdog]
-    R3[Process Lifecycle]
-    R4[Signal Handling]
   end
 
   subgraph Safety_System
@@ -60,35 +59,39 @@ flowchart TB
 
   subgraph Reports
     F1[FuzzerReporter]
-    F2[Formatters]
-    F3[SafetyReporter]
+    F2[OutputManager]
+    F3[Formatters]
+    F4[SafetyReporter]
   end
 
-  A1 --> A2 --> A3 --> A4
-  A4 --> B1
+  A1 --> A2 --> A3 --> A4 --> B0 --> B1
+  B1 --> B2
+  B1 --> B3
 
-  B1 --> C1
-  B1 --> C2
-  B1 --> C3
-  B1 --> C4
-  B1 --> D1
-  B1 --> D2
+  C0 --> C1
+  C0 --> C2
+  C0 --> C3
+  C0 --> C4
+  C0 --> C5
+
+  B2 --> C0
+  B3 --> C0
+  B2 --> D1
+  B3 --> D2
+  D1 --> D3
+  D2 --> D3
+
+  B2 --> E1
+  B3 --> E1
+  E1 --> F4
+
   B1 --> F1
-
-  D1 --> E1
-  D2 --> E1
-  D1 --> D4
-  D2 --> D4
+  F1 --> F2
+  F1 --> F3
+  C0 -.-> E3
 
   C3 -.-> R1
   R1 --> R2
-  R2 -.-> R3
-  R1 -.-> R4
-
-  B1 --> E1
-  E1 --> F3
-  F1 --> F2
-  C1 -.-> E3
 ```
 
 ## Data Flow
@@ -99,31 +102,31 @@ flowchart TB
 graph TD
     A[CLI] --> B[Parse Arguments]
     B --> C[Merge CLI + Config]
-    C --> D[Validate Args/Env/Transport]
-    D --> E[Create Transport (build_driver)]
+    C --> D[Validate Args/Env]
+    D --> E[Build Transport + Auth]
     E --> F[Init Client + Reporter]
-    F --> G[Discover Tools]
+    F --> G[Build Run Plan]
     G --> H{Mode}
 
-    H -->|Tools| I[ToolExecutor]
-    H -->|Protocol| J[Spec Guard] --> K[ProtocolExecutor]
+    H -->|Tools| I[ToolClient]
+    H -->|Protocol| J[Spec Guard] --> K[ProtocolClient]
+    H -->|Resources/Prompts| J --> K
+    H -->|All| I --> J --> K
 
     I --> L[ToolMutator]
-    K --> M[ProtocolMutator]
+    L --> M[SafetyFilter (tool args)]
+    M --> N[Send tool call via Transport]
 
-    L --> N[AsyncFuzzExecutor]
-    M --> N
-    N --> O[Send via Transport]
+    K --> P[ProtocolMutator]
+    P --> Q[SafetyFilter (protocol)]
+    Q --> R[Send raw via Transport]
+    K -.-> S[Stateful Sequences (optional)]
+    S --> R
 
-    O --> P{SafetyFilter}
-    P -->|Block| Q[Log + Mock Response]
-    P -->|Allow/Sanitize| R[Execute Request]
-
-    R --> S[Collect Results]
-    Q --> S
-
-    S --> T[Reporter Formats + Writes]
-    T --> U[Console/Files]
+    N --> T[Collect Results]
+    R --> T
+    T --> U[Reporter + OutputManager]
+    U --> V[Console/Files]
 ```
 
 ### Safety System Flow
@@ -363,13 +366,12 @@ The safety system provides multiple layers of protection against dangerous opera
 **Safety Features:**
 
 - **Pluggable Safety Providers**: Protocol-based safety system allowing custom implementations
-- **Pattern-Based Filtering**: Comprehensive pattern matching for dangerous content
-- **SafetyFilter Class**: Main implementation with URL/command blocking
+- **Pattern Detection Helpers**: `DangerDetector` is available for custom providers
+- **SafetyFilter Class**: Default provider with optional filesystem path sanitization
 - **System Command Blocking**: The `SystemCommandBlocker` PATH shim prevents execution of dangerous commands
-- **Filesystem Sandboxing**: Confines file operations to specified directories
-- **Process Isolation**: Safe subprocess handling with timeouts
-- **Input Sanitization**: Filters potentially dangerous input
-- **Mock Response Generation**: Safe responses for blocked operations
+- **Filesystem Sandboxing**: Confines file operations to specified directories when enabled
+- **Process Management**: Safe subprocess handling with timeouts
+- **Optional Mock Responses**: Helpers to build safe JSON-RPC errors if you choose to block
 
 ### 9. Authentication System
 
@@ -465,7 +467,7 @@ The configuration system provides centralized configuration management with mult
 
 ### 11. Reporting System
 
-The reporting system provides centralized output management and comprehensive result reporting with multiple output formats and real-time progress tracking.
+The reporting system provides centralized output management and comprehensive result reporting with multiple output formats and standardized artifacts.
 
 **Key Components:**
 
@@ -478,14 +480,14 @@ The reporting system provides centralized output management and comprehensive re
 
 - **Multi-Format Output**: Console summaries plus JSON, text, CSV, XML, HTML, and Markdown exports
 - **Standardized Artifacts**: Output protocol produces structured JSON bundles for fuzzing, safety, and error data
-- **Real-time Progress**: Live progress indicators and status updates during fuzzing
-- **Result Aggregation**: Comprehensive statistics, success rates, and performance metrics
+- **Console Summaries**: Rich startup configuration tables and end-of-run summaries
+- **Result Aggregation**: Comprehensive statistics, success rates, and execution timing
 - **Safety Reporting**: Detailed breakdown of blocked operations, risk assessments, and security events
-- **Session Tracking**: Timestamped reports with unique session identification and metadata
+- **Session Tracking**: Session-id based reports with timestamps captured in metadata
 
 **Output Formats:**
 
-- **Console**: Interactive tables with colors, progress bars, and real-time updates
+- **Console**: Rich tables with colors and summary output
 - **JSON/Text**: Machine-readable structured data plus readable summaries for doc handoffs
 - **CSV/XML**: Spreadsheet- and enterprise-friendly formats for data analysis
 - **HTML/Markdown**: Presentation-ready exports for reports and runbooks
@@ -495,29 +497,27 @@ The reporting system provides centralized output management and comprehensive re
 
 - **Fuzzing Reports**: Complete tool and protocol testing results with detailed metrics
 - **Safety Reports**: Comprehensive safety system data, blocked operations, and risk analysis
-- **Session Reports**: Execution metadata, configuration snapshots, and performance statistics
-- **Performance Reports**: Detailed timing, resource usage, and scalability metrics
+- **Session Reports**: Execution metadata and timing statistics
+- **Performance Reports**: Reserved for future timing/resource metrics
 - **Error Reports**: Categorized error analysis with root cause identification
 
 **Reporting Architecture:**
 
 ```mermaid
 graph TD
-    A[Fuzzing Engine] --> B[FuzzerReporter]
-    B --> C{Output Format}
-    C -->|Console| D[ConsoleFormatter]
-    C -->|JSON| E[JSONFormatter]
-    C -->|Text| F[TextFormatter]
-    C -->|CSV| G[CSVFormatter]
+    A[Fuzzing Clients] --> B[FuzzerReporter]
+    B --> C[OutputManager]
+    C --> D[Standardized JSON Sessions]
+
+    B --> E[FormatterRegistry]
+    E --> F[ConsoleFormatter]
+    E --> G[JSON/Text/CSV/XML/HTML/Markdown]
 
     B --> H[SafetyReporter]
-    H --> I[Risk Assessment]
-    H --> J[Blocked Operations]
 
-    D --> K[Terminal Output]
-    E --> L[File System]
-    F --> L
-    G --> L
+    F --> I[Terminal Output]
+    G --> J[Report Files]
+    H --> J
 ```
 
 **Configuration Options:**
@@ -531,7 +531,7 @@ output:
     - "fuzzing_results"
     - "error_report"
     - "safety_summary"
-    - "performance_metrics"
+  # performance_metrics and configuration_dump are reserved
   schema: "./custom_schema.json" # Custom output schema file
 ```
 
@@ -633,39 +633,42 @@ The `AsyncFuzzExecutor` provides controlled concurrency and robust error handlin
 ```mermaid
 sequenceDiagram
     participant CLI as CLI
-    participant Client as Unified Client
+    participant Runner as Unified Runner
+    participant ToolClient as ToolClient
+    participant Mutator as ToolMutator
+    participant Safety as SafetyFilter
+    participant Auth as AuthManager
     participant Transport as Transport
     participant Server as MCP Server
-    participant Fuzzer as Tool Fuzzer
-    participant Executor as AsyncFuzzExecutor
-    participant Strategy as Strategy Manager
+    participant Reporter as Reporter
 
-    CLI->>Client: Initialize with transport
-    Client->>Transport: Create transport instance
-    Transport->>Server: Discover available tools
-    Server-->>Transport: Return tool list
-    Transport-->>Client: Tool list received
+    CLI->>Runner: Start run
+    Runner->>ToolClient: Fuzz tools
+    ToolClient->>Transport: tools/list
+    Transport->>Server: tools/list
+    Server-->>Transport: tools
+    Transport-->>ToolClient: tool list
 
-    loop For each tool
-        Client->>Fuzzer: Fuzz tool
-        Fuzzer->>Strategy: Request test data
-        Strategy-->>Fuzzer: Return test data
-
-        Fuzzer->>Executor: Execute batch operations
-
-        loop For each test run (concurrent)
-            Executor->>Client: Execute tool call
-            Client->>Transport: Send tool request
-            Transport->>Server: Execute tool
-            Server-->>Transport: Return result
-            Transport-->>Client: Result received
-            Client-->>Executor: Tool result
-            Executor->>Fuzzer: Record result
+    loop For each tool/run
+        ToolClient->>Mutator: mutate(tool)
+        Mutator-->>ToolClient: args
+        ToolClient->>Safety: sanitize (fs-root) / optional block
+        alt Custom block
+            Safety-->>ToolClient: blocked
+            ToolClient->>Reporter: record blocked
+        else Pass-through
+            Safety-->>ToolClient: args (pass-through / fs-root sanitized)
+            ToolClient->>Auth: get auth params
+            Auth-->>ToolClient: auth params
+            ToolClient->>Transport: tools/call
+            Transport->>Server: call tool
+            Server-->>Transport: result/error
+            Transport-->>ToolClient: response
+            ToolClient->>Reporter: record result + spec checks
         end
     end
 
-    Fuzzer-->>Client: Fuzzing complete
-    Client-->>CLI: Generate report
+    Runner-->>Reporter: write reports
 ```
 
 ### Protocol Fuzzing Flow
@@ -673,36 +676,43 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant CLI as CLI
-    participant Client as Unified Client
+    participant Runner as Unified Runner
+    participant SpecGuard as Spec Guard
+    participant ProtocolClient as ProtocolClient
+    participant Mutator as ProtocolMutator
+    participant Safety as SafetyFilter
     participant Transport as Transport
     participant Server as MCP Server
-    participant Fuzzer as Protocol Fuzzer
-    participant Executor as AsyncFuzzExecutor
-    participant Strategy as Strategy Manager
+    participant Reporter as Reporter
 
-    CLI->>Client: Initialize with transport
-    Client->>Transport: Create transport instance
+    CLI->>Runner: Start run
+    Runner->>SpecGuard: run spec suite (protocol/resources/prompts)
+    SpecGuard-->>Reporter: record checks
+    Runner->>ProtocolClient: Fuzz protocol types
 
-    loop For each protocol type
-        Client->>Fuzzer: Fuzz protocol type
-        Fuzzer->>Strategy: Request protocol messages
-        Strategy-->>Fuzzer: Return test messages
-
-        Fuzzer->>Executor: Execute batch operations
-
-        loop For each test run (concurrent)
-            Executor->>Client: Execute protocol message
-            Client->>Transport: Send protocol message
-            Transport->>Server: Execute protocol
-            Server-->>Transport: Return response
-            Transport-->>Client: Response received
-            Client-->>Executor: Protocol response
-            Executor->>Fuzzer: Record result
+    loop For each protocol type/run
+        ProtocolClient->>Mutator: mutate(protocol_type, protocol_phase)
+        Mutator-->>ProtocolClient: message
+        ProtocolClient->>Safety: optional block/sanitize (custom)
+        alt Custom block
+            Safety-->>ProtocolClient: blocked
+            ProtocolClient->>Reporter: record blocked
+        else Pass-through
+            Safety-->>ProtocolClient: message (pass-through)
+            ProtocolClient->>Transport: send_raw
+            Transport->>Server: request
+            Server-->>Transport: response
+            Transport-->>ProtocolClient: response
+            ProtocolClient->>Reporter: record result + spec checks
         end
     end
 
-    Fuzzer-->>Client: Fuzzing complete
-    Client-->>CLI: Generate report
+    opt Stateful enabled
+        ProtocolClient->>Mutator: build stateful sequence
+        ProtocolClient->>Transport: send sequence
+    end
+
+    Runner-->>Reporter: write reports
 ```
 
 ## Design Principles
@@ -737,10 +747,10 @@ The system is designed for extensibility:
 
 Safety is built into every layer:
 
-- **Danger pattern detection** blocks suspicious URLs, scripts, and command content
-- **Input sanitization** filters potentially dangerous data
-- **System command blocking** prevents command execution
-- **Filesystem sandboxing** confines file operations
+- **Danger pattern helpers** are available for custom safety providers
+- **Filesystem path sanitization** when the sandbox is enabled
+- **System command blocking** prevents command execution when enabled
+- **Network policy controls** restrict outbound hosts when configured
 
 ### 5. Testability
 
@@ -801,7 +811,7 @@ The architecture supports scaling:
 
 - **Configurable async concurrency limits** through AsyncFuzzExecutor semaphores
 - **Batch execution** for tool runs and protocol messages
-- **Watchdog performance metrics** to inform resource planning
+- **Watchdog stats** (process counts, last scan time) to inform resource planning
 - **Standardized output artifacts** for CI/CD and fleet orchestration
 
 ## Security Considerations
@@ -812,38 +822,36 @@ All input is validated and sanitized:
 
 - **Argument validation** at CLI level
 - **Transport-level JSON-RPC validation and serialization checks**
-- **Safety system filtering** via the `DangerDetector`
-- **Filesystem path sanitization** through the sandbox
+- **Safety system hooks** for optional filesystem path sanitization and command blocking
+- **Filesystem path sanitization** when the sandbox is enabled
 - **Host normalization** for network access control
 
 ### Access Control
 
 The system implements access control:
 
-- **Filesystem sandboxing**
-- **Process isolation**
-- **System command blocking**
-- **Network policy enforcement** for redirects and outbound requests
+- **Filesystem sandboxing** (opt-in via `--fs-root`)
+- **System command blocking** (opt-in via `--enable-safety-system`)
+- **Network policy enforcement** for redirects and outbound requests (`--no-network`, `--allow-host`)
 
 ### Audit Logging
 
-Comprehensive logging for security:
+Security-relevant events are logged:
 
-- **All operations are logged**
 - **Safety system actions are recorded**
 - **Error conditions are tracked**
-- **Performance metrics are collected**
+- **Transport failures and retries are logged**
 
 ## Monitoring and Observability
 
 ### Metrics Collection
 
-The system collects various metrics:
+The system does not emit a continuous metrics stream by default. Available
+signals include:
 
-- **Request success/failure rates**
-- **Response times**
-- **Error counts and types**
-- **Resource usage**
+- **Success/error counts** in reports
+- **Execution time** in report metadata
+- **Watchdog stats** for managed subprocesses
 
 ### Logging
 
@@ -851,7 +859,6 @@ Comprehensive logging throughout:
 
 - **Structured logging** with levels
 - **Context-aware log messages**
-- **Performance timing information**
 - **Error stack traces**
 
 ### Health Checks
@@ -872,7 +879,7 @@ The MCP Fuzzer is designed as a modular system with clear integration points:
 - **Transport Abstraction**: All communication is abstracted through the TransportDriver interface, allowing any transport to work with the system.
 - **Safety Providers**: The safety system uses a provider interface allowing customization of safety features.
 - **Strategy Extensions**: Fuzzing strategies can be extended with new generators for different data types.
-- **Runtime Management**: The async runtime provides process isolation and management for all components.
+- **Runtime Management**: The async runtime provides subprocess management and watchdog supervision.
 - **Execution Framework**: The AsyncFuzzExecutor provides a bridge between strategies and execution.
 
 ### External Integration

@@ -9,8 +9,8 @@ or programmatically.
 
 The safety subsystem lives under `mcp_fuzzer/safety_system` and is composed of:
 
-- **SafetyFilter** (`safety.py`) – argument-level sanitization backed by the
-  `DangerDetector`, filesystem sandboxing, and mock responses for blocked calls.
+- **SafetyFilter** (`safety.py`) – argument-level hooks plus optional filesystem
+  path sanitization; includes `DangerDetector` helpers for custom blocking.
 - **Filesystem Sandbox** (`filesystem/`) – `FilesystemSandbox` and
   `PathSanitizer` confine file paths to a safe root via `--fs-root` or
   `MCP_FUZZER_FS_ROOT`.
@@ -22,44 +22,39 @@ The safety subsystem lives under `mcp_fuzzer/safety_system` and is composed of:
 - **Safety Reporter** (`reporting/`) – aggregates blocked operations and prints
   detailed reports with `--safety-report` or `--export-safety-data`.
 
-The CLI enables argument-level filtering by default. System command blocking,
+The CLI enables argument-level safety hooks by default. System command blocking,
 filesystem sandboxing, and reporting are opt-in controls layered on top.
 
-## Argument-Level Filtering (`SafetyFilter`)
+## Argument-Level Hooks (`SafetyFilter`)
 
-`SafetyFilter` detects and sanitizes dangerous arguments before they reach the
-target server. It is built around the `DangerDetector`, which groups patterns
-into three categories:
+`SafetyFilter` is the default safety provider for tool fuzzing. It intentionally
+passes URL/script/command payloads through so the server is tested with real
+inputs. Protection happens at system boundaries instead:
 
-- **Dangerous URLs** – `http(s)://`, `ftp://`, `file://`, and TLD-based matches.
-- **Script Injection** – `<script>` tags, `javascript:` URIs, DOM APIs, and event
-  handler attributes.
-- **Command Patterns** – Browser launches (`open`, `start`, `xdg-open`),
-  shell/exec references, `sudo`, `rm -rf`, and other risky command strings.
+- **System command blocking** (`--enable-safety-system`)
+- **Filesystem sandboxing** (`--fs-root`)
+- **Network policy controls** (`--no-network`, `--allow-host`)
 
-When a match is found, SafetyFilter records the operation, rewrites the argument
-into a safe placeholder, and can fabricate a mock JSON-RPC error so the fuzzer
-continues without running arbitrary code.
+When a sandbox root is set, filesystem paths are rewritten into safe equivalents
+under that root. `DangerDetector` helpers are still available if you want to
+implement stricter blocking in a custom safety provider.
 
 ```python
 from mcp_fuzzer.safety_system.safety import SafetyFilter
 
 filter = SafetyFilter()
+filter.set_fs_root("/tmp/mcp_sandbox")
 
-args = {
-    "url": "https://evil.example/payload",
-    "output_path": "/etc/passwd",
-}
-
-sanitized = filter.sanitize_tool_arguments("web_tool", args)
-should_skip = filter.should_skip_tool_call("web_tool", args)
-
-if should_skip:
-    safe_response = filter.create_safe_mock_response("web_tool")
+args = {"output_path": "/etc/passwd"}
+sanitized = filter.sanitize_tool_arguments("file_tool", args)
+# sanitized["output_path"] now points inside /tmp/mcp_sandbox
 ```
 
 Filesystem arguments are sanitized automatically once a sandbox root is set
 (either through the CLI or by calling `set_fs_root()` on the filter).
+
+If you implement stricter blocking in a custom provider, you can use
+`create_safe_mock_response()` to fabricate a consistent JSON-RPC error.
 
 ## Filesystem Sandbox
 
@@ -67,8 +62,12 @@ The sandbox forces all file paths to stay under a safe directory. It is powered
 by `FilesystemSandbox` and the `PathSanitizer` heuristics discussed earlier.
 
 - CLI flag: `--fs-root /tmp/mcp_fuzzer_safe`
-- Environment variable: `MCP_FUZZER_FS_ROOT=~/.mcp_fuzzer`
+- Environment variable: `MCP_FUZZER_FS_ROOT=/tmp/mcp_fuzzer_safe`
 - Programmatic: `SafetyFilter().set_fs_root("/tmp/mcp")`
+
+If you do not set `--fs-root` (or `MCP_FUZZER_FS_ROOT` in environments where it
+is applied), the filesystem sandbox is not initialized and file paths are not
+confined.
 
 The sandbox rejects system directories (`/`, `/etc`, `/usr`, etc.), enforces
 0700 permissions, and rewrites suspicious arguments (e.g., `../../etc/passwd`)
@@ -116,8 +115,8 @@ blocking if you cancel an unsafe run.
 | Flag | Description |
 | --- | --- |
 | `--enable-safety-system` | Activate PATH shims for browsers/launchers. |
-| `--fs-root PATH` | Set the filesystem sandbox root (defaults to `~/.mcp_fuzzer`). |
-| `--no-safety` | Disable argument-level filtering (not recommended). |
+| `--fs-root PATH` | Set the filesystem sandbox root (only applied when provided). |
+| `--no-safety` | Disable argument-level safety hooks (not recommended). |
 | `--safety-report` | Print the full safety report at the end of the session. |
 | `--export-safety-data [FILE]` | Save safety data as JSON, optionally to a custom filename. |
 | `--retry-with-safety-on-interrupt` | Re-run once with system blocking after Ctrl-C. |
@@ -151,8 +150,8 @@ When both CLI flags and environment variables are provided, CLI values win.
 
 When `--safety-report` is enabled, the `SafetyReporter` prints:
 
-- Whether SafetyFilter was active and how many tool calls were sanitized.
-- A table of blocked operations (tool name, reason, sanitized argument).
+- SafetyFilter statistics (blocked operations count, risk assessment) if any.
+- A table of blocked operations when custom SafetyFilter logic is used.
 - System command blocker statistics (count and preview of attempts).
 
 `--export-safety-data` writes the same structured data to disk so you can attach
@@ -175,6 +174,9 @@ custom_filter = SafetyFilter(
     dangerous_argument_names=["path", "command"],
 )
 ```
+
+Note: the default `SafetyFilter` does not block on these patterns; override
+`should_skip_tool_call()` or implement a custom provider to enforce them.
 
 To swap the filesystem sandbox implementation, implement the `SandboxProvider`
 protocol and pass it to `SafetyFilter`:

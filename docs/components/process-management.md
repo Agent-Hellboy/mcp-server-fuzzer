@@ -24,7 +24,8 @@ AsyncFuzzExecutor (Controlled concurrency)
 
 ### AsyncFuzzExecutor
 
-Provides controlled concurrency for executing asynchronous operations with timeout handling and retry mechanisms.
+Provides controlled concurrency for executing asynchronous operations with
+batch result aggregation.
 
 #### Configuring Concurrency
 
@@ -252,7 +253,7 @@ Note: To deliver CTRL_BREAK_EVENT on Windows, the child must be started in its o
 
 - **Resource Cleanup**: Automatic cleanup on shutdown
 - **Error Handling**: Comprehensive error handling and logging
-- **Process Isolation**: Processes are properly isolated using process groups and async-aware process management
+- **Process Group Management**: Processes are grouped for signal handling and cleanup
 - **Memory Management**: Efficient memory usage with proper cleanup
 
 ## Usage Examples
