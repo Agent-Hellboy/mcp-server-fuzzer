@@ -16,9 +16,12 @@ from mcp_fuzzer.safety_system.policy import (
     ("value", "expected"),
     [
         ("https://Example.COM/path", "example.com"),
+        ("http://Example.COM/path", "example.com"),
         ("EXAMPLE.com", "example.com"),
         ("example.com:443", "example.com"),
+        ("::1", "::1"),
         ("[2001:db8::1]:8443", "2001:db8::1"),
+        ("[::1", "::1"),
         ("localhost.", "localhost"),
         ("  localhost  ", "localhost"),
         ("", ""),
@@ -50,6 +53,14 @@ def test_is_host_allowed_trailing_dot_variants():
     assert is_host_allowed(
         "http://localhost",
         allowed_hosts=["localhost."],
+        deny_network_by_default=True,
+    )
+
+
+def test_is_host_allowed_bare_ipv6_loopback():
+    assert is_host_allowed(
+        "::1",
+        allowed_hosts=["::1"],
         deny_network_by_default=True,
     )
 

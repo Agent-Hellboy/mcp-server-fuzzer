@@ -28,8 +28,15 @@ def _normalize_host(host: str) -> str:
     if "://" in s:
         parsed = urlparse(s)
         host = parsed.hostname or s
+    elif s.startswith("["):
+        end = s.find("]")
+        host = s[1:end] if end != -1 else s.strip("[]")
+    elif s.count(":") == 1:
+        host = s.split(":", 1)[0]
+    elif ":" in s:
+        host = s
     else:
-        host = s.split(":", 1)[0] if ":" in s and not s.startswith("[") else s
+        host = s
     return host.strip().lower().rstrip(".")
 ```
 

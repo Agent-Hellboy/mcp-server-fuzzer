@@ -46,8 +46,11 @@ def _normalize_host(host: str | None) -> str:
         else:
             normalized = s.strip("[]")
     # Handle host:port without protocol.
-    elif ":" in s:
+    elif s.count(":") == 1:
         normalized = s.split(":", 1)[0]
+    # Bare IPv6 literals contain multiple colons and should not be split.
+    elif ":" in s:
+        normalized = s
     else:
         normalized = s
 
@@ -86,8 +89,8 @@ def is_host_allowed(
 ) -> bool:
     """Return True if the URL's host is permitted by policy.
 
-    - By default, only localhost/loopback hosts are allowed.
-    - If deny_network_by_default is False, allow any host.
+    - When deny_network_by_default is True, only allowed hosts are permitted.
+    - When deny_network_by_default is False, allow any host.
     """
     # Resolve deny flag with runtime override first
     if _POLICY_DENY_NETWORK_DEFAULT_OVERRIDE is not None:

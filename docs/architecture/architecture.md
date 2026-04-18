@@ -368,7 +368,7 @@ The safety system provides multiple layers of protection against dangerous opera
 - **Pluggable Safety Providers**: Protocol-based safety system allowing custom implementations
 - **Pattern Detection Helpers**: `DangerDetector` is available for custom providers
 - **SafetyFilter Class**: Default provider with optional filesystem path sanitization
-- **System Command Blocking**: The `SystemCommandBlocker` PATH shim prevents execution of dangerous commands
+- **System Command Blocking**: When system-level safety is enabled, the `SystemCommandBlocker` PATH shim can be installed to prevent dangerous commands
 - **Filesystem Sandboxing**: Confines file operations to specified directories when enabled
 - **Process Management**: Safe subprocess handling with timeouts
 - **Optional Mock Responses**: Helpers to build safe JSON-RPC errors if you choose to block

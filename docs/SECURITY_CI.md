@@ -70,9 +70,16 @@ jobs:
       env:
         MCP_FUZZER_SAFETY_ENABLED: 'true'   # argument-level safety hooks
         MCP_FUZZER_TIMEOUT: '30'
+        MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
       run: |
         chmod +x tests/e2e/test_everything_server_docker.sh
-        ./tests/e2e/test_everything_server_docker.sh --enable-safety-system
+        ./tests/e2e/test_everything_server_docker.sh \
+          --enable-safety-system \
+          --fs-root /tmp/mcp_fuzzer_sandbox \
+          --no-network \
+          --allow-host localhost \
+          --allow-host 127.0.0.1 \
+          --allow-host ::1
 
     - name: Upload results
       uses: actions/upload-artifact@v4
