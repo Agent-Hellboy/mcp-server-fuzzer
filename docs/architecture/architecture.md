@@ -483,7 +483,7 @@ The reporting system provides centralized output management and comprehensive re
 - **Console Summaries**: Rich startup configuration tables and end-of-run summaries
 - **Result Aggregation**: Comprehensive statistics, success rates, and execution timing
 - **Safety Reporting**: Detailed breakdown of blocked operations, risk assessments, and security events
-- **Session Tracking**: Session-id based reports with timestamps captured in metadata
+- **Session Tracking**: Session-ID-based reports with timestamps captured in metadata
 
 **Output Formats:**
 

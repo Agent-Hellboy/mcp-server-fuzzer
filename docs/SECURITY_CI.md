@@ -11,8 +11,8 @@ The e2e test script can be safely run in GitHub Actions with the following secur
 ### 1. **Safety System Integration**
 - **Command Blocking**: Prevents execution of dangerous system commands when `--enable-safety-system` is set
 - **Filesystem Sandboxing**: Constrains file paths when `--fs-root` (or `MCP_FUZZER_FS_ROOT`) is set
-- **Process Management**: Stdio servers run as managed subprocesses with watchdog timeouts
-- **Network Restrictions**: Available via `--no-network` + `--allow-host` (not enabled by default)
+- **Process Management**: Stdio servers run as managed subprocesses with watchdog timeouts when tests launch server processes
+- **Network Restrictions**: Enforced when `--no-network` is enabled, with optional host exceptions via `--allow-host`
 
 ### 2. **CI Environment Protections**
 - **Ephemeral Runners**: GitHub Actions runners are destroyed after each run
@@ -20,9 +20,9 @@ The e2e test script can be safely run in GitHub Actions with the following secur
 - **Resource Limits**: GitHub enforces CPU, memory, and time limits
 - **Artifact Isolation**: Test results are isolated and controlled
 
-### 3. **Built-in Safety Features**
+### 3. **Flag-Driven Safety Features**
 
-#### Command Blocking (Active)
+#### Command Blocking (When Enabled)
 ```bash
 # Blocked commands include:
 xdg-open, open, start, firefox, chrome, chromium
@@ -72,7 +72,7 @@ jobs:
         MCP_FUZZER_TIMEOUT: '30'
       run: |
         chmod +x tests/e2e/test_everything_server_docker.sh
-        ./tests/e2e/test_everything_server_docker.sh
+        ./tests/e2e/test_everything_server_docker.sh --enable-safety-system
 
     - name: Upload results
       uses: actions/upload-artifact@v4
@@ -139,12 +139,12 @@ MCP_FUZZER_ICON_THEME=ascii
 
 ## 🎯 Conclusion
 
-**The e2e test script is SAFE for GitHub Actions execution** with:
+**The e2e test script is SAFE for GitHub Actions execution when recommended safety flags are enabled**, including:
 
-- ✅ **Comprehensive safety system** preventing dangerous operations
+- ✅ **Flag-driven safety controls** (command blocking, sandboxing, and network policy)
 - ✅ **CI environment isolation** providing additional security layer
 - ✅ **Resource controls** preventing resource exhaustion
 - ✅ **Artifact isolation** controlling data exposure
 - ✅ **Automatic cleanup** preventing persistent state
 
-The combination of the MCP fuzzer's built-in safety system and GitHub Actions' security model provides multiple layers of protection, making this e2e test suitable for automated CI/CD pipelines.
+The combination of MCP fuzzer safety controls and GitHub Actions security boundaries provides multiple layers of protection, making this e2e test suitable for automated CI/CD pipelines.

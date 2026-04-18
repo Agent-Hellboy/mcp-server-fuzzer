@@ -19,7 +19,6 @@ The system automatically normalizes host strings in a consistent way:
 
 ```python
 from urllib.parse import urlparse
-import ipaddress
 
 def _normalize_host(host: str) -> str:
     """Normalize host to handle URLs, mixed case, and host:port."""
@@ -31,7 +30,7 @@ def _normalize_host(host: str) -> str:
         host = parsed.hostname or s
     else:
         host = s.split(":", 1)[0] if ":" in s and not s.startswith("[") else s
-    return host.strip().lower()
+    return host.strip().lower().rstrip(".")
 ```
 
 This ensures:
@@ -39,6 +38,7 @@ This ensures:
 - Protocol handling (`http://example.com` -> `example.com`)
 - Port stripping (`example.com:80` -> `example.com`)
 - Whitespace handling (`  example.com  ` -> `example.com`)
+- Trailing-dot normalization (`example.com.` -> `example.com`)
 - Special cases for IPv6 addresses
 
 ### Network Access Control
