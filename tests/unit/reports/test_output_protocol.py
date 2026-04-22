@@ -19,7 +19,7 @@ from mcp_fuzzer.reports.core.models import (
     RunRecord,
     SummaryStats,
 )
-from mcp_fuzzer.reports.output.protocol import _result_has_failure
+from mcp_fuzzer.reports.formatters.common import result_has_failure
 
 from importlib.metadata import version, PackageNotFoundError
 
@@ -220,14 +220,15 @@ class TestOutputProtocol:
                 {"success": True},
                 {"success": False, "error": "bad"},
                 {"exception": "boom"},
+                {"success": True, "result": {"response": {"error": "nested"}}},
             ]
         }
 
         formatted = self.protocol._format_protocol_results(protocol_results)
         assert len(formatted) == 1
         entry = formatted[0]
-        assert entry["errors"] == 2
-        assert entry["success_rate"] == pytest.approx(33.33, rel=1e-3)
+        assert entry["errors"] == 3
+        assert entry["success_rate"] == pytest.approx(25.0, rel=1e-3)
 
     def test_calculate_error_severity_priorities(self):
         assert self.protocol._calculate_error_severity([]) == "none"
@@ -243,11 +244,12 @@ class TestOutputProtocol:
         assert self.protocol._calculate_error_severity([{}]) == "low"
 
     def test_result_has_failure_detects_flags(self):
-        assert _result_has_failure({"error": "problem"})
-        assert _result_has_failure({"exception": "boom"})
-        assert _result_has_failure({"server_error": "connection failed"})
-        assert _result_has_failure({"success": False})
-        assert not _result_has_failure({"success": True})
+        assert result_has_failure({"error": "problem"})
+        assert result_has_failure({"exception": "boom"})
+        assert result_has_failure({"server_error": "connection failed"})
+        assert result_has_failure({"success": False})
+        assert result_has_failure({"result": {"response": {"error": "nested"}}})
+        assert not result_has_failure({"success": True})
 
     def test_save_output(self):
         """Test saving output to file."""

@@ -396,11 +396,19 @@ class FuzzerReporter:
         """Export all requested named formats and return written file names."""
         exported: dict[str, str] = {}
         for format_name, filename in export_targets.items():
-            exported[format_name] = await self.export_format(
-                format_name,
-                filename,
-                include_safety=include_safety,
-            )
+            try:
+                exported[format_name] = await self.export_format(
+                    format_name,
+                    filename,
+                    include_safety=include_safety,
+                )
+            except Exception as exc:
+                logging.error(
+                    "Failed to export %s report to %s: %s",
+                    format_name,
+                    filename,
+                    exc,
+                )
         return exported
 
     async def _prepare_snapshot(

@@ -6,6 +6,7 @@ This module provides functionality for fuzzing MCP protocol types.
 """
 
 import copy
+import inspect
 import json
 import logging
 import random
@@ -555,7 +556,7 @@ class ProtocolClient:
         await self._append_follow_up_results(results, protocol_type)
         return results
 
-    async def _get_protocol_types(self) -> list[str]:
+    def _get_protocol_types(self) -> list[str]:
         """Get list of protocol types to fuzz.
 
         Returns:
@@ -568,7 +569,9 @@ class ProtocolClient:
     ) -> dict[str, list[ProtocolFuzzResult]]:
         """Fuzz all protocol types using ProtocolClient safety + sending."""
         try:
-            protocol_types = await self._get_protocol_types()
+            protocol_types = self._get_protocol_types()
+            if inspect.isawaitable(protocol_types):
+                protocol_types = await protocol_types
             if not protocol_types:
                 self._logger.warning("No protocol types available")
                 return {}

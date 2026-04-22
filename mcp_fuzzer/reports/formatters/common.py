@@ -99,17 +99,14 @@ def summarize_tool_runs(runs: list[dict[str, Any]]) -> dict[str, int | float]:
     safety_blocked = sum(1 for run in runs if run.get("safety_blocked", False))
     failures = sum(1 for run in runs if tool_run_has_failure(run))
     successful = max(total_runs - failures, 0)
+    success_rate = (successful / total_runs) * 100 if total_runs > 0 else 0.0
     return {
         "total_runs": total_runs,
         "exceptions": exceptions,
         "safety_blocked": safety_blocked,
         "failures": failures,
         "successful": successful,
-        "success_rate": calculate_tool_success_rate(
-            total_runs,
-            exceptions,
-            safety_blocked,
-        ),
+        "success_rate": success_rate,
     }
 
 

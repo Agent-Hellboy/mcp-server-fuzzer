@@ -168,10 +168,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
                 include_safety=config.get("safety_report", False),
             )
             if exported_files:
-                logging.info(
-                    "Exported report formats: %s",
-                    {name: path for name, path in exported_files.items()},
-                )
+                logging.info("Exported report formats: %s", exported_files)
 
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to export additional report formats: {exc}")

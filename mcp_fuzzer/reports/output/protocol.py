@@ -15,7 +15,9 @@ from importlib.metadata import PackageNotFoundError, version
 from ...exceptions import ValidationError
 from ..core import ReportSnapshot
 from ..formatters.common import (
+    calculate_protocol_success_rate,
     extract_tool_runs,
+    result_has_failure,
     summarize_tool_runs,
     tool_run_has_exception,
 )
@@ -24,25 +26,6 @@ try:
     TOOL_VERSION = version("mcp-fuzzer")
 except PackageNotFoundError:
     TOOL_VERSION = "unknown"
-
-
-def _result_has_failure(result: dict[str, Any]) -> bool:
-    """Return True when a result indicates a failure."""
-    return bool(
-        result.get("exception")
-        or not result.get("success", True)
-        or result.get("error")
-        or result.get("server_error")
-    )
-
-
-def _rate(total: int, failures: int) -> float:
-    if total <= 0:
-        return 0.0
-    successes = max(total - failures, 0)
-    return (successes / total) * 100
-
-
 class OutputProtocol:
     """Handles standardized output format with mini-protocol for MCP Fuzzer."""
 
@@ -307,9 +290,9 @@ class OutputProtocol:
         formatted = []
         for protocol_type, results in protocol_results.items():
             total_runs = len(results)
-            errors = sum(1 for r in results if _result_has_failure(r))
+            errors = sum(1 for r in results if result_has_failure(r))
             successes = max(total_runs - errors, 0)
-            success_rate = _rate(total_runs, errors)
+            success_rate = calculate_protocol_success_rate(total_runs, errors)
             formatted.append(
                 {
                     "type": protocol_type,

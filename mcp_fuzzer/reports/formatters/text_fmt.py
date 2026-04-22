@@ -113,7 +113,9 @@ class TextFormatter:
                     f.write(f"  Safety Blocked: {stats['safety_blocked']}\n")
 
                     if runs:
-                        f.write(f"  Success Rate: {stats['success_rate']:.1f}%\n")
+                        f.write(
+                            f"  Success Rate: {float(stats['success_rate']):.1f}%\n"
+                        )
 
             if "protocol_results" in data:
                 f.write("\n\nPROTOCOL FUZZING RESULTS\n")
