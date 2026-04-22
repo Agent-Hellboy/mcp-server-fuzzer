@@ -96,7 +96,11 @@ def summarize_tool_runs(runs: list[dict[str, Any]]) -> dict[str, int | float]:
     """Return non-overlapping summary counters for tool run reporting."""
     total_runs = len(runs)
     exceptions = sum(1 for run in runs if tool_run_has_exception(run))
-    safety_blocked = sum(1 for run in runs if run.get("safety_blocked", False))
+    safety_blocked = sum(
+        1
+        for run in runs
+        if isinstance(run, dict) and run.get("safety_blocked", False)
+    )
     failures = sum(1 for run in runs if tool_run_has_failure(run))
     successful = max(total_runs - failures, 0)
     success_rate = (successful / total_runs) * 100 if total_runs > 0 else 0.0

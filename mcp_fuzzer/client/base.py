@@ -123,16 +123,21 @@ class MCPFuzzerClient:
             tool_timeout=effective_timeout,
         )
 
-    async def fuzz_tool_both_phases(self, tool, runs_per_phase=5):
+    async def fuzz_tool_both_phases(self, tool, runs_per_phase=5, tool_timeout=None):
         """Fuzz a tool in both realistic and aggressive phases."""
+        effective_timeout = self._resolve_tool_timeout(tool_timeout)
         return await self.tool_client.fuzz_tool_both_phases(
-            tool, runs_per_phase=runs_per_phase
+            tool,
+            runs_per_phase=runs_per_phase,
+            tool_timeout=effective_timeout,
         )
 
-    async def fuzz_all_tools_both_phases(self, runs_per_phase=5):
+    async def fuzz_all_tools_both_phases(self, runs_per_phase=5, tool_timeout=None):
         """Fuzz all tools in both realistic and aggressive phases."""
+        effective_timeout = self._resolve_tool_timeout(tool_timeout)
         return await self.tool_client.fuzz_all_tools_both_phases(
-            runs_per_phase=runs_per_phase
+            runs_per_phase=runs_per_phase,
+            tool_timeout=effective_timeout,
         )
 
     # ============================================================================

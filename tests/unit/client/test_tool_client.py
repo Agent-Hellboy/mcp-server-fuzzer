@@ -190,6 +190,34 @@ async def test_fuzz_tool_both_phases_runs():
 
 
 @pytest.mark.asyncio
+async def test_fuzz_tool_both_phases_forwards_tool_timeout():
+    client = ToolClient(
+        MagicMock(),
+        auth_manager=MagicMock(),
+        safety_system=MagicMock(),
+    )
+    client.tool_mutator.mutate = AsyncMock(side_effect=[{"a": 1}, {"b": 2}])
+    client._process_fuzz_results = AsyncMock(
+        side_effect=[[{"ok": True}], [{"ok": False}]]
+    )
+
+    await client.fuzz_tool_both_phases(
+        {"name": "alpha"},
+        runs_per_phase=1,
+        tool_timeout=0.25,
+    )
+
+    first_timeout = client._process_fuzz_results.await_args_list[0].kwargs[
+        "tool_timeout"
+    ]
+    second_timeout = client._process_fuzz_results.await_args_list[1].kwargs[
+        "tool_timeout"
+    ]
+    assert first_timeout == 0.25
+    assert second_timeout == 0.25
+
+
+@pytest.mark.asyncio
 async def test_fuzz_tool_applies_per_call_timeout():
     safety = MagicMock()
     safety.should_skip_tool_call.return_value = False

@@ -444,7 +444,10 @@ class ToolClient:
         )
 
     async def _fuzz_single_tool_both_phases(
-        self, tool: dict[str, Any], runs_per_phase: int
+        self,
+        tool: dict[str, Any],
+        runs_per_phase: int,
+        tool_timeout: float | None = None,
     ) -> dict[str, Any]:
         """Fuzz a single tool in both phases and report results."""
         tool_name = tool.get("name", "unknown")
@@ -453,7 +456,11 @@ class ToolClient:
 
         try:
             # Run both phases for this tool
-            phase_results = await self.fuzz_tool_both_phases(tool, runs_per_phase)
+            phase_results = await self.fuzz_tool_both_phases(
+                tool,
+                runs_per_phase,
+                tool_timeout=tool_timeout,
+            )
 
             # Check if the result is an error
             if "error" in phase_results:
@@ -505,6 +512,7 @@ class ToolClient:
         phase_name: str,
         mutate_phase: str | None,
         runs: int,
+        tool_timeout: float | None = None,
     ) -> list[dict[str, Any]]:
         tool_name = tool.get("name", "unknown")
         self._logger.info("%s phase: %s", phase_name.title(), tool_name)
@@ -515,10 +523,17 @@ class ToolClient:
             else:
                 args = await self.tool_mutator.mutate(tool, phase=mutate_phase)
             fuzz_results.append({"args": args})
-        return await self._process_fuzz_results(tool_name, fuzz_results)
+        return await self._process_fuzz_results(
+            tool_name,
+            fuzz_results,
+            tool_timeout=tool_timeout,
+        )
 
     async def fuzz_tool_both_phases(
-        self, tool: dict[str, Any], runs_per_phase: int = 5
+        self,
+        tool: dict[str, Any],
+        runs_per_phase: int = 5,
+        tool_timeout: float | None = None,
     ) -> dict[str, Any]:
         """Fuzz a specific tool in both realistic and aggressive phases."""
         tool_name = tool.get("name", "unknown")
@@ -530,12 +545,14 @@ class ToolClient:
                 phase_name="realistic",
                 mutate_phase="realistic",
                 runs=runs_per_phase,
+                tool_timeout=tool_timeout,
             )
             aggressive_processed = await self._run_tool_phase(
                 tool,
                 phase_name="aggressive",
                 mutate_phase=None,
                 runs=runs_per_phase,
+                tool_timeout=tool_timeout,
             )
 
             return {
@@ -550,7 +567,9 @@ class ToolClient:
             return self._build_phase_error(tool_name, str(e))
 
     async def fuzz_all_tools_both_phases(
-        self, runs_per_phase: int = 5
+        self,
+        runs_per_phase: int = 5,
+        tool_timeout: float | None = None,
     ) -> dict[str, dict[str, list[dict[str, Any]]]]:
         """Fuzz all tools in both realistic and aggressive phases."""
         # Use reporter for output instead of console
@@ -567,7 +586,9 @@ class ToolClient:
             for tool in tools:
                 tool_name = tool.get("name", "unknown")
                 phase_results = await self._fuzz_single_tool_both_phases(
-                    tool, runs_per_phase
+                    tool,
+                    runs_per_phase,
+                    tool_timeout=tool_timeout,
                 )
                 if tool_name in self._tool_schema_checks:
                     schema_checks = self._tool_schema_checks[tool_name]

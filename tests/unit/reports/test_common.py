@@ -162,3 +162,10 @@ def test_summarize_tool_runs_counts_error_only_failures_in_success_rate():
     assert summary["failures"] == 1
     assert summary["successful"] == 0
     assert summary["success_rate"] == 0.0
+
+
+def test_summarize_tool_runs_handles_non_dict_safety_blocked_entries():
+    summary = summarize_tool_runs([{"success": True}, "legacy-run"])  # type: ignore[list-item]
+
+    assert summary["safety_blocked"] == 0
+    assert summary["failures"] == 1
