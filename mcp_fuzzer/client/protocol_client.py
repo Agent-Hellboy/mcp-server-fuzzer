@@ -6,7 +6,6 @@ This module provides functionality for fuzzing MCP protocol types.
 """
 
 import copy
-import inspect
 import json
 import logging
 import random
@@ -14,7 +13,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from ..types import ProtocolFuzzResult, SafetyCheckResult, PREVIEW_LENGTH
+from ..types import PREVIEW_LENGTH, ProtocolFuzzResult, ProtocolSpec, SafetyCheckResult
 from ..protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 from ..protocol_registry import EXECUTABLE_PROTOCOL_TYPES
 from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
@@ -27,123 +26,100 @@ from ..safety_system.safety import CombinedSafetyProvider, ProtocolSafetyProvide
 # ProtocolClient owns the executable protocol list it can iterate over.
 SUPPORTED_PROTOCOL_TYPES = tuple(EXECUTABLE_PROTOCOL_TYPES)
 
-_PROTOCOL_SPECS: dict[str, dict[str, Any]] = {
-    "InitializeRequest": {
-        "handler_name": "_send_initialize_request",
-        "method": "initialize",
-        "is_notification": False,
-    },
-    "InitializedNotification": {
-        "handler_name": "_send_initialized_notification",
-        "method": "notifications/initialized",
-        "is_notification": True,
-    },
-    "ProgressNotification": {
-        "handler_name": "_send_progress_notification",
-        "method": "notifications/progress",
-        "is_notification": True,
-    },
-    "CancelledNotification": {
-        "handler_name": "_send_cancelled_notification",
-        "method": "notifications/cancelled",
-        "is_notification": True,
-    },
-    "ListToolsRequest": {
-        "handler_name": "_send_list_tools_request",
-        "method": "tools/list",
-        "is_notification": False,
-    },
-    "CallToolRequest": {
-        "handler_name": "_send_call_tool_request",
-        "method": "tools/call",
-        "is_notification": False,
-    },
-    "ListResourcesRequest": {
-        "handler_name": "_send_list_resources_request",
-        "method": "resources/list",
-        "is_notification": False,
-    },
-    READ_RESOURCE_REQUEST: {
-        "handler_name": "_send_read_resource_request",
-        "method": "resources/read",
-        "is_notification": False,
-    },
-    "ListResourceTemplatesRequest": {
-        "handler_name": "_send_list_resource_templates_request",
-        "method": "resources/templates/list",
-        "is_notification": False,
-    },
-    "SetLevelRequest": {
-        "handler_name": "_send_set_level_request",
-        "method": "logging/setLevel",
-        "is_notification": False,
-    },
-    "CreateMessageRequest": {
-        "handler_name": "_send_create_message_request",
-        "method": "sampling/createMessage",
-        "is_notification": False,
-    },
-    "ListPromptsRequest": {
-        "handler_name": "_send_list_prompts_request",
-        "method": "prompts/list",
-        "is_notification": False,
-    },
-    GET_PROMPT_REQUEST: {
-        "handler_name": "_send_get_prompt_request",
-        "method": "prompts/get",
-        "is_notification": False,
-    },
-    "ListRootsRequest": {
-        "handler_name": "_send_list_roots_request",
-        "method": "roots/list",
-        "is_notification": False,
-    },
-    "SubscribeRequest": {
-        "handler_name": "_send_subscribe_request",
-        "method": "resources/subscribe",
-        "is_notification": False,
-    },
-    "UnsubscribeRequest": {
-        "handler_name": "_send_unsubscribe_request",
-        "method": "resources/unsubscribe",
-        "is_notification": False,
-    },
-    "CompleteRequest": {
-        "handler_name": "_send_complete_request",
-        "method": "completion/complete",
-        "is_notification": False,
-    },
-    "ElicitRequest": {
-        "handler_name": "_send_elicit_request",
-        "method": "elicitation/create",
-        "is_notification": False,
-    },
-    "ListTasksRequest": {
-        "handler_name": "_send_list_tasks_request",
-        "method": "tasks/list",
-        "is_notification": False,
-    },
-    "GetTaskRequest": {
-        "handler_name": "_send_get_task_request",
-        "method": "tasks/get",
-        "is_notification": False,
-    },
-    "GetTaskPayloadRequest": {
-        "handler_name": "_send_get_task_payload_request",
-        "method": "tasks/result",
-        "is_notification": False,
-    },
-    "CancelTaskRequest": {
-        "handler_name": "_send_cancel_task_request",
-        "method": "tasks/cancel",
-        "is_notification": False,
-    },
-    "PingRequest": {
-        "handler_name": "_send_ping_request",
-        "method": "ping",
-        "is_notification": False,
-    },
+_PROTOCOL_SPECS: dict[str, ProtocolSpec] = {
+    "InitializeRequest": ProtocolSpec("_send_initialize_request", "initialize", False),
+    "InitializedNotification": ProtocolSpec(
+        "_send_initialized_notification",
+        "notifications/initialized",
+        True,
+    ),
+    "ProgressNotification": ProtocolSpec(
+        "_send_progress_notification",
+        "notifications/progress",
+        True,
+    ),
+    "CancelledNotification": ProtocolSpec(
+        "_send_cancelled_notification",
+        "notifications/cancelled",
+        True,
+    ),
+    "ListToolsRequest": ProtocolSpec("_send_list_tools_request", "tools/list", False),
+    "CallToolRequest": ProtocolSpec("_send_call_tool_request", "tools/call", False),
+    "ListResourcesRequest": ProtocolSpec(
+        "_send_list_resources_request",
+        "resources/list",
+        False,
+    ),
+    READ_RESOURCE_REQUEST: ProtocolSpec(
+        "_send_read_resource_request",
+        "resources/read",
+        False,
+    ),
+    "ListResourceTemplatesRequest": ProtocolSpec(
+        "_send_list_resource_templates_request",
+        "resources/templates/list",
+        False,
+    ),
+    "SetLevelRequest": ProtocolSpec(
+        "_send_set_level_request",
+        "logging/setLevel",
+        False,
+    ),
+    "CreateMessageRequest": ProtocolSpec(
+        "_send_create_message_request",
+        "sampling/createMessage",
+        False,
+    ),
+    "ListPromptsRequest": ProtocolSpec(
+        "_send_list_prompts_request",
+        "prompts/list",
+        False,
+    ),
+    GET_PROMPT_REQUEST: ProtocolSpec("_send_get_prompt_request", "prompts/get", False),
+    "ListRootsRequest": ProtocolSpec("_send_list_roots_request", "roots/list", False),
+    "SubscribeRequest": ProtocolSpec(
+        "_send_subscribe_request",
+        "resources/subscribe",
+        False,
+    ),
+    "UnsubscribeRequest": ProtocolSpec(
+        "_send_unsubscribe_request",
+        "resources/unsubscribe",
+        False,
+    ),
+    "CompleteRequest": ProtocolSpec(
+        "_send_complete_request",
+        "completion/complete",
+        False,
+    ),
+    "ElicitRequest": ProtocolSpec(
+        "_send_elicit_request",
+        "elicitation/create",
+        False,
+    ),
+    "ListTasksRequest": ProtocolSpec("_send_list_tasks_request", "tasks/list", False),
+    "GetTaskRequest": ProtocolSpec("_send_get_task_request", "tasks/get", False),
+    "GetTaskPayloadRequest": ProtocolSpec(
+        "_send_get_task_payload_request",
+        "tasks/result",
+        False,
+    ),
+    "CancelTaskRequest": ProtocolSpec(
+        "_send_cancel_task_request",
+        "tasks/cancel",
+        False,
+    ),
+    "PingRequest": ProtocolSpec("_send_ping_request", "ping", False),
 }
+
+
+def _validate_protocol_specs() -> None:
+    for protocol_type, spec in _PROTOCOL_SPECS.items():
+        if not spec.handler_name or not spec.method:
+            raise ValueError(f"Invalid protocol spec for {protocol_type!r}")
+
+
+_validate_protocol_specs()
 
 
 class ProtocolClient:
@@ -570,8 +546,6 @@ class ProtocolClient:
         """Fuzz all protocol types using ProtocolClient safety + sending."""
         try:
             protocol_types = self._get_protocol_types()
-            if inspect.isawaitable(protocol_types):
-                protocol_types = await protocol_types
             if not protocol_types:
                 self._logger.warning("No protocol types available")
                 return {}
@@ -896,7 +870,7 @@ class ProtocolClient:
         """Send a protocol request based on the type."""
         spec = _PROTOCOL_SPECS.get(protocol_type)
         handler_name = (
-            spec["handler_name"] if spec is not None else "_send_generic_request"
+            spec.handler_name if spec is not None else "_send_generic_request"
         )
         handler = getattr(self, handler_name)
         return await handler(data)
@@ -1002,8 +976,8 @@ class ProtocolClient:
         self, protocol_type: str, data: Any
     ) -> dict[str, Any] | dict[str, str]:
         spec = _PROTOCOL_SPECS[protocol_type]
-        method = spec["method"]
-        if spec["is_notification"]:
+        method = spec.method
+        if spec.is_notification:
             return await self._send_notification(method, data)
         return await self._send_request(method, data)
 

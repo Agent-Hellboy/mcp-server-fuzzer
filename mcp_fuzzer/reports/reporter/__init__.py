@@ -30,6 +30,7 @@ from ..formatters.common import extract_tool_runs
 from ..output import OutputManager
 from .config import ReporterConfig
 from ..safety_reporter import SafetyReporter
+from ...safety_system.safety import CombinedSafetyProvider
 
 from importlib.metadata import version, PackageNotFoundError
 
@@ -51,7 +52,7 @@ class FuzzerReporter:
         output_dir: str = "reports",
         compress_output: bool = False,
         config_provider: Mapping[str, Any] | None = None,
-        safety_system=_AUTO_FILTER,
+        safety_system: CombinedSafetyProvider | object = _AUTO_FILTER,
         collector: ReportCollector | None = None,
         output_manager: OutputManager | None = None,
         console: Console | None = None,
@@ -132,7 +133,7 @@ class FuzzerReporter:
     @staticmethod
     def _resolve_safety_reporter(
         safety_reporter: SafetyReporter | None,
-        safety_system: Any,
+        safety_system: CombinedSafetyProvider | object,
     ) -> SafetyReporter:
         if safety_reporter is not None:
             return safety_reporter

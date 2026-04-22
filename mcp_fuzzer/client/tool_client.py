@@ -14,6 +14,7 @@ from ..auth import AuthManager
 from .. import spec_guard
 from ..fuzz_engine.mutators import ToolMutator
 from ..safety_system.safety import SafetyFilter, CombinedSafetyProvider
+from ..types import ErrorType, TimeoutScope, ToolRunResult
 
 # Import constants directly from config (constants are values, not behavior)
 from ..config.core.constants import (
@@ -70,13 +71,13 @@ class ToolClient:
         safety_blocked: bool,
         safety_sanitized: bool,
         result: Any = None,
-        error: str | None = None,
+        error: ErrorType | None = None,
         exception: str | None = None,
-        timeout_scope: str | None = None,
+        timeout_scope: TimeoutScope | None = None,
         spec_checks: list[dict[str, Any]] | None = None,
         spec_scope: str | None = None,
-    ) -> dict[str, Any]:
-        payload: dict[str, Any] = {
+    ) -> ToolRunResult:
+        payload: ToolRunResult = {
             "args": args,
             "success": success,
             "safety_blocked": safety_blocked,
@@ -108,7 +109,7 @@ class ToolClient:
                     success=False,
                     safety_blocked=False,
                     safety_sanitized=False,
-                    error="phase_execution_failed",
+                    error=ErrorType.PHASE_EXECUTION_FAILED,
                     exception=message,
                 )
             ],
@@ -134,7 +135,7 @@ class ToolClient:
                 success=False,
                 safety_blocked=True,
                 safety_sanitized=False,
-                error="safety_blocked",
+                error=ErrorType.SAFETY_BLOCKED,
             )
 
         sanitized_args = args
@@ -188,9 +189,9 @@ class ToolClient:
                 success=False,
                 safety_blocked=False,
                 safety_sanitized=safety_sanitized,
-                error="tool_timeout",
+                error=ErrorType.TOOL_TIMEOUT,
                 exception=exception,
-                timeout_scope="call",
+                timeout_scope=TimeoutScope.CALL,
             )
         except Exception as e:
             self._logger.warning("Exception calling tool %s: %s", tool_name, e)
@@ -203,7 +204,7 @@ class ToolClient:
                 success=False,
                 safety_blocked=False,
                 safety_sanitized=safety_sanitized,
-                error="tool_call_failed",
+                error=ErrorType.TOOL_CALL_FAILED,
                 exception=str(e),
             )
 
@@ -300,9 +301,9 @@ class ToolClient:
                         success=False,
                         safety_blocked=False,
                         safety_sanitized=False,
-                        error="tool_timeout",
+                        error=ErrorType.TOOL_TIMEOUT,
                         exception="Tool fuzzing timed out",
-                        timeout_scope="session",
+                        timeout_scope=TimeoutScope.SESSION,
                     )
                 ]
         except Exception as e:
@@ -354,7 +355,7 @@ class ToolClient:
                         success=False,
                         safety_blocked=False,
                         safety_sanitized=False,
-                        error="tool_mutation_failed",
+                        error=ErrorType.TOOL_MUTATION_FAILED,
                         exception=str(e),
                     )
                 )

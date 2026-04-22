@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Any
 from ...transport.catalog import build_driver as base_build_driver
 from ...transport.wrappers import RetryingTransport, RetryPolicy
 from ...exceptions import TransportRegistrationError
+from ...types import AuthManagerProtocol
 
 logger = logging.getLogger(__name__)
 AUTH_PROTOCOLS = ("http", "https", "streamablehttp", "sse")
@@ -26,7 +26,7 @@ class TransportBuildRequest:
     transport_retry_backoff: float = 2.0
     transport_retry_max_delay: float = 5.0
     transport_retry_jitter: float = 0.1
-    auth_manager: Any = None
+    auth_manager: AuthManagerProtocol | None = None
     safety_enabled: bool = True
 
 

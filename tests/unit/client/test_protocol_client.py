@@ -157,7 +157,7 @@ async def test_process_single_protocol_fuzz_mutator_none():
 @pytest.mark.asyncio
 async def test_fuzz_all_protocol_types_empty_list():
     client = ProtocolClient(transport=MagicMock(), safety_system=None)
-    client._get_protocol_types = AsyncMock(return_value=[])
+    client._get_protocol_types = MagicMock(return_value=[])
 
     result = await client.fuzz_all_protocol_types()
 
@@ -167,7 +167,7 @@ async def test_fuzz_all_protocol_types_empty_list():
 @pytest.mark.asyncio
 async def test_fuzz_all_protocol_types_runs():
     client = ProtocolClient(transport=MagicMock(), safety_system=None)
-    client._get_protocol_types = AsyncMock(return_value=["InitializeRequest"])
+    client._get_protocol_types = MagicMock(return_value=["InitializeRequest"])
     client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})
 
     result = await client.fuzz_all_protocol_types(runs_per_type=2)
@@ -178,7 +178,7 @@ async def test_fuzz_all_protocol_types_runs():
 @pytest.mark.asyncio
 async def test_fuzz_all_protocol_types_appends_listed_results():
     client = ProtocolClient(transport=MagicMock(), safety_system=None)
-    client._get_protocol_types = AsyncMock(
+    client._get_protocol_types = MagicMock(
         return_value=["ReadResourceRequest", "GetPromptRequest"]
     )
     client._process_single_protocol_fuzz = AsyncMock(return_value={"success": True})

@@ -161,7 +161,7 @@ def test_get_protocol_types_reads_supported_protocols():
 @pytest.mark.asyncio
 async def test_fuzz_all_protocol_types_exception():
     client = ProtocolClient(transport=MagicMock(), safety_system=None)
-    client._get_protocol_types = AsyncMock(side_effect=Exception("boom"))
+    client._get_protocol_types = MagicMock(side_effect=Exception("boom"))
     result = await client.fuzz_all_protocol_types()
     assert result == {}
 

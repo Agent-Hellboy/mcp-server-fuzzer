@@ -12,6 +12,7 @@ from typing import Any
 from ..auth import AuthManager
 from ..reports import FuzzerReporter
 from ..safety_system.safety import CombinedSafetyProvider, SafetyFilter
+from ..types import AuthManagerProtocol, ProtocolFuzzResult, ToolRunResult
 
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
@@ -29,7 +30,7 @@ class MCPFuzzerClient:
     def __init__(
         self,
         transport,
-        auth_manager: AuthManager | None = None,
+        auth_manager: AuthManagerProtocol | None = None,
         tool_timeout: float | None = None,
         reporter: FuzzerReporter | None = None,
         safety_system: CombinedSafetyProvider | None = None,
@@ -96,8 +97,8 @@ class MCPFuzzerClient:
 
     async def _fuzz_protocol_group(
         self, protocol_types: tuple[str, ...], runs_per_type: int, phase: str
-    ) -> dict[str, list[dict[str, Any]]]:
-        results: dict[str, list[dict[str, Any]]] = {}
+    ) -> dict[str, list[ProtocolFuzzResult]]:
+        results: dict[str, list[ProtocolFuzzResult]] = {}
         for protocol_type in protocol_types:
             results[protocol_type] = await self.protocol_client.fuzz_protocol_type(
                 protocol_type, runs=runs_per_type, phase=phase
@@ -108,14 +109,23 @@ class MCPFuzzerClient:
     # Tool Fuzzing Methods - Delegate to ToolClient
     # ============================================================================
 
-    async def fuzz_tool(self, tool, runs=10, tool_timeout=None):
+    async def fuzz_tool(
+        self,
+        tool: dict[str, Any],
+        runs: int = 10,
+        tool_timeout: float | None = None,
+    ) -> list[ToolRunResult]:
         """Fuzz a specific tool."""
         effective_timeout = self._resolve_tool_timeout(tool_timeout)
         return await self.tool_client.fuzz_tool(
             tool, runs=runs, tool_timeout=effective_timeout
         )
 
-    async def fuzz_all_tools(self, runs_per_tool=10, tool_timeout=None):
+    async def fuzz_all_tools(
+        self,
+        runs_per_tool: int = 10,
+        tool_timeout: float | None = None,
+    ):
         """Fuzz all available tools."""
         effective_timeout = self._resolve_tool_timeout(tool_timeout)
         return await self.tool_client.fuzz_all_tools(
@@ -123,7 +133,12 @@ class MCPFuzzerClient:
             tool_timeout=effective_timeout,
         )
 
-    async def fuzz_tool_both_phases(self, tool, runs_per_phase=5, tool_timeout=None):
+    async def fuzz_tool_both_phases(
+        self,
+        tool: dict[str, Any],
+        runs_per_phase: int = 5,
+        tool_timeout: float | None = None,
+    ):
         """Fuzz a tool in both realistic and aggressive phases."""
         effective_timeout = self._resolve_tool_timeout(tool_timeout)
         return await self.tool_client.fuzz_tool_both_phases(
@@ -132,7 +147,11 @@ class MCPFuzzerClient:
             tool_timeout=effective_timeout,
         )
 
-    async def fuzz_all_tools_both_phases(self, runs_per_phase=5, tool_timeout=None):
+    async def fuzz_all_tools_both_phases(
+        self,
+        runs_per_phase: int = 5,
+        tool_timeout: float | None = None,
+    ):
         """Fuzz all tools in both realistic and aggressive phases."""
         effective_timeout = self._resolve_tool_timeout(tool_timeout)
         return await self.tool_client.fuzz_all_tools_both_phases(
@@ -144,7 +163,12 @@ class MCPFuzzerClient:
     # Protocol Fuzzing Methods - Delegate to ProtocolClient
     # ============================================================================
 
-    async def fuzz_protocol_type(self, protocol_type, runs=10, phase=None):
+    async def fuzz_protocol_type(
+        self,
+        protocol_type: str,
+        runs: int = 10,
+        phase: str | None = None,
+    ) -> list[ProtocolFuzzResult]:
         """Fuzz a specific protocol type."""
         if phase is None:
             return await self.protocol_client.fuzz_protocol_type(
@@ -154,7 +178,11 @@ class MCPFuzzerClient:
             protocol_type, runs=runs, phase=phase
         )
 
-    async def fuzz_all_protocol_types(self, runs_per_type=5, phase=None):
+    async def fuzz_all_protocol_types(
+        self,
+        runs_per_type: int = 5,
+        phase: str | None = None,
+    ) -> dict[str, list[ProtocolFuzzResult]]:
         """Fuzz all protocol types."""
         if phase is None:
             return await self.protocol_client.fuzz_all_protocol_types(

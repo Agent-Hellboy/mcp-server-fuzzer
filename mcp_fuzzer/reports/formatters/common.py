@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Literal, Protocol
 
+from ...types import ExtractedToolRuns, ToolRunResult
+
 
 class SupportsToDict(Protocol):
     def to_dict(self) -> dict[str, Any]: ...
@@ -23,15 +25,15 @@ def normalize_report_data(
 
 def extract_tool_runs(
     tool_entry: Any,
-) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+) -> ExtractedToolRuns:
     if isinstance(tool_entry, list):
-        return tool_entry, None
+        return ExtractedToolRuns(tool_entry, None)
     if not isinstance(tool_entry, dict):
-        return [], None
+        return ExtractedToolRuns([], None)
     runs = tool_entry.get("runs")
     if isinstance(runs, list):
-        return runs, tool_entry
-    combined: list[dict[str, Any]] = []
+        return ExtractedToolRuns(runs, tool_entry)
+    combined: list[ToolRunResult] = []
     realistic = tool_entry.get("realistic")
     aggressive = tool_entry.get("aggressive")
     if isinstance(realistic, list):
@@ -39,9 +41,9 @@ def extract_tool_runs(
     if isinstance(aggressive, list):
         combined.extend(aggressive)
     if combined:
-        return combined, tool_entry
+        return ExtractedToolRuns(combined, tool_entry)
     if "error" in tool_entry or "exception" in tool_entry:
-        synthetic_run: dict[str, Any] = {
+        synthetic_run: ToolRunResult = {
             "success": bool(tool_entry.get("success", False)),
             "safety_blocked": bool(tool_entry.get("safety_blocked", False)),
             "safety_sanitized": bool(tool_entry.get("safety_sanitized", False)),
@@ -54,8 +56,8 @@ def extract_tool_runs(
             synthetic_run["error"] = tool_entry.get("error")
         if "exception" in tool_entry:
             synthetic_run["exception"] = tool_entry.get("exception")
-        return [synthetic_run], tool_entry
-    return combined, tool_entry
+        return ExtractedToolRuns([synthetic_run], tool_entry)
+    return ExtractedToolRuns(combined, tool_entry)
 
 
 def calculate_tool_success_rate(
@@ -79,7 +81,13 @@ def tool_run_has_exception(result: dict[str, Any] | None) -> bool:
 
 
 def tool_run_has_failure(result: dict[str, Any] | None) -> bool:
-    """Return True when a tool result should count as a failed run."""
+    """Return True when a tool result should count as a failed run.
+
+    Failure classification rules are centralized here:
+    - malformed/non-dict entries are failures
+    - safety-blocked entries are failures
+    - exceptions, explicit errors, server errors, or falsey success are failures
+    """
     if not isinstance(result, dict):
         return True
     if result.get("safety_blocked", False):
