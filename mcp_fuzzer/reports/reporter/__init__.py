@@ -30,6 +30,7 @@ from ..formatters.common import extract_tool_runs
 from ..output import OutputManager
 from .config import ReporterConfig
 from ..safety_reporter import SafetyReporter
+from ...safety_system.safety import CombinedSafetyProvider
 
 from importlib.metadata import version, PackageNotFoundError
 
@@ -51,7 +52,7 @@ class FuzzerReporter:
         output_dir: str = "reports",
         compress_output: bool = False,
         config_provider: Mapping[str, Any] | None = None,
-        safety_system=_AUTO_FILTER,
+        safety_system: CombinedSafetyProvider | object = _AUTO_FILTER,
         collector: ReportCollector | None = None,
         output_manager: OutputManager | None = None,
         console: Console | None = None,
@@ -132,7 +133,7 @@ class FuzzerReporter:
     @staticmethod
     def _resolve_safety_reporter(
         safety_reporter: SafetyReporter | None,
-        safety_system: Any,
+        safety_system: CombinedSafetyProvider | object,
     ) -> SafetyReporter:
         if safety_reporter is not None:
             return safety_reporter
@@ -207,6 +208,13 @@ class FuzzerReporter:
             runs, _ = extract_tool_runs(tool_results)
             self.add_tool_results(tool_name, runs)
 
+    def print_tool_execution_summary(self, results: dict[str, Any]) -> None:
+        """Print tool summary plus aggregate run statistics."""
+        self.console_formatter.print_tool_execution_summary(results)
+        for tool_name, tool_results in results.items():
+            runs, _ = extract_tool_runs(tool_results)
+            self.add_tool_results(tool_name, runs)
+
     def print_protocol_summary(
         self,
         results: dict[str, list[dict[str, Any]]],
@@ -245,6 +253,10 @@ class FuzzerReporter:
     def print_safety_summary(self):
         """Print safety system summary to console."""
         self.safety_reporter.print_safety_summary()
+
+    def print_safety_system_summary(self):
+        """Print safety-system blocked operation details."""
+        self.safety_reporter.print_safety_system_summary()
 
     def print_comprehensive_safety_report(self):
         """Print comprehensive safety report to console."""
@@ -375,6 +387,30 @@ class FuzzerReporter:
         return self.formatter_registry.save(
             format_name, snapshot, self.output_dir, filename
         )
+
+    async def export_requested_formats(
+        self,
+        export_targets: Mapping[str, str],
+        *,
+        include_safety: bool = False,
+    ) -> dict[str, str]:
+        """Export all requested named formats and return written file names."""
+        exported: dict[str, str] = {}
+        for format_name, filename in export_targets.items():
+            try:
+                exported[format_name] = await self.export_format(
+                    format_name,
+                    filename,
+                    include_safety=include_safety,
+                )
+            except Exception as exc:
+                logging.error(
+                    "Failed to export %s report to %s: %s",
+                    format_name,
+                    filename,
+                    exc,
+                )
+        return exported
 
     async def _prepare_snapshot(
         self, include_safety: bool, finalize: bool

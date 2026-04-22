@@ -737,7 +737,7 @@ class TestUnifiedMCPFuzzerClient:
 
         # Verify tool_client.fuzz_all_tools_both_phases was called
         self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(
-            runs_per_phase=1
+            runs_per_phase=1, tool_timeout=None
         )
 
     @pytest.mark.asyncio
@@ -755,7 +755,7 @@ class TestUnifiedMCPFuzzerClient:
 
         # Verify tool_client.fuzz_all_tools_both_phases was called
         self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(
-            runs_per_phase=5
+            runs_per_phase=5, tool_timeout=None
         )
 
     @pytest.mark.asyncio
@@ -1723,7 +1723,28 @@ class TestUnifiedMCPFuzzerClient:
 
         # Verify tool_client.fuzz_tool_both_phases was called
         self.mock_tool_client.fuzz_tool_both_phases.assert_called_once_with(
-            tool, runs_per_phase=1
+            tool, runs_per_phase=1, tool_timeout=None
+        )
+
+    @pytest.mark.asyncio
+    async def test_fuzz_tool_both_phases_forwards_explicit_timeout(self):
+        """Test explicit timeout propagation for two-phase single-tool fuzzing."""
+        tool = {"name": "test_tool"}
+        self.mock_tool_client.fuzz_tool_both_phases.return_value = {
+            "realistic": [],
+            "aggressive": [],
+        }
+
+        await self.client.fuzz_tool_both_phases(
+            tool,
+            runs_per_phase=1,
+            tool_timeout=0.05,
+        )
+
+        self.mock_tool_client.fuzz_tool_both_phases.assert_called_once_with(
+            tool,
+            runs_per_phase=1,
+            tool_timeout=0.05,
         )
 
     @pytest.mark.asyncio
@@ -1938,7 +1959,22 @@ class TestUnifiedMCPFuzzerClient:
 
         # Verify tool_client.fuzz_all_tools_both_phases was called
         self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(
-            runs_per_phase=1
+            runs_per_phase=1, tool_timeout=None
+        )
+
+    @pytest.mark.asyncio
+    async def test_fuzz_all_tools_both_phases_forwards_explicit_timeout(self):
+        """Test explicit timeout propagation for two-phase all-tools fuzzing."""
+        self.mock_tool_client.fuzz_all_tools_both_phases.return_value = {}
+
+        await self.client.fuzz_all_tools_both_phases(
+            runs_per_phase=1,
+            tool_timeout=0.05,
+        )
+
+        self.mock_tool_client.fuzz_all_tools_both_phases.assert_called_once_with(
+            runs_per_phase=1,
+            tool_timeout=0.05,
         )
 
     @pytest.mark.asyncio

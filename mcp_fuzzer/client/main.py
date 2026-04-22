@@ -5,18 +5,55 @@ from __future__ import annotations
 
 import logging
 import os
-
-from ..utils.icons import ALERT, CHECK, ROCKET, STATS, TARGET
+from typing import Any
 
 from ..reports import FuzzerReporter
-from ..reports.formatters.common import extract_tool_runs
 from ..safety_system.safety import SafetyFilter
 from ..exceptions import MCPError
 from ..corpus import build_corpus_root, build_target_id, default_fs_root
 from .settings import ClientSettings
 from .base import MCPFuzzerClient
-from .transport import build_driver_with_auth
+from .transport import TransportBuildRequest, build_driver_with_auth
 from .runtime import RunContext, build_run_plan
+
+
+def _build_transport_request(config: dict[str, Any]) -> TransportBuildRequest:
+    return TransportBuildRequest(
+        protocol=config["protocol"],
+        endpoint=config["endpoint"],
+        timeout=config.get("timeout", 30.0),
+        transport_retries=config.get("transport_retries", 1),
+        transport_retry_delay=config.get("transport_retry_delay", 0.5),
+        transport_retry_backoff=config.get("transport_retry_backoff", 2.0),
+        transport_retry_max_delay=config.get("transport_retry_max_delay", 5.0),
+        transport_retry_jitter=config.get("transport_retry_jitter", 0.1),
+        auth_manager=config.get("auth_manager"),
+        safety_enabled=config.get("safety_enabled", True),
+    )
+
+
+def _requested_export_targets(config: dict[str, Any]) -> dict[str, str]:
+    export_targets: dict[str, str] = {}
+    for config_key, format_name in (
+        ("export_csv", "csv"),
+        ("export_xml", "xml"),
+        ("export_html", "html"),
+        ("export_markdown", "markdown"),
+    ):
+        filename = config.get(config_key)
+        if filename:
+            export_targets[format_name] = filename
+    return export_targets
+
+
+def _set_report_metadata(reporter: FuzzerReporter, config: dict[str, Any]) -> None:
+    reporter.set_fuzzing_metadata(
+        mode=config.get("mode", "unknown"),
+        protocol=config.get("protocol", "unknown"),
+        endpoint=config.get("endpoint", "unknown"),
+        runs=config.get("runs", 0),
+        runs_per_type=config.get("runs_per_type"),
+    )
 
 
 async def unified_client_main(settings: ClientSettings) -> int:
@@ -35,43 +72,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
         f"md={config.get('export_markdown', False)}"
     )
 
-    class Args:
-        def __init__(
-            self,
-            protocol,
-            endpoint,
-            timeout,
-            transport_retries,
-            transport_retry_delay,
-            transport_retry_backoff,
-            transport_retry_max_delay,
-            transport_retry_jitter,
-        ):
-            self.protocol = protocol
-            self.endpoint = endpoint
-            self.timeout = timeout
-            self.transport_retries = transport_retries
-            self.transport_retry_delay = transport_retry_delay
-            self.transport_retry_backoff = transport_retry_backoff
-            self.transport_retry_max_delay = transport_retry_max_delay
-            self.transport_retry_jitter = transport_retry_jitter
-
-    args = Args(
-        protocol=config["protocol"],
-        endpoint=config["endpoint"],
-        timeout=config.get("timeout", 30.0),
-        transport_retries=config.get("transport_retries", 1),
-        transport_retry_delay=config.get("transport_retry_delay", 0.5),
-        transport_retry_backoff=config.get("transport_retry_backoff", 2.0),
-        transport_retry_max_delay=config.get("transport_retry_max_delay", 5.0),
-        transport_retry_jitter=config.get("transport_retry_jitter", 0.1),
-    )  # pragma: no cover
-
-    client_args = {
-        "auth_manager": config.get("auth_manager"),
-    }
-
-    transport = build_driver_with_auth(args, client_args)
+    transport = build_driver_with_auth(_build_transport_request(config))
 
     safety_enabled = config.get("safety_enabled", True)
     safety_system = None
@@ -109,6 +110,8 @@ async def unified_client_main(settings: ClientSettings) -> int:
         corpus_root=corpus_root,
         havoc_mode=config.get("havoc_mode", False),
     )
+    reporter = client.reporter
+    _set_report_metadata(reporter, config)
 
     try:
         mode = config["mode"]
@@ -134,69 +137,20 @@ async def unified_client_main(settings: ClientSettings) -> int:
                 and isinstance(tool_results, dict)
                 and tool_results
             ):
-                print("\n" + "=" * 80)
-                print(f"{TARGET} MCP FUZZER TOOL RESULTS SUMMARY")
-                print("=" * 80)
-                client.print_tool_summary(tool_results)
-
-                total_tools = len(tool_results)
-                total_runs = sum(
-                    len(extract_tool_runs(runs)[0]) for runs in tool_results.values()
-                )
-                total_exceptions = sum(
-                    len([r for r in extract_tool_runs(runs)[0] if r.get("exception")])
-                    for runs in tool_results.values()
-                )
-
-                success_rate = (
-                    ((total_runs - total_exceptions) / total_runs * 100)
-                    if total_runs > 0
-                    else 0
-                )
-
-                print(f"\n{STATS} OVERALL STATISTICS")
-                print("-" * 40)
-                print(f"• Total Tools Tested: {total_tools}")
-                print(f"• Total Fuzzing Runs: {total_runs}")
-                print(f"• Total Exceptions: {total_exceptions}")
-                print(f"• Overall Success Rate: {success_rate:.1f}%")
-
-                vulnerable_tools = []
-                for tool_name, runs in tool_results.items():
-                    run_entries = extract_tool_runs(runs)[0]
-                    exceptions = len([r for r in run_entries if r.get("exception")])
-                    if exceptions > 0:
-                        vulnerable_tools.append(
-                            (tool_name, exceptions, len(run_entries))
-                        )
-
-                if vulnerable_tools:
-                    print(
-                        f"\n{ALERT} VULNERABILITIES FOUND: {len(vulnerable_tools)}"
-                    )
-                    for tool, exceptions, total in vulnerable_tools:
-                        rate = exceptions / total * 100
-                        print(
-                            f"  • {tool}: {exceptions}/{total} exceptions ({rate:.1f}%)"
-                        )
-                else:
-                    print(f"\n{CHECK} NO VULNERABILITIES FOUND")
+                reporter.print_tool_execution_summary(tool_results)
 
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display table summary: {exc}")
 
         try:  # pragma: no cover
             if isinstance(protocol_results, dict) and protocol_results:
-                print("\n" + "=" * 80)
-                print(f"{ROCKET} MCP FUZZER PROTOCOL RESULTS SUMMARY")
-                print("=" * 80)
-                client.print_protocol_summary(protocol_results)
+                reporter.print_protocol_summary(protocol_results)
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display protocol summary tables: {exc}")
 
         try:  # pragma: no cover
             output_types = config.get("output_types")
-            standardized_files = await client.generate_standardized_reports(
+            standardized_files = await reporter.generate_standardized_report(
                 output_types=output_types,
                 include_safety=config.get("safety_report", False),
             )
@@ -208,46 +162,13 @@ async def unified_client_main(settings: ClientSettings) -> int:
             logging.warning(f"Failed to generate standardized reports: {exc}")
 
         try:  # pragma: no cover
-            logging.info(
-                "Checking export flags: "
-                f"csv={config.get('export_csv', False)}, "
-                f"xml={config.get('export_xml', False)}, "
-                f"html={config.get('export_html', False)}, "
-                f"md={config.get('export_markdown', False)}"
+            export_targets = _requested_export_targets(config)
+            exported_files = await reporter.export_requested_formats(
+                export_targets,
+                include_safety=config.get("safety_report", False),
             )
-            logging.info(f"Client reporter available: {client.reporter is not None}")
-
-            if config.get("export_csv"):
-                csv_filename = config["export_csv"]
-                if client.reporter:
-                    await client.reporter.export_format("csv", csv_filename)
-                    logging.info(f"Exported CSV report to: {csv_filename}")
-                else:
-                    logging.warning("No reporter available for CSV export")
-
-            if config.get("export_xml"):
-                xml_filename = config["export_xml"]
-                if client.reporter:
-                    await client.reporter.export_format("xml", xml_filename)
-                    logging.info(f"Exported XML report to: {xml_filename}")
-                else:
-                    logging.warning("No reporter available for XML export")
-
-            if config.get("export_html"):
-                html_filename = config["export_html"]
-                if client.reporter:
-                    await client.reporter.export_format("html", html_filename)
-                    logging.info(f"Exported HTML report to: {html_filename}")
-                else:
-                    logging.warning("No reporter available for HTML export")
-
-            if config.get("export_markdown"):
-                markdown_filename = config["export_markdown"]
-                if client.reporter:
-                    await client.reporter.export_format("markdown", markdown_filename)
-                    logging.info(f"Exported Markdown report to: {markdown_filename}")
-                else:
-                    logging.warning("No reporter available for Markdown export")
+            if exported_files:
+                logging.info("Exported report formats: %s", exported_files)
 
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to export additional report formats: {exc}")

@@ -246,6 +246,17 @@ class TestFuzzerReporter:
         # Verify results were stored
         assert "test_tool" in reporter.tool_results
 
+    def test_print_tool_execution_summary(self, reporter):
+        """Test printing tool execution summary."""
+        results = {"test_tool": [{"success": True}, {"exception": "boom"}]}
+
+        reporter.print_tool_execution_summary(results)
+
+        reporter.console_formatter.print_tool_execution_summary.assert_called_once_with(
+            results
+        )
+        assert "test_tool" in reporter.tool_results
+
     def test_print_protocol_summary(self, reporter):
         """Test printing protocol summary."""
         results = {"test_protocol": [{"success": True}, {"error": "test_error"}]}
@@ -567,3 +578,23 @@ class TestFuzzerReporter:
         reporter.xml_formatter.save_xml_report.assert_called_once()
         reporter.html_formatter.save_html_report.assert_called_once()
         reporter.markdown_formatter.save_markdown_report.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_export_requested_formats_continues_after_failure(
+        self, reporter, tmp_path
+    ):
+        """Test failed exports do not abort later requested formats."""
+        export_targets = {
+            "csv": str(tmp_path / "report.csv"),
+            "xml": str(tmp_path / "report.xml"),
+        }
+        reporter.export_format = AsyncMock(
+            side_effect=[RuntimeError("csv failed"), str(tmp_path / "report.xml")]
+        )
+
+        with patch("mcp_fuzzer.reports.reporter.logging.error") as mock_error:
+            exported = await reporter.export_requested_formats(export_targets)
+
+        assert exported == {"xml": str(tmp_path / "report.xml")}
+        assert reporter.export_format.await_count == 2
+        mock_error.assert_called_once()

@@ -39,6 +39,9 @@ def _settings(**overrides):
 def _make_reporter():
     reporter = MagicMock()
     reporter.export_format = AsyncMock()
+    reporter.generate_standardized_report = AsyncMock(return_value={})
+    reporter.export_requested_formats = AsyncMock(return_value={})
+    reporter.set_fuzzing_metadata = MagicMock()
     return reporter
 
 
@@ -46,13 +49,13 @@ def test_unified_client_main_tools_mode():
     settings = _settings()
     mock_transport = MagicMock()
     mock_safety = MagicMock()
-    mock_reporter = MagicMock()
+    mock_reporter = _make_reporter()
     client_instance = MagicMock()
     client_instance.fuzz_all_tools = AsyncMock(
         return_value={"tool1": [{"result": "ok"}]}
     )
-    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
+    client_instance.reporter = mock_reporter
 
     with (
         patch(
@@ -69,13 +72,17 @@ def test_unified_client_main_tools_mode():
     mock_transport_factory.assert_called_once()
     assert client_instance.fuzz_all_tools.await_count == 1
     client_instance.cleanup.assert_awaited()
-    mock_reporter.export_format.assert_not_called()
+    mock_reporter.export_requested_formats.assert_awaited_once_with(
+        {},
+        include_safety=False,
+    )
 
 
 def test_unified_client_main_unknown_mode_logs_error_and_returns_nonzero():
     settings = _settings(mode="unknown")
     client_instance = MagicMock()
     client_instance.cleanup = AsyncMock()
+    client_instance.reporter = _make_reporter()
     with (
         patch(
             "mcp_fuzzer.client.main.build_driver_with_auth",
@@ -95,8 +102,8 @@ def test_unified_client_main_sets_fs_root_when_provided():
     mock_safety = MagicMock()
     client_instance = MagicMock()
     client_instance.fuzz_all_tools = AsyncMock(return_value={})
-    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
+    client_instance.reporter = _make_reporter()
 
     with (
         patch(
@@ -119,6 +126,7 @@ def test_unified_client_main_protocol_and_both_modes():
     client_instance.fuzz_all_protocol_types = AsyncMock()
     client_instance.run_spec_suite = AsyncMock(return_value=[])
     client_instance.cleanup = AsyncMock()
+    client_instance.reporter = _make_reporter()
     with (
         patch(
             "mcp_fuzzer.client.main.build_driver_with_auth",
@@ -139,6 +147,7 @@ def test_unified_client_main_protocol_and_both_modes():
     client_instance2.fuzz_protocol_type = AsyncMock()
     client_instance2.run_spec_suite = AsyncMock(return_value=[])
     client_instance2.cleanup = AsyncMock()
+    client_instance2.reporter = _make_reporter()
     with (
         patch(
             "mcp_fuzzer.client.main.build_driver_with_auth",
@@ -163,7 +172,6 @@ def test_unified_client_main_exports_reports_and_handles_errors():
     )
     client_instance = MagicMock()
     client_instance.fuzz_tool = AsyncMock(return_value={})
-    client_instance.generate_standardized_reports = AsyncMock(return_value={"f": "p"})
     client_instance.cleanup = AsyncMock()
     reporter = _make_reporter()
     client_instance.reporter = reporter
@@ -177,8 +185,10 @@ def test_unified_client_main_exports_reports_and_handles_errors():
         patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
     ):
         asyncio.run(unified_client_main(settings))
-    reporter.export_format.assert_any_call("csv", "out.csv")
-    reporter.export_format.assert_any_call("markdown", "md.md")
+    reporter.export_requested_formats.assert_awaited_once_with(
+        {"csv": "out.csv", "markdown": "md.md"},
+        include_safety=False,
+    )
 
 
 def test_unified_client_main_exports_html_xml():
@@ -190,7 +200,6 @@ def test_unified_client_main_exports_html_xml():
     )
     client_instance = MagicMock()
     client_instance.fuzz_tool = AsyncMock(return_value={})
-    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
     reporter = _make_reporter()
     client_instance.reporter = reporter
@@ -204,16 +213,18 @@ def test_unified_client_main_exports_html_xml():
         patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
     ):
         asyncio.run(unified_client_main(settings))
-    reporter.export_format.assert_any_call("html", "out.html")
-    reporter.export_format.assert_any_call("xml", "out.xml")
+    reporter.export_requested_formats.assert_awaited_once_with(
+        {"html": "out.html", "xml": "out.xml"},
+        include_safety=False,
+    )
 
 
 def test_unified_client_main_safety_disabled():
     settings = _settings(safety_enabled=False)
     client_instance = MagicMock()
     client_instance.fuzz_all_tools = AsyncMock(return_value={})
-    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
+    client_instance.reporter = _make_reporter()
     with (
         patch(
             "mcp_fuzzer.client.main.build_driver_with_auth",
@@ -230,12 +241,12 @@ def test_unified_client_main_safety_disabled():
 def test_unified_client_main_tool_results_summary(monkeypatch):
     settings = _settings(mode="tools")
     client_instance = MagicMock()
+    reporter = _make_reporter()
     client_instance.fuzz_all_tools = AsyncMock(
         return_value={"tool1": [{"exception": None}, {"exception": {"err": 1}}]}
     )
-    client_instance.generate_standardized_reports = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
-    client_instance.print_tool_summary = MagicMock()
+    client_instance.reporter = reporter
     with (
         patch(
             "mcp_fuzzer.client.main.build_driver_with_auth",
@@ -247,7 +258,7 @@ def test_unified_client_main_tool_results_summary(monkeypatch):
         patch("builtins.print"),
     ):
         asyncio.run(unified_client_main(settings))
-    client_instance.print_tool_summary.assert_called_once()
+    reporter.print_tool_execution_summary.assert_called_once()
 
 
 def test_unified_client_main_returns_one_on_exception():
@@ -255,6 +266,7 @@ def test_unified_client_main_returns_one_on_exception():
     client_instance = MagicMock()
     client_instance.fuzz_all_tools = AsyncMock(side_effect=Exception("boom"))
     client_instance.cleanup = AsyncMock()
+    client_instance.reporter = _make_reporter()
     with (
         patch(
             "mcp_fuzzer.client.main.build_driver_with_auth",
@@ -270,7 +282,7 @@ def test_unified_client_main_returns_one_on_exception():
 
 class StubClient:
     def __init__(self, **_kwargs):
-        self.reporter = None
+        self.reporter = _make_reporter()
         self._spec_checks = []
 
     async def fuzz_tool_both_phases(self, *_args, **_kwargs):
@@ -302,15 +314,6 @@ class StubClient:
 
     async def cleanup(self):
         return None
-
-    def print_protocol_summary(self, *_args, **_kwargs):
-        return None
-
-    def print_tool_summary(self, *_args, **_kwargs):
-        return None
-
-    async def generate_standardized_reports(self, *_args, **_kwargs):
-        return {}
 
 
 @pytest.mark.asyncio

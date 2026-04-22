@@ -13,6 +13,8 @@ from mcp_fuzzer.reports.formatters.common import (
     normalize_report_data,
     result_has_failure,
     summarize_protocol_items,
+    summarize_tool_runs,
+    tool_run_has_exception,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -66,6 +68,21 @@ def test_extract_tool_runs_from_unexpected_value():
     assert metadata is None
 
 
+def test_extract_tool_runs_from_error_only_entry():
+    entry = {"success": False, "error": "phase failed", "exception": "boom"}
+    runs, metadata = extract_tool_runs(entry)
+    assert runs == [
+        {
+            "success": False,
+            "error": "phase failed",
+            "exception": "boom",
+            "safety_blocked": False,
+            "safety_sanitized": False,
+        }
+    ]
+    assert metadata is entry
+
+
 def test_calculate_protocol_success_rate_handles_zero_runs():
     assert calculate_protocol_success_rate(0, 1) == 0.0
 
@@ -116,3 +133,39 @@ def test_summarize_protocol_items_detects_failures():
     assert summary["alpha"]["errors"] == 1
     assert summary["beta"]["errors"] == 1
     assert result_has_failure({"success": False})
+
+
+def test_tool_run_has_exception_excludes_safety_blocked():
+    assert tool_run_has_exception({"exception": "boom"})
+    assert not tool_run_has_exception(
+        {"exception": "safety_blocked", "safety_blocked": True}
+    )
+
+
+def test_summarize_tool_runs_uses_non_overlapping_failure_counts():
+    summary = summarize_tool_runs(
+        [
+            {"success": True},
+            {"exception": "boom"},
+            {"success": False, "safety_blocked": True},
+        ]
+    )
+    assert summary["exceptions"] == 1
+    assert summary["safety_blocked"] == 1
+    assert summary["successful"] == 1
+    assert summary["success_rate"] == pytest.approx(33.33, rel=1e-3)
+
+
+def test_summarize_tool_runs_counts_error_only_failures_in_success_rate():
+    summary = summarize_tool_runs([{"success": False, "error": "boom"}])
+
+    assert summary["failures"] == 1
+    assert summary["successful"] == 0
+    assert summary["success_rate"] == 0.0
+
+
+def test_summarize_tool_runs_handles_non_dict_safety_blocked_entries():
+    summary = summarize_tool_runs([{"success": True}, "legacy-run"])  # type: ignore[list-item]
+
+    assert summary["safety_blocked"] == 0
+    assert summary["failures"] == 1

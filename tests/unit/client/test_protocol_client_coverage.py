@@ -149,20 +149,19 @@ async def test_send_generic_request_non_string_method(client):
     assert result == {"ok": True}
     client.transport.send_request.assert_called_with("unknown", {"a": 1})
 
-@pytest.mark.asyncio
-async def test_get_protocol_types_exception():
+def test_get_protocol_types_reads_supported_protocols():
     client = ProtocolClient(transport=MagicMock(), safety_system=None)
     with patch(
-        "mcp_fuzzer.client.protocol_client.ProtocolExecutor",
-        side_effect=Exception("boom"),
+        "mcp_fuzzer.client.protocol_client.SUPPORTED_PROTOCOL_TYPES",
+        ("PingRequest",),
     ):
-        result = await client._get_protocol_types()
-        assert result == []
+        result = client._get_protocol_types()
+        assert result == ["PingRequest"]
 
 @pytest.mark.asyncio
 async def test_fuzz_all_protocol_types_exception():
     client = ProtocolClient(transport=MagicMock(), safety_system=None)
-    client._get_protocol_types = AsyncMock(side_effect=Exception("boom"))
+    client._get_protocol_types = MagicMock(side_effect=Exception("boom"))
     result = await client.fuzz_all_protocol_types()
     assert result == {}
 

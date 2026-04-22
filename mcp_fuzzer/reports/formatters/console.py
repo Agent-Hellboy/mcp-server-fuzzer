@@ -9,10 +9,10 @@ from rich.table import Table
 
 from .common import (
     calculate_protocol_success_rate,
-    calculate_tool_success_rate,
     collect_and_summarize_protocol_items,
     extract_tool_runs,
     result_has_failure,
+    summarize_tool_runs,
 )
 from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
@@ -38,22 +38,66 @@ class ConsoleFormatter:
 
         for tool_name, tool_results in results.items():
             runs, _ = extract_tool_runs(tool_results)
-            total_runs = len(runs)
-            exceptions = sum(1 for r in runs if "exception" in r)
-            safety_blocked = sum(1 for r in runs if r.get("safety_blocked", False))
-            success_rate = calculate_tool_success_rate(
-                total_runs, exceptions, safety_blocked
-            )
+            stats = summarize_tool_runs(runs)
 
             table.add_row(
                 tool_name,
-                str(total_runs),
-                str(exceptions),
-                str(safety_blocked),
-                f"{success_rate:.1f}%",
+                str(stats["total_runs"]),
+                str(stats["exceptions"]),
+                str(stats["safety_blocked"]),
+                f"{stats['success_rate']:.1f}%",
             )
 
         self.console.print(table)
+
+    def print_tool_execution_summary(self, results: dict[str, Any]) -> None:
+        """Print the detailed tool execution summary and aggregate statistics."""
+        self.print_tool_summary(results)
+        if not results:
+            return
+
+        total_tools = len(results)
+        total_runs = 0
+        total_successful = 0
+        total_exceptions = 0
+        total_safety_blocked = 0
+        vulnerable_tools: list[tuple[str, int, int]] = []
+
+        for tool_name, tool_results in results.items():
+            runs, _ = extract_tool_runs(tool_results)
+            stats = summarize_tool_runs(runs)
+            total_runs += int(stats["total_runs"])
+            total_successful += int(stats["successful"])
+            total_exceptions += int(stats["exceptions"])
+            total_safety_blocked += int(stats["safety_blocked"])
+            server_failures = max(
+                0, int(stats["failures"]) - int(stats["safety_blocked"])
+            )
+            if server_failures > 0:
+                vulnerable_tools.append(
+                    (tool_name, server_failures, int(stats["total_runs"]))
+                )
+
+        success_rate = (total_successful / total_runs * 100) if total_runs > 0 else 0
+
+        self.console.print("\n[bold]Tool Execution Statistics[/bold]")
+        self.console.print(f"Total Tools Tested: {total_tools}")
+        self.console.print(f"Total Fuzzing Runs: {total_runs}")
+        self.console.print(f"Total Exceptions: {total_exceptions}")
+        self.console.print(f"Total Safety Blocked: {total_safety_blocked}")
+        self.console.print(f"Overall Success Rate: {success_rate:.1f}%")
+
+        if vulnerable_tools:
+            self.console.print(
+                f"\n[bold red]Vulnerabilities Found: {len(vulnerable_tools)}[/bold red]"
+            )
+            for tool_name, failures, total in vulnerable_tools:
+                rate = (failures / total * 100) if total > 0 else 0
+                self.console.print(
+                    f"  • {tool_name}: {failures}/{total} failed runs ({rate:.1f}%)"
+                )
+        else:
+            self.console.print("\n[bold green]No vulnerabilities found[/bold green]")
 
     def print_protocol_summary(
         self,
@@ -102,6 +146,7 @@ class ConsoleFormatter:
             self._print_protocol_item_summary(
                 "MCP Prompt Item Fuzzing Summary", "Prompt", prompt_summary
             )
+
     def _print_protocol_item_summary(
         self, title: str, name_header: str, summary: dict[str, dict[str, Any]]
     ) -> None:

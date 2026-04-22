@@ -3,6 +3,7 @@
 Tests for formatters module.
 """
 
+from decimal import Decimal
 import tempfile
 from unittest.mock import MagicMock, patch, mock_open
 
@@ -167,6 +168,26 @@ class TestConsoleFormatter:
 
         table = console_formatter.console.print.call_args[0][0]
         assert table.title == "MCP Resources Fuzzing Summary"
+
+    def test_print_tool_execution_summary_separates_safety_blocked_runs(
+        self, console_formatter
+    ):
+        """Test tool execution summary excludes safety blocks from vulnerabilities."""
+        results = {
+            "safe_tool": [{"success": False, "safety_blocked": True}],
+            "broken_tool": [{"success": False, "error": "boom"}],
+        }
+
+        console_formatter.print_tool_execution_summary(results)
+
+        printed = [
+            str(call.args[0]) for call in console_formatter.console.print.call_args_list
+        ]
+        assert any("Total Safety Blocked: 1" in item for item in printed)
+        assert any("Overall Success Rate: 0.0%" in item for item in printed)
+        assert any("Vulnerabilities Found: 1" in item for item in printed)
+        assert any("broken_tool" in item for item in printed)
+        assert not any("safe_tool: 1/1 failed runs" in item for item in printed)
 
     def test_print_spec_guard_summary_no_checks(self, console_formatter):
         """Test printing spec guard summary without checks."""
@@ -489,6 +510,42 @@ class TestTextFormatter:
             assert "Total Operations Blocked: 5" in content
             assert "Unique Tools Blocked: 3" in content
             assert "Risk Assessment: MEDIUM" in content
+
+        finally:
+            import os
+
+            os.unlink(temp_filename)
+
+    def test_save_text_report_coerces_tool_success_rate_to_float(self, text_formatter):
+        """Test tool success rates render from Decimal-like values."""
+        report_data = {
+            "metadata": {"session_id": "test_session"},
+            "tool_results": {
+                "test_tool": [{"success": True}],
+            },
+        }
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".txt"
+        ) as temp_file:
+            temp_filename = temp_file.name
+
+        try:
+            with patch(
+                "mcp_fuzzer.reports.formatters.text_fmt.summarize_tool_runs",
+                return_value={
+                    "total_runs": 1,
+                    "exceptions": 0,
+                    "safety_blocked": 0,
+                    "success_rate": Decimal("100.0"),
+                },
+            ):
+                text_formatter.save_text_report(report_data, temp_filename)
+
+            with open(temp_filename, "r") as f:
+                content = f.read()
+
+            assert "Success Rate: 100.0%" in content
 
         finally:
             import os

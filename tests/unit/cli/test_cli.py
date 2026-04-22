@@ -24,7 +24,10 @@ from mcp_fuzzer.client.runtime.async_runner import AsyncRunner
 from mcp_fuzzer.client.runtime.async_runner import execute_inner_client
 from mcp_fuzzer.client.runtime.retry import run_with_retry_on_interrupt
 from mcp_fuzzer.client.safety import SafetyController
-from mcp_fuzzer.client.transport.factory import build_driver_with_auth
+from mcp_fuzzer.client.transport.factory import (
+    TransportBuildRequest,
+    build_driver_with_auth,
+)
 from mcp_fuzzer.env import ValidationType
 from mcp_fuzzer.exceptions import ArgumentValidationError, ConfigFileError, MCPError
 
@@ -353,11 +356,17 @@ def test_prepare_inner_argv_roundtrip():
 
 
 def test_transport_factory_applies_auth_headers():
-    args = MagicMock(protocol="http", endpoint="http://example.com", timeout=10.0)
-    auth_manager = MagicMock()
-    auth_manager.get_default_auth_headers.return_value = {"Authorization": "x"}
+    request = TransportBuildRequest(
+        protocol="http",
+        endpoint="http://example.com",
+        timeout=10.0,
+        auth_manager=MagicMock(),
+    )
+    request.auth_manager.get_default_auth_headers.return_value = {
+        "Authorization": "x"
+    }
     with patch("mcp_fuzzer.client.transport.factory.base_build_driver") as mock_create:
-        build_driver_with_auth(args, {"auth_manager": auth_manager})
+        build_driver_with_auth(request)
         mock_create.assert_called_once_with(
             "http",
             "http://example.com",

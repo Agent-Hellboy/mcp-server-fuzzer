@@ -2,7 +2,9 @@
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from mcp_fuzzer.client.protocol_client import ProtocolClient
+
+from mcp_fuzzer.client.protocol_client import ProtocolClient, SUPPORTED_PROTOCOL_TYPES
+from mcp_fuzzer.protocol_registry import EXECUTABLE_PROTOCOL_TYPES
 
 
 @pytest.fixture
@@ -200,35 +202,18 @@ class TestProtocolRequestDispatch:
 class TestGetProtocolTypes:
     """Test _get_protocol_types method."""
 
-    @pytest.mark.asyncio
-    async def test_get_protocol_types_returns_list(self, client):
+    def test_get_protocol_types_returns_list(self, client):
         """Test getting protocol types returns a list."""
         with patch(
-            "mcp_fuzzer.client.protocol_client.ProtocolExecutor"
-        ) as mock_executor:
-            mock_executor.PROTOCOL_TYPES = ["InitializeRequest", "ListResourcesRequest"]
-            result = await client._get_protocol_types()
+            "mcp_fuzzer.client.protocol_client.SUPPORTED_PROTOCOL_TYPES",
+            ("InitializeRequest", "ListResourcesRequest"),
+        ):
+            result = client._get_protocol_types()
             assert result == ["InitializeRequest", "ListResourcesRequest"]
 
-    @pytest.mark.asyncio
-    async def test_get_protocol_types_handles_missing_attr(self, client):
-        """Test getting protocol types handles missing attribute."""
-        with patch(
-            "mcp_fuzzer.client.protocol_client.ProtocolExecutor"
-        ) as mock_executor:
-            del mock_executor.PROTOCOL_TYPES
-            result = await client._get_protocol_types()
-            assert result == []
-
-    @pytest.mark.asyncio
-    async def test_get_protocol_types_handles_exception(self, client):
-        """Test getting protocol types handles exceptions."""
-        with patch(
-            "mcp_fuzzer.client.protocol_client.ProtocolExecutor",
-            side_effect=Exception("fail"),
-        ):
-            result = await client._get_protocol_types()
-            assert result == []
+    def test_supported_protocol_types_match_registry_order(self):
+        """ProtocolClient should stay aligned with executable registry types."""
+        assert SUPPORTED_PROTOCOL_TYPES == tuple(EXECUTABLE_PROTOCOL_TYPES)
 
 
 class TestFuzzAllProtocolTypes:
@@ -237,21 +222,21 @@ class TestFuzzAllProtocolTypes:
     @pytest.mark.asyncio
     async def test_fuzz_all_returns_empty_when_no_types(self, client):
         """Test fuzzing all types returns empty when no protocol types."""
-        client._get_protocol_types = AsyncMock(return_value=[])
+        client._get_protocol_types = MagicMock(return_value=[])
         result = await client.fuzz_all_protocol_types()
         assert result == {}
 
     @pytest.mark.asyncio
     async def test_fuzz_all_handles_exception(self, client):
         """Test fuzzing all types handles exceptions gracefully."""
-        client._get_protocol_types = AsyncMock(side_effect=Exception("boom"))
+        client._get_protocol_types = MagicMock(side_effect=Exception("boom"))
         result = await client.fuzz_all_protocol_types()
         assert result == {}
 
     @pytest.mark.asyncio
     async def test_fuzz_all_runs_for_each_type(self, client):
         """Test fuzzing all types runs for each protocol type."""
-        client._get_protocol_types = AsyncMock(return_value=["InitializeRequest"])
+        client._get_protocol_types = MagicMock(return_value=["InitializeRequest"])
         client._process_single_protocol_fuzz = AsyncMock(
             return_value={"success": True}
         )

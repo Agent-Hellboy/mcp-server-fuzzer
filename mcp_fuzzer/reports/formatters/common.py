@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Literal, Protocol
 
+from ...types import ExtractedToolRuns, ToolRunResult
+
 
 class SupportsToDict(Protocol):
     def to_dict(self) -> dict[str, Any]: ...
@@ -23,22 +25,39 @@ def normalize_report_data(
 
 def extract_tool_runs(
     tool_entry: Any,
-) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+) -> ExtractedToolRuns:
     if isinstance(tool_entry, list):
-        return tool_entry, None
+        return ExtractedToolRuns(tool_entry, None)
     if not isinstance(tool_entry, dict):
-        return [], None
+        return ExtractedToolRuns([], None)
     runs = tool_entry.get("runs")
     if isinstance(runs, list):
-        return runs, tool_entry
-    combined: list[dict[str, Any]] = []
+        return ExtractedToolRuns(runs, tool_entry)
+    combined: list[ToolRunResult] = []
     realistic = tool_entry.get("realistic")
     aggressive = tool_entry.get("aggressive")
     if isinstance(realistic, list):
         combined.extend(realistic)
     if isinstance(aggressive, list):
         combined.extend(aggressive)
-    return combined, tool_entry
+    if combined:
+        return ExtractedToolRuns(combined, tool_entry)
+    if "error" in tool_entry or "exception" in tool_entry:
+        synthetic_run: ToolRunResult = {
+            "success": bool(tool_entry.get("success", False)),
+            "safety_blocked": bool(tool_entry.get("safety_blocked", False)),
+            "safety_sanitized": bool(tool_entry.get("safety_sanitized", False)),
+        }
+        if "args" in tool_entry:
+            synthetic_run["args"] = tool_entry.get("args")
+        if "label" in tool_entry:
+            synthetic_run["label"] = tool_entry.get("label")
+        if "error" in tool_entry:
+            synthetic_run["error"] = tool_entry.get("error")
+        if "exception" in tool_entry:
+            synthetic_run["exception"] = tool_entry.get("exception")
+        return ExtractedToolRuns([synthetic_run], tool_entry)
+    return ExtractedToolRuns(combined, tool_entry)
 
 
 def calculate_tool_success_rate(
@@ -50,6 +69,57 @@ def calculate_tool_success_rate(
         return 0.0
     successful_runs = max(0, total_runs - exceptions - safety_blocked)
     return (successful_runs / total_runs) * 100
+
+
+def tool_run_has_exception(result: dict[str, Any] | None) -> bool:
+    """Return True when a tool result has a non-safety exception."""
+    if not isinstance(result, dict):
+        return False
+    if result.get("safety_blocked", False):
+        return False
+    return bool(result.get("exception"))
+
+
+def tool_run_has_failure(result: dict[str, Any] | None) -> bool:
+    """Return True when a tool result should count as a failed run.
+
+    Failure classification rules are centralized here:
+    - malformed/non-dict entries are failures
+    - safety-blocked entries are failures
+    - exceptions, explicit errors, server errors, or falsey success are failures
+    """
+    if not isinstance(result, dict):
+        return True
+    if result.get("safety_blocked", False):
+        return True
+    return bool(
+        tool_run_has_exception(result)
+        or not result.get("success", True)
+        or result.get("error")
+        or result.get("server_error")
+    )
+
+
+def summarize_tool_runs(runs: list[dict[str, Any]]) -> dict[str, int | float]:
+    """Return non-overlapping summary counters for tool run reporting."""
+    total_runs = len(runs)
+    exceptions = sum(1 for run in runs if tool_run_has_exception(run))
+    safety_blocked = sum(
+        1
+        for run in runs
+        if isinstance(run, dict) and run.get("safety_blocked", False)
+    )
+    failures = sum(1 for run in runs if tool_run_has_failure(run))
+    successful = max(total_runs - failures, 0)
+    success_rate = (successful / total_runs) * 100 if total_runs > 0 else 0.0
+    return {
+        "total_runs": total_runs,
+        "exceptions": exceptions,
+        "safety_blocked": safety_blocked,
+        "failures": failures,
+        "successful": successful,
+        "success_rate": success_rate,
+    }
 
 
 def calculate_protocol_success_rate(total_runs: int, errors: int) -> float:
