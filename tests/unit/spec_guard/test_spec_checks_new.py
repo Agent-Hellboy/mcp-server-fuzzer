@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from mcp_fuzzer.spec_guard.check_ids import CheckID
 from mcp_fuzzer.spec_guard.spec_checks import (
     check_cancelled_notification,
     check_completion_complete,
@@ -37,31 +38,31 @@ def test_completion_complete_not_dict():
 def test_completion_complete_missing_completion_key():
     checks = check_completion_complete({})
     ids = [c["id"] for c in checks]
-    assert "completion-missing" in ids
+    assert CheckID.COMPLETION_MISSING in ids
 
 
 def test_completion_complete_completion_not_dict():
     checks = check_completion_complete({"completion": "bad"})
     ids = [c["id"] for c in checks]
-    assert "completion-type" in ids
+    assert CheckID.COMPLETION_TYPE in ids
 
 
 def test_completion_complete_missing_values():
     checks = check_completion_complete({"completion": {}})
     ids = [c["id"] for c in checks]
-    assert "completion-values-missing" in ids
+    assert CheckID.COMPLETION_VALUES_MISSING in ids
 
 
 def test_completion_complete_values_not_array():
     checks = check_completion_complete({"completion": {"values": "bad"}})
     ids = [c["id"] for c in checks]
-    assert "completion-values-type" in ids
+    assert CheckID.COMPLETION_VALUES_TYPE in ids
 
 
 def test_completion_complete_values_non_string_item():
     checks = check_completion_complete({"completion": {"values": [1, "ok"]}})
     ids = [c["id"] for c in checks]
-    assert "completion-values-item" in ids
+    assert CheckID.COMPLETION_VALUES_ITEM in ids
 
 
 def test_completion_complete_has_more_non_bool():
@@ -69,7 +70,7 @@ def test_completion_complete_has_more_non_bool():
         {"completion": {"values": [], "hasMore": "yes"}}
     )
     ids = [c["id"] for c in checks]
-    assert "completion-has-more-type" in ids
+    assert CheckID.COMPLETION_HAS_MORE_TYPE in ids
 
 
 def test_completion_complete_total_non_int():
@@ -77,13 +78,13 @@ def test_completion_complete_total_non_int():
         {"completion": {"values": [], "total": 3.5}}
     )
     ids = [c["id"] for c in checks]
-    assert "completion-total-type" in ids
+    assert CheckID.COMPLETION_TOTAL_TYPE in ids
 
 
 def test_completion_complete_total_bool_rejected():
     checks = check_completion_complete({"completion": {"values": [], "total": True}})
     ids = [c["id"] for c in checks]
-    assert "completion-total-type" in ids
+    assert CheckID.COMPLETION_TOTAL_TYPE in ids
 
 
 # ---------------------------------------------------------------------------

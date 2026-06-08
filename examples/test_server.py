@@ -33,6 +33,9 @@ BIND_PORT = int(os.getenv("BIND_PORT", "8000"))
 REQUIRED_TOKEN = os.getenv("REQUIRED_TOKEN", "secret123")
 
 _CURRENT_LOG_LEVEL: str = "info"
+# Subscription tracking is intentionally a stub — the test server records
+# subscribed URIs so handlers exist and return EmptyResult, but does not
+# emit notifications when resources change.
 _SUBSCRIBED_URIS: set[str] = set()
 
 # In-memory task store -------------------------------------------------------
@@ -338,7 +341,7 @@ def build_mcp_server() -> FastMCP:
         if isinstance(ref, types.ResourceTemplateReference):
             if arg_name == "item_id":
                 candidates = ["apple", "banana", "cherry"]
-                values = [c for c in candidates if c.startswith(arg_value)]
+                values = [c for c in candidates if c.lower().startswith(arg_value.lower())]
                 return types.Completion(values=values, total=len(values), hasMore=False)
 
         return types.Completion(values=[], total=0, hasMore=False)
@@ -350,8 +353,10 @@ def build_mcp_server() -> FastMCP:
     @mcp._mcp_server.set_logging_level()
     async def handle_set_log_level(level: types.LoggingLevel) -> None:
         global _CURRENT_LOG_LEVEL
-        _CURRENT_LOG_LEVEL = str(level)
-        LOGGER.info("Log level set to %s", level)
+        level_str = str(level).upper()
+        _CURRENT_LOG_LEVEL = level_str.lower()
+        logging.getLogger().setLevel(getattr(logging, level_str, logging.INFO))
+        LOGGER.info("Log level set to %s", level_str)
 
     # ------------------------------------------------------------------
     # Resource subscriptions  (resources/subscribe, resources/unsubscribe)

@@ -80,6 +80,7 @@ graphify explain "OAuthClientCredentialsAuth"
 Graphify is faster than grepping and surfaces cross-file relationships the raw code doesn't make obvious. Only fall back to `grep`/`Read` when the graph answer is insufficient.
 
 To rebuild the graph after large changes:
+
 ```bash
 /graphify mcp_fuzzer tests --update
 ```

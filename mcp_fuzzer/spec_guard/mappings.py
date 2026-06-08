@@ -33,64 +33,34 @@ from .spec_checks import (
 
 _CheckFn = Callable[[Any], list[SpecCheck]]
 
-METHOD_CHECK_MAP: dict[str, tuple[_CheckFn, str]] = {
-    "notifications/message": (check_logging_notification, "logging/message"),
-    "notifications/tasks/status": (
-        check_task_status_notification,
-        "tasks/status",
-    ),
-    "notifications/elicitation/complete": (
-        check_elicitation_complete_notification,
-        "elicitation/complete",
-    ),
-    "notifications/progress": (check_progress_notification, "notifications/progress"),
-    "notifications/cancelled": (
-        check_cancelled_notification,
-        "notifications/cancelled",
-    ),
-    "notifications/resources/list_changed": (
-        check_list_changed_notification,
-        "notifications/resources/list_changed",
-    ),
-    "notifications/resources/updated": (
-        check_resources_updated_notification,
-        "notifications/resources/updated",
-    ),
-    "notifications/prompts/list_changed": (
-        check_list_changed_notification,
-        "notifications/prompts/list_changed",
-    ),
-    "notifications/tools/list_changed": (
-        check_list_changed_notification,
-        "notifications/tools/list_changed",
-    ),
-    "notifications/roots/list_changed": (
-        check_list_changed_notification,
-        "notifications/roots/list_changed",
-    ),
-    "tools/list": (check_tools_list, "tools/list"),
-    "tools/call": (check_tool_result_content, "tools/call"),
-    "resources/list": (check_resources_list, "resources/list"),
-    "resources/read": (check_resources_read, "resources/read"),
-    "resources/subscribe": (check_subscribe_result, "resources/subscribe"),
-    "resources/unsubscribe": (check_unsubscribe_result, "resources/unsubscribe"),
-    "resources/templates/list": (
-        check_resource_templates_list,
-        "resources/templates/list",
-    ),
-    "prompts/list": (check_prompts_list, "prompts/list"),
-    "prompts/get": (check_prompts_get, "prompts/get"),
-    "roots/list": (check_roots_list, "roots/list"),
-    "sampling/createMessage": (
-        check_create_message_result,
-        "sampling/createMessage",
-    ),
-    "elicitation/create": (check_elicit_result, "elicitation/create"),
-    "completion/complete": (check_completion_complete, "completion/complete"),
-    "tasks/list": (check_tasks_list, "tasks/list"),
-    "tasks/get": (check_task_result, "tasks/get"),
-    "tasks/result": (check_task_payload_result, "tasks/result"),
-    "tasks/cancel": (check_task_result, "tasks/cancel"),
+METHOD_CHECK_MAP: dict[str, _CheckFn] = {
+    "notifications/message": check_logging_notification,
+    "notifications/tasks/status": check_task_status_notification,
+    "notifications/elicitation/complete": check_elicitation_complete_notification,
+    "notifications/progress": check_progress_notification,
+    "notifications/cancelled": check_cancelled_notification,
+    "notifications/resources/list_changed": check_list_changed_notification,
+    "notifications/resources/updated": check_resources_updated_notification,
+    "notifications/prompts/list_changed": check_list_changed_notification,
+    "notifications/tools/list_changed": check_list_changed_notification,
+    "notifications/roots/list_changed": check_list_changed_notification,
+    "tools/list": check_tools_list,
+    "tools/call": check_tool_result_content,
+    "resources/list": check_resources_list,
+    "resources/read": check_resources_read,
+    "resources/subscribe": check_subscribe_result,
+    "resources/unsubscribe": check_unsubscribe_result,
+    "resources/templates/list": check_resource_templates_list,
+    "prompts/list": check_prompts_list,
+    "prompts/get": check_prompts_get,
+    "roots/list": check_roots_list,
+    "sampling/createMessage": check_create_message_result,
+    "elicitation/create": check_elicit_result,
+    "completion/complete": check_completion_complete,
+    "tasks/list": check_tasks_list,
+    "tasks/get": check_task_result,
+    "tasks/result": check_task_payload_result,
+    "tasks/cancel": check_task_result,
 }
 
 PROTOCOL_TYPE_TO_METHOD: dict[str, str] = {
@@ -127,10 +97,10 @@ def get_spec_checks_for_method(
 ) -> tuple[list[SpecCheck], str | None]:
     if not isinstance(method, str) or not method:
         return [], None
-    entry = METHOD_CHECK_MAP.get(method)
-    if not entry:
+    check_fn = METHOD_CHECK_MAP.get(method)
+    if not check_fn:
         return [], None
-    check_fn, scope = entry
+    scope = method
     return check_fn(payload), scope
 
 
@@ -142,6 +112,32 @@ def get_spec_checks_for_protocol_type(
     mapped_method = PROTOCOL_TYPE_TO_METHOD.get(protocol_type or "")
     return get_spec_checks_for_method(mapped_method, payload)
 
+
+_NOTIFICATION_ONLY_METHODS: frozenset[str] = frozenset(
+    {
+        "notifications/initialized",
+    }
+)
+
+
+def _validate_registry() -> None:
+    """Assert every PROTOCOL_TYPE_TO_METHOD value is resolvable.
+
+    A method is considered resolvable if it is present in METHOD_CHECK_MAP
+    or is a known notification-only method that intentionally has no check.
+    Raises AssertionError with a descriptive message on the first violation.
+    """
+    for protocol_type, method in PROTOCOL_TYPE_TO_METHOD.items():
+        if method not in METHOD_CHECK_MAP and method not in _NOTIFICATION_ONLY_METHODS:
+            raise AssertionError(
+                f"PROTOCOL_TYPE_TO_METHOD entry {protocol_type!r} maps to method "
+                f"{method!r}, which has no entry in METHOD_CHECK_MAP and is not a "
+                "known notification-only method. Add it to METHOD_CHECK_MAP or to "
+                "_NOTIFICATION_ONLY_METHODS."
+            )
+
+
+_validate_registry()
 
 __all__ = [
     "METHOD_CHECK_MAP",
