@@ -44,6 +44,25 @@ tox -e ruff                  # lint
 tox -e tests -- <test paths> # unit tests
 ```
 
+## Codebase Exploration — Use Graphify First
+
+A knowledge graph of this repo lives in `graphify-out/`. **Before exploring the code manually, query the graph:**
+
+```bash
+# Ask anything about structure, coverage, relationships
+graphify query "how does X work"
+graphify query "what calls Y"
+graphify path "AuthModule" "Database"
+graphify explain "OAuthClientCredentialsAuth"
+```
+
+Graphify is faster than grepping and surfaces cross-file relationships the raw code doesn't make obvious. Only fall back to `grep`/`Read` when the graph answer is insufficient.
+
+To rebuild the graph after large changes:
+```bash
+/graphify mcp_fuzzer tests --update
+```
+
 ## Pull Requests
 
 Open PRs against `main` on `https://github.com/Agent-Hellboy/mcp-server-fuzzer`.

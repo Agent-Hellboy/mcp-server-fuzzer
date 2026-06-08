@@ -5,6 +5,7 @@ from datetime import date
 from typing import Any
 
 from .helpers import (
+    COMPLETIONS_SPEC,
     ELICITATION_SPEC,
     LOGGING_SPEC,
     PROMPTS_SPEC,
@@ -39,6 +40,7 @@ _ROOTS_SPEC = ROOTS_SPEC
 _SAMPLING_SPEC = SAMPLING_SPEC
 _ELICITATION_SPEC = ELICITATION_SPEC
 _TASKS_SPEC = TASKS_SPEC
+_COMPLETIONS_SPEC = COMPLETIONS_SPEC
 
 
 def _spec_at_least(target: str) -> bool:
@@ -883,6 +885,264 @@ def check_prompts_get(result: Any) -> list[SpecCheck]:
                     _PROMPTS_SPEC,
                 )
             )
+
+    return checks
+
+
+def check_completion_complete(result: Any) -> list[SpecCheck]:
+    """Validate completion/complete response shape."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        return checks
+
+    completion = result.get("completion")
+    if completion is None:
+        checks.append(
+            _fail(
+                "completion-missing",
+                "completion/complete result missing completion object",
+                _COMPLETIONS_SPEC,
+            )
+        )
+        return checks
+
+    if not isinstance(completion, dict):
+        checks.append(
+            _fail(
+                "completion-type",
+                "completion/complete result completion is not an object",
+                _COMPLETIONS_SPEC,
+            )
+        )
+        return checks
+
+    values = completion.get("values")
+    if values is None:
+        checks.append(
+            _fail(
+                "completion-values-missing",
+                "completion/complete result missing values array",
+                _COMPLETIONS_SPEC,
+            )
+        )
+    elif not isinstance(values, list):
+        checks.append(
+            _fail(
+                "completion-values-type",
+                "completion/complete result values is not an array",
+                _COMPLETIONS_SPEC,
+            )
+        )
+    else:
+        for idx, val in enumerate(values):
+            if not isinstance(val, str):
+                checks.append(
+                    _fail(
+                        "completion-values-item",
+                        f"completion/complete result values[{idx}] is not a string",
+                        _COMPLETIONS_SPEC,
+                    )
+                )
+
+    has_more = completion.get("hasMore")
+    if has_more is not None and not isinstance(has_more, bool):
+        checks.append(
+            _fail(
+                "completion-has-more-type",
+                "completion/complete result hasMore is not a boolean",
+                _COMPLETIONS_SPEC,
+            )
+        )
+
+    total = completion.get("total")
+    if total is not None and (not isinstance(total, int) or isinstance(total, bool)):
+        checks.append(
+            _fail(
+                "completion-total-type",
+                "completion/complete result total is not an integer",
+                _COMPLETIONS_SPEC,
+            )
+        )
+
+    return checks
+
+
+def check_subscribe_result(result: Any) -> list[SpecCheck]:
+    """Validate resources/subscribe response shape (must be EmptyResult {})."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        checks.append(
+            _fail(
+                "subscribe-result-type",
+                "resources/subscribe result is not an object",
+                _RESOURCES_SPEC,
+            )
+        )
+    return checks
+
+
+def check_unsubscribe_result(result: Any) -> list[SpecCheck]:
+    """Validate resources/unsubscribe response shape (must be EmptyResult {})."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        checks.append(
+            _fail(
+                "unsubscribe-result-type",
+                "resources/unsubscribe result is not an object",
+                _RESOURCES_SPEC,
+            )
+        )
+    return checks
+
+
+def check_progress_notification(payload: dict[str, Any]) -> list[SpecCheck]:
+    """Validate notifications/progress payload shape."""
+    checks: list[SpecCheck] = []
+    params = payload.get("params")
+    if not isinstance(params, dict):
+        checks.append(
+            _fail(
+                "progress-params-type",
+                "notifications/progress params is not an object",
+                _LOGGING_SPEC,
+            )
+        )
+        return checks
+
+    token = params.get("progressToken")
+    if token is None:
+        checks.append(
+            _fail(
+                "progress-token-missing",
+                "notifications/progress missing progressToken",
+                _LOGGING_SPEC,
+            )
+        )
+    elif not isinstance(token, (str, int)) or isinstance(token, bool):
+        checks.append(
+            _fail(
+                "progress-token-type",
+                "notifications/progress progressToken must be string or integer",
+                _LOGGING_SPEC,
+            )
+        )
+
+    progress = params.get("progress")
+    if progress is None:
+        checks.append(
+            _fail(
+                "progress-value-missing",
+                "notifications/progress missing progress value",
+                _LOGGING_SPEC,
+            )
+        )
+    elif not isinstance(progress, (int, float)) or isinstance(progress, bool):
+        checks.append(
+            _fail(
+                "progress-value-type",
+                "notifications/progress progress must be a number",
+                _LOGGING_SPEC,
+            )
+        )
+
+    total = params.get("total")
+    if total is not None and (
+        not isinstance(total, (int, float)) or isinstance(total, bool)
+    ):
+        checks.append(
+            _fail(
+                "progress-total-type",
+                "notifications/progress total must be a number",
+                _LOGGING_SPEC,
+            )
+        )
+
+    return checks
+
+
+def check_cancelled_notification(payload: dict[str, Any]) -> list[SpecCheck]:
+    """Validate notifications/cancelled payload shape."""
+    checks: list[SpecCheck] = []
+    params = payload.get("params")
+    if not isinstance(params, dict):
+        checks.append(
+            _fail(
+                "cancelled-params-type",
+                "notifications/cancelled params is not an object",
+                _LOGGING_SPEC,
+            )
+        )
+        return checks
+
+    request_id = params.get("requestId")
+    if request_id is None:
+        checks.append(
+            _fail(
+                "cancelled-request-id-missing",
+                "notifications/cancelled missing requestId",
+                _LOGGING_SPEC,
+            )
+        )
+    elif not isinstance(request_id, (str, int)) or isinstance(request_id, bool):
+        checks.append(
+            _fail(
+                "cancelled-request-id-type",
+                "notifications/cancelled requestId must be string or integer",
+                _LOGGING_SPEC,
+            )
+        )
+
+    reason = params.get("reason")
+    if reason is not None and not isinstance(reason, str):
+        checks.append(
+            _fail(
+                "cancelled-reason-type",
+                "notifications/cancelled reason must be a string",
+                _LOGGING_SPEC,
+            )
+        )
+
+    return checks
+
+
+def check_list_changed_notification(payload: dict[str, Any]) -> list[SpecCheck]:
+    """Validate list_changed notification payload (params must be object or absent)."""
+    checks: list[SpecCheck] = []
+    params = payload.get("params")
+    if params is not None and not isinstance(params, dict):
+        checks.append(
+            _fail(
+                "list-changed-params-type",
+                "list_changed notification params must be an object when present",
+                _RESOURCES_SPEC,
+            )
+        )
+    return checks
+
+
+def check_resources_updated_notification(payload: dict[str, Any]) -> list[SpecCheck]:
+    """Validate notifications/resources/updated payload shape."""
+    checks: list[SpecCheck] = []
+    params = payload.get("params")
+    if not isinstance(params, dict):
+        checks.append(
+            _fail(
+                "resources-updated-params-type",
+                "notifications/resources/updated params is not an object",
+                _RESOURCES_SPEC,
+            )
+        )
+        return checks
+
+    uri = params.get("uri")
+    if not isinstance(uri, str) or not uri:
+        checks.append(
+            _fail(
+                "resources-updated-uri-missing",
+                "notifications/resources/updated missing uri",
+                _RESOURCES_SPEC,
+            )
+        )
 
     return checks
 
