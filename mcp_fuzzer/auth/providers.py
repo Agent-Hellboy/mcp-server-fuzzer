@@ -152,7 +152,8 @@ class OAuthClientCredentialsAuth(AuthProvider):
                 ttl = float(expires_in)
             except (TypeError, ValueError):
                 ttl = 3600.0
-            self._expires_at = time.time() + max(ttl - 60.0, 0.0)
+            skew = min(60.0, max(ttl * 0.1, 1.0))
+            self._expires_at = time.time() + max(ttl - skew, 1.0)
             self._access_token = access_token
             return access_token
 

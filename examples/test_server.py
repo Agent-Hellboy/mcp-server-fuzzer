@@ -43,7 +43,8 @@ class SecureToolAuthMiddleware:
         body = await self._read_body(receive)
         request = self._decode_json(body)
         if self._is_secure_tool_call(request) and not self._has_valid_auth(scope):
-            await self._send_unauthorized(send, request.get("id"))
+            request_id = request.get("id") if isinstance(request, dict) else None
+            await self._send_unauthorized(send, request_id)
             return
 
         await self.app(scope, self._replay_body(body), send)
@@ -70,14 +71,18 @@ class SecureToolAuthMiddleware:
 
         return receive
 
-    def _decode_json(self, body: bytes) -> dict[str, Any]:
+    def _decode_json(self, body: bytes) -> Any:
         try:
             payload = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
             return {}
-        return payload if isinstance(payload, dict) else {}
+        return payload
 
-    def _is_secure_tool_call(self, request: dict[str, Any]) -> bool:
+    def _is_secure_tool_call(self, request: Any) -> bool:
+        if isinstance(request, list):
+            return any(self._is_secure_tool_call(item) for item in request)
+        if not isinstance(request, dict):
+            return False
         params = request.get("params")
         return (
             request.get("method") == "tools/call"

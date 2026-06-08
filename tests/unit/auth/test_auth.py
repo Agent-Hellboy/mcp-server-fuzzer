@@ -905,3 +905,81 @@ def test_load_auth_config_rejects_non_dict_tool_mapping(tmp_path: Path):
 
     with pytest.raises(AuthConfigError, match="tool_mapping"):
         load_auth_config(str(path))
+
+
+def test_api_key_auth_empty_prefix():
+    """APIKeyAuth with empty prefix returns bare api_key value."""
+    auth = APIKeyAuth("mykey", "X-Key", "")
+    headers = auth.get_auth_headers()
+    assert headers == {"X-Key": "mykey"}
+
+
+def test_oauth_client_credentials_get_auth_params():
+    """get_auth_params always returns empty dict."""
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token", "cid", "csecret"
+    )
+    assert auth.get_auth_params() == {}
+
+
+def test_oauth_client_credentials_missing_expires_in(monkeypatch):
+    """Token response without expires_in defaults TTL to 3600."""
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"access_token": "tok"}
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.auth.providers.httpx.post", lambda *a, **kw: Response()
+    )
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token", "cid", "csecret"
+    )
+    headers = auth.get_auth_headers()
+    assert headers == {"Authorization": "Bearer tok"}
+    # default 3600 s TTL minus skew leaves expires_at well in the future
+    assert auth._expires_at > time.time() + 3500
+
+
+def test_oauth_client_credentials_short_ttl_not_immediately_expired(monkeypatch):
+    """Tokens with expires_in <= 60 are still cached, not immediately expired."""
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"access_token": "shortlived", "expires_in": 30}
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.auth.providers.httpx.post", lambda *a, **kw: Response()
+    )
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token", "cid", "csecret"
+    )
+    auth.get_auth_headers()
+    assert auth._expires_at > time.time()
+
+
+def test_oauth_client_credentials_non_numeric_expires_in(monkeypatch):
+    """Non-numeric expires_in falls back to 3600 s TTL."""
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"access_token": "tok", "expires_in": "bad"}
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.auth.providers.httpx.post", lambda *a, **kw: Response()
+    )
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token", "cid", "csecret"
+    )
+    headers = auth.get_auth_headers()
+    assert headers["Authorization"] == "Bearer tok"
+    assert auth._expires_at > time.time() + 3500
