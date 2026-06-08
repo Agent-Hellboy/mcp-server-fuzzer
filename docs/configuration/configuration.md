@@ -257,9 +257,11 @@ Example `--auth-config` JSON:
 When `--auth-env` is used, set the appropriate variables (such as
 `MCP_API_KEY`, `MCP_HEADER_NAME`, `MCP_USERNAME`, `MCP_PASSWORD`,
 `MCP_OAUTH_TOKEN_URL`, `MCP_OAUTH_CLIENT_ID`, and
-`MCP_OAUTH_CLIENT_SECRET`) before running the fuzzer. OAuth client credentials
-auth uses HTTP Basic client authentication against the configured token endpoint
-and sends the resulting bearer token as an `Authorization` header.
+`MCP_OAUTH_CLIENT_SECRET`) before running the fuzzer. Set optional
+`MCP_OAUTH_SCOPE` when the token endpoint requires a client-credentials scope.
+OAuth client credentials auth uses HTTP Basic client authentication against the
+configured token endpoint and sends the resulting bearer token as an
+`Authorization` header.
 
 ## Custom Transports
 

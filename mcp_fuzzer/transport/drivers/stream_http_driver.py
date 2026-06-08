@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Callable
 
 import httpx
 
@@ -19,8 +19,6 @@ from ..interfaces.behaviors import (
     ResponseParserBehavior,
     NetworkError as DriverNetworkError,
 )
-from typing import Callable
-
 from ..interfaces.server_requests import (
     ServerRequestHandler,
     ServerRequestHandlerProtocol,
@@ -71,6 +69,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         url: str,
         timeout: float = DEFAULT_TIMEOUT,
         auth_headers: dict[str, str | None] = None,
+        auth_header_provider: Callable[[], dict[str, str | None]] | None = None,
         safety_enabled: bool = True,
         server_request_handler: ServerRequestHandlerProtocol | None = None,
         server_request_handler_factory: Callable[[], ServerRequestHandlerProtocol]
@@ -94,6 +93,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         self.auth_headers = {
             k: v for k, v in (auth_headers or {}).items() if v is not None
         }
+        self.auth_header_provider = auth_header_provider
 
         self.session_id: str | None = None
         self.protocol_version: str | None = None
@@ -120,6 +120,14 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             safe_headers = headers.copy()
         # Add auth headers after sanitization (they are user-configured and safe)
         safe_headers.update(self.auth_headers)
+        if self.auth_header_provider is not None:
+            safe_headers.update(
+                {
+                    k: v
+                    for k, v in self.auth_header_provider().items()
+                    if v is not None
+                }
+            )
         return safe_headers
 
     def _prepare_headers(self) -> dict[str, str]:

@@ -32,7 +32,7 @@ pip install -e .
 2. **Run basic fuzzing**:
    ```bash
    # Fuzz tools on an HTTP server
-   mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
+   mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
 
    # Fuzz protocol types on an SSE server
    mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 5
@@ -41,8 +41,9 @@ pip install -e .
    mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 5 --enable-safety-system
    ```
 
-   The repository bundles HTTP and StreamableHTTP example servers under
-   `examples/`, but it does not currently ship a stdio example server.
+   The repository bundles official Python MCP SDK HTTP and StreamableHTTP
+   example servers under `examples/`, but it does not currently ship a stdio
+   example server.
 3. **View results** in beautiful, colorized tables
 
 ## Key Features

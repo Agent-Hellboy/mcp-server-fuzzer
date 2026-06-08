@@ -6,6 +6,8 @@ Unit tests for Auth module
 import json
 import os
 import tempfile
+import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
@@ -219,6 +221,51 @@ def test_oauth_client_credentials_auth_rejects_missing_token(monkeypatch):
 
     with pytest.raises(ValueError, match="access_token"):
         auth.get_auth_headers()
+
+
+def test_oauth_client_credentials_auth_deduplicates_concurrent_refresh(monkeypatch):
+    """Only one thread should refresh an expired client-credentials token."""
+    post_calls = 0
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "access_token": "issued-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            }
+
+    def fake_post(*args, **kwargs):
+        nonlocal post_calls
+        post_calls += 1
+        time.sleep(0.05)
+        return Response()
+
+    monkeypatch.setattr("mcp_fuzzer.auth.providers.httpx.post", fake_post)
+
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token",
+        "client-id",
+        "client-secret",
+    )
+    barrier = threading.Barrier(4)
+    results: list[dict[str, str]] = []
+
+    def worker():
+        barrier.wait()
+        results.append(auth.get_auth_headers())
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert post_calls == 1
+    assert results == [{"Authorization": "Bearer issued-token"}] * 4
 
 
 # Test cases for CustomHeaderAuth class

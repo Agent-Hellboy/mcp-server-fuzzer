@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Protocol
 
 from ..base import MCPFuzzerClient
+
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionPipeline(Protocol):
@@ -23,20 +27,35 @@ class ClientExecutionPipeline:
         self.client = client
         self.config = config
 
+    async def _resolve_requested_tool(self) -> dict[str, Any] | None:
+        tool_name = self.config.get("tool")
+        if not tool_name:
+            return None
+        tool = await self.client.get_tool_by_name(tool_name)
+        if tool is None:
+            logger.error("Requested tool '%s' was not found on the server", tool_name)
+        return tool
+
     async def fuzz_tools(self) -> dict[str, Any]:
         config = self.config
         if config.get("phase") == "both":
             if config.get("tool"):
+                tool = await self._resolve_requested_tool()
+                if tool is None:
+                    return {}
                 return await self.client.fuzz_tool_both_phases(
-                    config["tool"], runs_per_phase=config.get("runs", 10)
+                    tool, runs_per_phase=config.get("runs", 10)
                 )
             return await self.client.fuzz_all_tools_both_phases(
                 runs_per_phase=config.get("runs", 10)
             )
 
         if config.get("tool"):
+            tool = await self._resolve_requested_tool()
+            if tool is None:
+                return {}
             return await self.client.fuzz_tool(
-                config["tool"], runs=config.get("runs", 10)
+                tool, runs=config.get("runs", 10)
             )
         return await self.client.fuzz_all_tools(
             runs_per_tool=config.get("runs", 10)

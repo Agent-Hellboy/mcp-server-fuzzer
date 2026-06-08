@@ -171,6 +171,9 @@ def test_unified_client_main_exports_reports_and_handles_errors():
         export_markdown="md.md",
     )
     client_instance = MagicMock()
+    client_instance.get_tool_by_name = AsyncMock(
+        return_value={"name": "x", "inputSchema": {"type": "object"}}
+    )
     client_instance.fuzz_tool = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
     reporter = _make_reporter()
@@ -199,6 +202,9 @@ def test_unified_client_main_exports_html_xml():
         export_xml="out.xml",
     )
     client_instance = MagicMock()
+    client_instance.get_tool_by_name = AsyncMock(
+        return_value={"name": "x", "inputSchema": {"type": "object"}}
+    )
     client_instance.fuzz_tool = AsyncMock(return_value={})
     client_instance.cleanup = AsyncMock()
     reporter = _make_reporter()
@@ -296,6 +302,9 @@ class StubClient:
 
     async def fuzz_all_tools(self, *_args, **_kwargs):
         return {"tool": [{"success": True}]}
+
+    async def get_tool_by_name(self, tool_name):
+        return {"name": tool_name, "inputSchema": {"type": "object"}}
 
     async def fuzz_protocol_type(self, *_args, **_kwargs):
         return [{"success": True}]

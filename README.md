@@ -57,10 +57,12 @@ docker run --rm mcp-fuzzer:latest --help
 ### 1. Run the bundled HTTP example server
 
 ```bash
+pip install "mcp[cli]" uvicorn
 python3 examples/test_server.py
 ```
 
-That server listens on `http://localhost:8000` and exposes:
+That server uses the official Python MCP SDK, listens on
+`http://localhost:8000/mcp/`, and exposes:
 
 - `test_tool`
 - `echo_tool`
@@ -69,35 +71,35 @@ That server listens on `http://localhost:8000` and exposes:
 ### 2. Fuzz tools
 
 ```bash
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
 ```
 
 ### 3. Fuzz protocol requests
 
 ```bash
 mcp-fuzzer --mode protocol --protocol-type InitializeRequest \
-  --protocol http --endpoint http://localhost:8000 --runs-per-type 5
+  --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 5
 ```
 
 ### 4. Run tools and protocol together
 
 ```bash
-mcp-fuzzer --mode all --phase both --protocol http --endpoint http://localhost:8000
+mcp-fuzzer --mode all --phase both --protocol http --endpoint http://localhost:8000/mcp/
 ```
 
 ## Common Commands
 
 ```bash
 # Enable command blocking + safety reporting
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ \
   --enable-safety-system --safety-report
 
 # Export results
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ \
   --export-csv results.csv --export-html results.html
 
 # Use auth config for the bundled secure_tool example
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 \
+mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ \
   --auth-config examples/auth_config.json
 
 # Load settings from YAML

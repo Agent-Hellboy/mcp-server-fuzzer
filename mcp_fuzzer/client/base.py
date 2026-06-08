@@ -121,6 +121,14 @@ class MCPFuzzerClient:
             tool, runs=runs, tool_timeout=effective_timeout
         )
 
+    async def get_tool_by_name(self, tool_name: str) -> dict[str, Any] | None:
+        """Return a tool definition from the server by name."""
+        tools = await self.tool_client._get_tools_from_server()
+        for tool in tools:
+            if tool.get("name") == tool_name:
+                return tool
+        return None
+
     async def fuzz_all_tools(
         self,
         runs_per_tool: int = 10,
