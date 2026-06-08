@@ -110,11 +110,12 @@ mcp-fuzzer --config config.yaml
 
 This repository bundles:
 
-- an HTTP example server: [`examples/test_server.py`](examples/test_server.py)
+- an official Python MCP SDK HTTP example: [`examples/test_server.py`](examples/test_server.py)
+- an official Go MCP SDK stdio example: [`examples/go_stdio_server`](examples/go_stdio_server)
+- an official TypeScript MCP SDK stdio example: [`examples/typescript-stdio-server`](examples/typescript-stdio-server)
 - a StreamableHTTP example: [`examples/streamable_http_server.py`](examples/streamable_http_server.py)
 
-It does **not** currently bundle a stdio example server. For stdio usage, point
-the fuzzer at your own server:
+For other stdio usage, point the fuzzer at your own server:
 
 ```bash
 mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" \

@@ -17,6 +17,9 @@ sdks/
 doc_ref/
 # Project exploration directory
 explore/
+examples/go_stdio_server/go-stdio-server
+examples/typescript-stdio-server/node_modules/
+examples/typescript-stdio-server/dist/
 # C extensions
 *REDESIGN*.md
 *FLOW.md

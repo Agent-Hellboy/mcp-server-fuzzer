@@ -41,9 +41,8 @@ pip install -e .
    mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 5 --enable-safety-system
    ```
 
-   The repository bundles official Python MCP SDK HTTP and StreamableHTTP
-   example servers under `examples/`, but it does not currently ship a stdio
-   example server.
+   The repository bundles official Python HTTP, Go stdio, TypeScript stdio,
+   and StreamableHTTP example servers under `examples/`.
 3. **View results** in beautiful, colorized tables
 
 ## Key Features

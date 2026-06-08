@@ -96,6 +96,34 @@ Then fuzz it with the StreamableHTTP transport:
 python3 -m mcp_fuzzer --mode tools --protocol streamablehttp --endpoint http://127.0.0.1:3000/mcp --runs 3 --timeout 10 --verbose
 ```
 
+Official SDK stdio examples
+---------------------------
+
+This directory also includes stdio servers built with the official Go and
+TypeScript MCP SDKs.
+
+Build and fuzz the Go SDK server:
+
+```
+cd examples/go_stdio_server
+go mod download
+go build -o /tmp/mcp-fuzzer-go-stdio-server .
+cd ../..
+python3 -m mcp_fuzzer --mode tools --protocol stdio --endpoint /tmp/mcp-fuzzer-go-stdio-server --runs 2 --timeout 30
+```
+
+Build and fuzz the TypeScript SDK server:
+
+```
+cd examples/typescript-stdio-server
+npm ci
+npm run build
+cd ../..
+python3 -m mcp_fuzzer --mode tools --protocol stdio --endpoint "node examples/typescript-stdio-server/dist/server.js" --runs 2 --timeout 30
+```
+
+Both servers expose `echo_tool`, `add_numbers`, and `normalize_text`.
+
 ## Custom Transport Examples
 
 ### Overview
