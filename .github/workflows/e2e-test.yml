@@ -48,6 +48,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e .
+        pip install "mcp[cli]" uvicorn
 
 
     - name: Create test output directory
@@ -82,6 +83,17 @@ jobs:
         # Run the everything server e2e test
         chmod +x tests/e2e/test_everything_server.sh
         ./tests/e2e/test_everything_server.sh
+
+    - name: Run auth e2e test
+      env:
+        MCP_FUZZER_TIMEOUT: '30'
+        MCP_FUZZER_SAFETY_ENABLED: 'true'
+        MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
+      run: |
+        echo "Running auth e2e test"
+        mkdir -p /tmp/mcp_fuzzer_sandbox
+        chmod +x tests/e2e/test_auth_server.sh
+        ./tests/e2e/test_auth_server.sh
 
     - name: Ensure workspace exists
       if: always()
