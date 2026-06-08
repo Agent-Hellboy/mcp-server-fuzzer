@@ -199,7 +199,13 @@ def build_auth_schema() -> dict[str, Any]:
                         "properties": {
                             "type": {
                                 "type": "string",
-                                "enum": ["api_key", "basic", "oauth", "custom"],
+                                "enum": [
+                                    "api_key",
+                                    "basic",
+                                    "oauth",
+                                    "oauth_client_credentials",
+                                    "custom",
+                                ],
                             },
                             "id": {"type": "string"},
                             "config": {"type": "object"},

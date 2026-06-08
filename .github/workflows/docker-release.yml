@@ -44,14 +44,37 @@ jobs:
             type=raw,value=latest,enable=${{ github.event_name == 'release' || startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag_args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && tag_args+=(--tag "$tag")
+          done <<< "${{ steps.meta.outputs.tags }}"
+
+          label_args=()
+          while IFS= read -r label; do
+            [ -n "$label" ] && label_args+=(--label "$label")
+          done <<< "${{ steps.meta.outputs.labels }}"
+
+          for attempt in 1 2 3; do
+            if docker buildx build \
+              --file ./Dockerfile \
+              --platform linux/amd64,linux/arm64 \
+              --push \
+              "${tag_args[@]}" \
+              "${label_args[@]}" \
+              .; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+
+            sleep $((attempt * 30))
+          done
 
       - name: Update Docker Hub README
         uses: peter-evans/dockerhub-description@v3

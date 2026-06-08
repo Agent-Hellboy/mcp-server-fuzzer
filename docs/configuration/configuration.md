@@ -238,17 +238,28 @@ Example `--auth-config` JSON:
       "type": "api_key",
       "api_key": "secret123",
       "header_name": "Authorization"
+    },
+    "machine_provider": {
+      "type": "oauth_client_credentials",
+      "token_url": "https://auth.example.com/oauth/token",
+      "client_id": "mcp-fuzzer",
+      "client_secret": "secret123",
+      "scope": "tools.read"
     }
   },
   "tool_mapping": {
-    "example_tool": "api_key_provider"
+    "example_tool": "api_key_provider",
+    "machine_tool": "machine_provider"
   }
 }
 ```
 
 When `--auth-env` is used, set the appropriate variables (such as
-`MCP_API_KEY`, `MCP_HEADER_NAME`, `MCP_USERNAME`, `MCP_PASSWORD`) before running
-the fuzzer.
+`MCP_API_KEY`, `MCP_HEADER_NAME`, `MCP_USERNAME`, `MCP_PASSWORD`,
+`MCP_OAUTH_TOKEN_URL`, `MCP_OAUTH_CLIENT_ID`, and
+`MCP_OAUTH_CLIENT_SECRET`) before running the fuzzer. OAuth client credentials
+auth uses HTTP Basic client authentication against the configured token endpoint
+and sends the resulting bearer token as an `Authorization` header.
 
 ## Custom Transports
 

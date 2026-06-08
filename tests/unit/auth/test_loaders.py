@@ -14,6 +14,10 @@ def test_setup_auth_from_env_populates_providers(monkeypatch):
     monkeypatch.setenv("MCP_USERNAME", "user")
     monkeypatch.setenv("MCP_PASSWORD", "pass")
     monkeypatch.setenv("MCP_OAUTH_TOKEN", "tok")
+    monkeypatch.setenv("MCP_OAUTH_TOKEN_URL", "https://auth.example.com/token")
+    monkeypatch.setenv("MCP_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("MCP_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("MCP_OAUTH_SCOPE", "tools.read")
     monkeypatch.setenv(
         "MCP_CUSTOM_HEADERS", json.dumps({"X-Custom": "value", "Another": 1})
     )
@@ -21,7 +25,13 @@ def test_setup_auth_from_env_populates_providers(monkeypatch):
     monkeypatch.setenv("MCP_DEFAULT_AUTH_PROVIDER", "api_key")
 
     manager = loaders.setup_auth_from_env()
-    assert set(manager.auth_providers) >= {"api_key", "basic", "oauth", "custom"}
+    assert set(manager.auth_providers) >= {
+        "api_key",
+        "basic",
+        "oauth",
+        "oauth_client_credentials",
+        "custom",
+    }
     assert manager.tool_auth_mapping == {"tool": "api_key"}
     assert manager.default_provider == "api_key"
 
