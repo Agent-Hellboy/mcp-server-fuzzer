@@ -6,6 +6,8 @@ Unit tests for Auth module
 import json
 import os
 import tempfile
+import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
@@ -16,11 +18,13 @@ from mcp_fuzzer.auth import (
     AuthProvider,
     BasicAuth,
     CustomHeaderAuth,
+    OAuthClientCredentialsAuth,
     OAuthTokenAuth,
     create_api_key_auth,
     create_basic_auth,
     create_custom_header_auth,
     create_oauth_auth,
+    create_oauth_client_credentials_auth,
     load_auth_config,
     setup_auth_from_env,
 )
@@ -148,6 +152,120 @@ def test_oauth_token_auth_get_auth_params(oauth_token_auth):
     """Test getting auth params."""
     params = oauth_token_auth.get_auth_params()
     assert params == {}
+
+
+def test_oauth_client_credentials_auth_fetches_and_caches_token(monkeypatch):
+    """Client credentials auth should exchange credentials for a bearer token."""
+    responses = []
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "access_token": "issued-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            }
+
+    def fake_post(url, data, auth, timeout):
+        responses.append((url, data, auth, timeout))
+        return Response()
+
+    monkeypatch.setattr("mcp_fuzzer.auth.providers.httpx.post", fake_post)
+
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token",
+        "client-id",
+        "client-secret",
+        scope=["tools.read", "tools.write"],
+        timeout=5.0,
+    )
+
+    assert auth.get_auth_headers() == {"Authorization": "Bearer issued-token"}
+    assert auth.get_auth_headers() == {"Authorization": "Bearer issued-token"}
+    assert responses == [
+        (
+            "https://auth.example.com/token",
+            {
+                "grant_type": "client_credentials",
+                "scope": "tools.read tools.write",
+            },
+            ("client-id", "client-secret"),
+            5.0,
+        )
+    ]
+
+
+def test_oauth_client_credentials_auth_rejects_missing_token(monkeypatch):
+    """Token endpoint responses must include access_token."""
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"token_type": "Bearer"}
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.auth.providers.httpx.post",
+        lambda *args, **kwargs: Response(),
+    )
+
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token",
+        "client-id",
+        "client-secret",
+    )
+
+    with pytest.raises(ValueError, match="access_token"):
+        auth.get_auth_headers()
+
+
+def test_oauth_client_credentials_auth_deduplicates_concurrent_refresh(monkeypatch):
+    """Only one thread should refresh an expired client-credentials token."""
+    post_calls = 0
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "access_token": "issued-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            }
+
+    def fake_post(*args, **kwargs):
+        nonlocal post_calls
+        post_calls += 1
+        time.sleep(0.05)
+        return Response()
+
+    monkeypatch.setattr("mcp_fuzzer.auth.providers.httpx.post", fake_post)
+
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token",
+        "client-id",
+        "client-secret",
+    )
+    barrier = threading.Barrier(4)
+    results: list[dict[str, str]] = []
+
+    def worker():
+        barrier.wait()
+        results.append(auth.get_auth_headers())
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert post_calls == 1
+    assert results == [{"Authorization": "Bearer issued-token"}] * 4
 
 
 # Test cases for CustomHeaderAuth class
@@ -407,6 +525,21 @@ def test_create_oauth_auth():
     assert auth.token_type == "Bearer"
 
 
+def test_create_oauth_client_credentials_auth():
+    """Test creating OAuth client credentials auth."""
+    auth = create_oauth_client_credentials_auth(
+        "https://auth.example.com/token",
+        "client-id",
+        "client-secret",
+        "tools.read",
+    )
+    assert isinstance(auth, OAuthClientCredentialsAuth)
+    assert auth.token_url == "https://auth.example.com/token"
+    assert auth.client_id == "client-id"
+    assert auth.client_secret == "client-secret"
+    assert auth.scope == "tools.read"
+
+
 def test_create_custom_header_auth():
     """Test creating custom header auth."""
     headers = {"X-Custom-Header": "custom_value"}
@@ -423,6 +556,10 @@ def test_setup_auth_from_env_all_providers():
         "MCP_USERNAME": "test_user",
         "MCP_PASSWORD": "test_password",
         "MCP_OAUTH_TOKEN": "test_token",
+        "MCP_OAUTH_TOKEN_URL": "https://auth.example.com/token",
+        "MCP_OAUTH_CLIENT_ID": "client-id",
+        "MCP_OAUTH_CLIENT_SECRET": "client-secret",
+        "MCP_OAUTH_SCOPE": "tools.read",
         "MCP_CUSTOM_HEADERS": '{"X-Custom": "value"}',
     }
     with patch.dict(os.environ, env_vars):
@@ -432,6 +569,7 @@ def test_setup_auth_from_env_all_providers():
         assert "api_key" in auth_manager.auth_providers
         assert "basic" in auth_manager.auth_providers
         assert "oauth" in auth_manager.auth_providers
+        assert "oauth_client_credentials" in auth_manager.auth_providers
         assert "custom" in auth_manager.auth_providers
 
 
@@ -475,8 +613,15 @@ def test_load_auth_config_valid_file():
                 "username": "test_user",
                 "password": "test_password",
             },
+            "machine": {
+                "type": "oauth_client_credentials",
+                "token_url": "https://auth.example.com/token",
+                "client_id": "client-id",
+                "client_secret": "client-secret",
+                "scope": ["tools.read"],
+            },
         },
-        "tool_mapping": {"tool1": "api_key", "tool2": "basic"},
+        "tool_mapping": {"tool1": "api_key", "tool2": "basic", "tool3": "machine"},
     }
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -489,8 +634,10 @@ def test_load_auth_config_valid_file():
         assert isinstance(auth_manager, AuthManager)
         assert "api_key" in auth_manager.auth_providers
         assert "basic" in auth_manager.auth_providers
+        assert "machine" in auth_manager.auth_providers
         assert "tool1" in auth_manager.tool_auth_mapping
         assert "tool2" in auth_manager.tool_auth_mapping
+        assert "tool3" in auth_manager.tool_auth_mapping
     finally:
         os.unlink(config_file)
 
@@ -544,6 +691,29 @@ def test_load_auth_config_unknown_provider_type():
             load_auth_config(config_file)
 
         assert "Unknown provider type" in str(excinfo.value)
+    finally:
+        os.unlink(config_file)
+
+
+def test_load_auth_config_oauth_client_credentials_requires_fields():
+    """Client credentials auth needs endpoint and client credentials."""
+    config_data = {
+        "providers": {
+            "machine": {
+                "type": "oauth_client_credentials",
+                "token_url": "https://auth.example.com/token",
+                "client_id": "client-id",
+            }
+        }
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(config_data, f)
+        config_file = f.name
+
+    try:
+        with pytest.raises(AuthProviderError, match="client_secret"):
+            load_auth_config(config_file)
     finally:
         os.unlink(config_file)
 
@@ -735,3 +905,81 @@ def test_load_auth_config_rejects_non_dict_tool_mapping(tmp_path: Path):
 
     with pytest.raises(AuthConfigError, match="tool_mapping"):
         load_auth_config(str(path))
+
+
+def test_api_key_auth_empty_prefix():
+    """APIKeyAuth with empty prefix returns bare api_key value."""
+    auth = APIKeyAuth("mykey", "X-Key", "")
+    headers = auth.get_auth_headers()
+    assert headers == {"X-Key": "mykey"}
+
+
+def test_oauth_client_credentials_get_auth_params():
+    """get_auth_params always returns empty dict."""
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token", "cid", "csecret"
+    )
+    assert auth.get_auth_params() == {}
+
+
+def test_oauth_client_credentials_missing_expires_in(monkeypatch):
+    """Token response without expires_in defaults TTL to 3600."""
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"access_token": "tok"}
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.auth.providers.httpx.post", lambda *a, **kw: Response()
+    )
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token", "cid", "csecret"
+    )
+    headers = auth.get_auth_headers()
+    assert headers == {"Authorization": "Bearer tok"}
+    # default 3600 s TTL minus skew leaves expires_at well in the future
+    assert auth._expires_at > time.time() + 3500
+
+
+def test_oauth_client_credentials_short_ttl_not_immediately_expired(monkeypatch):
+    """Tokens with expires_in <= 60 are still cached, not immediately expired."""
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"access_token": "shortlived", "expires_in": 30}
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.auth.providers.httpx.post", lambda *a, **kw: Response()
+    )
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token", "cid", "csecret"
+    )
+    auth.get_auth_headers()
+    assert auth._expires_at > time.time()
+
+
+def test_oauth_client_credentials_non_numeric_expires_in(monkeypatch):
+    """Non-numeric expires_in falls back to 3600 s TTL."""
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"access_token": "tok", "expires_in": "bad"}
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.auth.providers.httpx.post", lambda *a, **kw: Response()
+    )
+    auth = OAuthClientCredentialsAuth(
+        "https://auth.example.com/token", "cid", "csecret"
+    )
+    headers = auth.get_auth_headers()
+    assert headers["Authorization"] == "Bearer tok"
+    assert auth._expires_at > time.time() + 3500

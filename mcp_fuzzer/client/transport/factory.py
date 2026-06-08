@@ -34,34 +34,29 @@ def build_driver_with_auth(request: TransportBuildRequest):
     """Create a transport with authentication headers when available."""
     resolved = request
     try:
-        auth_headers = None
+        auth_header_provider = None
         auth_manager = resolved.auth_manager
 
         if auth_manager:
-            auth_headers = auth_manager.get_default_auth_headers()
-            if not auth_headers:
-                auth_headers = auth_manager.get_auth_headers_for_tool(
-                    ""
-                )  # pragma: no cover
-            if auth_headers:
-                logger.debug(
-                    "Auth headers found for transport: %s",
-                    list(auth_headers.keys()),
-                )
-            else:
-                logger.debug(
-                    "No auth headers found for default tool mapping"
-                )  # pragma: no cover
+            def auth_header_provider() -> dict[str, str]:
+                auth_headers = auth_manager.get_default_auth_headers()
+                if not auth_headers:
+                    auth_headers = auth_manager.get_auth_headers_for_tool(
+                        ""
+                    )  # pragma: no cover
+                return auth_headers
+
+            logger.debug("Auth manager found for transport")
 
         factory_kwargs = {"timeout": resolved.timeout}
         safety_enabled = resolved.safety_enabled
 
         if resolved.protocol in AUTH_PROTOCOLS:
             factory_kwargs["safety_enabled"] = safety_enabled
-        if resolved.protocol in AUTH_PROTOCOLS and auth_headers:
-            factory_kwargs["auth_headers"] = auth_headers
+        if resolved.protocol in AUTH_PROTOCOLS and auth_header_provider:
+            factory_kwargs["auth_header_provider"] = auth_header_provider
             logger.debug(
-                "Adding auth headers to %s transport", resolved.protocol.upper()
+                "Adding auth provider to %s transport", resolved.protocol.upper()
             )
 
         logger.debug(

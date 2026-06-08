@@ -37,6 +37,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
         url: str,
         timeout: float = 30.0,
         auth_headers: dict[str, str | None] | None = None,
+        auth_header_provider: Callable[[], dict[str, str | None]] | None = None,
         safety_enabled: bool = True,
         server_request_handler: ServerRequestHandlerProtocol | None = None,
         server_request_handler_factory: Callable[
@@ -61,6 +62,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
         self.auth_headers = {
             k: v for k, v in (auth_headers or {}).items() if v is not None
         }
+        self.auth_header_provider = auth_header_provider
         if server_request_handler is not None:
             self._server_request_handler = server_request_handler
         elif server_request_handler_factory is not None:
@@ -76,6 +78,14 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
             safe_headers = headers.copy()
         # Add auth headers after sanitization (they are user-configured and safe)
         safe_headers.update(self.auth_headers)
+        if self.auth_header_provider is not None:
+            safe_headers.update(
+                {
+                    k: v
+                    for k, v in self.auth_header_provider().items()
+                    if v is not None
+                }
+            )
         return safe_headers
 
     async def send_request(

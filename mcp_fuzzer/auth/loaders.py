@@ -8,6 +8,7 @@ from .providers import (
     create_api_key_auth,
     create_basic_auth,
     create_oauth_auth,
+    create_oauth_client_credentials_auth,
     create_custom_header_auth,
 )
 
@@ -38,6 +39,20 @@ def setup_auth_from_env() -> AuthManager:
     oauth_token = os.getenv("MCP_OAUTH_TOKEN")
     if oauth_token:
         auth_manager.add_auth_provider("oauth", create_oauth_auth(oauth_token))
+
+    oauth_client_id = os.getenv("MCP_OAUTH_CLIENT_ID")
+    oauth_client_secret = os.getenv("MCP_OAUTH_CLIENT_SECRET")
+    oauth_token_url = os.getenv("MCP_OAUTH_TOKEN_URL")
+    if oauth_client_id and oauth_client_secret and oauth_token_url:
+        auth_manager.add_auth_provider(
+            "oauth_client_credentials",
+            create_oauth_client_credentials_auth(
+                oauth_token_url,
+                oauth_client_id,
+                oauth_client_secret,
+                os.getenv("MCP_OAUTH_SCOPE"),
+            ),
+        )
 
     custom_headers = os.getenv("MCP_CUSTOM_HEADERS")
     if custom_headers:
@@ -146,6 +161,28 @@ def load_auth_config(config_file: str) -> AuthManager:
                         provider_config.get("token_type", "Bearer"),
                     ),
                 )
+            elif provider_type == "oauth_client_credentials":
+                for field in ("token_url", "client_id", "client_secret"):
+                    if field not in provider_config:
+                        raise AuthProviderError(
+                            f"Provider '{name}' is type 'oauth_client_credentials' "
+                            f"but missing required field '{field}'. Expected: "
+                            "{'type': 'oauth_client_credentials', "
+                            "'token_url': 'https://auth.example.com/token', "
+                            "'client_id': 'CLIENT_ID', "
+                            "'client_secret': 'CLIENT_SECRET'}"
+                        )
+                auth_manager.add_auth_provider(
+                    name,
+                    create_oauth_client_credentials_auth(
+                        provider_config["token_url"],
+                        provider_config["client_id"],
+                        provider_config["client_secret"],
+                        provider_config.get("scope"),
+                        provider_config.get("token_type", "Bearer"),
+                        float(provider_config.get("timeout", 10.0)),
+                    ),
+                )
             elif provider_type == "custom":
                 headers = provider_config.get("headers")
                 if not headers:
@@ -168,7 +205,8 @@ def load_auth_config(config_file: str) -> AuthManager:
             else:
                 raise AuthProviderError(
                     f"Unknown provider type: '{provider_type}' for provider '{name}'. "
-                    f"Supported types: api_key, basic, oauth, custom"
+                    "Supported types: api_key, basic, oauth, "
+                    "oauth_client_credentials, custom"
                 )
         except AuthProviderError:
             raise

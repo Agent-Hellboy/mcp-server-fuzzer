@@ -44,14 +44,46 @@ jobs:
             type=raw,value=latest,enable=${{ github.event_name == 'release' || startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+        shell: bash
+        env:
+          TAGS_JSON: ${{ toJSON(steps.meta.outputs.tags) }}
+          LABELS_JSON: ${{ toJSON(steps.meta.outputs.labels) }}
+        run: |
+          set -euo pipefail
+
+          tag_args=()
+          mapfile -t tag_lines < <(
+            jq -r 'split("\n")[] | select(length > 0)' <<< "$TAGS_JSON"
+          )
+          for tag in "${tag_lines[@]}"; do
+            tag_args+=(--tag "$tag")
+          done
+
+          label_args=()
+          mapfile -t label_lines < <(
+            jq -r 'split("\n")[] | select(length > 0)' <<< "$LABELS_JSON"
+          )
+          for label in "${label_lines[@]}"; do
+            label_args+=(--label "$label")
+          done
+
+          for attempt in 1 2 3; do
+            if docker buildx build \
+              --file ./Dockerfile \
+              --platform linux/amd64,linux/arm64 \
+              --push \
+              "${tag_args[@]}" \
+              "${label_args[@]}" \
+              .; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+
+            sleep $((attempt * 30))
+          done
 
       - name: Update Docker Hub README
         uses: peter-evans/dockerhub-description@v3

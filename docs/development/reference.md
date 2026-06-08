@@ -176,6 +176,10 @@ Notes:
 | `MCP_USERNAME` | Username for basic authentication |
 | `MCP_PASSWORD` | Password for basic authentication |
 | `MCP_OAUTH_TOKEN` | OAuth token for authentication |
+| `MCP_OAUTH_TOKEN_URL` | OAuth token endpoint for client credentials authentication |
+| `MCP_OAUTH_CLIENT_ID` | OAuth client ID for client credentials authentication |
+| `MCP_OAUTH_CLIENT_SECRET` | OAuth client secret for client credentials authentication |
+| `MCP_OAUTH_SCOPE` | Optional OAuth scope string for client credentials authentication |
 | `MCP_CUSTOM_HEADERS` | Custom headers as JSON string for authentication |
 | `MCP_TOOL_AUTH_MAPPING` | Map tool names to auth providers as JSON |
 
@@ -225,6 +229,25 @@ The authentication system supports multiple provider types with configurable opt
 
 - **token** (required): OAuth token value
 - **token_type** (optional): Token type for Authorization header (default: "Bearer")
+
+#### OAuth Client Credentials Authentication
+
+```json
+{
+  "type": "oauth_client_credentials",
+  "token_url": "https://auth.example.com/oauth/token",
+  "client_id": "CLIENT_ID",
+  "client_secret": "CLIENT_SECRET",
+  "scope": "tools.read",
+  "token_type": "Bearer"
+}
+```
+
+- **token_url** (required): OAuth token endpoint
+- **client_id** (required): OAuth client identifier
+- **client_secret** (required): OAuth client secret sent with HTTP Basic authentication
+- **scope** (optional): Space-delimited scope string or list of scope strings
+- **token_type** (optional): Fallback token type for Authorization header (default: "Bearer")
 
 #### Custom Headers Authentication
 

@@ -7,24 +7,25 @@ This directory contains runnable examples to try the MCP fuzzer against simple l
 Run the basic test server
 -------------------------
 
-The server listens on http://localhost:8000 and exposes three tools:
+The server uses the official Python MCP SDK and listens on
+http://localhost:8000/mcp/ with three tools:
 
 - public `test_tool`
 - public `echo_tool`
 - protected `secure_tool` (requires Authorization: Bearer secret123)
 
-Start the server:
+Install the SDK dependencies and start the server:
 
 ```
+pip install "mcp[cli]" uvicorn
 python3 examples/test_server.py
 ```
 
 You should see log lines like:
 
 ```
-INFO:__main__:Test server started on http://localhost:8000
-INFO:__main__:Available tools: test_tool, echo_tool, secure_tool
-Press Ctrl+C to stop
+INFO:__main__:Starting MCP test server on 0.0.0.0:8000
+INFO:     Uvicorn running on http://0.0.0.0:8000
 ```
 
 Fuzz the server (no auth)
@@ -33,7 +34,7 @@ Fuzz the server (no auth)
 Call the fuzzer in tools mode:
 
 ```
-python3 -m mcp_fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 3 --timeout 5
+python3 -m mcp_fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 3 --timeout 5
 ```
 
 This will fuzz all tools. Public tools succeed; `secure_tool` may return Unauthorized unless you provide auth headers.
@@ -44,7 +45,7 @@ Fuzz the protected tool with auth (config file)
 Use the provided `examples/auth_config.json` which maps `secure_tool` to an API key provider using the token `secret123`.
 
 ```
-python3 -m mcp_fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 2 --timeout 5 --auth-config examples/auth_config.json
+python3 -m mcp_fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 2 --timeout 5 --auth-config examples/auth_config.json
 ```
 
 Fuzz the protected tool with auth (environment)
@@ -55,7 +56,7 @@ Set environment variables and run the fuzzer:
 ```
 export MCP_API_KEY=secret123
 export MCP_TOOL_AUTH_MAPPING='{"secure_tool":"api_key"}'
-python3 -m mcp_fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 2 --timeout 5 --auth-env
+python3 -m mcp_fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 2 --timeout 5 --auth-env
 ```
 
 Fuzz protocol types
@@ -64,13 +65,13 @@ Fuzz protocol types
 To fuzz protocol types instead of tools:
 
 ```
-python3 -m mcp_fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 2 --timeout 5
+python3 -m mcp_fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 2 --timeout 5
 ```
 
 Notes
 -----
 
-- The example server is intentionally minimal and stateless.
+- The example server is intentionally minimal, stateless, and built with the official Python MCP SDK.
 - `secure_tool` requires `Authorization: Bearer secret123`. Use config file or env auth to hit it successfully.
 - Stop the server with Ctrl+C.
 
@@ -94,6 +95,34 @@ Then fuzz it with the StreamableHTTP transport:
 ```
 python3 -m mcp_fuzzer --mode tools --protocol streamablehttp --endpoint http://127.0.0.1:3000/mcp --runs 3 --timeout 10 --verbose
 ```
+
+Official SDK stdio examples
+---------------------------
+
+This directory also includes stdio servers built with the official Go and
+TypeScript MCP SDKs.
+
+Build and fuzz the Go SDK server:
+
+```
+cd examples/go_stdio_server
+go mod download
+go build -o /tmp/mcp-fuzzer-go-stdio-server .
+cd ../..
+python3 -m mcp_fuzzer --mode tools --protocol stdio --endpoint /tmp/mcp-fuzzer-go-stdio-server --runs 2 --timeout 30
+```
+
+Build and fuzz the TypeScript SDK server:
+
+```
+cd examples/typescript-stdio-server
+npm ci
+npm run build
+cd ../..
+python3 -m mcp_fuzzer --mode tools --protocol stdio --endpoint "node examples/typescript-stdio-server/dist/server.js" --runs 2 --timeout 30
+```
+
+Both servers expose `echo_tool`, `add_numbers`, and `normalize_text`.
 
 ## Custom Transport Examples
 

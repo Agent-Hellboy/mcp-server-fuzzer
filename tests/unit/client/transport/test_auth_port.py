@@ -35,6 +35,15 @@ def test_resolve_auth_port_env_auto_detect(monkeypatch):
     assert auth_port.resolve_auth_port(args) is sentinel
 
 
+def test_resolve_auth_port_env_auto_detect_oauth_client_credentials(monkeypatch):
+    """OAuth client credentials env variables should trigger auto-detect."""
+    sentinel = object()
+    monkeypatch.setenv("MCP_OAUTH_TOKEN_URL", "https://auth.example.com/token")
+    monkeypatch.setattr(auth_port, "setup_auth_from_env", lambda: sentinel)
+    args = argparse.Namespace(auth_config=None, auth_env=False)
+    assert auth_port.resolve_auth_port(args) is sentinel
+
+
 def test_resolve_auth_port_prefers_config_over_env(monkeypatch):
     """Explicit config should win even if env vars are present."""
     monkeypatch.setenv("MCP_API_KEY", "secret")
@@ -55,6 +64,9 @@ def test_resolve_auth_port_none(monkeypatch):
         "MCP_USERNAME",
         "MCP_PASSWORD",
         "MCP_OAUTH_TOKEN",
+        "MCP_OAUTH_TOKEN_URL",
+        "MCP_OAUTH_CLIENT_ID",
+        "MCP_OAUTH_CLIENT_SECRET",
         "MCP_CUSTOM_HEADERS",
     ]:
         monkeypatch.delenv(key, raising=False)

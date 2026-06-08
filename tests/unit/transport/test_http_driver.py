@@ -153,6 +153,28 @@ def test_prepare_headers_with_auth(monkeypatch):
     assert headers["Authorization"] == "token"
 
 
+def test_prepare_headers_with_auth_provider(monkeypatch):
+    calls = 0
+
+    def provider():
+        nonlocal calls
+        calls += 1
+        return {"Authorization": f"token-{calls}"}
+
+    driver = HttpDriver(
+        "http://localhost",
+        safety_enabled=False,
+        auth_header_provider=provider,
+        process_manager=MagicMock(),
+    )
+
+    first = driver._prepare_headers_with_auth({"Accept": "json"})
+    second = driver._prepare_headers_with_auth({"Accept": "json"})
+
+    assert first["Authorization"] == "token-1"
+    assert second["Authorization"] == "token-2"
+
+
 def test_resolve_redirect_url_denied(monkeypatch):
     driver = HttpDriver(
         "http://localhost",

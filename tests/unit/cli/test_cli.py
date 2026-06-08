@@ -372,8 +372,10 @@ def test_transport_factory_applies_auth_headers():
             "http://example.com",
             timeout=10.0,
             safety_enabled=True,
-            auth_headers={"Authorization": "x"},
+            auth_header_provider=mock_create.call_args.kwargs["auth_header_provider"],
         )
+        provider = mock_create.call_args.kwargs["auth_header_provider"]
+        assert provider() == {"Authorization": "x"}
 
 
 def test_safety_controller():

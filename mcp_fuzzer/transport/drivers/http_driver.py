@@ -3,7 +3,7 @@ import logging
 import uuid
 import time
 import inspect
-from typing import Any, AsyncIterator, TYPE_CHECKING
+from typing import Any, AsyncIterator, Callable, TYPE_CHECKING
 
 import httpx
 
@@ -62,6 +62,7 @@ class HttpDriver(
         url: str,
         timeout: float = 30.0,
         auth_headers: dict[str, str | None] | None = None,
+        auth_header_provider: Callable[[], dict[str, str | None]] | None = None,
         safety_enabled: bool = True,
         process_manager: ProcessManager | None = None,
     ):
@@ -76,6 +77,7 @@ class HttpDriver(
         self.auth_headers = {
             k: v for k, v in (auth_headers or {}).items() if v is not None
         }
+        self.auth_header_provider = auth_header_provider
 
         # Track last activity for process management
         self._last_activity = time.time()
@@ -103,6 +105,14 @@ class HttpDriver(
             safe_headers = headers.copy()
         # Add auth headers after sanitization (they are user-configured and safe)
         safe_headers.update(self.auth_headers)
+        if self.auth_header_provider is not None:
+            safe_headers.update(
+                {
+                    k: v
+                    for k, v in self.auth_header_provider().items()
+                    if v is not None
+                }
+            )
         return safe_headers
 
     async def _update_activity(self):

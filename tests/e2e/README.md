@@ -29,6 +29,15 @@ The e2e tests automatically:
 - **Duration**: ~2-4 minutes
 - **Environment**: Local (requires Node.js and server setup)
 
+### `test_auth_server.sh`
+
+- **Server**: Local authenticated HTTP MCP server using the official Python MCP SDK
+- **Test Type**: Tool fuzzing against a tool that requires bearer auth
+- **Expected**: OAuth client credentials config obtains a token, unauthenticated
+  `secure_tool` calls fail, and authenticated fuzzing calls succeed
+- **Duration**: ~30 seconds
+- **Environment**: Local Python SDK server
+
 ## Usage
 
 ### Run Individual Tests
@@ -39,6 +48,9 @@ The e2e tests automatically:
 
 # Test Everything Server (Local)
 ./tests/e2e/test_everything_server.sh
+
+# Test authenticated tool fuzzing
+./tests/e2e/test_auth_server.sh
 ```
 
 ### Run All E2E Tests
@@ -63,6 +75,9 @@ These tests are designed to run in CI environments. They include:
 ### Expected Behavior
 
 - **Everything MCP Server**: Should pass with high success rate
+- **Auth MCP Server**: Should reject unauthenticated `secure_tool` calls and
+  generate fuzzing output when `secure_tool` is fuzzed with OAuth client
+  credentials auth configured
 
 ### Output
 

@@ -68,6 +68,9 @@ def test_build_auth_schema():
     assert auth_schema["type"] == "object"
     assert "providers" in auth_schema["properties"]
     assert "mappings" in auth_schema["properties"]
+    providers_schema = auth_schema["properties"]["providers"]
+    provider_type_schema = providers_schema["items"]["properties"]["type"]
+    assert "oauth_client_credentials" in provider_type_schema["enum"]
 
 
 def test_build_custom_transports_schema():

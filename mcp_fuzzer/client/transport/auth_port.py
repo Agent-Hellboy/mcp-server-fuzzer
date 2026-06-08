@@ -29,6 +29,9 @@ def resolve_auth_port(args: argparse.Namespace):
         "MCP_USERNAME",
         "MCP_PASSWORD",
         "MCP_OAUTH_TOKEN",
+        "MCP_OAUTH_TOKEN_URL",
+        "MCP_OAUTH_CLIENT_ID",
+        "MCP_OAUTH_CLIENT_SECRET",
         "MCP_CUSTOM_HEADERS",
     ]
     if any(os.getenv(var) for var in auth_env_vars):

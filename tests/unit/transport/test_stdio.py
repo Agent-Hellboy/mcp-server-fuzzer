@@ -28,6 +28,7 @@ class TestStdioDriver:
         self.transport = StdioDriver(self.command, self.timeout)
         self.transport.process_manager = AsyncMock(spec=ProcessManager)
         self.transport._lock = AsyncMock(spec=asyncio.Lock)
+        self.transport._mcp_initialized = True
 
     def test_init(self):
         """Test initialization of StdioDriver."""
@@ -838,6 +839,38 @@ class TestStdioDriverExtended:
         result = await transport.send_request("initialize")
         assert result["protocolVersion"] == "2025-11-25"
         assert seen["pv"] == "2025-11-25"
+        assert transport._mcp_initialized is True
+
+
+    @pytest.mark.asyncio
+    async def test_send_request_auto_initializes_mcp_session(self, monkeypatch):
+        transport = StdioDriver("echo")
+        transport._initialized = True
+        transport._mcp_initialized = False
+        sent_messages = []
+
+        async def fake_send(message):
+            sent_messages.append(message)
+
+        responses = [
+            {"id": "init", "result": {"protocolVersion": "2025-06-18"}},
+            {"id": "tools", "result": {"tools": []}},
+        ]
+
+        transport._send_message = fake_send
+        transport._receive_message = AsyncMock(side_effect=responses)
+        ids = iter(["init", "tools"])
+        monkeypatch.setattr(stdio_driver.uuid, "uuid4", lambda: next(ids))
+
+        result = await transport.send_request("tools/list")
+
+        assert result == {"tools": []}
+        assert [message["method"] for message in sent_messages] == [
+            "initialize",
+            "notifications/initialized",
+            "tools/list",
+        ]
+        assert transport._mcp_initialized is True
     
     
     @pytest.mark.asyncio
