@@ -12,7 +12,9 @@ from typing import Any
 
 import anyio
 import uvicorn
+from mcp import types
 from mcp.server.fastmcp import FastMCP
+from pydantic import AnyUrl
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -27,6 +29,9 @@ REQUIRED_AUTH_SCHEME = "Bearer"
 BIND_HOST = os.getenv("BIND_HOST", "0.0.0.0")
 BIND_PORT = int(os.getenv("BIND_PORT", "8000"))
 REQUIRED_TOKEN = os.getenv("REQUIRED_TOKEN", "secret123")
+
+_CURRENT_LOG_LEVEL: str = "info"
+_SUBSCRIBED_URIS: set[str] = set()
 
 
 class SecureToolAuthMiddleware:
@@ -125,6 +130,10 @@ def build_mcp_server() -> FastMCP:
         streamable_http_path="/",
     )
 
+    # ------------------------------------------------------------------
+    # Tools
+    # ------------------------------------------------------------------
+
     @mcp.tool()
     def test_tool(message: str = "default", count: int = 1) -> str:
         """Return the supplied message and count."""
@@ -140,6 +149,102 @@ def build_mcp_server() -> FastMCP:
         """Return a response only after middleware verifies bearer auth."""
         return f"Secure OK: {msg}"
 
+    # ------------------------------------------------------------------
+    # Resources (static + template)
+    # ------------------------------------------------------------------
+
+    @mcp.resource("test://static/hello")
+    def hello_resource() -> str:
+        """A static hello resource."""
+        return "Hello from the MCP test server!"
+
+    @mcp.resource("test://static/info")
+    def info_resource() -> str:
+        """Server info as a resource."""
+        return json.dumps({"server": "mcp-fuzzer-test-server", "version": "1.0.0"})
+
+    @mcp.resource("test://items/{item_id}", name="item")
+    def item_resource(item_id: str) -> str:
+        """A parameterised item resource."""
+        return f"Item: {item_id}"
+
+    # ------------------------------------------------------------------
+    # Prompts
+    # ------------------------------------------------------------------
+
+    @mcp.prompt(name="hello_prompt", description="Greet someone by name")
+    def hello_prompt(name: str = "world") -> list[types.PromptMessage]:
+        return [
+            types.PromptMessage(
+                role="user",
+                content=types.TextContent(type="text", text=f"Hello, {name}!"),
+            )
+        ]
+
+    @mcp.prompt(name="summarise_prompt", description="Ask the model to summarise text")
+    def summarise_prompt(text: str = "") -> list[types.PromptMessage]:
+        return [
+            types.PromptMessage(
+                role="user",
+                content=types.TextContent(
+                    type="text",
+                    text=f"Please summarise the following:\n\n{text}",
+                ),
+            )
+        ]
+
+    # ------------------------------------------------------------------
+    # Completion  (completion/complete)
+    # ------------------------------------------------------------------
+
+    @mcp._mcp_server.completion()
+    async def handle_completion(
+        ref: types.PromptReference | types.ResourceTemplateReference,
+        argument: types.CompletionArgument,
+        context: types.CompletionContext | None,
+    ) -> types.Completion | None:
+        """Return completions for prompt arguments and resource template params."""
+        arg_name = argument.name
+        arg_value = argument.value
+
+        if isinstance(ref, types.PromptReference):
+            if ref.name == "hello_prompt" and arg_name == "name":
+                candidates = ["Alice", "Bob", "Carol", "Dave"]
+                values = [c for c in candidates if c.lower().startswith(arg_value.lower())]
+                return types.Completion(values=values, total=len(values), hasMore=False)
+
+        if isinstance(ref, types.ResourceTemplateReference):
+            if arg_name == "item_id":
+                candidates = ["apple", "banana", "cherry"]
+                values = [c for c in candidates if c.startswith(arg_value)]
+                return types.Completion(values=values, total=len(values), hasMore=False)
+
+        return types.Completion(values=[], total=0, hasMore=False)
+
+    # ------------------------------------------------------------------
+    # Logging  (logging/setLevel)
+    # ------------------------------------------------------------------
+
+    @mcp._mcp_server.set_logging_level()
+    async def handle_set_log_level(level: types.LoggingLevel) -> None:
+        global _CURRENT_LOG_LEVEL
+        _CURRENT_LOG_LEVEL = str(level)
+        LOGGER.info("Log level set to %s", level)
+
+    # ------------------------------------------------------------------
+    # Resource subscriptions  (resources/subscribe, resources/unsubscribe)
+    # ------------------------------------------------------------------
+
+    @mcp._mcp_server.subscribe_resource()
+    async def handle_subscribe(uri: AnyUrl) -> None:
+        _SUBSCRIBED_URIS.add(str(uri))
+        LOGGER.info("Subscribed to resource: %s", uri)
+
+    @mcp._mcp_server.unsubscribe_resource()
+    async def handle_unsubscribe(uri: AnyUrl) -> None:
+        _SUBSCRIBED_URIS.discard(str(uri))
+        LOGGER.info("Unsubscribed from resource: %s", uri)
+
     return mcp
 
 
@@ -150,9 +255,16 @@ def build_app() -> Starlette:
         return JSONResponse(
             {
                 "status": "healthy",
-                "server": "Simple Test Server",
+                "server": "mcp-fuzzer-test-server",
                 "version": "1.0.0",
-                "capabilities": ["tools"],
+                "capabilities": [
+                    "tools",
+                    "resources",
+                    "prompts",
+                    "completion",
+                    "logging",
+                    "subscribe",
+                ],
             }
         )
 

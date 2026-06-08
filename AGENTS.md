@@ -44,6 +44,27 @@ tox -e ruff                  # lint
 tox -e tests -- <test paths> # unit tests
 ```
 
+### tox venv setup
+
+tox creates a managed venv at `.tox/tests/`. Use its Python for anything that
+needs project dependencies (running the server, the CLI, ad-hoc scripts):
+
+```bash
+# First run: tox creates the venv automatically
+tox -e tests -- tests/unit/
+
+# Use the tox Python directly for scripts / servers / CLI
+.tox/tests/bin/python examples/test_server.py
+.tox/tests/bin/python -m mcp_fuzzer --help
+
+# Install extra deps into the tox venv (e.g. server deps)
+.tox/tests/bin/pip install uvicorn mcp anyio starlette
+```
+
+**Never use the system `python3` or `pip3` for project code** — the repo uses a
+managed environment and the system Python may lack required packages or be
+protected by PEP 668.
+
 ## Codebase Exploration — Use Graphify First
 
 A knowledge graph of this repo lives in `graphify-out/`. **Before exploring the code manually, query the graph:**
