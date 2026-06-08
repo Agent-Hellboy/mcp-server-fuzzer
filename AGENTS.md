@@ -44,6 +44,47 @@ tox -e ruff                  # lint
 tox -e tests -- <test paths> # unit tests
 ```
 
+### tox venv setup
+
+tox creates a managed venv at `.tox/tests/`. Use its Python for anything that
+needs project dependencies (running the server, the CLI, ad-hoc scripts):
+
+```bash
+# First run: tox creates the venv automatically
+tox -e tests -- tests/unit/
+
+# Use the tox Python directly for scripts / servers / CLI
+.tox/tests/bin/python examples/test_server.py
+.tox/tests/bin/python -m mcp_fuzzer --help
+
+# Install extra deps into the tox venv (e.g. server deps)
+.tox/tests/bin/pip install uvicorn mcp anyio starlette
+```
+
+**Never use the system `python3` or `pip3` for project code** — the repo uses a
+managed environment and the system Python may lack required packages or be
+protected by PEP 668.
+
+## Codebase Exploration — Use Graphify First
+
+A knowledge graph of this repo lives in `graphify-out/`. **Before exploring the code manually, query the graph:**
+
+```bash
+# Ask anything about structure, coverage, relationships
+graphify query "how does X work"
+graphify query "what calls Y"
+graphify path "AuthModule" "Database"
+graphify explain "OAuthClientCredentialsAuth"
+```
+
+Graphify is faster than grepping and surfaces cross-file relationships the raw code doesn't make obvious. Only fall back to `grep`/`Read` when the graph answer is insufficient.
+
+To rebuild the graph after large changes:
+
+```bash
+/graphify mcp_fuzzer tests --update
+```
+
 ## Pull Requests
 
 Open PRs against `main` on `https://github.com/Agent-Hellboy/mcp-server-fuzzer`.

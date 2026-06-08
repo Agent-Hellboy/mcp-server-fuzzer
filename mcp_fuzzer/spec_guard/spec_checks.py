@@ -4,10 +4,13 @@ import os
 from datetime import date
 from typing import Any
 
+from .check_ids import CheckID
 from .helpers import (
+    COMPLETIONS_SPEC,
     ELICITATION_SPEC,
     LOGGING_SPEC,
     PROMPTS_SPEC,
+    PROTOCOL_SPEC,
     RESOURCES_SPEC,
     ROOTS_SPEC,
     SAMPLING_SPEC,
@@ -31,6 +34,7 @@ _TOOLS_SPEC = spec_variant(
     ),
 )
 _LOGGING_SPEC = LOGGING_SPEC
+_PROTOCOL_SPEC = PROTOCOL_SPEC
 _SCHEMA_SPEC = spec_variant(SCHEMA_SPEC, spec_id="MCP-JSON-Schema")
 _RESOURCES_SPEC = RESOURCES_SPEC
 _PROMPTS_SPEC = PROMPTS_SPEC
@@ -39,6 +43,7 @@ _ROOTS_SPEC = ROOTS_SPEC
 _SAMPLING_SPEC = SAMPLING_SPEC
 _ELICITATION_SPEC = ELICITATION_SPEC
 _TASKS_SPEC = TASKS_SPEC
+_COMPLETIONS_SPEC = COMPLETIONS_SPEC
 
 
 def _spec_at_least(target: str) -> bool:
@@ -59,7 +64,7 @@ def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
     name = tool.get("name")
     if name is not None and (not isinstance(name, str) or not name):
         checks.append(
-            _fail("tool-name", "Tool is missing a non-empty name", _TOOLS_SPEC)
+            _fail(CheckID.TOOL_NAME, "Tool is missing a non-empty name", _TOOLS_SPEC)
         )
 
     schema = tool.get("inputSchema")
@@ -68,7 +73,7 @@ def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
         if "$schema" in schema and not isinstance(schema.get("$schema"), str):
             checks.append(
                 _fail(
-                    "tool-schema-$schema",
+                    CheckID.TOOL_SCHEMA_SCHEMA,
                     "Tool inputSchema has non-string $schema",
                     _SCHEMA_SPEC,
                 )
@@ -77,7 +82,7 @@ def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
         if "$defs" in schema and not isinstance(schema.get("$defs"), dict):
             checks.append(
                 _fail(
-                    "tool-schema-$defs",
+                    CheckID.TOOL_SCHEMA_DEFS,
                     "Tool inputSchema has non-object $defs",
                     _SCHEMA_SPEC,
                 )
@@ -88,7 +93,7 @@ def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
             if not isinstance(additional, (bool, dict)):
                 checks.append(
                     _fail(
-                        "tool-schema-additional-properties",
+                        CheckID.TOOL_SCHEMA_ADDITIONAL_PROPERTIES,
                         "Tool inputSchema has invalid additionalProperties type",
                         _SCHEMA_SPEC,
                     )
@@ -97,14 +102,14 @@ def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
     icons = tool.get("icons")
     if icons is not None and not isinstance(icons, list):
         checks.append(
-            _fail("tool-icons-type", "Tool icons is not an array", _TOOLS_SPEC)
+            _fail(CheckID.TOOL_ICONS_TYPE, "Tool icons is not an array", _TOOLS_SPEC)
         )
     elif isinstance(icons, list):
         for idx, icon in enumerate(icons):
             if not isinstance(icon, dict):
                 checks.append(
                     _fail(
-                        "tool-icon-item",
+                        CheckID.TOOL_ICON_ITEM,
                         f"Tool icon {idx} is not an object",
                         _TOOLS_SPEC,
                     )
@@ -113,7 +118,7 @@ def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
             if not isinstance(icon.get("src"), str) or not icon.get("src"):
                 checks.append(
                     _fail(
-                        "tool-icon-src",
+                        CheckID.TOOL_ICON_SRC,
                         f"Tool icon {idx} missing src",
                         _TOOLS_SPEC,
                     )
@@ -123,7 +128,7 @@ def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
     if execution is not None and not isinstance(execution, dict):
         checks.append(
             _fail(
-                "tool-execution-type",
+                CheckID.TOOL_EXECUTION_TYPE,
                 "Tool execution is not an object",
                 _TOOLS_SPEC,
             )
@@ -133,7 +138,7 @@ def check_tool_schema_fields(tool: dict[str, Any]) -> list[SpecCheck]:
         if task_support not in {"forbidden", "optional", "required"}:
             checks.append(
                 _fail(
-                    "tool-execution-task-support",
+                    CheckID.TOOL_EXECUTION_TASK_SUPPORT,
                     "Tool execution.taskSupport is invalid",
                     _TOOLS_SPEC,
                 )
@@ -150,17 +155,23 @@ def check_tools_list(result: Any) -> list[SpecCheck]:
 
     tools = result.get("tools")
     if tools is None:
-        checks.append(_fail("tools-list-missing", "Missing tools array", _TOOLS_SPEC))
+        checks.append(
+            _fail(CheckID.TOOLS_LIST_MISSING, "Missing tools array", _TOOLS_SPEC)
+        )
         return checks
 
     if not isinstance(tools, list):
-        checks.append(_fail("tools-list-type", "tools is not an array", _TOOLS_SPEC))
+        checks.append(
+            _fail(CheckID.TOOLS_LIST_TYPE, "tools is not an array", _TOOLS_SPEC)
+        )
         return checks
 
     for tool in tools:
         if not isinstance(tool, dict):
             checks.append(
-                _fail("tools-list-item", "Tool entry is not an object", _TOOLS_SPEC)
+                _fail(
+                    CheckID.TOOLS_LIST_ITEM, "Tool entry is not an object", _TOOLS_SPEC
+                )
             )
             continue
         checks.extend(check_tool_schema_fields(tool))
@@ -213,11 +224,15 @@ def check_tasks_list(result: Any) -> list[SpecCheck]:
 
     tasks = result.get("tasks")
     if tasks is None:
-        checks.append(_fail("tasks-list-missing", "Missing tasks array", _TASKS_SPEC))
+        checks.append(
+            _fail(CheckID.TASKS_LIST_MISSING, "Missing tasks array", _TASKS_SPEC)
+        )
         return checks
 
     if not isinstance(tasks, list):
-        checks.append(_fail("tasks-list-type", "tasks is not an array", _TASKS_SPEC))
+        checks.append(
+            _fail(CheckID.TASKS_LIST_TYPE, "tasks is not an array", _TASKS_SPEC)
+        )
         return checks
 
     for idx, task in enumerate(tasks):
@@ -237,7 +252,7 @@ def check_task_payload_result(result: Any) -> list[SpecCheck]:
     if not isinstance(result, dict):
         checks.append(
             _fail(
-                "tasks-result-type",
+                CheckID.TASKS_RESULT_TYPE,
                 "tasks/result payload is not an object",
                 _TASKS_SPEC,
             )
@@ -258,22 +273,30 @@ def check_roots_list(result: Any) -> list[SpecCheck]:
 
     roots = result.get("roots")
     if roots is None:
-        checks.append(_fail("roots-list-missing", "Missing roots array", _ROOTS_SPEC))
+        checks.append(
+            _fail(CheckID.ROOTS_LIST_MISSING, "Missing roots array", _ROOTS_SPEC)
+        )
         return checks
 
     if not isinstance(roots, list):
-        checks.append(_fail("roots-list-type", "roots is not an array", _ROOTS_SPEC))
+        checks.append(
+            _fail(CheckID.ROOTS_LIST_TYPE, "roots is not an array", _ROOTS_SPEC)
+        )
         return checks
 
     for idx, root in enumerate(roots):
         if not isinstance(root, dict):
             checks.append(
-                _fail("roots-list-item", f"Root {idx} is not an object", _ROOTS_SPEC)
+                _fail(
+                    CheckID.ROOTS_LIST_ITEM,
+                    f"Root {idx} is not an object",
+                    _ROOTS_SPEC,
+                )
             )
             continue
         if not isinstance(root.get("uri"), str) or not root.get("uri"):
             checks.append(
-                _fail("roots-list-uri", f"Root {idx} missing uri", _ROOTS_SPEC)
+                _fail(CheckID.ROOTS_LIST_URI, f"Root {idx} missing uri", _ROOTS_SPEC)
             )
 
     return checks
@@ -287,19 +310,27 @@ def check_create_message_result(result: Any) -> list[SpecCheck]:
 
     if not isinstance(result.get("model"), str) or not result.get("model"):
         checks.append(
-            _fail("sampling-model", "CreateMessageResult missing model", _SAMPLING_SPEC)
+            _fail(
+                CheckID.SAMPLING_MODEL,
+                "CreateMessageResult missing model",
+                _SAMPLING_SPEC,
+            )
         )
     role = result.get("role")
     if role is not None and (not isinstance(role, str) or not role):
         checks.append(
-            _fail("sampling-role", "CreateMessageResult missing role", _SAMPLING_SPEC)
+            _fail(
+                CheckID.SAMPLING_ROLE,
+                "CreateMessageResult missing role",
+                _SAMPLING_SPEC,
+            )
         )
 
     content = result.get("content")
     if not isinstance(content, (dict, list)):
         checks.append(
             _fail(
-                "sampling-content",
+                CheckID.SAMPLING_CONTENT,
                 "CreateMessageResult content must be an object or array",
                 _SAMPLING_SPEC,
             )
@@ -309,7 +340,7 @@ def check_create_message_result(result: Any) -> list[SpecCheck]:
     if stop_reason is not None and not isinstance(stop_reason, str):
         checks.append(
             _fail(
-                "sampling-stop-reason",
+                CheckID.SAMPLING_STOP_REASON,
                 "CreateMessageResult stopReason is not a string",
                 _SAMPLING_SPEC,
             )
@@ -327,7 +358,7 @@ def check_elicit_result(result: Any) -> list[SpecCheck]:
     if result.get("action") not in {"accept", "cancel", "decline"}:
         checks.append(
             _fail(
-                "elicitation-action",
+                CheckID.ELICITATION_ACTION,
                 "ElicitResult action is invalid",
                 _ELICITATION_SPEC,
             )
@@ -335,7 +366,7 @@ def check_elicit_result(result: Any) -> list[SpecCheck]:
     if "content" in result and not isinstance(result.get("content"), dict):
         checks.append(
             _fail(
-                "elicitation-content",
+                CheckID.ELICITATION_CONTENT,
                 "ElicitResult content must be an object when present",
                 _ELICITATION_SPEC,
             )
@@ -356,13 +387,19 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
     content = result.get("content")
     if not isinstance(content, list):
         checks.append(
-            _fail("tools-content-array", "Tool content is not an array", _TOOLS_SPEC)
+            _fail(
+                CheckID.TOOLS_CONTENT_ARRAY, "Tool content is not an array", _TOOLS_SPEC
+            )
         )
         return checks
 
     if not content:
         checks.append(
-            _warn("tools-content-empty", "Tool content array is empty", _TOOLS_SPEC)
+            _warn(
+                CheckID.TOOLS_CONTENT_EMPTY,
+                "Tool content array is empty",
+                _TOOLS_SPEC,
+            )
         )
 
     supports_audio = _spec_at_least("2025-03-26")
@@ -372,7 +409,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
         if not isinstance(item, dict):
             checks.append(
                 _fail(
-                    "tools-content-item",
+                    CheckID.TOOLS_CONTENT_ITEM,
                     f"Content item {idx} is not an object",
                     _TOOLS_SPEC,
                 )
@@ -383,7 +420,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
         if not isinstance(ctype, str):
             checks.append(
                 _fail(
-                    "tools-content-type",
+                    CheckID.TOOLS_CONTENT_TYPE,
                     f"Content item {idx} missing type",
                     _TOOLS_SPEC,
                 )
@@ -395,7 +432,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if not isinstance(text, str) or not text:
                 checks.append(
                     _fail(
-                        "tools-content-text",
+                        CheckID.TOOLS_CONTENT_TEXT,
                         "Text content missing text field",
                         _TOOLS_SPEC,
                     )
@@ -404,7 +441,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if not isinstance(item.get("data"), str):
                 checks.append(
                     _fail(
-                        "tools-content-image-data",
+                        CheckID.TOOLS_CONTENT_IMAGE_DATA,
                         "Image content missing data field",
                         _TOOLS_SPEC,
                     )
@@ -412,7 +449,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if not isinstance(item.get("mimeType"), str):
                 checks.append(
                     _fail(
-                        "tools-content-image-mime",
+                        CheckID.TOOLS_CONTENT_IMAGE_MIME,
                         "Image content missing mimeType field",
                         _TOOLS_SPEC,
                     )
@@ -421,7 +458,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if not supports_audio:
                 checks.append(
                     _fail(
-                        "tools-content-audio-unsupported",
+                        CheckID.TOOLS_CONTENT_AUDIO_UNSUPPORTED,
                         "Audio content is not supported by this spec version",
                         _TOOLS_SPEC,
                     )
@@ -430,7 +467,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if not isinstance(item.get("data"), str):
                 checks.append(
                     _fail(
-                        "tools-content-audio-data",
+                        CheckID.TOOLS_CONTENT_AUDIO_DATA,
                         "Audio content missing data field",
                         _TOOLS_SPEC,
                     )
@@ -438,7 +475,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if not isinstance(item.get("mimeType"), str):
                 checks.append(
                     _fail(
-                        "tools-content-audio-mime",
+                        CheckID.TOOLS_CONTENT_AUDIO_MIME,
                         "Audio content missing mimeType field",
                         _TOOLS_SPEC,
                     )
@@ -448,7 +485,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if resource is None:
                 checks.append(
                     _fail(
-                        "tools-content-resource",
+                        CheckID.TOOLS_CONTENT_RESOURCE,
                         "Resource content missing resource object",
                         _TOOLS_SPEC,
                     )
@@ -456,7 +493,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             elif not isinstance(resource, dict):
                 checks.append(
                     _fail(
-                        "tools-content-resource",
+                        CheckID.TOOLS_CONTENT_RESOURCE,
                         "Resource content missing resource object",
                         _TOOLS_SPEC,
                     )
@@ -465,7 +502,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
                 if not resource.get("uri"):
                     checks.append(
                         _fail(
-                            "tools-content-resource-uri",
+                            CheckID.TOOLS_CONTENT_RESOURCE_URI,
                             "Resource content missing uri field",
                             _TOOLS_SPEC,
                         )
@@ -473,7 +510,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
                 if not (resource.get("text") or resource.get("blob")):
                     checks.append(
                         _fail(
-                            "tools-content-resource-body",
+                            CheckID.TOOLS_CONTENT_RESOURCE_BODY,
                             "Resource content missing text or blob field",
                             _TOOLS_SPEC,
                         )
@@ -482,7 +519,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if not supports_resource_link:
                 checks.append(
                     _fail(
-                        "tools-content-resource-link-unsupported",
+                        CheckID.TOOLS_CONTENT_RESOURCE_LINK_UNSUPPORTED,
                         "Resource links are not supported by this spec version",
                         _TOOLS_SPEC,
                     )
@@ -491,7 +528,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if not item.get("uri"):
                 checks.append(
                     _fail(
-                        "tools-content-resource-link-uri",
+                        CheckID.TOOLS_CONTENT_RESOURCE_LINK_URI,
                         "Resource link missing uri field",
                         _TOOLS_SPEC,
                     )
@@ -499,7 +536,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
             if not item.get("name"):
                 checks.append(
                     _fail(
-                        "tools-content-resource-link-name",
+                        CheckID.TOOLS_CONTENT_RESOURCE_LINK_NAME,
                         "Resource link missing name field",
                         _TOOLS_SPEC,
                     )
@@ -507,7 +544,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
         else:
             checks.append(
                 _warn(
-                    "tools-content-unknown-type",
+                    CheckID.TOOLS_CONTENT_UNKNOWN_TYPE,
                     f"Unknown content type: {ctype}",
                     _TOOLS_SPEC,
                 )
@@ -524,7 +561,7 @@ def check_tool_result_content(result: Any) -> list[SpecCheck]:
         if not has_text:
             checks.append(
                 _warn(
-                    "tools-error-text",
+                    CheckID.TOOLS_ERROR_TEXT,
                     "isError=true without text error message",
                     _TOOLS_SPEC,
                 )
@@ -540,7 +577,7 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
     if params is None:
         checks.append(
             _fail(
-                "logging-params-missing",
+                CheckID.LOGGING_PARAMS_MISSING,
                 "Logging notification params missing",
                 _LOGGING_SPEC,
             )
@@ -550,7 +587,7 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
     if not isinstance(params, dict):
         checks.append(
             _fail(
-                "logging-params-type",
+                CheckID.LOGGING_PARAMS_TYPE,
                 "Logging notification params is not an object",
                 _LOGGING_SPEC,
             )
@@ -560,7 +597,7 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
     if "level" not in params:
         checks.append(
             _fail(
-                "logging-level-missing",
+                CheckID.LOGGING_LEVEL_MISSING,
                 "Logging notification level missing",
                 _LOGGING_SPEC,
             )
@@ -568,7 +605,7 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
     elif not isinstance(params.get("level"), str):
         checks.append(
             _fail(
-                "logging-level-type",
+                CheckID.LOGGING_LEVEL_TYPE,
                 "Logging notification level is not a string",
                 _LOGGING_SPEC,
             )
@@ -577,7 +614,7 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
     if "data" not in params:
         checks.append(
             _fail(
-                "logging-data-missing",
+                CheckID.LOGGING_DATA_MISSING,
                 "Logging notification data missing",
                 _LOGGING_SPEC,
             )
@@ -586,7 +623,7 @@ def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
     if "logger" in params and not isinstance(params.get("logger"), str):
         checks.append(
             _fail(
-                "logging-logger-type",
+                CheckID.LOGGING_LOGGER_TYPE,
                 "Logging notification logger is not a string",
                 _LOGGING_SPEC,
             )
@@ -610,7 +647,7 @@ def check_elicitation_complete_notification(
     if not isinstance(params, dict):
         checks.append(
             _fail(
-                "elicitation-complete-params",
+                CheckID.ELICITATION_COMPLETE_PARAMS,
                 "Elicitation completion params missing",
                 _ELICITATION_SPEC,
             )
@@ -622,7 +659,7 @@ def check_elicitation_complete_notification(
     ):
         checks.append(
             _fail(
-                "elicitation-complete-id",
+                CheckID.ELICITATION_COMPLETE_ID,
                 "Elicitation completion missing elicitationId",
                 _ELICITATION_SPEC,
             )
@@ -640,13 +677,21 @@ def check_resources_list(result: Any) -> list[SpecCheck]:
     resources = result.get("resources")
     if resources is None:
         checks.append(
-            _fail("resources-list-missing", "Missing resources array", _RESOURCES_SPEC)
+            _fail(
+                CheckID.RESOURCES_LIST_MISSING,
+                "Missing resources array",
+                _RESOURCES_SPEC,
+            )
         )
         return checks
 
     if not isinstance(resources, list):
         checks.append(
-            _fail("resources-list-type", "resources is not an array", _RESOURCES_SPEC)
+            _fail(
+                CheckID.RESOURCES_LIST_TYPE,
+                "resources is not an array",
+                _RESOURCES_SPEC,
+            )
         )
         return checks
 
@@ -654,7 +699,7 @@ def check_resources_list(result: Any) -> list[SpecCheck]:
         if not isinstance(resource, dict):
             checks.append(
                 _fail(
-                    "resources-list-item",
+                    CheckID.RESOURCES_LIST_ITEM,
                     f"Resource {idx} is not an object",
                     _RESOURCES_SPEC,
                 )
@@ -663,7 +708,7 @@ def check_resources_list(result: Any) -> list[SpecCheck]:
         if not resource.get("uri"):
             checks.append(
                 _fail(
-                    "resources-list-uri",
+                    CheckID.RESOURCES_LIST_URI,
                     f"Resource {idx} missing uri",
                     _RESOURCES_SPEC,
                 )
@@ -671,7 +716,7 @@ def check_resources_list(result: Any) -> list[SpecCheck]:
         if not resource.get("name"):
             checks.append(
                 _fail(
-                    "resources-list-name",
+                    CheckID.RESOURCES_LIST_NAME,
                     f"Resource {idx} missing name",
                     _RESOURCES_SPEC,
                 )
@@ -689,19 +734,31 @@ def check_resources_read(result: Any) -> list[SpecCheck]:
     contents = result.get("contents")
     if contents is None:
         checks.append(
-            _fail("resources-read-missing", "Missing contents array", _RESOURCES_SPEC)
+            _fail(
+                CheckID.RESOURCES_READ_MISSING,
+                "Missing contents array",
+                _RESOURCES_SPEC,
+            )
         )
         return checks
 
     if not isinstance(contents, list):
         checks.append(
-            _fail("resources-read-type", "contents is not an array", _RESOURCES_SPEC)
+            _fail(
+                CheckID.RESOURCES_READ_TYPE,
+                "contents is not an array",
+                _RESOURCES_SPEC,
+            )
         )
         return checks
 
     if not contents:
         checks.append(
-            _warn("resources-read-empty", "contents array is empty", _RESOURCES_SPEC)
+            _warn(
+                CheckID.RESOURCES_READ_EMPTY,
+                "contents array is empty",
+                _RESOURCES_SPEC,
+            )
         )
         return checks
 
@@ -710,7 +767,7 @@ def check_resources_read(result: Any) -> list[SpecCheck]:
             if not item.get("uri"):
                 checks.append(
                     _fail(
-                        "resources-read-uri",
+                        CheckID.RESOURCES_READ_URI,
                         f"Content {idx} missing uri",
                         _RESOURCES_SPEC,
                     )
@@ -718,7 +775,7 @@ def check_resources_read(result: Any) -> list[SpecCheck]:
             if not (item.get("text") or item.get("blob")):
                 checks.append(
                     _fail(
-                        "resources-read-body",
+                        CheckID.RESOURCES_READ_BODY,
                         f"Content {idx} missing text or blob",
                         _RESOURCES_SPEC,
                     )
@@ -726,7 +783,7 @@ def check_resources_read(result: Any) -> list[SpecCheck]:
         else:
             checks.append(
                 _fail(
-                    "resources-read-item",
+                    CheckID.RESOURCES_READ_ITEM,
                     f"Content {idx} is not object",
                     _RESOURCES_SPEC,
                 )
@@ -745,7 +802,7 @@ def check_resource_templates_list(result: Any) -> list[SpecCheck]:
     if templates is None:
         checks.append(
             _fail(
-                "resources-templates-missing",
+                CheckID.RESOURCES_TEMPLATES_MISSING,
                 "Missing resourceTemplates array",
                 _RESOURCES_SPEC,
             )
@@ -755,7 +812,7 @@ def check_resource_templates_list(result: Any) -> list[SpecCheck]:
     if not isinstance(templates, list):
         checks.append(
             _fail(
-                "resources-templates-type",
+                CheckID.RESOURCES_TEMPLATES_TYPE,
                 "resourceTemplates is not an array",
                 _RESOURCES_SPEC,
             )
@@ -766,7 +823,7 @@ def check_resource_templates_list(result: Any) -> list[SpecCheck]:
         if not isinstance(template, dict):
             checks.append(
                 _fail(
-                    "resources-templates-item",
+                    CheckID.RESOURCES_TEMPLATES_ITEM,
                     f"Template {idx} is not an object",
                     _RESOURCES_SPEC,
                 )
@@ -775,7 +832,7 @@ def check_resource_templates_list(result: Any) -> list[SpecCheck]:
         if not template.get("uriTemplate"):
             checks.append(
                 _fail(
-                    "resources-templates-uri",
+                    CheckID.RESOURCES_TEMPLATES_URI,
                     f"Template {idx} missing uriTemplate",
                     _RESOURCES_SPEC,
                 )
@@ -783,7 +840,7 @@ def check_resource_templates_list(result: Any) -> list[SpecCheck]:
         if not template.get("name"):
             checks.append(
                 _fail(
-                    "resources-templates-name",
+                    CheckID.RESOURCES_TEMPLATES_NAME,
                     f"Template {idx} missing name",
                     _RESOURCES_SPEC,
                 )
@@ -801,13 +858,15 @@ def check_prompts_list(result: Any) -> list[SpecCheck]:
     prompts = result.get("prompts")
     if prompts is None:
         checks.append(
-            _fail("prompts-list-missing", "Missing prompts array", _PROMPTS_SPEC)
+            _fail(CheckID.PROMPTS_LIST_MISSING, "Missing prompts array", _PROMPTS_SPEC)
         )
         return checks
 
     if not isinstance(prompts, list):
         checks.append(
-            _fail("prompts-list-type", "prompts is not an array", _PROMPTS_SPEC)
+            _fail(
+                CheckID.PROMPTS_LIST_TYPE, "prompts is not an array", _PROMPTS_SPEC
+            )
         )
         return checks
 
@@ -815,7 +874,7 @@ def check_prompts_list(result: Any) -> list[SpecCheck]:
         if not isinstance(prompt, dict):
             checks.append(
                 _fail(
-                    "prompts-list-item",
+                    CheckID.PROMPTS_LIST_ITEM,
                     f"Prompt {idx} is not an object",
                     _PROMPTS_SPEC,
                 )
@@ -824,7 +883,7 @@ def check_prompts_list(result: Any) -> list[SpecCheck]:
         if not prompt.get("name"):
             checks.append(
                 _fail(
-                    "prompts-list-name",
+                    CheckID.PROMPTS_LIST_NAME,
                     f"Prompt {idx} missing name",
                     _PROMPTS_SPEC,
                 )
@@ -841,19 +900,23 @@ def check_prompts_get(result: Any) -> list[SpecCheck]:
     messages = result.get("messages")
     if messages is None:
         checks.append(
-            _fail("prompts-get-missing", "Missing messages array", _PROMPTS_SPEC)
+            _fail(CheckID.PROMPTS_GET_MISSING, "Missing messages array", _PROMPTS_SPEC)
         )
         return checks
 
     if not isinstance(messages, list):
         checks.append(
-            _fail("prompts-get-type", "messages is not an array", _PROMPTS_SPEC)
+            _fail(
+                CheckID.PROMPTS_GET_TYPE, "messages is not an array", _PROMPTS_SPEC
+            )
         )
         return checks
 
     if not messages:
         checks.append(
-            _warn("prompts-get-empty", "messages array is empty", _PROMPTS_SPEC)
+            _warn(
+                CheckID.PROMPTS_GET_EMPTY, "messages array is empty", _PROMPTS_SPEC
+            )
         )
         return checks
 
@@ -861,7 +924,7 @@ def check_prompts_get(result: Any) -> list[SpecCheck]:
         if not isinstance(message, dict):
             checks.append(
                 _fail(
-                    "prompts-get-item",
+                    CheckID.PROMPTS_GET_ITEM,
                     f"Message {idx} is not an object",
                     _PROMPTS_SPEC,
                 )
@@ -870,7 +933,7 @@ def check_prompts_get(result: Any) -> list[SpecCheck]:
         if not message.get("role"):
             checks.append(
                 _fail(
-                    "prompts-get-role",
+                    CheckID.PROMPTS_GET_ROLE,
                     f"Message {idx} missing role",
                     _PROMPTS_SPEC,
                 )
@@ -878,11 +941,269 @@ def check_prompts_get(result: Any) -> list[SpecCheck]:
         if not message.get("content"):
             checks.append(
                 _fail(
-                    "prompts-get-content",
+                    CheckID.PROMPTS_GET_CONTENT,
                     f"Message {idx} missing content",
                     _PROMPTS_SPEC,
                 )
             )
+
+    return checks
+
+
+def check_completion_complete(result: Any) -> list[SpecCheck]:
+    """Validate completion/complete response shape."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        return checks
+
+    completion = result.get("completion")
+    if completion is None:
+        checks.append(
+            _fail(
+                CheckID.COMPLETION_MISSING,
+                "completion/complete result missing completion object",
+                _COMPLETIONS_SPEC,
+            )
+        )
+        return checks
+
+    if not isinstance(completion, dict):
+        checks.append(
+            _fail(
+                CheckID.COMPLETION_TYPE,
+                "completion/complete result completion is not an object",
+                _COMPLETIONS_SPEC,
+            )
+        )
+        return checks
+
+    values = completion.get("values")
+    if values is None:
+        checks.append(
+            _fail(
+                CheckID.COMPLETION_VALUES_MISSING,
+                "completion/complete result missing values array",
+                _COMPLETIONS_SPEC,
+            )
+        )
+    elif not isinstance(values, list):
+        checks.append(
+            _fail(
+                CheckID.COMPLETION_VALUES_TYPE,
+                "completion/complete result values is not an array",
+                _COMPLETIONS_SPEC,
+            )
+        )
+    else:
+        for idx, val in enumerate(values):
+            if not isinstance(val, str):
+                checks.append(
+                    _fail(
+                        CheckID.COMPLETION_VALUES_ITEM,
+                        f"completion/complete result values[{idx}] is not a string",
+                        _COMPLETIONS_SPEC,
+                    )
+                )
+
+    has_more = completion.get("hasMore")
+    if has_more is not None and not isinstance(has_more, bool):
+        checks.append(
+            _fail(
+                CheckID.COMPLETION_HAS_MORE_TYPE,
+                "completion/complete result hasMore is not a boolean",
+                _COMPLETIONS_SPEC,
+            )
+        )
+
+    total = completion.get("total")
+    if total is not None and (not isinstance(total, int) or isinstance(total, bool)):
+        checks.append(
+            _fail(
+                CheckID.COMPLETION_TOTAL_TYPE,
+                "completion/complete result total is not an integer",
+                _COMPLETIONS_SPEC,
+            )
+        )
+
+    return checks
+
+
+def check_subscribe_result(result: Any) -> list[SpecCheck]:
+    """Validate resources/subscribe response shape (must be EmptyResult {})."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        checks.append(
+            _fail(
+                CheckID.SUBSCRIBE_RESULT_TYPE,
+                "resources/subscribe result is not an object",
+                _RESOURCES_SPEC,
+            )
+        )
+    return checks
+
+
+def check_unsubscribe_result(result: Any) -> list[SpecCheck]:
+    """Validate resources/unsubscribe response shape (must be EmptyResult {})."""
+    checks: list[SpecCheck] = []
+    if not isinstance(result, dict):
+        checks.append(
+            _fail(
+                CheckID.UNSUBSCRIBE_RESULT_TYPE,
+                "resources/unsubscribe result is not an object",
+                _RESOURCES_SPEC,
+            )
+        )
+    return checks
+
+
+def check_progress_notification(payload: dict[str, Any]) -> list[SpecCheck]:
+    """Validate notifications/progress payload shape."""
+    checks: list[SpecCheck] = []
+    params = payload.get("params")
+    if not isinstance(params, dict):
+        checks.append(
+            _fail(
+                CheckID.PROGRESS_PARAMS_TYPE,
+                "notifications/progress params is not an object",
+                _PROTOCOL_SPEC,
+            )
+        )
+        return checks
+
+    token = params.get("progressToken")
+    if token is None:
+        checks.append(
+            _fail(
+                CheckID.PROGRESS_TOKEN_MISSING,
+                "notifications/progress missing progressToken",
+                _PROTOCOL_SPEC,
+            )
+        )
+    elif not isinstance(token, (str, int)) or isinstance(token, bool):
+        checks.append(
+            _fail(
+                CheckID.PROGRESS_TOKEN_TYPE,
+                "notifications/progress progressToken must be string or integer",
+                _PROTOCOL_SPEC,
+            )
+        )
+
+    progress = params.get("progress")
+    if progress is None:
+        checks.append(
+            _fail(
+                CheckID.PROGRESS_VALUE_MISSING,
+                "notifications/progress missing progress value",
+                _PROTOCOL_SPEC,
+            )
+        )
+    elif not isinstance(progress, (int, float)) or isinstance(progress, bool):
+        checks.append(
+            _fail(
+                CheckID.PROGRESS_VALUE_TYPE,
+                "notifications/progress progress must be a number",
+                _PROTOCOL_SPEC,
+            )
+        )
+
+    total = params.get("total")
+    if total is not None and (
+        not isinstance(total, (int, float)) or isinstance(total, bool)
+    ):
+        checks.append(
+            _fail(
+                CheckID.PROGRESS_TOTAL_TYPE,
+                "notifications/progress total must be a number",
+                _PROTOCOL_SPEC,
+            )
+        )
+
+    return checks
+
+
+def check_cancelled_notification(payload: dict[str, Any]) -> list[SpecCheck]:
+    """Validate notifications/cancelled payload shape."""
+    checks: list[SpecCheck] = []
+    params = payload.get("params")
+    if not isinstance(params, dict):
+        checks.append(
+            _fail(
+                CheckID.CANCELLED_PARAMS_TYPE,
+                "notifications/cancelled params is not an object",
+                _PROTOCOL_SPEC,
+            )
+        )
+        return checks
+
+    request_id = params.get("requestId")
+    if request_id is None:
+        checks.append(
+            _fail(
+                CheckID.CANCELLED_REQUEST_ID_MISSING,
+                "notifications/cancelled missing requestId",
+                _PROTOCOL_SPEC,
+            )
+        )
+    elif not isinstance(request_id, (str, int)) or isinstance(request_id, bool):
+        checks.append(
+            _fail(
+                CheckID.CANCELLED_REQUEST_ID_TYPE,
+                "notifications/cancelled requestId must be string or integer",
+                _PROTOCOL_SPEC,
+            )
+        )
+
+    reason = params.get("reason")
+    if reason is not None and not isinstance(reason, str):
+        checks.append(
+            _fail(
+                CheckID.CANCELLED_REASON_TYPE,
+                "notifications/cancelled reason must be a string",
+                _PROTOCOL_SPEC,
+            )
+        )
+
+    return checks
+
+
+def check_list_changed_notification(payload: dict[str, Any]) -> list[SpecCheck]:
+    """Validate list_changed notification payload (params must be object or absent)."""
+    checks: list[SpecCheck] = []
+    params = payload.get("params")
+    if params is not None and not isinstance(params, dict):
+        checks.append(
+            _fail(
+                CheckID.LIST_CHANGED_PARAMS_TYPE,
+                "list_changed notification params must be an object when present",
+                _PROTOCOL_SPEC,
+            )
+        )
+    return checks
+
+
+def check_resources_updated_notification(payload: dict[str, Any]) -> list[SpecCheck]:
+    """Validate notifications/resources/updated payload shape."""
+    checks: list[SpecCheck] = []
+    params = payload.get("params")
+    if not isinstance(params, dict):
+        checks.append(
+            _fail(
+                CheckID.RESOURCES_UPDATED_PARAMS_TYPE,
+                "notifications/resources/updated params is not an object",
+                _RESOURCES_SPEC,
+            )
+        )
+        return checks
+
+    uri = params.get("uri")
+    if not isinstance(uri, str) or not uri:
+        checks.append(
+            _fail(
+                CheckID.RESOURCES_UPDATED_URI_MISSING,
+                "notifications/resources/updated missing uri",
+                _RESOURCES_SPEC,
+            )
+        )
 
     return checks
 
@@ -906,7 +1227,7 @@ def check_sse_event_text(event_text: str) -> list[SpecCheck]:
             if not retry_value.isdigit():
                 checks.append(
                     _warn(
-                        "sse-retry-nonint",
+                        CheckID.SSE_RETRY_NONINT,
                         "SSE retry field is not an integer",
                         _SSE_SPEC,
                     )
@@ -916,7 +1237,7 @@ def check_sse_event_text(event_text: str) -> list[SpecCheck]:
             if not event_id:
                 checks.append(
                     _warn(
-                        "sse-id-empty",
+                        CheckID.SSE_ID_EMPTY,
                         "SSE id field is empty",
                         _SSE_SPEC,
                     )
@@ -924,7 +1245,9 @@ def check_sse_event_text(event_text: str) -> list[SpecCheck]:
 
     if not saw_data:
         checks.append(
-            _warn("sse-no-data", "SSE event contains no data payload", _SSE_SPEC)
+            _warn(
+                CheckID.SSE_NO_DATA, "SSE event contains no data payload", _SSE_SPEC
+            )
         )
 
     return checks
