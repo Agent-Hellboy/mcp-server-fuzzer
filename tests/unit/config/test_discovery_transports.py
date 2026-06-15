@@ -201,6 +201,8 @@ def test_load_custom_transports_logs_with_percent_formatting(monkeypatch):
 
 
 def test_load_custom_transports_invalid_factory_path(monkeypatch):
+    from mcp_fuzzer.config.extensions import transports
+
     dummy_module = SimpleNamespace(DummyTransport=DummyTransport)
 
     def fake_import(name):
@@ -208,14 +210,8 @@ def test_load_custom_transports_invalid_factory_path(monkeypatch):
             return dummy_module
         raise ImportError(name)
 
-    monkeypatch.setattr(
-        "mcp_fuzzer.config.extensions.transports.importlib.import_module",
-        fake_import,
-    )
-    monkeypatch.setattr(
-        "mcp_fuzzer.config.extensions.transports.register_custom_driver",
-        lambda **_kwargs: None,
-    )
+    monkeypatch.setattr(transports.importlib, "import_module", fake_import)
+    monkeypatch.setattr(transports, "register_custom_driver", lambda **_kwargs: None)
 
     config_data = {
         "custom_transports": {
@@ -232,6 +228,8 @@ def test_load_custom_transports_invalid_factory_path(monkeypatch):
 
 
 def test_load_custom_transports_non_callable_factory(monkeypatch):
+    from mcp_fuzzer.config.extensions import transports
+
     dummy_module = SimpleNamespace(DummyTransport=DummyTransport)
     factory_module = SimpleNamespace(not_callable="nope")
 
@@ -242,14 +240,8 @@ def test_load_custom_transports_non_callable_factory(monkeypatch):
             return factory_module
         raise ImportError(name)
 
-    monkeypatch.setattr(
-        "mcp_fuzzer.config.extensions.transports.importlib.import_module",
-        fake_import,
-    )
-    monkeypatch.setattr(
-        "mcp_fuzzer.config.extensions.transports.register_custom_driver",
-        lambda **_kwargs: None,
-    )
+    monkeypatch.setattr(transports.importlib, "import_module", fake_import)
+    monkeypatch.setattr(transports, "register_custom_driver", lambda **_kwargs: None)
 
     config_data = {
         "custom_transports": {
