@@ -114,6 +114,13 @@ SSE_SPEC = {
     ),
 }
 
+PROTOCOL_SPEC = {
+    "spec_id": "MCP-Protocol",
+    "spec_url": (
+        "https://modelcontextprotocol.io/specification/{version}/basic/utilities"
+    ),
+}
+
 
 def spec_variant(
     spec: dict[str, Any],
