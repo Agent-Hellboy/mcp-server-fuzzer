@@ -63,7 +63,11 @@ async def test_protocol_executor_init_with_custom_components():
 @pytest.mark.asyncio
 async def test_execute_success(protocol_executor, mock_transport):
     """Test successful protocol execution."""
-    results = await protocol_executor.execute("InitializeRequest", runs=3)
+    with patch(
+        "mcp_fuzzer.fuzz_engine.executor.protocol_executor.verify_response_invariants",
+        return_value=True,
+    ):
+        results = await protocol_executor.execute("InitializeRequest", runs=3)
     assert len(results) == 3
     for result in results:
         assert result["protocol_type"] == "InitializeRequest"

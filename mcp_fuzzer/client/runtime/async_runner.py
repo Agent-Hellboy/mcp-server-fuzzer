@@ -90,8 +90,10 @@ class AsyncRunner:
             try:
                 self.loop.add_signal_handler(signal.SIGINT, self._cancel_all_tasks)
                 self.loop.add_signal_handler(signal.SIGTERM, self._cancel_all_tasks)
-                self.loop.add_signal_handler(signal.SIGQUIT, self._cancel_all_tasks)
-            except NotImplementedError:
+                sigquit = getattr(signal, "SIGQUIT", None)
+                if sigquit is not None:
+                    self.loop.add_signal_handler(sigquit, self._cancel_all_tasks)
+            except (NotImplementedError, AttributeError):
                 pass
 
     def _cancel_all_tasks(self) -> None:

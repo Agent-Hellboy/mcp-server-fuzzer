@@ -117,7 +117,8 @@ async def test_process_single_protocol_fuzz_success_with_spec_checks():
     ):
         result = await client._process_single_protocol_fuzz("ListPromptsRequest", 0, 1)
 
-    assert result["success"] is True
+    assert result["success"] is False
+    assert result.get("accepted_malformed") is True
     assert result["safety_sanitized"] is True
     assert result["spec_checks"] == [{"id": "spec"}]
     assert result["spec_scope"] == "protocol"
@@ -350,7 +351,8 @@ async def test_process_single_protocol_fuzz_preview_fallback(monkeypatch):
 
     result = await client._process_single_protocol_fuzz("PingRequest", 0, 1)
 
-    assert result["success"] is True
+    assert result["success"] is False
+    assert result.get("accepted_malformed") is True
     assert result["result"]["error"] is None
 
 

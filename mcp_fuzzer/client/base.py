@@ -6,6 +6,7 @@ This module provides the base client class for fuzzing MCP servers.
 """
 
 import logging
+import random
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from ..types import AuthManagerProtocol, ProtocolFuzzResult, ToolRunResult
 
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
+from ..fuzz_engine.mutators.seed_pool import SeedPool
 from .. import spec_guard
 
 
@@ -40,6 +42,7 @@ class MCPFuzzerClient:
         protocol_client: ProtocolClient | None = None,
         corpus_root: str | None = None,
         havoc_mode: bool = False,
+        seed: int | None = None,
     ):
         """
         Initialize the MCP Fuzzer Client.
@@ -66,6 +69,10 @@ class MCPFuzzerClient:
         else:
             self.safety_system = safety_system or SafetyFilter()
 
+        rng = random.Random(seed) if seed is not None else random.Random()
+        self._rng = rng
+        shared_seed_pool = SeedPool(rng=rng)
+
         # Create specialized clients if not provided
         self.tool_client = tool_client or ToolClient(
             transport=transport,
@@ -75,6 +82,7 @@ class MCPFuzzerClient:
             max_concurrency=max_concurrency,
             corpus_root=(Path(corpus_root) if corpus_root else None),
             havoc_mode=havoc_mode,
+            seed_pool=shared_seed_pool,
         )
 
         self.protocol_client = protocol_client or ProtocolClient(
@@ -83,6 +91,7 @@ class MCPFuzzerClient:
             max_concurrency=max_concurrency,
             corpus_root=(Path(corpus_root) if corpus_root else None),
             havoc_mode=havoc_mode,
+            seed_pool=shared_seed_pool,
         )
 
         self._logger = logging.getLogger(__name__)
@@ -93,7 +102,9 @@ class MCPFuzzerClient:
         return self._reporter
 
     def _resolve_tool_timeout(self, tool_timeout: float | None) -> float | None:
-        return tool_timeout or self.tool_timeout
+        if tool_timeout is not None:
+            return tool_timeout
+        return self.tool_timeout
 
     async def _fuzz_protocol_group(
         self, protocol_types: tuple[str, ...], runs_per_type: int, phase: str

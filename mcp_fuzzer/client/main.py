@@ -8,6 +8,7 @@ import os
 from typing import Any
 
 from ..reports import FuzzerReporter
+from ..reports.formatters.plain_summary import write_stdout_summary
 from ..safety_system.safety import SafetyFilter
 from ..exceptions import MCPError
 from ..corpus import build_corpus_root, build_target_id, default_fs_root
@@ -109,6 +110,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
         max_concurrency=config.get("max_concurrency", 5),
         corpus_root=corpus_root,
         havoc_mode=config.get("havoc_mode", False),
+        seed=config.get("seed"),
     )
     reporter = client.reporter
     _set_report_metadata(reporter, config)
@@ -131,22 +133,37 @@ async def unified_client_main(settings: ClientSettings) -> int:
         tool_results = context.tool_results
         protocol_results = context.protocol_results
 
-        try:  # pragma: no cover
-            if (
-                mode in ["tools", "all"]
-                and isinstance(tool_results, dict)
-                and tool_results
-            ):
-                reporter.print_tool_execution_summary(tool_results)
+        # A tools/all run that produced no tool results could not actually
+        # fuzz anything (auth required, unreachable endpoint, or no tools
+        # exposed). Surface this distinctly so exit 0 is not misread.
+        tools_mode = mode in ("tools", "all")
+        tools_fuzzed = isinstance(tool_results, dict) and len(tool_results) > 0
+        no_tools_available = tools_mode and not tools_fuzzed
 
+        try:  # pragma: no cover
+            if mode in ["tools", "all"] and tool_results:
+                reporter.print_tool_execution_summary(tool_results)
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display table summary: {exc}")
 
         try:  # pragma: no cover
-            if isinstance(protocol_results, dict) and protocol_results:
-                reporter.print_protocol_summary(protocol_results)
+            if mode not in ("tools",) and isinstance(protocol_results, dict):
+                if protocol_results:
+                    reporter.print_protocol_summary(protocol_results)
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display protocol summary tables: {exc}")
+
+        try:
+            write_stdout_summary(
+                mode=mode,
+                tool_results=tool_results if isinstance(tool_results, dict) else None,
+                protocol_results=(
+                    protocol_results if isinstance(protocol_results, dict) else None
+                ),
+                blocked=no_tools_available,
+            )
+        except Exception as exc:  # pragma: no cover
+            logging.warning("Failed to write plain stdout summary: %s", exc)
 
         try:  # pragma: no cover
             output_types = config.get("output_types")
@@ -173,6 +190,13 @@ async def unified_client_main(settings: ClientSettings) -> int:
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to export additional report formats: {exc}")
             logging.exception("Export error details:")
+
+        if no_tools_available and config.get("fail_if_no_tools", False):
+            logging.warning(
+                "No tools were available to fuzz; exiting non-zero due to "
+                "--fail-if-no-tools"
+            )
+            return 2
 
         return 0
     except MCPError:

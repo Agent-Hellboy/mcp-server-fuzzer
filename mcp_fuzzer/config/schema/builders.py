@@ -218,6 +218,10 @@ def build_auth_schema() -> dict[str, Any]:
                     "type": "object",
                     "additionalProperties": {"type": "string"},
                 },
+                "tool_mapping": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                },
             },
             "additionalProperties": False,
         },

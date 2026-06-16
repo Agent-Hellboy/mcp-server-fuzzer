@@ -58,10 +58,24 @@ def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> 
         console.print(
             "[bold]🌍 Environment Authentication:[/bold] Using environment variables"
         )
-        # Show which env vars are set
+        # Show which env vars are set (names from auth/loaders.py)
         import os
 
-        env_vars = ["MCP_API_KEY", "MCP_USERNAME", "MCP_PASSWORD", "MCP_TOKEN"]
+        env_vars = [
+            "MCP_API_KEY",
+            "MCP_HEADER_NAME",
+            "MCP_PREFIX",
+            "MCP_USERNAME",
+            "MCP_PASSWORD",
+            "MCP_OAUTH_TOKEN",
+            "MCP_OAUTH_CLIENT_ID",
+            "MCP_OAUTH_CLIENT_SECRET",
+            "MCP_OAUTH_TOKEN_URL",
+            "MCP_OAUTH_SCOPE",
+            "MCP_CUSTOM_HEADERS",
+            "MCP_TOOL_AUTH_MAPPING",
+            "MCP_DEFAULT_AUTH_PROVIDER",
+        ]
         found_vars = [var for var in env_vars if os.getenv(var)]
         if found_vars:
             console.print(
@@ -110,7 +124,7 @@ def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> 
         config_table.add_row(
             "Auth",
             "Environment Variables",
-            "Using MCP_API_KEY, MCP_USERNAME, etc.",
+            "Using MCP_API_KEY, MCP_OAUTH_TOKEN, MCP_USERNAME, etc.",
         )
 
     if not getattr(args, "auth_config", None) and not getattr(args, "auth_env", False):

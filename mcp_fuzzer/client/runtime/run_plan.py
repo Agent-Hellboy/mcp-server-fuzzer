@@ -75,7 +75,6 @@ async def _run_spec_guard_if_enabled(
         len(failed),
     )
     if reporter:
-        reporter.add_spec_checks(checks)
         reporter.print_spec_guard_summary(
             checks,
             requested_version=requested_version,

@@ -8,6 +8,13 @@ from typing import Any
 from .common import SupportsToDict, extract_tool_runs, normalize_report_data
 
 
+def _csv_cell(value: Any) -> str:
+    text = str(value)
+    if text and text[0] in ("=", "+", "-", "@", "\t", "\r", "\n"):
+        return "'" + text
+    return text
+
+
 class CSVFormatter:
     """Handles CSV formatting for reports."""
 
@@ -39,12 +46,12 @@ class CSVFormatter:
                     for i, result in enumerate(runs):
                         writer.writerow(
                             [
-                                tool_name,
+                                _csv_cell(tool_name),
                                 i + 1,
                                 result.get("success", False),
-                                result.get("response_time", ""),
-                                result.get("exception", ""),
-                                str(result.get("args", "")),
-                                result.get("timestamp", ""),
+                                _csv_cell(result.get("response_time", "")),
+                                _csv_cell(result.get("exception", "")),
+                                _csv_cell(result.get("args", "")),
+                                _csv_cell(result.get("timestamp", "")),
                             ]
                         )

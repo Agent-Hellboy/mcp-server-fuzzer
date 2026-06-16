@@ -82,7 +82,8 @@ async def test_fuzz_tool_success_with_auth_and_spec_checks():
 
     result = results[0]
     assert result["args"] == {"x": "clean"}
-    assert result["success"] is True
+    assert result["success"] is False
+    assert result.get("accepted_malformed") is True
     assert result["spec_checks"] == [{"id": "spec"}]
     client._rpc.call_tool.assert_called_once_with(
         "alpha",
@@ -165,7 +166,8 @@ async def test_process_fuzz_results_success_and_spec_checks():
     ):
         results = await client._process_fuzz_results("alpha", [{"args": {"x": 1}}])
 
-    assert results[0]["success"] is True
+    assert results[0]["success"] is False
+    assert results[0].get("accepted_malformed") is True
     assert results[0]["args"] == {"x": 2}
     assert results[0]["spec_checks"] == [{"id": "spec"}]
     client._rpc.call_tool.assert_called_once_with("alpha", {"x": 2, "token": "abc"})
@@ -179,8 +181,8 @@ async def test_fuzz_tool_both_phases_runs():
         safety_system=MagicMock(),
     )
     client.tool_mutator.mutate = AsyncMock(side_effect=[{"a": 1}, {"b": 2}])
-    client._process_fuzz_results = AsyncMock(
-        side_effect=[[{"ok": True}], [{"ok": False}]]
+    client._execute_tool_call = AsyncMock(
+        side_effect=[{"ok": True}, {"ok": False}]
     )
 
     result = await client.fuzz_tool_both_phases({"name": "alpha"}, runs_per_phase=1)
@@ -197,8 +199,8 @@ async def test_fuzz_tool_both_phases_forwards_tool_timeout():
         safety_system=MagicMock(),
     )
     client.tool_mutator.mutate = AsyncMock(side_effect=[{"a": 1}, {"b": 2}])
-    client._process_fuzz_results = AsyncMock(
-        side_effect=[[{"ok": True}], [{"ok": False}]]
+    client._execute_tool_call = AsyncMock(
+        side_effect=[{"ok": True}, {"ok": False}]
     )
 
     await client.fuzz_tool_both_phases(
@@ -207,10 +209,10 @@ async def test_fuzz_tool_both_phases_forwards_tool_timeout():
         tool_timeout=0.25,
     )
 
-    first_timeout = client._process_fuzz_results.await_args_list[0].kwargs[
+    first_timeout = client._execute_tool_call.await_args_list[0].kwargs[
         "tool_timeout"
     ]
-    second_timeout = client._process_fuzz_results.await_args_list[1].kwargs[
+    second_timeout = client._execute_tool_call.await_args_list[1].kwargs[
         "tool_timeout"
     ]
     assert first_timeout == 0.25

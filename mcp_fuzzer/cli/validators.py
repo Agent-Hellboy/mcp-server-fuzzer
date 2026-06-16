@@ -35,10 +35,29 @@ class ValidationManager:
                 "--endpoint is required for fuzzing operations"
             )
 
-        if args.mode == "protocol" and not args.protocol_type:
-            raise ArgumentValidationError(
-                "--protocol-type is required when --mode protocol"
-            )
+        if args.mode == "protocol" and args.protocol_type:
+            from ..protocol_registry import FUZZABLE_PROTOCOL_TYPES
+
+            requested = [
+                part.strip()
+                for part in str(args.protocol_type).split("|")
+                if part.strip()
+            ]
+            if not requested:
+                raise ArgumentValidationError(
+                    "--protocol-type cannot be empty when provided"
+                )
+            unsupported = [
+                name
+                for name in requested
+                if name not in FUZZABLE_PROTOCOL_TYPES
+            ]
+            if unsupported:
+                supported = ", ".join(FUZZABLE_PROTOCOL_TYPES)
+                raise ArgumentValidationError(
+                    "Unsupported protocol type(s): "
+                    f"{', '.join(unsupported)}. Supported: {supported}"
+                )
 
         if args.protocol_type and args.mode != "protocol":
             raise ArgumentValidationError(
@@ -174,7 +193,8 @@ class ValidationManager:
     ) -> bool:
         """Validate a single environment variable."""
         if validation_type == ValidationType.CHOICE:
-            return value.upper() in [c.upper() for c in params.get("choices", [])]
+            choices = params.get("choices", [])
+            return value in choices
         elif validation_type == ValidationType.BOOLEAN:
             return value.lower() in [
                 "true",

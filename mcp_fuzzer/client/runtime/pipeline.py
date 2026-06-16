@@ -36,6 +36,20 @@ class ClientExecutionPipeline:
             logger.error("Requested tool '%s' was not found on the server", tool_name)
         return tool
 
+    @staticmethod
+    def _wrap_tool_results(tool_name: str, payload: Any) -> dict[str, Any]:
+        """Normalize single-tool results into the reporter-friendly dict shape."""
+        if isinstance(payload, dict) and (
+            "runs" in payload
+            or "realistic" in payload
+            or "aggressive" in payload
+            or "error" in payload
+        ):
+            return {tool_name: payload}
+        if isinstance(payload, list):
+            return {tool_name: {"runs": payload}}
+        return {tool_name: {"runs": []}}
+
     async def fuzz_tools(self) -> dict[str, Any]:
         config = self.config
         if config.get("phase") == "both":
@@ -43,9 +57,11 @@ class ClientExecutionPipeline:
                 tool = await self._resolve_requested_tool()
                 if tool is None:
                     return {}
-                return await self.client.fuzz_tool_both_phases(
+                tool_name = tool.get("name", "unknown")
+                phases = await self.client.fuzz_tool_both_phases(
                     tool, runs_per_phase=config.get("runs", 10)
                 )
+                return self._wrap_tool_results(tool_name, phases)
             return await self.client.fuzz_all_tools_both_phases(
                 runs_per_phase=config.get("runs", 10)
             )
@@ -54,9 +70,11 @@ class ClientExecutionPipeline:
             tool = await self._resolve_requested_tool()
             if tool is None:
                 return {}
-            return await self.client.fuzz_tool(
+            tool_name = tool.get("name", "unknown")
+            runs = await self.client.fuzz_tool(
                 tool, runs=config.get("runs", 10)
             )
+            return self._wrap_tool_results(tool_name, runs)
         return await self.client.fuzz_all_tools(
             runs_per_tool=config.get("runs", 10)
         )

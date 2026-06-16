@@ -10,9 +10,8 @@ import asyncio
 import functools
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from types import TracebackType
 from typing import Any, Callable
-
-from hypothesis import strategies as st
 
 
 class AsyncFuzzExecutor:
@@ -25,15 +24,23 @@ class AsyncFuzzExecutor:
         Args:
             max_concurrency: Maximum number of concurrent operations
         """
-        self.max_concurrency = max_concurrency
-        self._semaphore = None  # Will be created lazily when needed
-        self._thread_pool = ThreadPoolExecutor(max_workers=max_concurrency)
+        self.max_concurrency = max(1, max_concurrency)
+        self._semaphore: asyncio.Semaphore | None = None
+        self._semaphore_loop: asyncio.AbstractEventLoop | None = None
+        self._thread_pool: ThreadPoolExecutor | None = None
+        self._shutdown = False
         self._logger = logging.getLogger(__name__)
+        self._ensure_thread_pool()
 
-    def _get_semaphore(self):
-        """Get or create the semaphore lazily."""
-        if self._semaphore is None:
+    def _ensure_thread_pool(self) -> None:
+        if self._thread_pool is None:
+            self._thread_pool = ThreadPoolExecutor(max_workers=self.max_concurrency)
+
+    def _get_semaphore(self) -> asyncio.Semaphore:
+        loop = asyncio.get_running_loop()
+        if self._semaphore is None or self._semaphore_loop is not loop:
             self._semaphore = asyncio.Semaphore(self.max_concurrency)
+            self._semaphore_loop = loop
         return self._semaphore
 
     @staticmethod
@@ -52,10 +59,12 @@ class AsyncFuzzExecutor:
         Returns:
             Dictionary with 'results' and 'errors' lists
         """
+        if self._shutdown:
+            raise RuntimeError("AsyncFuzzExecutor has been shut down")
+
         results = []
         errors = []
 
-        # Create tasks for all operations
         tasks = [
             asyncio.create_task(
                 self._execute_single(func, args, kwargs),
@@ -64,13 +73,10 @@ class AsyncFuzzExecutor:
             for i, (func, args, kwargs) in enumerate(operations)
         ]
 
-        # Wait for all tasks to complete
         completed = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Process results
         for result in completed:
             if isinstance(result, BaseException):
-                # Preserve cancellation semantics
                 if isinstance(result, asyncio.CancelledError):
                     raise result
                 errors.append(result)
@@ -93,19 +99,24 @@ class AsyncFuzzExecutor:
         Returns:
             Result of the function execution
         """
+        if self._shutdown:
+            raise RuntimeError("AsyncFuzzExecutor has been shut down")
+
         async with self._get_semaphore():
             try:
                 if asyncio.iscoroutinefunction(func):
                     return await func(*args, **kwargs)
-                # Run synchronous functions in thread pool (support kwargs)
                 loop = asyncio.get_running_loop()
                 bound = functools.partial(func, *args, **kwargs)
+                self._ensure_thread_pool()
                 return await loop.run_in_executor(self._thread_pool, bound)
             except Exception as e:
-                self._logger.warning(f"Error executing {self._func_name(func)}: {e}")
+                self._logger.warning(
+                    "Error executing %s: %s", self._func_name(func), e
+                )
                 raise
 
-    async def run_hypothesis_strategy(self, strategy: st.SearchStrategy) -> Any:
+    async def run_hypothesis_strategy(self, strategy) -> Any:
         """
         Run a Hypothesis strategy in a thread pool to prevent asyncio deadlocks.
 
@@ -115,9 +126,30 @@ class AsyncFuzzExecutor:
         Returns:
             Generated value from the strategy
         """
+        if self._shutdown:
+            raise RuntimeError("AsyncFuzzExecutor has been shut down")
         loop = asyncio.get_running_loop()
+        self._ensure_thread_pool()
         return await loop.run_in_executor(self._thread_pool, strategy.example)
 
     async def shutdown(self) -> None:
         """Shutdown the executor and clean up resources."""
-        self._thread_pool.shutdown(wait=True)
+        if self._shutdown:
+            return
+        self._shutdown = True
+        if self._thread_pool is not None:
+            self._thread_pool.shutdown(wait=True)
+            self._thread_pool = None
+        self._semaphore = None
+        self._semaphore_loop = None
+
+    async def __aenter__(self) -> "AsyncFuzzExecutor":
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        await self.shutdown()

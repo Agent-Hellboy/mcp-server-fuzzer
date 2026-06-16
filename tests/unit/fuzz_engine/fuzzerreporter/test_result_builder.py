@@ -135,6 +135,7 @@ def test_build_protocol_result_with_invariant_violations(result_builder):
         invariant_violations=violations,
     )
     assert result["invariant_violations"] == violations
+    assert result["success"] is False
 
 
 def test_build_protocol_result_with_empty_invariant_violations(result_builder):

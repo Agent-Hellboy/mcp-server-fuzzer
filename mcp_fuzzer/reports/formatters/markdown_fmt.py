@@ -20,7 +20,8 @@ class MarkdownFormatter:
 
     @staticmethod
     def _escape_cell(value: str) -> str:
-        return value.replace("|", "\\|")
+        escaped = value.replace("|", "\\|")
+        return escaped.replace("\n", " ").replace("\r", " ")
 
     def save_markdown_report(
         self,
@@ -28,6 +29,7 @@ class MarkdownFormatter:
         filename: str,
     ):
         data = normalize_report_data(report_data)
+        mode = str((data.get("metadata") or {}).get("mode", "all"))
         md_content = "# MCP Fuzzer Report\n\n"
 
         if "metadata" in data:
@@ -36,10 +38,10 @@ class MarkdownFormatter:
                 md_content += f"- **{key}**: {value}\n"
             md_content += "\n"
 
-        if "spec_summary" in data:
+        if "spec_summary" in data and mode not in {"tools"}:
             spec_summary = data.get("spec_summary") or {}
             totals = spec_summary.get("totals", {})
-            if totals:
+            if totals.get("total", 0) > 0:
                 md_content += "## Spec Guard Summary\n\n"
                 md_content += (
                     f"- **Total Checks**: {totals.get('total', 0)}\n"
@@ -69,12 +71,12 @@ class MarkdownFormatter:
 
                 for i, result in enumerate(runs):
                     success = CHECK if result.get("success") else CROSS
-                    exception = result.get("exception", "")
+                    exception = self._escape_cell(str(result.get("exception", "")))
                     md_content += f"| {i + 1} | {success} | {exception} |\n"
 
                 md_content += "\n"
 
-        if "protocol_results" in data:
+        if "protocol_results" in data and mode not in {"tools"}:
             protocol_results = data["protocol_results"]
             md_content += "## Protocol Results\n\n"
             md_content += (

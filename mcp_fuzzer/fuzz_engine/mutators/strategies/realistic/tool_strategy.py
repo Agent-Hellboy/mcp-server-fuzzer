@@ -15,7 +15,7 @@ Key principles:
 import asyncio
 import base64
 import math
-import random
+from ...rng_context import lazy_rng as random
 import re
 import string
 import threading

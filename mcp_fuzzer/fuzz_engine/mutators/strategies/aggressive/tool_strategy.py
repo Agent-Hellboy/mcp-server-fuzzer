@@ -14,7 +14,7 @@ Key principles:
 - No random garbage (e.g., "A" * 10000) - use targeted attacks instead
 """
 
-import random
+from ...rng_context import lazy_rng as random
 import string
 from typing import Any
 

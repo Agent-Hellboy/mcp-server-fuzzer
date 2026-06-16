@@ -22,7 +22,8 @@ def main() -> None:
         (
             f"{SHIELD} Command '{command_name}' was blocked to "
             "prevent external app launch during fuzzing. This is a safety feature."
-        )
+        ),
+        file=sys.stderr,
     )
 
     if LOG_FILE:

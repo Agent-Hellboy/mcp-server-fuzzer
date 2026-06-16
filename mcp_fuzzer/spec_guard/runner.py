@@ -7,6 +7,7 @@ import os
 import re
 from typing import Any
 
+from ..spec_versions import is_supported_protocol_version, schema_path_for_version
 from .helpers import (
     COMPLETIONS_SPEC,
     PROMPTS_SPEC,
@@ -19,7 +20,6 @@ from .helpers import (
     warn as _warn,
 )
 from .schema_validator import (
-    SCHEMA_BASE_PATH,
     discover_testable_schemas,
     validate_definition,
 )
@@ -108,8 +108,10 @@ async def run_spec_suite(
                     )
                 )
                 return checks
-            schema_path = SCHEMA_BASE_PATH / server_version / "schema.json"
-            if not version_pattern.match(server_version) or not schema_path.exists():
+            schema_path = schema_path_for_version(server_version)
+            if not version_pattern.match(server_version) or not (
+                is_supported_protocol_version(server_version) and schema_path.exists()
+            ):
                 checks.append(
                     _fail(
                         "protocol-version",
