@@ -53,7 +53,10 @@ def build_authorization_url(
     if scope:
         params["scope"] = scope
     if extra_params:
-        params.update(extra_params)
+        # Never let caller extras overwrite security-critical parameters.
+        for key, value in extra_params.items():
+            if key not in params:
+                params[key] = value
     sep = "&" if urlsplit(authorization_endpoint).query else "?"
     return f"{authorization_endpoint}{sep}{urlencode(params)}"
 
@@ -68,7 +71,9 @@ def _post_token_request(
     timeout: float,
 ) -> dict[str, Any]:
     owns_client = http is None
-    client = http or httpx.Client(timeout=timeout, follow_redirects=True)
+    # Token endpoints must not redirect: a 307/308 would replay the POST body
+    # (authorization code, refresh token, or client secret) to the new target.
+    client = http or httpx.Client(timeout=timeout, follow_redirects=False)
     # Confidential clients authenticate with HTTP Basic; public clients send
     # client_id in the body (token_endpoint_auth_method = none).
     auth = (client_id, client_secret) if client_secret else None
@@ -171,6 +176,11 @@ def request_client_credentials_token(
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, Any]:
     """Obtain a token via the ``client_credentials`` grant (RFC 8707 resource)."""
+    if not client_secret:
+        raise AuthProviderError(
+            "client_credentials grant requires a client_secret "
+            "(confidential client authentication)"
+        )
     data = {"grant_type": "client_credentials", "resource": resource}
     if scope:
         data["scope"] = scope
@@ -187,8 +197,16 @@ def request_client_credentials_token(
 class _CallbackHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - required name
         parsed = urlsplit(self.path)
-        query = parse_qs(parsed.query)
         server: Any = self.server
+        # Ignore unrelated probes (e.g. /favicon.ico) so they cannot satisfy
+        # the wait with an empty/garbage result.
+        expected = getattr(server, "expected_path", None)
+        if expected is not None and parsed.path != expected:
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        query = parse_qs(parsed.query)
         server.oauth_result = {key: values[0] for key, values in query.items()}
         body = (
             b"<html><body><h2>Authorization complete.</h2>"
@@ -219,6 +237,7 @@ class LoopbackRedirectServer:
         self._path = path if path.startswith("/") else f"/{path}"
         self._server = HTTPServer((host, port), _CallbackHandler)
         self._server.oauth_result = None  # type: ignore[attr-defined]
+        self._server.expected_path = self._path  # type: ignore[attr-defined]
         self._thread: threading.Thread | None = None
         bound_host, bound_port = self._server.server_address[:2]
         self.host = str(bound_host)
@@ -255,11 +274,13 @@ class LoopbackRedirectServer:
         )
 
     def close(self) -> None:
-        self._server.shutdown()
-        self._server.server_close()
+        # shutdown() only works (and only avoids deadlock) when serve_forever
+        # is running in another thread; skip it if we never started.
         if self._thread is not None:
+            self._server.shutdown()
             self._thread.join(timeout=2.0)
             self._thread = None
+        self._server.server_close()
 
     def __enter__(self) -> "LoopbackRedirectServer":
         self.start()

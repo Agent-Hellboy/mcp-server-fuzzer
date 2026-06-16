@@ -58,7 +58,16 @@ class MCPOAuthProvider(AuthProvider):
         )
 
     def _cache_key(self) -> tuple[str, str, str | None]:
-        return (self.endpoint_url, self.config.grant_type, self.config.client_id)
+        # Segregate tokens by client identity source and requested scope so a
+        # token issued for a different client (static id, CIMD URL, or DCR) or
+        # a different scope is never reused for the current run.
+        identity = (
+            self.config.client_id
+            or self.config.client_id_metadata_url
+            or "dynamic"
+        )
+        scope = self.config.scope or ""
+        return (self.endpoint_url, f"{self.config.grant_type}:{scope}", identity)
 
     def _build_flow(self) -> MCPAuthorizationFlow:
         return MCPAuthorizationFlow(

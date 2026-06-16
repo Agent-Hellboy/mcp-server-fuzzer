@@ -61,10 +61,13 @@ class TokenStore:
         path = self._path(endpoint_url, grant_type, client_id)
         try:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
-            # Write with owner-only permissions.
+            # Write with owner-only permissions. The mode arg to os.open only
+            # applies on create, so chmod explicitly to also cover rewrites of
+            # an existing file that may have broader permissions.
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle)
+            os.chmod(path, 0o600)
         except OSError as exc:
             logger.debug("Could not persist OAuth token cache: %s", exc)
 

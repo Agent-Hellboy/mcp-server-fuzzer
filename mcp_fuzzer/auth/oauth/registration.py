@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -43,20 +44,24 @@ def register_dynamic_client(
     The returned dict contains at least ``client_id`` (and ``client_secret``
     for confidential clients). Raises ``AuthProviderError`` on failure.
     """
-    payload: dict[str, Any] = {
-        "client_name": client_name,
-        "redirect_uris": redirect_uris,
-        "grant_types": grant_types or ["authorization_code", "refresh_token"],
-        "response_types": response_types or ["code"],
-        "token_endpoint_auth_method": token_endpoint_auth_method,
-    }
+    payload: dict[str, Any] = dict(extra) if extra else {}
+    # Registered metadata fields take precedence over caller-supplied extras.
+    payload.update(
+        {
+            "client_name": client_name,
+            "redirect_uris": redirect_uris,
+            "grant_types": grant_types or ["authorization_code", "refresh_token"],
+            "response_types": response_types or ["code"],
+            "token_endpoint_auth_method": token_endpoint_auth_method,
+        }
+    )
     if scope:
         payload["scope"] = scope
-    if extra:
-        payload.update(extra)
 
     owns_client = http is None
-    client = http or httpx.Client(timeout=timeout, follow_redirects=True)
+    # Registration endpoints must not redirect: a 307/308 would replay the POST
+    # body (which may carry sensitive metadata) to the new target.
+    client = http or httpx.Client(timeout=timeout, follow_redirects=False)
     try:
         response = client.post(
             registration_endpoint,
@@ -104,9 +109,11 @@ def build_client_id_metadata_document(
     ``client_id`` MUST equal the HTTPS document URL exactly and the URL MUST
     use the ``https`` scheme with a path component.
     """
-    if not client_id_url.startswith("https://"):
+    parsed = urlsplit(client_id_url)
+    if parsed.scheme != "https" or not parsed.netloc or parsed.path in ("", "/"):
         raise AuthProviderError(
-            "Client ID Metadata Document URL must use the https scheme"
+            "Client ID Metadata Document URL must be an https URL with a host "
+            f"and a path component, got {client_id_url!r}"
         )
     document: dict[str, Any] = {
         "client_id": client_id_url,

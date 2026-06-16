@@ -79,6 +79,9 @@ class OAuthToken:
     expires_at: float = 0.0
     refresh_token: str | None = None
     scope: str | None = None
+    # Client id that obtained the token, persisted so a cached token can be
+    # refreshed in a later run (e.g. dynamically-registered/CIMD clients).
+    client_id: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -108,6 +111,7 @@ class OAuthToken:
             "expires_at": self.expires_at,
             "refresh_token": self.refresh_token,
             "scope": self.scope,
+            "client_id": self.client_id,
         }
 
     @classmethod
@@ -118,6 +122,7 @@ class OAuthToken:
             expires_at=float(data.get("expires_at") or 0.0),
             refresh_token=data.get("refresh_token"),
             scope=data.get("scope"),
+            client_id=data.get("client_id"),
             raw=data,
         )
 
@@ -149,9 +154,34 @@ class MCPAuthorizationFlow:
         self.rs_metadata: ProtectedResourceMetadata | None = None
         self.as_metadata: AuthorizationServerMetadata | None = None
 
+    def _metadata_from_config(self) -> AuthorizationServerMetadata | None:
+        """Build AS metadata directly from explicitly configured endpoints,
+        bypassing discovery when the caller already knows them."""
+        if not self.config.token_endpoint:
+            return None
+        return AuthorizationServerMetadata(
+            issuer=self.config.issuer,
+            authorization_endpoint=self.config.authorization_endpoint,
+            token_endpoint=self.config.token_endpoint,
+            registration_endpoint=self.config.registration_endpoint,
+            # Assume S256 when endpoints are configured explicitly.
+            code_challenge_methods_supported=["S256"],
+            scopes_supported=[],
+            grant_types_supported=[],
+            token_endpoint_auth_methods_supported=[],
+            client_id_metadata_document_supported=False,
+            metadata_url="(configured)",
+            raw={},
+        )
+
     # -- discovery ---------------------------------------------------------
     def discover(self) -> AuthorizationServerMetadata:
         """Discover the protected-resource and authorization-server metadata."""
+        configured = self._metadata_from_config()
+        if configured is not None:
+            self.as_metadata = configured
+            return configured
+
         self.rs_metadata = fetch_protected_resource_metadata(
             self.endpoint_url,
             self.www_authenticate,
@@ -163,7 +193,13 @@ class MCPAuthorizationFlow:
                 "Could not discover Protected Resource Metadata (RFC 9728) for "
                 f"{self.endpoint_url}"
             )
-        issuer = self.config.issuer or self.rs_metadata.authorization_servers[0]
+        issuer = self.config.issuer
+        if not issuer:
+            if not self.rs_metadata.authorization_servers:
+                raise AuthProviderError(
+                    "Protected Resource Metadata lists no authorization_servers"
+                )
+            issuer = self.rs_metadata.authorization_servers[0]
         self.as_metadata = fetch_authorization_server_metadata(
             issuer, http=self._http, timeout=self.config.timeout
         )
@@ -174,19 +210,23 @@ class MCPAuthorizationFlow:
         return self.as_metadata
 
     def _resolve_scope(self) -> str | None:
+        # Per the MCP scope-selection strategy: explicit config, then the
+        # WWW-Authenticate challenge scope, then the resource server's
+        # scopes_supported (its minimal functional set). The AS scopes_supported
+        # is a full catalogue, not a least-privilege set, so it is not used.
         if self.config.scope:
             return self.config.scope
         if self.challenge_scopes:
             return " ".join(self.challenge_scopes)
         if self.rs_metadata and self.rs_metadata.scopes_supported:
             return " ".join(self.rs_metadata.scopes_supported)
-        if self.as_metadata and self.as_metadata.scopes_supported:
-            return " ".join(self.as_metadata.scopes_supported)
         return None
 
-    def _resolve_client(self, as_metadata: AuthorizationServerMetadata) -> tuple[
-        str, str | None
-    ]:
+    def _resolve_client(
+        self,
+        as_metadata: AuthorizationServerMetadata,
+        redirect_uri: str | None = None,
+    ) -> tuple[str, str | None]:
         """Resolve a client_id (and optional secret) per the spec priority."""
         # 1. Pre-registered static client.
         if self.config.client_id:
@@ -199,11 +239,12 @@ class MCPAuthorizationFlow:
                     "attempting CIMD anyway"
                 )
             return self.config.client_id_metadata_url, None
-        # 3. Dynamic Client Registration.
+        # 3. Dynamic Client Registration -- register the *actual* redirect URI
+        #    so it matches the authorization request (exact-match validation).
         if as_metadata.registration_endpoint:
             registration = register_dynamic_client(
                 as_metadata.registration_endpoint,
-                redirect_uris=[self._redirect_uri_hint()],
+                redirect_uris=[redirect_uri] if redirect_uri else [],
                 client_name=self.config.client_name,
                 scope=self._resolve_scope(),
                 http=self._http,
@@ -214,10 +255,6 @@ class MCPAuthorizationFlow:
             "No client credentials available: provide a client_id, a Client ID "
             "Metadata Document URL, or use an AS that supports dynamic registration"
         )
-
-    def _redirect_uri_hint(self) -> str:
-        # Used for DCR before the loopback server binds; localhost is allowed.
-        return f"http://{self.config.redirect_host}:0{self.config.redirect_path}"
 
     # -- grants ------------------------------------------------------------
     def run(self) -> OAuthToken:
@@ -244,7 +281,9 @@ class MCPAuthorizationFlow:
             http=self._http,
             timeout=self.config.timeout,
         )
-        return OAuthToken.from_response(payload)
+        token = OAuthToken.from_response(payload)
+        token.client_id = self.config.client_id
+        return token
 
     def _run_authorization_code(
         self, as_metadata: AuthorizationServerMetadata
@@ -259,7 +298,6 @@ class MCPAuthorizationFlow:
                 "(code_challenge_methods_supported); refusing to proceed"
             )
 
-        client_id, client_secret = self._resolve_client(as_metadata)
         pkce = generate_pkce()
         state = generate_state()
         scope = self._resolve_scope()
@@ -269,6 +307,12 @@ class MCPAuthorizationFlow:
             port=self.config.redirect_port,
             path=self.config.redirect_path,
         ) as server:
+            # Resolve the client only once the loopback redirect URI is known,
+            # so dynamic registration registers the exact redirect_uri used in
+            # the authorization request.
+            client_id, client_secret = self._resolve_client(
+                as_metadata, redirect_uri=server.redirect_uri
+            )
             auth_url = build_authorization_url(
                 as_metadata.authorization_endpoint,
                 client_id=client_id,
@@ -321,7 +365,8 @@ class MCPAuthorizationFlow:
             timeout=self.config.timeout,
         )
         token = OAuthToken.from_response(payload)
-        # Remember the resolved client for refresh.
+        # Persist the resolved client so a cached token can later be refreshed.
+        token.client_id = client_id
         self._resolved_client_id = client_id
         self._resolved_client_secret = client_secret
         return token
@@ -332,10 +377,15 @@ class MCPAuthorizationFlow:
             raise AuthProviderError("No refresh_token available")
         if not self.as_metadata.token_endpoint:
             raise AuthProviderError("Authorization server has no token_endpoint")
-        client_id = getattr(self, "_resolved_client_id", None) or self.config.client_id
-        client_secret = getattr(
-            self, "_resolved_client_secret", None
-        ) or self.config.client_secret
+        client_id = (
+            token.client_id
+            or getattr(self, "_resolved_client_id", None)
+            or self.config.client_id
+        )
+        client_secret = (
+            getattr(self, "_resolved_client_secret", None)
+            or self.config.client_secret
+        )
         if not client_id:
             raise AuthProviderError("Cannot refresh without a client_id")
         payload = refresh_access_token(

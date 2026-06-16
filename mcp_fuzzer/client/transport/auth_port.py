@@ -21,11 +21,15 @@ def _build_oauth_auth_manager(args: argparse.Namespace):
     if not endpoint:
         raise AuthConfigError("--oauth requires --endpoint to be set")
 
+    # CLI flags win, but fall back to the standard OAuth env vars so --oauth
+    # can be used without putting client credentials on the command line.
     config = OAuthClientConfig(
         grant_type=getattr(args, "oauth_grant", "authorization_code"),
-        client_id=getattr(args, "oauth_client_id", None),
-        client_secret=getattr(args, "oauth_client_secret", None),
-        scope=getattr(args, "oauth_scope", None),
+        client_id=getattr(args, "oauth_client_id", None)
+        or os.getenv("MCP_OAUTH_CLIENT_ID"),
+        client_secret=getattr(args, "oauth_client_secret", None)
+        or os.getenv("MCP_OAUTH_CLIENT_SECRET"),
+        scope=getattr(args, "oauth_scope", None) or os.getenv("MCP_OAUTH_SCOPE"),
         client_id_metadata_url=getattr(args, "oauth_client_id_metadata_url", None),
         open_browser=getattr(args, "oauth_open_browser", False),
     )

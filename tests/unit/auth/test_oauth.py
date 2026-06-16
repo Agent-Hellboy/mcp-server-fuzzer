@@ -76,6 +76,8 @@ def test_build_authorization_url_includes_required_params():
     )
     query = parse_qs(urlsplit(url).query)
     assert query["response_type"] == ["code"]
+    assert query["client_id"] == ["client123"]
+    assert query["redirect_uri"] == ["http://127.0.0.1:5000/callback"]
     assert query["code_challenge_method"] == ["S256"]
     assert query["code_challenge"] == ["abc"]
     assert query["state"] == ["xyz"]
@@ -267,6 +269,7 @@ def test_client_credentials_token_includes_resource():
     assert payload["access_token"] == "cc-tok"
     assert captured["grant_type"] == ["client_credentials"]
     assert captured["resource"] == ["https://mcp.example.com/mcp"]
+    assert captured["scope"] == ["api"]
 
 
 def test_refresh_access_token():
@@ -489,3 +492,92 @@ def test_token_store_persists_across_providers(tmp_path):
 
     assert headers == {"Authorization": "Bearer final-token"}
     assert calls["count"] == 1  # second provider hit the disk cache, no new token
+
+
+# --- review-hardening regressions ------------------------------------------
+
+
+def test_authorization_url_extras_cannot_override_reserved():
+    url = build_authorization_url(
+        "https://auth.example.com/authorize",
+        client_id="client123",
+        redirect_uri="http://127.0.0.1:5000/callback",
+        code_challenge="abc",
+        state="real-state",
+        resource="https://mcp.example.com/mcp",
+        extra_params={"state": "attacker", "prompt": "consent"},
+    )
+    query = parse_qs(urlsplit(url).query)
+    assert query["state"] == ["real-state"]  # reserved param not overridden
+    assert query["prompt"] == ["consent"]  # genuine extra still added
+
+
+def test_client_credentials_requires_secret():
+    with pytest.raises(AuthProviderError, match="client_secret"):
+        request_client_credentials_token(
+            "https://auth.example.com/token",
+            client_id="svc",
+            client_secret=None,
+            resource="https://mcp.example.com/mcp",
+        )
+
+
+def test_cimd_url_must_have_https_and_path():
+    from mcp_fuzzer.auth.oauth import build_client_id_metadata_document
+
+    with pytest.raises(AuthProviderError):
+        build_client_id_metadata_document(
+            "https://example.com", redirect_uris=["http://127.0.0.1:0/callback"]
+        )
+    with pytest.raises(AuthProviderError):
+        build_client_id_metadata_document(
+            "http://example.com/client.json",
+            redirect_uris=["http://127.0.0.1:0/callback"],
+        )
+    doc = build_client_id_metadata_document(
+        "https://example.com/client.json",
+        redirect_uris=["http://127.0.0.1:0/callback"],
+    )
+    assert doc["client_id"] == "https://example.com/client.json"
+
+
+def test_token_roundtrip_preserves_client_id():
+    from mcp_fuzzer.auth.oauth import OAuthToken
+
+    token = OAuthToken(access_token="t", client_id="dyn-client", refresh_token="r")
+    restored = OAuthToken.from_dict(token.to_dict())
+    assert restored.client_id == "dyn-client"
+
+
+def test_flow_uses_configured_endpoints_without_discovery():
+    # token_endpoint configured directly -> no RS/AS metadata fetch needed.
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/token":
+            return httpx.Response(200, json={"access_token": "cfg-tok"})
+        return httpx.Response(404)
+
+    with _mock_client(handler) as http:
+        flow = MCPAuthorizationFlow(
+            "https://mcp.example.com/mcp",
+            OAuthClientConfig(
+                grant_type="client_credentials",
+                client_id="svc",
+                client_secret="secret",
+                token_endpoint="https://auth.example.com/token",
+            ),
+            http=http,
+        )
+        token = flow.run()
+    assert token.access_token == "cfg-tok"
+    assert flow.rs_metadata is None  # discovery skipped
+
+
+def test_loopback_ignores_unrelated_paths():
+    with LoopbackRedirectServer() as server:
+        base = f"http://{server.host}:{server.port}"
+        # A probe to a different path must not satisfy the wait.
+        resp = httpx.get(f"{base}/favicon.ico", timeout=5.0)
+        assert resp.status_code == 404
+        httpx.get(f"{base}/callback?code=abc&state=xyz", timeout=5.0)
+        result = server.wait_for_callback(timeout=5.0)
+    assert result == {"code": "abc", "state": "xyz"}

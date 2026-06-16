@@ -31,8 +31,10 @@ def generate_pkce(n_bytes: int = 32) -> PKCEChallenge:
     The verifier is a high-entropy URL-safe string (43-128 chars per
     RFC 7636 Section 4.1); the challenge is ``BASE64URL(SHA256(verifier))``.
     """
-    # 32 random bytes -> 43-char base64url verifier (within the 43-128 range).
-    verifier = _b64url_no_pad(secrets.token_bytes(max(32, n_bytes)))
+    # RFC 7636: the verifier must be 43-128 chars. base64url yields ~4/3 chars
+    # per byte, so clamp to 32-96 bytes (43-128 chars).
+    n_bytes = min(max(32, n_bytes), 96)
+    verifier = _b64url_no_pad(secrets.token_bytes(n_bytes))
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     challenge = _b64url_no_pad(digest)
     return PKCEChallenge(verifier=verifier, challenge=challenge, method="S256")

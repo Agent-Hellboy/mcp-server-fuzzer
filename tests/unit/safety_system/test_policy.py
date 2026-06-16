@@ -94,12 +94,17 @@ def test_resolve_redirect_safely_cross_origin_to_allowed_host():
         reset_allowed_hosts=True,
         extra_allowed_hosts=["sh.inference.ac", "api.inference.sh"],
     )
-    base = "https://sh.inference.ac"
-    target = "https://api.inference.sh/mcp"
-    assert (
-        resolve_redirect_safely(base, target, deny_network_by_default=True) == target
-    )
-    configure_network_policy(reset_allowed_hosts=True)
+    try:
+        base = "https://sh.inference.ac"
+        target = "https://api.inference.sh/mcp"
+        assert (
+            resolve_redirect_safely(base, target, deny_network_by_default=True)
+            == target
+        )
+    finally:
+        # Reset the global policy even if the assertion fails, to avoid
+        # leaking allowed hosts into other tests.
+        configure_network_policy(reset_allowed_hosts=True)
 
 
 def test_sanitize_subprocess_env_strips_proxies(monkeypatch):

@@ -143,9 +143,8 @@ def fetch_authorization_server_metadata(
             data = _get_json(client, url)
             if data is None:
                 continue
-            if not data.get("token_endpoint") and not data.get(
-                "authorization_endpoint"
-            ):
+            # A usable authorization server must expose a token endpoint.
+            if not data.get("token_endpoint"):
                 continue
             return AuthorizationServerMetadata(
                 issuer=data.get("issuer"),
@@ -162,8 +161,8 @@ def fetch_authorization_server_metadata(
                 token_endpoint_auth_methods_supported=_as_str_list(
                     data.get("token_endpoint_auth_methods_supported")
                 ),
-                client_id_metadata_document_supported=bool(
-                    data.get("client_id_metadata_document_supported")
+                client_id_metadata_document_supported=(
+                    data.get("client_id_metadata_document_supported") is True
                 ),
                 metadata_url=url,
                 raw=data,
