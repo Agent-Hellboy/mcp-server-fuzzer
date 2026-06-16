@@ -14,24 +14,37 @@ class TestInit(unittest.TestCase):
 
     def test_version_check_raises_on_old_python(self):
         """Test that importing with Python < 3.10 raises RuntimeError."""
-        # Clear module cache
-        if "mcp_fuzzer" in sys.modules:
-            del sys.modules["mcp_fuzzer"]
-            # Also clear submodules
-            modules_to_remove = [
-                k for k in list(sys.modules.keys()) if k.startswith("mcp_fuzzer")
-            ]
-            for module in modules_to_remove:
-                del sys.modules[module]
+        # Snapshot the original mcp_fuzzer modules so we can restore the exact
+        # same objects afterwards. Re-importing creates fresh module objects with
+        # *new* exception classes; if we leak those, ``except (TransportError, ...)``
+        # checks elsewhere stop matching (class identity changes) and unrelated
+        # tests fail depending on execution order.
+        saved = {
+            k: v
+            for k, v in sys.modules.items()
+            if k == "mcp_fuzzer" or k.startswith("mcp_fuzzer.")
+        }
+        for module in saved:
+            del sys.modules[module]
 
-        with patch.object(sys, "version_info", (3, 9, 0)), patch.object(
-            sys, "version", "3.9.0"
-        ):
-            with self.assertRaises(RuntimeError) as ctx:
-                importlib.import_module("mcp_fuzzer")
-        error_msg = str(ctx.exception)
-        self.assertIn("Python 3.10+", error_msg)
-        self.assertIn("3.9.0", error_msg)
+        try:
+            with patch.object(sys, "version_info", (3, 9, 0)), patch.object(
+                sys, "version", "3.9.0"
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    importlib.import_module("mcp_fuzzer")
+            error_msg = str(ctx.exception)
+            self.assertIn("Python 3.10+", error_msg)
+            self.assertIn("3.9.0", error_msg)
+        finally:
+            # Drop anything (re)imported during this test, then restore originals.
+            for module in [
+                k
+                for k in list(sys.modules)
+                if k == "mcp_fuzzer" or k.startswith("mcp_fuzzer.")
+            ]:
+                del sys.modules[module]
+            sys.modules.update(saved)
 
     def test_import_succeeds_with_python_310_plus(self):
         """Test that import succeeds with Python 3.10+."""

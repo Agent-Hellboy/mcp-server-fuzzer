@@ -258,6 +258,60 @@ Examples:
         action="store_true",
         help="Load authentication from environment variables",
     )
+    parser.add_argument(
+        "--oauth",
+        action="store_true",
+        help=(
+            "Authenticate against the MCP server's OAuth 2.1 authorization server "
+            "(MCP 2025-11-25 spec): discovers RFC 9728/8414 metadata and obtains a "
+            "bearer token. Used with --endpoint."
+        ),
+    )
+    parser.add_argument(
+        "--oauth-grant",
+        choices=["authorization_code", "client_credentials"],
+        default="authorization_code",
+        help=(
+            "OAuth grant to use: 'authorization_code' (PKCE, browser-based, "
+            "user-delegated) or 'client_credentials' (machine-to-machine)."
+        ),
+    )
+    parser.add_argument(
+        "--oauth-client-id",
+        help="Pre-registered OAuth client_id (skips dynamic registration).",
+    )
+    parser.add_argument(
+        "--oauth-client-secret",
+        help="OAuth client_secret for confidential clients.",
+    )
+    parser.add_argument(
+        "--oauth-scope",
+        help="OAuth scope(s) to request (space-separated).",
+    )
+    parser.add_argument(
+        "--oauth-client-id-metadata-url",
+        help=(
+            "HTTPS URL of a Client ID Metadata Document to use as the client_id."
+        ),
+    )
+    parser.add_argument(
+        "--oauth-open-browser",
+        action="store_true",
+        help=(
+            "Auto-open the default browser for the authorization-code flow. "
+            "Off by default for unattended fuzzing -- the URL is printed instead. "
+            "(For fully non-interactive runs, prefer "
+            "--oauth-grant client_credentials.)"
+        ),
+    )
+    parser.add_argument(
+        "--oauth-no-token-cache",
+        action="store_true",
+        help=(
+            "Disable the on-disk OAuth token cache. By default the token is "
+            "cached so the browser authorization step happens at most once."
+        ),
+    )
 
     parser.add_argument(
         "--enable-safety-system",

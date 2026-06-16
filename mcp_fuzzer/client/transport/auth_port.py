@@ -9,15 +9,46 @@ import os
 from ...auth import load_auth_config, setup_auth_from_env
 
 
+def _build_oauth_auth_manager(args: argparse.Namespace):
+    """Build an AuthManager backed by the MCP OAuth 2.1 authorization flow."""
+    from ...auth import AuthManager
+    from ...auth.oauth import MCPOAuthProvider, OAuthClientConfig
+    from ...exceptions import AuthConfigError
+
+    endpoint = getattr(args, "endpoint", None)
+    if not endpoint:
+        raise AuthConfigError("--oauth requires --endpoint to be set")
+
+    config = OAuthClientConfig(
+        grant_type=getattr(args, "oauth_grant", "authorization_code"),
+        client_id=getattr(args, "oauth_client_id", None),
+        client_secret=getattr(args, "oauth_client_secret", None),
+        scope=getattr(args, "oauth_scope", None),
+        client_id_metadata_url=getattr(args, "oauth_client_id_metadata_url", None),
+        open_browser=getattr(args, "oauth_open_browser", False),
+    )
+    use_cache = not getattr(args, "oauth_no_token_cache", False)
+    manager = AuthManager()
+    manager.add_auth_provider(
+        "mcp_oauth",
+        MCPOAuthProvider(endpoint, config, use_token_cache=use_cache),
+    )
+    manager.set_default_provider("mcp_oauth")
+    return manager
+
+
 def resolve_auth_port(args: argparse.Namespace):
     """Port for resolving authentication managers.
-    
+
     Priority order:
-    1. --auth-config file (if provided)
-    2. --auth-env flag (if explicitly set)
-    3. Environment variables (if any auth vars are set, auto-detect)
-    4. None (no auth)
+    1. --oauth flag (MCP 2025-11-25 OAuth 2.1 authorization flow)
+    2. --auth-config file (if provided)
+    3. --auth-env flag (if explicitly set)
+    4. Environment variables (if any auth vars are set, auto-detect)
+    5. None (no auth)
     """
+    if getattr(args, "oauth", False):
+        return _build_oauth_auth_manager(args)
     if getattr(args, "auth_config", None):
         return load_auth_config(args.auth_config)
     if getattr(args, "auth_env", False):
