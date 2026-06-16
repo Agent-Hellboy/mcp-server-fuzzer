@@ -31,6 +31,7 @@ class TextFormatter:
         filename: str,
     ):
         data = normalize_report_data(report_data)
+        mode = str((data.get("metadata") or {}).get("mode", "all"))
         with open(filename, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
             f.write("MCP FUZZER REPORT\n")
@@ -58,7 +59,7 @@ class TextFormatter:
                     )
                     f.write(f"Tool Success Rate: {tools['success_rate']:.1f}%\n\n")
 
-                if "protocols" in summary:
+                if "protocols" in summary and mode not in {"tools"}:
                     protocols = summary["protocols"]
                     f.write(
                         f"Protocol Types Tested: {protocols['total_protocol_types']}\n"
@@ -80,10 +81,10 @@ class TextFormatter:
                         f"Protocol Success Rate: {protocols['success_rate']:.1f}%\n\n"
                     )
 
-            if "spec_summary" in data:
+            if "spec_summary" in data and mode not in {"tools"}:
                 spec_summary = data.get("spec_summary") or {}
                 totals = spec_summary.get("totals", {})
-                if totals:
+                if totals.get("total", 0) > 0:
                     f.write("SPEC GUARD SUMMARY\n")
                     f.write("-" * 40 + "\n")
                     f.write(f"Total Checks: {totals.get('total', 0)}\n")
@@ -117,7 +118,7 @@ class TextFormatter:
                             f"  Success Rate: {float(stats['success_rate']):.1f}%\n"
                         )
 
-            if "protocol_results" in data:
+            if "protocol_results" in data and mode not in {"tools"}:
                 f.write("\n\nPROTOCOL FUZZING RESULTS\n")
                 f.write("-" * 40 + "\n")
                 for protocol_type, results in data["protocol_results"].items():

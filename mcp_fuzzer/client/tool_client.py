@@ -12,7 +12,9 @@ from typing import Any
 
 from ..auth import AuthManager
 from .. import spec_guard
+from ..outcomes import FuzzOutcome, classify_tool_run, is_server_rejection_error
 from ..fuzz_engine.mutators import ToolMutator
+from ..fuzz_engine.mutators.seed_pool import SeedPool
 from ..safety_system.safety import SafetyFilter, CombinedSafetyProvider
 from ..types import ErrorType, TimeoutScope, ToolRunResult
 
@@ -38,6 +40,7 @@ class ToolClient:
         enable_safety: bool = True,
         corpus_root: Path | None = None,
         havoc_mode: bool = False,
+        seed_pool: SeedPool | None = None,
     ):
         """
         Initialize the tool client.
@@ -57,8 +60,11 @@ class ToolClient:
         else:
             self.safety_system = safety_system or SafetyFilter()
         self.tool_mutator = ToolMutator(
-            corpus_dir=corpus_root, havoc_mode=havoc_mode
+            corpus_dir=corpus_root,
+            havoc_mode=havoc_mode,
+            seed_pool=seed_pool,
         )
+        self.max_concurrency = max(1, max_concurrency)
         self._logger = logging.getLogger(__name__)
         self._tool_schema_checks: dict[str, list[dict[str, Any]]] = {}
 
@@ -76,6 +82,8 @@ class ToolClient:
         timeout_scope: TimeoutScope | None = None,
         spec_checks: list[dict[str, Any]] | None = None,
         spec_scope: str | None = None,
+        outcome: FuzzOutcome | str | None = None,
+        accepted_malformed: bool = False,
     ) -> ToolRunResult:
         payload: ToolRunResult = {
             "args": args,
@@ -97,6 +105,10 @@ class ToolClient:
             payload["spec_checks"] = spec_checks
         if spec_scope is not None:
             payload["spec_scope"] = spec_scope
+        if outcome is not None:
+            payload["outcome"] = str(outcome)
+        if accepted_malformed:
+            payload["accepted_malformed"] = True
         return payload
 
     @staticmethod
@@ -165,15 +177,18 @@ class ToolClient:
                 spec_checks=spec_checks,
                 response_signature=response_signature,
             )
+            success, outcome = classify_tool_run(result=result)
             call_result = self._build_tool_run_result(
                 args=sanitized_args,
                 label=label,
-                success=True,
+                success=success,
                 safety_blocked=False,
                 safety_sanitized=safety_sanitized,
                 result=result,
                 spec_checks=spec_checks,
                 spec_scope="tool_result" if spec_checks else None,
+                outcome=outcome,
+                accepted_malformed=outcome == FuzzOutcome.ACCEPTED_MALFORMED,
             )
         except asyncio.TimeoutError:
             exception = self._tool_timeout_message(tool_timeout)
@@ -198,14 +213,21 @@ class ToolClient:
             self.tool_mutator.record_feedback(
                 tool_name, sanitized_args, exception=str(e)
             )
+            if is_server_rejection_error(e):
+                success, outcome = True, FuzzOutcome.SERVER_REJECTED
+                error = None
+            else:
+                success, outcome = classify_tool_run(exception=e)
+                error = ErrorType.TOOL_CALL_FAILED
             call_result = self._build_tool_run_result(
                 args=sanitized_args,
                 label=label,
-                success=False,
+                success=success,
                 safety_blocked=False,
                 safety_sanitized=safety_sanitized,
-                error=ErrorType.TOOL_CALL_FAILED,
-                exception=str(e),
+                error=error,
+                exception=str(e) if not success else None,
+                outcome=outcome,
             )
 
         return call_result
@@ -315,10 +337,20 @@ class ToolClient:
                     success=False,
                     safety_blocked=False,
                     safety_sanitized=False,
-                    error=str(e),
+                    error=ErrorType.PHASE_EXECUTION_FAILED,
                     exception=str(e),
                 )
             ]
+
+    async def _run_bounded(self, count: int, factory) -> list[Any]:
+        """Run up to ``count`` async factories with concurrency limiting."""
+        semaphore = asyncio.Semaphore(self.max_concurrency)
+
+        async def _limited(index: int):
+            async with semaphore:
+                return await factory(index)
+
+        return list(await asyncio.gather(*(_limited(i) for i in range(count))))
 
     async def fuzz_tool(
         self,
@@ -327,40 +359,33 @@ class ToolClient:
         tool_timeout: float | None = None,
     ) -> list[dict[str, Any]]:
         """Fuzz a tool by calling it with random/edge-case arguments."""
-        results = []
         tool_name = tool.get("name", "unknown")
 
-        for i in range(runs):
+        async def _one_run(_index: int) -> dict[str, Any]:
             try:
-                # Generate fuzz arguments using the mutator
                 args = await self.tool_mutator.mutate(tool)
-
-                # High-level run progress at DEBUG to avoid noise
-                self._logger.debug("Fuzzing %s (run %d/%d)", tool_name, i + 1, runs)
-                results.append(
-                    await self._execute_tool_call(
-                        tool_name,
-                        args,
-                        label=f"tool:{tool_name}",
-                        tool_timeout=tool_timeout,
-                    )
+                self._logger.debug(
+                    "Fuzzing %s (run %d/%d)", tool_name, _index + 1, runs
                 )
-
+                return await self._execute_tool_call(
+                    tool_name,
+                    args,
+                    label=f"tool:{tool_name}",
+                    tool_timeout=tool_timeout,
+                )
             except Exception as e:
                 self._logger.warning("Exception during fuzzing %s: %s", tool_name, e)
-                results.append(
-                    self._build_tool_run_result(
-                        args=None,
-                        label=f"tool:{tool_name}",
-                        success=False,
-                        safety_blocked=False,
-                        safety_sanitized=False,
-                        error=ErrorType.TOOL_MUTATION_FAILED,
-                        exception=str(e),
-                    )
+                return self._build_tool_run_result(
+                    args=None,
+                    label=f"tool:{tool_name}",
+                    success=False,
+                    safety_blocked=False,
+                    safety_sanitized=False,
+                    error=ErrorType.TOOL_MUTATION_FAILED,
+                    exception=str(e),
                 )
 
-        return results
+        return await self._run_bounded(runs, _one_run)
 
     async def fuzz_all_tools(
         self,
@@ -517,18 +542,20 @@ class ToolClient:
     ) -> list[dict[str, Any]]:
         tool_name = tool.get("name", "unknown")
         self._logger.info("%s phase: %s", phase_name.title(), tool_name)
-        fuzz_results = []
-        for _ in range(runs):
+
+        async def _one_run(_index: int) -> dict[str, Any]:
             if mutate_phase is None:
                 args = await self.tool_mutator.mutate(tool)
             else:
                 args = await self.tool_mutator.mutate(tool, phase=mutate_phase)
-            fuzz_results.append({"args": args})
-        return await self._process_fuzz_results(
-            tool_name,
-            fuzz_results,
-            tool_timeout=tool_timeout,
-        )
+            return await self._execute_tool_call(
+                tool_name,
+                args,
+                label=f"tool:{tool_name}",
+                tool_timeout=tool_timeout,
+            )
+
+        return await self._run_bounded(runs, _one_run)
 
     async def fuzz_tool_both_phases(
         self,

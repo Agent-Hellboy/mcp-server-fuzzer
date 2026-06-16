@@ -23,7 +23,13 @@ class MetricsCalculator:
         """
         total = len(results)
         successful = len([r for r in results if r.get("success", False)])
-        exceptions = len([r for r in results if not r.get("success", False)])
+        exceptions = len(
+            [
+                r
+                for r in results
+                if r.get("exception") is not None and not r.get("safety_blocked", False)
+            ]
+        )
 
         return {
             "total": total,

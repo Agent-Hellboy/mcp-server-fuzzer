@@ -21,5 +21,7 @@ def test_default_shim_main(tmp_path, monkeypatch, capsys):
     assert exc.value.code == 0
     assert log_file.exists()
     assert "blocked-cmd" in log_file.read_text()
+    err = default_shim.sys.stderr.getvalue()
+    assert "Command 'blocked-cmd' was blocked" in err
     out = capsys.readouterr().out
-    assert "Command 'blocked-cmd' was blocked" in out
+    assert "Command 'blocked-cmd' was blocked" not in out

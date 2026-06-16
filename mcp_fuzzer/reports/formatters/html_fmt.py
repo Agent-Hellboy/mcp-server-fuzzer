@@ -25,6 +25,7 @@ class HTMLFormatter:
         title: str = "Fuzzing Results Report",
     ):
         data = normalize_report_data(report_data)
+        mode = str((data.get("metadata") or {}).get("mode", "all"))
         escaped_title = escape(title)
         html_content = f"""
 <!DOCTYPE html>
@@ -54,10 +55,10 @@ class HTMLFormatter:
                 )
             html_content += "</ul>"
 
-        if "spec_summary" in data:
+        if "spec_summary" in data and mode not in {"tools"}:
             spec_summary = data.get("spec_summary") or {}
             totals = spec_summary.get("totals", {})
-            if totals:
+            if totals.get("total", 0) > 0:
                 html_content += "<h2>Spec Guard Summary</h2>"
                 html_content += "<ul>"
                 total_checks = escape(str(totals.get("total", 0)))
@@ -110,7 +111,7 @@ class HTMLFormatter:
 
             html_content += "</table>"
 
-        if "protocol_results" in data:
+        if "protocol_results" in data and mode not in {"tools"}:
             protocol_results = data["protocol_results"]
             html_content += "<h2>Protocol Results</h2><table>"
             html_content += (

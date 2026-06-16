@@ -101,7 +101,7 @@ class ResultBuilder:
             "protocol_type": protocol_type,
             "run": run_index + 1,
             "fuzz_data": fuzz_data,
-            "success": server_error is None,
+            "success": server_error is None and not (invariant_violations or []),
             "server_response": server_response,
             "server_error": server_error,
             "server_rejected_input": server_error is not None,

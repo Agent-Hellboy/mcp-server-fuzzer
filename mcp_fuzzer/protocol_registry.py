@@ -98,3 +98,33 @@ EXECUTABLE_PROTOCOL_TYPES: tuple[str, ...] = DEFAULT_PROTOCOL_TYPES + (
     "CancelledNotification",
     "GenericJSONRPCRequest",
 )
+
+# JSON-RPC method metadata for schema-less fallback fuzzing: (method, is_notification).
+EXECUTABLE_PROTOCOL_METHODS: dict[str, tuple[str, bool]] = {
+    "InitializeRequest": ("initialize", False),
+    "InitializedNotification": ("notifications/initialized", True),
+    "ProgressNotification": ("notifications/progress", True),
+    "CancelledNotification": ("notifications/cancelled", True),
+    "ListToolsRequest": ("tools/list", False),
+    "CallToolRequest": ("tools/call", False),
+    "ListResourcesRequest": ("resources/list", False),
+    "ReadResourceRequest": ("resources/read", False),
+    "ListResourceTemplatesRequest": ("resources/templates/list", False),
+    "SetLevelRequest": ("logging/setLevel", False),
+    "CreateMessageRequest": ("sampling/createMessage", False),
+    "ListPromptsRequest": ("prompts/list", False),
+    "GetPromptRequest": ("prompts/get", False),
+    "ListRootsRequest": ("roots/list", False),
+    "SubscribeRequest": ("resources/subscribe", False),
+    "UnsubscribeRequest": ("resources/unsubscribe", False),
+    "CompleteRequest": ("completion/complete", False),
+    "ElicitRequest": ("elicitation/create", False),
+    "ListTasksRequest": ("tasks/list", False),
+    "GetTaskRequest": ("tasks/get", False),
+    "GetTaskPayloadRequest": ("tasks/result", False),
+    "CancelTaskRequest": ("tasks/cancel", False),
+    "PingRequest": ("ping", False),
+    "GenericJSONRPCRequest": ("tools/list", False),
+}
+
+FUZZABLE_PROTOCOL_TYPES: tuple[str, ...] = tuple(EXECUTABLE_PROTOCOL_METHODS.keys())

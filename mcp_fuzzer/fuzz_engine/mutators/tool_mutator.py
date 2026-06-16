@@ -15,6 +15,7 @@ from .strategies import ToolStrategies
 from .seed_pool import SeedPool
 from .seed_mutation import mutate_seed_payload
 from .utils import havoc_stack
+from .rng_context import fuzz_rng_scope
 
 
 class ToolMutator(Mutator):
@@ -61,12 +62,13 @@ class ToolMutator(Mutator):
             Dictionary of fuzzed tool arguments
         """
         tool_name = tool.get("name", "unknown")
-        if self.seed_pool.should_reseed(self._seed_ratio_for_phase(phase)):
-            seed = self.seed_pool.pick_seed(tool_name)
-            if isinstance(seed, dict):
-                stack = self._havoc_stack()
-                return mutate_seed_payload(seed, stack=stack)
-        return await self.strategies.fuzz_tool_arguments(tool, phase=phase)
+        with fuzz_rng_scope(self._rng):
+            if self.seed_pool.should_reseed(self._seed_ratio_for_phase(phase)):
+                seed = self.seed_pool.pick_seed(tool_name)
+                if isinstance(seed, dict):
+                    stack = self._havoc_stack()
+                    return mutate_seed_payload(seed, stack=stack, rng=self._rng)
+            return await self.strategies.fuzz_tool_arguments(tool, phase=phase)
 
     def record_feedback(
         self,

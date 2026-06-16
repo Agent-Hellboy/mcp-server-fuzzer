@@ -10,6 +10,7 @@ from ..version import VERSION
 
 def create_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="mcp-fuzzer",
         description="MCP Fuzzer - Comprehensive fuzzing for MCP servers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
@@ -99,9 +100,9 @@ Examples:
     parser.add_argument(
         "--protocol",
         type=str,
-        choices=["http", "sse", "stdio", "streamablehttp"],
+        choices=["http", "https", "sse", "stdio", "streamablehttp"],
         default="http",
-        help="Transport protocol to use (http, sse, stdio, streamablehttp)",
+        help="Transport protocol to use (http, https, sse, stdio, streamablehttp)",
     )
     parser.add_argument(
         "--endpoint",
@@ -298,9 +299,16 @@ Examples:
         ),
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for reproducible fuzz payload generation",
+    )
+
+    parser.add_argument(
         "--output-dir",
         metavar="DIRECTORY",
-        default="reports",
+        default=None,
         help="Directory to save reports and exports (default: reports)",
     )
     parser.add_argument(

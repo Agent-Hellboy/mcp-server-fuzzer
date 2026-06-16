@@ -50,6 +50,7 @@ class StdioDriver(TransportDriver):
         self.stdin = None
         self.stdout = None
         self.stderr = None
+        self._stderr_drain_task: asyncio.Task | None = None
         self._lock = None  # Will be created lazily when needed
         self._initialized = False
         self._mcp_initialized = False
@@ -169,6 +170,7 @@ class StdioDriver(TransportDriver):
                 self.stdin = self.process.stdin
                 self.stdout = self.process.stdout
                 self.stderr = self.process.stderr
+                self._start_stderr_drain()
 
                 # Register with process manager for monitoring
                 if hasattr(self.process, "pid"):
@@ -202,6 +204,29 @@ class StdioDriver(TransportDriver):
     def _get_activity_timestamp(self) -> float:
         """Callback for process manager to get last activity timestamp."""
         return self._last_activity
+
+    def _start_stderr_drain(self) -> None:
+        if self.stderr is None:
+            return
+        if self._stderr_drain_task is not None and not self._stderr_drain_task.done():
+            return
+        self._stderr_drain_task = asyncio.create_task(self._drain_stderr())
+
+    async def _drain_stderr(self) -> None:
+        if self.stderr is None:
+            return
+        try:
+            while True:
+                line = await self.stderr.readline()
+                if not line:
+                    break
+                decoded = line.decode(errors="replace").rstrip()
+                if decoded:
+                    logging.debug("stdio stderr: %s", decoded[-500:])
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logging.debug("stdio stderr drain stopped: %s", exc)
 
     async def _send_message(self, message: dict[str, Any]) -> None:
         """Send a message to the subprocess."""
@@ -461,6 +486,15 @@ class StdioDriver(TransportDriver):
         except Exception as e:
             logging.warning(f"Error stopping stdio transport process: {e}")
         finally:
+            if self._stderr_drain_task is not None:
+                self._stderr_drain_task.cancel()
+                try:
+                    await self._stderr_drain_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
+                self._stderr_drain_task = None
             self._initialized = False
             self.process = None
             self.stdin = None

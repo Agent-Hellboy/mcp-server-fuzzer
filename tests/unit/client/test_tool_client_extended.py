@@ -95,7 +95,8 @@ class TestFuzzTool:
         results = await tool_client.fuzz_tool(tool, runs=2)
         
         assert len(results) == 2
-        assert all(r.get("success") for r in results)
+        assert all(r.get("accepted_malformed") for r in results)
+        assert all(r.get("success") is False for r in results)
 
     @pytest.mark.asyncio
     async def test_fuzz_tool_safety_blocked(self, tool_client, mock_safety):
@@ -249,7 +250,8 @@ class TestFuzzSingleToolWithTimeout:
         results = await tool_client._fuzz_single_tool_with_timeout(tool, 1)
         
         assert len(results) == 1
-        assert "unexpected error" in results[0]["error"]
+        assert results[0]["error"] == "phase_execution_failed"
+        assert "unexpected error" in results[0]["exception"]
 
 
 class TestFuzzToolBothPhases:
@@ -260,14 +262,14 @@ class TestFuzzToolBothPhases:
         """Test successful two-phase fuzzing."""
         tool = {"name": "test_tool"}
         tool_client.tool_mutator.mutate = AsyncMock(return_value={})
-        tool_client._process_fuzz_results = AsyncMock(return_value=[{"success": True}])
+        tool_client._execute_tool_call = AsyncMock(return_value={"success": True})
         
         results = await tool_client.fuzz_tool_both_phases(tool, runs_per_phase=2)
         
         assert "realistic" in results
         assert "aggressive" in results
-        assert len(results["realistic"]) == 1
-        assert len(results["aggressive"]) == 1
+        assert len(results["realistic"]) == 2
+        assert len(results["aggressive"]) == 2
 
     @pytest.mark.asyncio
     async def test_both_phases_exception(self, tool_client):
@@ -297,7 +299,8 @@ class TestProcessFuzzResults:
         results = await tool_client._process_fuzz_results("test_tool", fuzz_results)
         
         assert len(results) == 1
-        assert results[0]["success"] is True
+        assert results[0]["success"] is False
+        assert results[0].get("accepted_malformed") is True
 
     @pytest.mark.asyncio
     async def test_process_results_safety_blocked(self, tool_client, mock_safety):

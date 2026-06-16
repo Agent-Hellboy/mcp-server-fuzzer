@@ -60,12 +60,15 @@ class ProtocolExecutor:
         self.collector = result_collector or ResultCollector()
         self._logger = logging.getLogger(__name__)
         # Bound concurrent protocol-type tasks
-        self._type_semaphore = None  # Will be created lazily when needed
+        self._type_semaphore: asyncio.Semaphore | None = None
+        self._type_semaphore_loop: asyncio.AbstractEventLoop | None = None
 
     def _get_type_semaphore(self):
-        """Get or create the type semaphore lazily."""
-        if self._type_semaphore is None:
+        """Get or create the type semaphore for the running event loop."""
+        loop = asyncio.get_running_loop()
+        if self._type_semaphore is None or self._type_semaphore_loop is not loop:
             self._type_semaphore = asyncio.Semaphore(self.executor.max_concurrency)
+            self._type_semaphore_loop = loop
         return self._type_semaphore
 
     async def execute(

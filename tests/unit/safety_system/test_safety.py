@@ -585,7 +585,7 @@ def test_get_blocked_operations_summary_counts(safety_filter):
         {
             "tool_name": "tool_a",
             "reason": "Reason B",
-            "dangerous_content": ["Command in 'arg': rm -rf /"],
+            "dangerous_content": ["COMMAND in 'arg': rm -rf /"],
         },
         {
             "tool_name": "tool_b",
