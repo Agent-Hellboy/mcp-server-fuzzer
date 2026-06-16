@@ -8,26 +8,65 @@ from typing import Any
 from .common import extract_tool_runs, summarize_tool_runs
 
 
+def _tool_outcome_buckets(runs: list[dict[str, Any]]) -> dict[str, int]:
+    """Group tool runs by outcome so a server *rejecting* malformed input is not
+    conflated with a transport/protocol anomaly (clarifies "findings")."""
+    buckets = {"server_rejected": 0, "accepted_malformed": 0, "anomaly": 0}
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        outcome = run.get("outcome")
+        if outcome == "server_rejected":
+            buckets["server_rejected"] += 1
+        elif outcome == "accepted_malformed" or run.get("accepted_malformed"):
+            buckets["accepted_malformed"] += 1
+        elif outcome in {"transport_error", "timeout", "phase_failed"}:
+            buckets["anomaly"] += 1
+    return buckets
+
+
 def write_stdout_summary(
     *,
     mode: str,
     tool_results: dict[str, Any] | None,
     protocol_results: dict[str, Any] | None,
+    blocked: bool = False,
 ) -> None:
-    """Write a plain-text fuzzing summary to stdout (always, not only on TTY)."""
+    """Write a plain-text fuzzing summary to stdout (always, not only on TTY).
+
+    ``blocked`` marks a run that could not start (no tools available, e.g. auth
+    required or unreachable endpoint), so callers/CI can tell it apart from a
+    genuinely completed run.
+    """
     lines: list[str] = ["", "=== MCP Fuzzer Summary ===", f"Mode: {mode}"]
 
-    if mode in {"tools", "all"} and tool_results:
+    tools_mode = mode in {"tools", "all"}
+    if blocked:
+        lines.append(
+            "Status: BLOCKED — no tools available "
+            "(auth required, endpoint unreachable, or no tools exposed)"
+        )
+    elif tools_mode:
+        tool_count = len(tool_results) if isinstance(tool_results, dict) else 0
+        lines.append(f"Status: completed — {tool_count} tool(s) fuzzed")
+
+    if tools_mode and tool_results:
         lines.append("")
         lines.append("Tool Results:")
         for tool_name, entry in tool_results.items():
             runs, _ = extract_tool_runs(entry)
             stats = summarize_tool_runs(runs)
+            buckets = _tool_outcome_buckets(runs)
             lines.append(
                 f"  {tool_name}: {stats['total_runs']} runs, "
                 f"{stats['successful']} handled correctly, "
                 f"{stats['failures']} findings/failures, "
                 f"{stats['safety_blocked']} safety-blocked"
+            )
+            lines.append(
+                f"      ({buckets['server_rejected']} server-rejected input, "
+                f"{buckets['accepted_malformed']} accepted-malformed findings, "
+                f"{buckets['anomaly']} transport/protocol anomalies)"
             )
 
     if mode in {"protocol", "all", "resources", "prompts"} and protocol_results:

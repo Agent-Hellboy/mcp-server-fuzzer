@@ -133,6 +133,13 @@ async def unified_client_main(settings: ClientSettings) -> int:
         tool_results = context.tool_results
         protocol_results = context.protocol_results
 
+        # A tools/all run that produced no tool results could not actually
+        # fuzz anything (auth required, unreachable endpoint, or no tools
+        # exposed). Surface this distinctly so exit 0 is not misread.
+        tools_mode = mode in ("tools", "all")
+        tools_fuzzed = isinstance(tool_results, dict) and len(tool_results) > 0
+        no_tools_available = tools_mode and not tools_fuzzed
+
         try:  # pragma: no cover
             if mode in ["tools", "all"] and tool_results:
                 reporter.print_tool_execution_summary(tool_results)
@@ -153,6 +160,7 @@ async def unified_client_main(settings: ClientSettings) -> int:
                 protocol_results=(
                     protocol_results if isinstance(protocol_results, dict) else None
                 ),
+                blocked=no_tools_available,
             )
         except Exception as exc:  # pragma: no cover
             logging.warning("Failed to write plain stdout summary: %s", exc)
@@ -182,6 +190,13 @@ async def unified_client_main(settings: ClientSettings) -> int:
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to export additional report formats: {exc}")
             logging.exception("Export error details:")
+
+        if no_tools_available and config.get("fail_if_no_tools", False):
+            logging.warning(
+                "No tools were available to fuzz; exiting non-zero due to "
+                "--fail-if-no-tools"
+            )
+            return 2
 
         return 0
     except MCPError:

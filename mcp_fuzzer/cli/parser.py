@@ -259,6 +259,16 @@ Examples:
         action="store_true",
         help="Load authentication from environment variables",
     )
+    parser.add_argument(
+        "--fail-if-no-tools",
+        action="store_true",
+        help=(
+            "Exit non-zero (code 2) when no tools could be fuzzed (e.g. the "
+            "server returned no tools, auth was required, or the endpoint was "
+            "unreachable). Useful in CI/registry sweeps where exit 0 with "
+            "'no tools available' is easy to misread as success."
+        ),
+    )
 
     parser.add_argument(
         "--enable-safety-system",

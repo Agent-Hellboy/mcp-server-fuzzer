@@ -6,7 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.3.5]
 
+### Added
+
+- `--fail-if-no-tools` to exit non-zero (code 2) when no tools could be fuzzed (auth required, unreachable endpoint, or no tools exposed), so CI/registry sweeps don't misread "no tools available" as success
+- Stdout summary now prints a clear `Status: BLOCKED — no tools available` vs `Status: completed — N tool(s) fuzzed` line
+- Tool summary breaks outcomes into server-rejected input vs accepted-malformed findings vs transport/protocol anomalies, so server-side input validation isn't conflated with fuzzer/transport faults
+
 ### Fixed
+
+- Serialize stdio request/response exchanges behind a per-event-loop I/O lock so bounded-concurrency fuzz runs no longer crash with "readuntil() called while another coroutine is already waiting for incoming data"
 
 - Normalize single-tool results to `{tool_name: {runs: [...]}}` so tools-mode reports populate `tools_tested` and per-run outcomes
 - Skip empty Protocol Results and Spec Guard sections when the active mode does not produce that data

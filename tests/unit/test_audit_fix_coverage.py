@@ -231,3 +231,61 @@ async def test_stdio_send_request_serializes_concurrent_exchanges():
 
     assert all(r == {"ok": True} for r in results)
     assert peak == 1  # the io lock serialized every exchange
+
+
+# --- clearer "no tools" outcome + findings labels ------------------------
+
+
+def test_stdout_summary_blocked_status(capsys):
+    from mcp_fuzzer.reports.formatters.plain_summary import write_stdout_summary
+
+    write_stdout_summary(
+        mode="tools", tool_results={}, protocol_results=None, blocked=True
+    )
+    out = capsys.readouterr().out
+    assert "BLOCKED" in out
+    assert "no tools available" in out
+
+
+def test_stdout_summary_completed_with_outcome_buckets(capsys):
+    from mcp_fuzzer.reports.formatters.plain_summary import write_stdout_summary
+
+    tool_results = {
+        "echo": {
+            "runs": [
+                {"success": True, "outcome": "server_rejected"},
+                {
+                    "success": False,
+                    "outcome": "accepted_malformed",
+                    "accepted_malformed": True,
+                },
+                {"success": False, "outcome": "transport_error", "exception": "boom"},
+            ]
+        }
+    }
+    write_stdout_summary(mode="tools", tool_results=tool_results, protocol_results=None)
+    out = capsys.readouterr().out
+    assert "Status: completed — 1 tool(s) fuzzed" in out
+    assert "1 server-rejected input" in out
+    assert "1 accepted-malformed findings" in out
+    assert "1 transport/protocol anomalies" in out
+
+
+def test_fail_if_no_tools_flag_parses_and_merges():
+    from mcp_fuzzer.cli.config_merge import build_cli_config
+    from mcp_fuzzer.client.adapters import config_mediator
+
+    parser = create_argument_parser()
+    args = parser.parse_args(
+        ["--mode", "tools", "--endpoint", "http://x/mcp", "--fail-if-no-tools"]
+    )
+    assert args.fail_if_no_tools is True
+
+    import copy
+
+    snapshot = copy.deepcopy(config_mediator._config._config)
+    try:
+        cfg = build_cli_config(args)
+        assert cfg.merged["fail_if_no_tools"] is True
+    finally:
+        config_mediator._config._config = snapshot
