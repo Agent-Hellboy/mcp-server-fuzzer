@@ -158,6 +158,21 @@ def test_resolve_redirect(monkeypatch):
     assert result == "http://redirect"
 
 
+def test_resolve_redirect_handles_301(monkeypatch):
+    driver = StreamHttpDriver("https://sh.inference.ac", safety_enabled=False)
+    response = FakeResponse(
+        status_code=301,
+        headers={"location": "https://api.inference.sh/mcp"},
+    )
+    monkeypatch.setitem(
+        driver._resolve_redirect.__globals__,
+        "resolve_redirect_safely",
+        lambda _base, location: location,
+    )
+
+    assert driver._resolve_redirect(response) == "https://api.inference.sh/mcp"
+
+
 def test_resolve_redirect_falls_back_to_trailing_slash(monkeypatch):
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
     response = FakeResponse(status_code=307, headers={})

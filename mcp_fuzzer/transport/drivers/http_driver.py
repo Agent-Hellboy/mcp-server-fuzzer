@@ -25,6 +25,7 @@ from ...config import (
 )
 from ...safety_system import policy as safety_policy
 from ...spec_version import maybe_update_spec_version_from_result
+from ...types import HTTP_REDIRECT_STATUS_CODES
 
 
 class HttpDriver(
@@ -121,10 +122,9 @@ class HttpDriver(
 
     def _resolve_redirect_url(self, response: httpx.Response) -> str | None:
         """
-        Resolve redirect target for 307/308 while enforcing same-origin and
-        host policy.
+        Resolve redirect target for 301/302/303/307/308 while enforcing host policy.
         """
-        if response.status_code not in (307, 308):
+        if response.status_code not in HTTP_REDIRECT_STATUS_CODES:
             return None
         location = response.headers.get("location")
         if not location:

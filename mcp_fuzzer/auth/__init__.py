@@ -20,6 +20,14 @@ from .discovery import (
     build_protected_resource_metadata_urls,
     build_authorization_server_metadata_urls,
 )
+from .oauth import (
+    MCPAuthorizationFlow,
+    MCPOAuthProvider,
+    OAuthClientConfig,
+    OAuthToken,
+    canonical_resource_uri,
+    create_mcp_oauth_auth,
+)
 
 __all__ = [
     "AuthProvider",
@@ -41,4 +49,10 @@ __all__ = [
     "extract_requested_scopes",
     "build_protected_resource_metadata_urls",
     "build_authorization_server_metadata_urls",
+    "MCPAuthorizationFlow",
+    "MCPOAuthProvider",
+    "OAuthClientConfig",
+    "OAuthToken",
+    "canonical_resource_uri",
+    "create_mcp_oauth_auth",
 ]

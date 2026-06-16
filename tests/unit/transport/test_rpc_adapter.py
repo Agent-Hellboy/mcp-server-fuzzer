@@ -64,6 +64,24 @@ async def test_get_tools_missing_key_returns_empty():
 
 
 @pytest.mark.asyncio
+async def test_get_tools_transport_error_returns_empty_without_traceback(caplog):
+    from mcp_fuzzer.exceptions import TransportError
+
+    transport = MagicMock()
+    transport.send_request = AsyncMock(
+        side_effect=TransportError("HTTP 401: Unauthorized")
+    )
+    adapter = JsonRpcAdapter(transport)
+
+    with caplog.at_level("WARNING"):
+        tools = await adapter.get_tools()
+
+    assert tools == []
+    assert any("Failed to fetch tools from server" in r.message for r in caplog.records)
+    assert not any(r.exc_info for r in caplog.records)
+
+
+@pytest.mark.asyncio
 async def test_call_tool_sends_request():
     transport = MagicMock()
     transport.send_request = AsyncMock(return_value={"ok": True})
