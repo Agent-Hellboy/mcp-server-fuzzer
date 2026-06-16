@@ -1,8 +1,17 @@
 from __future__ import annotations
 
-from starlette.testclient import TestClient
+import pytest
 
-from examples.test_server import build_app
+# The example server depends on optional server-side packages that are not part
+# of the unit-test environment. Skip the whole module cleanly when they are
+# absent so collection does not error in CI.
+pytest.importorskip("starlette")
+pytest.importorskip("mcp")
+pytest.importorskip("uvicorn")
+
+from starlette.testclient import TestClient  # noqa: E402
+
+from examples.test_server import build_app  # noqa: E402
 
 
 def test_server_initiated_methods_middleware_handles_stub_batch():
