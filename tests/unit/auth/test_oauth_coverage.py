@@ -440,3 +440,58 @@ def test_authorization_code_flow_browser_opener_failure_is_non_fatal():
         token = flow.run()
     assert token.access_token == "tok"
     assert token.client_id == "dyn"  # persisted resolved client
+
+
+def _as_meta(**kw):
+    from mcp_fuzzer.auth.oauth import AuthorizationServerMetadata
+
+    base = dict(
+        issuer="https://a",
+        authorization_endpoint="https://a/auth",
+        token_endpoint="https://a/token",
+        registration_endpoint=None,
+        code_challenge_methods_supported=["S256"],
+        scopes_supported=[],
+        grant_types_supported=[],
+        token_endpoint_auth_methods_supported=[],
+        client_id_metadata_document_supported=False,
+        metadata_url="x",
+        raw={},
+    )
+    base.update(kw)
+    return AuthorizationServerMetadata(**base)
+
+
+def test_resolve_client_cimd_returns_url_even_if_unadvertised():
+    flow = MCPAuthorizationFlow(
+        "https://mcp.x/mcp",
+        OAuthClientConfig(client_id_metadata_url="https://e.com/c.json"),
+    )
+    cid, secret = flow._resolve_client(
+        _as_meta(client_id_metadata_document_supported=False)
+    )
+    assert cid == "https://e.com/c.json"
+    assert secret is None
+
+
+def test_resolve_client_without_any_option_raises():
+    flow = MCPAuthorizationFlow("https://mcp.x/mcp", OAuthClientConfig())
+    with pytest.raises(AuthProviderError, match="No client credentials"):
+        flow._resolve_client(_as_meta(registration_endpoint=None))
+
+
+def test_run_client_credentials_requires_token_endpoint():
+    flow = MCPAuthorizationFlow(
+        "https://mcp.x/mcp",
+        OAuthClientConfig(
+            grant_type="client_credentials", client_id="svc", client_secret="s"
+        ),
+    )
+    with pytest.raises(AuthProviderError, match="token_endpoint"):
+        flow._run_client_credentials(_as_meta(token_endpoint=None))
+
+
+def test_run_authorization_code_requires_endpoints():
+    flow = MCPAuthorizationFlow("https://mcp.x/mcp", OAuthClientConfig())
+    with pytest.raises(AuthProviderError, match="missing authorization/token"):
+        flow._run_authorization_code(_as_meta(authorization_endpoint=None))
