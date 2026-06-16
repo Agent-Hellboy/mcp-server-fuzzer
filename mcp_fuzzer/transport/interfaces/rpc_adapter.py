@@ -10,6 +10,9 @@ from __future__ import annotations
 import logging
 from typing import Any, TYPE_CHECKING
 
+from ...exceptions import TransportError
+from ..interfaces.behaviors import NetworkError
+
 if TYPE_CHECKING:
     from .driver import TransportDriver
 
@@ -87,6 +90,9 @@ class JsonRpcAdapter:
                     return []
             self._logger.info("Found %d tools from server", len(tools))
             return tools
+        except (TransportError, NetworkError) as exc:
+            self._logger.warning("Failed to fetch tools from server: %s", exc)
+            return []
         except Exception as e:
             self._logger.exception("Failed to fetch tools from server: %s", e)
             return []

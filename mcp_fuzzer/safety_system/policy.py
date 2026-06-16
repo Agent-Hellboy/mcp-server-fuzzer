@@ -128,17 +128,13 @@ def resolve_redirect_safely(
     allowed_hosts: Iterable[str] | None = None,
     deny_network_by_default: bool | None = None,
 ) -> str | None:
-    """Resolve a redirect target while enforcing same-origin and host allow-list.
+    """Resolve a redirect target while enforcing host allow-list policy.
 
     Returns the resolved URL if allowed, otherwise None.
     """
     if not location:
         return None
     resolved = urljoin(base_url, location)
-    base = urlparse(base_url)
-    new = urlparse(resolved)
-    if (new.scheme, new.netloc) != (base.scheme, base.netloc):
-        return None
     if not is_host_allowed(
         resolved,
         allowed_hosts=allowed_hosts,

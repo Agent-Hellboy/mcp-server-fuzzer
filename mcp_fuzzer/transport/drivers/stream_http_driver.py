@@ -40,8 +40,7 @@ from ...config import (
 )
 from ...types import (
     HTTP_ACCEPTED,
-    HTTP_REDIRECT_TEMPORARY,
-    HTTP_REDIRECT_PERMANENT,
+    HTTP_REDIRECT_STATUS_CODES,
     HTTP_NOT_FOUND,
     DEFAULT_TIMEOUT,
     RETRY_DELAY,
@@ -219,8 +218,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Returns:
             Resolved redirect URL or None
         """
-        redirect_codes = (HTTP_REDIRECT_TEMPORARY, HTTP_REDIRECT_PERMANENT)
-        if response.status_code not in redirect_codes:
+        if response.status_code not in HTTP_REDIRECT_STATUS_CODES:
             return None
 
         location = response.headers.get("location")
