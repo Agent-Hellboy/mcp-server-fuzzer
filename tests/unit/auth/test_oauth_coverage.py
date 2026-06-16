@@ -315,3 +315,128 @@ def test_loopback_close_without_start_is_safe():
 
     server = LoopbackRedirectServer()
     server.close()  # never started serve_forever -> must not deadlock
+
+
+def test_fetch_rs_metadata_transport_error_returns_none():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom")
+
+    with _mock(handler) as http:
+        assert (
+            fetch_protected_resource_metadata("https://mcp.x/mcp", http=http) is None
+        )
+
+
+def test_register_transport_error_raises():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom")
+
+    with _mock(handler) as http:
+        with pytest.raises(AuthProviderError, match="registration request failed"):
+            register_dynamic_client(
+                "https://a/register",
+                redirect_uris=["http://127.0.0.1:0/cb"],
+                http=http,
+            )
+
+
+def test_provider_reauthorizes_when_refresh_fails(tmp_path):
+    store = TokenStore(tmp_path)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/token":
+            body = dict(parse_qs(request.content.decode()))
+            if body.get("grant_type") == ["refresh_token"]:
+                return httpx.Response(400, text="expired")
+            return httpx.Response(
+                200, json={"access_token": "reauth", "expires_in": 60}
+            )
+        return httpx.Response(404)
+
+    config = OAuthClientConfig(
+        grant_type="client_credentials",
+        client_id="svc",
+        client_secret="secret",
+        token_endpoint="https://auth.example.com/token",
+    )
+    with _mock(handler) as http:
+        provider = MCPOAuthProvider(
+            "https://mcp.x/mcp", config, http=http, token_store=store
+        )
+        store.save(
+            *provider._cache_key(),
+            {
+                "access_token": "old",
+                "expires_at": 0,
+                "refresh_token": "r",
+                "client_id": "svc",
+            },
+        )
+        headers = provider.get_auth_headers()
+    assert headers == {"Authorization": "Bearer reauth"}
+
+
+class _FakeRedirect:
+    def __init__(self, **_kw):
+        self.redirect_uri = "http://127.0.0.1:7788/callback"
+        self.captured_state = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return None
+
+    def wait_for_callback(self, timeout=120.0):
+        return {"code": "authcode", "state": self.captured_state}
+
+
+def test_authorization_code_flow_browser_opener_failure_is_non_fatal():
+    server = _FakeRedirect()
+
+    def opener(url):
+        from urllib.parse import urlsplit as _split
+
+        server.captured_state = parse_qs(_split(url).query)["state"][0]
+        raise RuntimeError("no browser here")  # must be swallowed
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if "protected-resource" in path:
+            return httpx.Response(
+                200, json={"authorization_servers": ["https://auth.example.com"]}
+            )
+        if "authorization-server" in path:
+            return httpx.Response(
+                200,
+                json={
+                    "authorization_endpoint": "https://auth.example.com/authorize",
+                    "token_endpoint": "https://auth.example.com/token",
+                    "registration_endpoint": "https://auth.example.com/register",
+                    "code_challenge_methods_supported": ["S256"],
+                },
+            )
+        if path == "/register":
+            return httpx.Response(201, json={"client_id": "dyn"})
+        if path == "/token":
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "tok",
+                    "expires_in": 60,
+                    "refresh_token": "r",
+                },
+            )
+        return httpx.Response(404)
+
+    with _mock(handler) as http:
+        flow = MCPAuthorizationFlow(
+            "https://mcp.example.com/mcp",
+            OAuthClientConfig(open_browser=True),
+            http=http,
+            browser_opener=opener,
+            redirect_server_factory=lambda **kw: server,
+        )
+        token = flow.run()
+    assert token.access_token == "tok"
+    assert token.client_id == "dyn"  # persisted resolved client
