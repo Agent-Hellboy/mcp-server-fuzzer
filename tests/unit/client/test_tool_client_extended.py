@@ -273,17 +273,21 @@ class TestFuzzToolBothPhases:
 
     @pytest.mark.asyncio
     async def test_both_phases_exception(self, tool_client):
-        """Test handling exception in two-phase fuzzing."""
+        """A per-run mutator error becomes a per-run failure entry, not a
+        phase abort."""
         tool = {"name": "test_tool"}
         tool_client.tool_mutator.mutate = AsyncMock(
             side_effect=Exception("mutator error")
         )
-        
+
         results = await tool_client.fuzz_tool_both_phases(tool, runs_per_phase=1)
-        
-        assert "error" in results
-        assert "mutator error" in results["error"]
-        assert results["runs"][0]["error"] == "phase_execution_failed"
+
+        assert set(results) == {"realistic", "aggressive"}
+        for phase in ("realistic", "aggressive"):
+            assert len(results[phase]) == 1
+            run = results[phase][0]
+            assert run["error"] == "phase_execution_failed"
+            assert "mutator error" in run["exception"]
 
 
 class TestProcessFuzzResults:

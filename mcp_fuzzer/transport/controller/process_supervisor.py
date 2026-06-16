@@ -123,17 +123,19 @@ class ProcessSupervisor:
             line = await asyncio.wait_for(reader.readline(), timeout=timeout)
         except asyncio.TimeoutError:
             return None
-        except (asyncio.LimitOverrunError, ValueError):
+        except (asyncio.LimitOverrunError, ValueError) as exc:
+            consumed = getattr(exc, "consumed", None)
+            size = consumed if isinstance(consumed, int) else self._max_read_bytes + 1
             self.emit_event(
                 "oversized_output",
                 pid=self.state.pid,
-                size=self._max_read_bytes + 1,
+                size=size,
                 limit=self._max_read_bytes,
             )
             raise TransportError(
                 "Received oversized message from stdio transport",
                 context={
-                    "size": self._max_read_bytes + 1,
+                    "size": size,
                     "limit": self._max_read_bytes,
                 },
             )

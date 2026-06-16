@@ -108,6 +108,14 @@ class ServerInitiatedMethodsMiddleware:
         body = await self._read_body(receive)
         payload = self._decode_json(body)
 
+        if isinstance(payload, list):
+            batch_body = self._handle_batch(payload)
+            if batch_body is not None:
+                await self._send_json(send, batch_body)
+                return
+            await self.app(scope, self._replay_body(body), send)
+            return
+
         method = payload.get("method") if isinstance(payload, dict) else None
         if method in self._STUB_RESPONSES:
             request_id = payload.get("id")
@@ -116,6 +124,29 @@ class ServerInitiatedMethodsMiddleware:
             return
 
         await self.app(scope, self._replay_body(body), send)
+
+    def _handle_batch(self, payload: list[Any]) -> bytes | None:
+        """Answer a batch of server-initiated stub methods directly.
+
+        Returns the encoded JSON-RPC array when every entry targets a stub
+        method (notifications without an ``id`` are accepted but produce no
+        response), or ``None`` to let the real app handle the batch.
+        """
+        if not payload or not all(
+            isinstance(item, dict) and item.get("method") in self._STUB_RESPONSES
+            for item in payload
+        ):
+            return None
+        responses = [
+            {
+                "jsonrpc": "2.0",
+                "id": item.get("id"),
+                "result": self._STUB_RESPONSES[item["method"]],
+            }
+            for item in payload
+            if item.get("id") is not None
+        ]
+        return json.dumps(responses).encode("utf-8")
 
     async def _read_body(self, receive: Receive) -> bytes:
         chunks: list[bytes] = []

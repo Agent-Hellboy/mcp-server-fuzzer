@@ -10,7 +10,7 @@ from .common import SupportsToDict, extract_tool_runs, normalize_report_data
 
 def _csv_cell(value: Any) -> str:
     text = str(value)
-    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+    if text and text[0] in ("=", "+", "-", "@", "\t", "\r", "\n"):
         return "'" + text
     return text
 

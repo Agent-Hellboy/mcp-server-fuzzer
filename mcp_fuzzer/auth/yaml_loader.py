@@ -38,55 +38,71 @@ def _add_provider(
     auth_manager: AuthManager, name: str, provider_config: dict[str, Any]
 ):
     provider_type = provider_config.get("type")
-    if provider_type == "api_key":
-        auth_manager.add_auth_provider(
-            name,
-            create_api_key_auth(
-                provider_config["api_key"],
-                provider_config.get("header_name", "Authorization"),
-                provider_config.get("prefix", "Bearer"),
-            ),
-        )
-    elif provider_type == "basic":
-        auth_manager.add_auth_provider(
-            name,
-            create_basic_auth(provider_config["username"], provider_config["password"]),
-        )
-    elif provider_type == "oauth":
-        auth_manager.add_auth_provider(
-            name,
-            create_oauth_auth(
-                provider_config["token"],
-                provider_config.get("token_type", "Bearer"),
-            ),
-        )
-    elif provider_type == "oauth_client_credentials":
-        auth_manager.add_auth_provider(
-            name,
-            create_oauth_client_credentials_auth(
-                provider_config["token_url"],
-                provider_config["client_id"],
-                provider_config["client_secret"],
-                provider_config.get("scope"),
-                provider_config.get("token_type", "Bearer"),
-                float(provider_config.get("timeout", 10.0)),
-            ),
-        )
-    elif provider_type == "custom":
-        headers = provider_config.get("headers", {})
-        if not isinstance(headers, dict):
-            raise AuthConfigError(
-                f"Provider '{name}' custom headers must be a dict, "
-                f"got {type(headers).__name__}"
+    try:
+        if provider_type == "api_key":
+            auth_manager.add_auth_provider(
+                name,
+                create_api_key_auth(
+                    provider_config["api_key"],
+                    provider_config.get("header_name", "Authorization"),
+                    provider_config.get("prefix", "Bearer"),
+                ),
             )
-        auth_manager.add_auth_provider(
-            name,
-            create_custom_header_auth({str(k): str(v) for k, v in headers.items()}),
-        )
-    else:
+        elif provider_type == "basic":
+            auth_manager.add_auth_provider(
+                name,
+                create_basic_auth(
+                    provider_config["username"], provider_config["password"]
+                ),
+            )
+        elif provider_type == "oauth":
+            auth_manager.add_auth_provider(
+                name,
+                create_oauth_auth(
+                    provider_config["token"],
+                    provider_config.get("token_type", "Bearer"),
+                ),
+            )
+        elif provider_type == "oauth_client_credentials":
+            auth_manager.add_auth_provider(
+                name,
+                create_oauth_client_credentials_auth(
+                    provider_config["token_url"],
+                    provider_config["client_id"],
+                    provider_config["client_secret"],
+                    provider_config.get("scope"),
+                    provider_config.get("token_type", "Bearer"),
+                    float(provider_config.get("timeout", 10.0)),
+                ),
+            )
+        elif provider_type == "custom":
+            headers = provider_config.get("headers")
+            if not headers:
+                raise AuthProviderError(
+                    f"Provider '{name}' is type 'custom' but missing "
+                    "required field 'headers'"
+                )
+            if not isinstance(headers, dict):
+                raise AuthConfigError(
+                    f"Provider '{name}' custom headers must be a dict, "
+                    f"got {type(headers).__name__}"
+                )
+            auth_manager.add_auth_provider(
+                name,
+                create_custom_header_auth(
+                    {str(k): str(v) for k, v in headers.items()}
+                ),
+            )
+        else:
+            raise AuthProviderError(
+                f"Unknown provider type: '{provider_type}' for '{name}'"
+            )
+    except (AuthProviderError, AuthConfigError):
+        raise
+    except (KeyError, ValueError, TypeError) as exc:
         raise AuthProviderError(
-            f"Unknown provider type: '{provider_type}' for '{name}'"
-        )
+            f"Error configuring auth provider '{name}': {exc}"
+        ) from exc
 
 
 def build_auth_from_yaml_section(auth_section: dict[str, Any]) -> AuthManager:
@@ -98,11 +114,12 @@ def build_auth_from_yaml_section(auth_section: dict[str, Any]) -> AuthManager:
 
     providers = auth_section.get("providers")
     if isinstance(providers, dict):
+        tool_mapping = auth_section.get("tool_mapping")
+        if tool_mapping is None:
+            tool_mapping = auth_section.get("mappings", {})
         payload = {
             "providers": providers,
-            "tool_mapping": auth_section.get("tool_mapping")
-            or auth_section.get("mappings")
-            or {},
+            "tool_mapping": tool_mapping,
             "default_provider": auth_section.get("default_provider"),
         }
         return load_auth_from_dict(payload)
@@ -119,11 +136,9 @@ def build_auth_from_yaml_section(auth_section: dict[str, Any]) -> AuthManager:
             f"'providers' must be a list or dict, got {type(providers).__name__}"
         )
 
-    tool_mapping = (
-        auth_section.get("tool_mapping")
-        or auth_section.get("mappings")
-        or {}
-    )
+    tool_mapping = auth_section.get("tool_mapping")
+    if tool_mapping is None:
+        tool_mapping = auth_section.get("mappings", {})
     if not isinstance(tool_mapping, dict):
         raise AuthConfigError(
             f"'tool_mapping' must be a dict, got {type(tool_mapping).__name__}"

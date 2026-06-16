@@ -1,6 +1,8 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 testing-servers/
+# Local registry remote fuzz harness (framework stress testing)
+registry-targets/
 *.py[cod]
 *$py.class
 *$py.pyc

@@ -122,6 +122,10 @@ def populate_auth_manager(auth_manager: AuthManager, config: dict[str, Any]) -> 
         )
 
     providers = config.get("providers", {})
+    if not isinstance(providers, dict):
+        raise AuthConfigError(
+            f"'providers' must be an object, got {type(providers).__name__}"
+        )
     for name, provider_config in providers.items():
         if not isinstance(provider_config, dict):
             raise AuthProviderError(
@@ -247,13 +251,18 @@ def populate_auth_manager(auth_manager: AuthManager, config: dict[str, Any]) -> 
         )
 
     for tool_name, auth_provider_name in final_tool_mappings.items():
+        if not isinstance(auth_provider_name, str):
+            raise AuthConfigError(
+                f"tool_mapping value for tool '{tool_name}' must be a string, "
+                f"got {type(auth_provider_name).__name__}"
+            )
         if auth_provider_name not in auth_manager.auth_providers:
             raise AuthConfigError(
                 f"tool_mapping references unknown provider '{auth_provider_name}' "
                 f"for tool '{tool_name}'. Known providers: "
                 f"{', '.join(sorted(auth_manager.auth_providers)) or '(none)'}"
             )
-        auth_manager.map_tool_to_auth(tool_name, auth_provider_name)
+        auth_manager.map_tool_to_auth(str(tool_name), auth_provider_name)
 
     default_provider = config.get("default_provider")
     if default_provider:

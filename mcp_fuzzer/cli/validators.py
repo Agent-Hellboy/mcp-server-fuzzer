@@ -43,6 +43,10 @@ class ValidationManager:
                 for part in str(args.protocol_type).split("|")
                 if part.strip()
             ]
+            if not requested:
+                raise ArgumentValidationError(
+                    "--protocol-type cannot be empty when provided"
+                )
             unsupported = [
                 name
                 for name in requested

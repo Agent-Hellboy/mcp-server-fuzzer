@@ -32,6 +32,21 @@ from mcp_fuzzer.reports.reporter import FuzzerReporter
 from mcp_fuzzer.spec_versions import is_supported_protocol_version
 
 
+@pytest.fixture(autouse=True)
+def _restore_config_mediator():
+    """Snapshot and restore global config state so mediator-mutating tests
+    do not leak ``output``/``auth`` config into later tests."""
+    import copy
+
+    from mcp_fuzzer.client.adapters import config_mediator
+
+    snapshot = copy.deepcopy(config_mediator._config._config)
+    try:
+        yield
+    finally:
+        config_mediator._config._config = snapshot
+
+
 @pytest.mark.asyncio
 async def test_pipeline_single_tool_wraps_results_for_reporter():
     client = MagicMock()

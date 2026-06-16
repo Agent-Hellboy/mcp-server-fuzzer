@@ -544,16 +544,33 @@ class ToolClient:
         self._logger.info("%s phase: %s", phase_name.title(), tool_name)
 
         async def _one_run(_index: int) -> dict[str, Any]:
-            if mutate_phase is None:
-                args = await self.tool_mutator.mutate(tool)
-            else:
-                args = await self.tool_mutator.mutate(tool, phase=mutate_phase)
-            return await self._execute_tool_call(
-                tool_name,
-                args,
-                label=f"tool:{tool_name}",
-                tool_timeout=tool_timeout,
-            )
+            try:
+                if mutate_phase is None:
+                    args = await self.tool_mutator.mutate(tool)
+                else:
+                    args = await self.tool_mutator.mutate(tool, phase=mutate_phase)
+                return await self._execute_tool_call(
+                    tool_name,
+                    args,
+                    label=f"tool:{tool_name}",
+                    tool_timeout=tool_timeout,
+                )
+            except Exception as e:
+                self._logger.warning(
+                    "Exception during %s phase fuzzing %s: %s",
+                    phase_name,
+                    tool_name,
+                    e,
+                )
+                return self._build_tool_run_result(
+                    args=None,
+                    label=f"tool:{tool_name}",
+                    success=False,
+                    safety_blocked=False,
+                    safety_sanitized=False,
+                    error=ErrorType.PHASE_EXECUTION_FAILED,
+                    exception=str(e),
+                )
 
         return await self._run_bounded(runs, _one_run)
 

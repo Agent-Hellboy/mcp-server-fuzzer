@@ -11,6 +11,10 @@ _active_rng: contextvars.ContextVar[random.Random | None] = contextvars.ContextV
     "fuzz_rng", default=None
 )
 
+# Stable process-wide fallback so paths without an active scope keep RNG state
+# continuity instead of getting a fresh generator on every access.
+_fallback_rng = random.Random()
+
 
 @contextmanager
 def fuzz_rng_scope(rng: random.Random | None):
@@ -24,7 +28,7 @@ def fuzz_rng_scope(rng: random.Random | None):
 
 def get_fuzz_rng() -> random.Random:
     rng = _active_rng.get()
-    return rng if rng is not None else random.Random()
+    return rng if rng is not None else _fallback_rng
 
 
 class _LazyRng:

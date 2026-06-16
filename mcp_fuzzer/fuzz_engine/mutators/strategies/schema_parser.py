@@ -49,7 +49,7 @@ def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
     required: list[str] = []
     merged_types = None  # track intersection of declared types
     had_type_branch = False
-    enum_values: set[Any] | None = None
+    enum_values: list[Any] | None = None
 
     # Track min/max constraint values
     min_constraints = {
@@ -84,10 +84,15 @@ def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
             merged_types = tset if merged_types is None else (merged_types & tset)
 
         if "enum" in s and isinstance(s["enum"], list):
-            branch_enum = set(s["enum"])
-            enum_values = (
-                branch_enum if enum_values is None else (enum_values & branch_enum)
-            )
+            branch_enum = s["enum"]
+            if enum_values is None:
+                enum_values = list(branch_enum)
+            else:
+                enum_values = [
+                    value
+                    for value in enum_values
+                    if any(value == candidate for candidate in branch_enum)
+                ]
 
         # Handle const values
         if "const" in s:
@@ -142,7 +147,7 @@ def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
         if not enum_values:
             merged["_schema_contradiction"] = "empty_enum_intersection"
         else:
-            merged["enum"] = sorted(enum_values, key=str)
+            merged["enum"] = enum_values
 
     # Apply min constraints
     for key, value in min_constraints.items():
@@ -358,6 +363,7 @@ def _handle_array_type(
             import json as _json
 
             attempts = 0
+            is_unique = False
             while attempts < 10:
                 try:
                     item_hash = _json.dumps(item, sort_keys=True, default=str)
@@ -366,11 +372,17 @@ def _handle_array_type(
                     item_hash = repr(item)
                 if item_hash not in seen_values:
                     seen_values.add(item_hash)
+                    is_unique = True
                     break
                 item = make_fuzz_strategy_from_jsonschema(
                     items_schema, phase, recursion_depth + 1
                 )
                 attempts += 1
+            # If a unique item couldn't be produced, skip it to honor
+            # uniqueItems -- unless we still need items to satisfy minItems
+            # (genuinely unsatisfiable constraints fall back to best effort).
+            if not is_unique and len(result) >= min_items:
+                continue
 
         result.append(item)
 
