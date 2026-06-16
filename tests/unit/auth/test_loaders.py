@@ -174,3 +174,18 @@ def test_load_auth_config_no_tool_mapping(tmp_path):
 
     manager = loaders.load_auth_config(str(path))
     assert manager.tool_auth_mapping == {}
+
+
+def test_load_auth_config_rejects_unknown_default_provider(tmp_path):
+    config = {
+        "providers": {
+            "api": {"type": "api_key", "api_key": "secret"},
+        },
+        "default_provider": "missing",
+    }
+    path = tmp_path / "auth.json"
+    path.write_text(json.dumps(config))
+
+    with pytest.raises(exceptions.AuthConfigError, match="default_provider"):
+        loaders.load_auth_config(str(path))
+

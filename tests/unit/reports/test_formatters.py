@@ -469,7 +469,7 @@ class TestTextFormatter:
             assert "FUZZING SESSION METADATA" in content
             assert "SUMMARY STATISTICS" in content
             assert "TOOL FUZZING RESULTS" in content
-            assert "PROTOCOL FUZZING RESULTS" in content
+            assert "PROTOCOL FUZZING RESULTS" not in content
             assert "test_session" in content
             assert "Tools Tested: 2" in content
             assert "Total Tool Runs: 10" in content

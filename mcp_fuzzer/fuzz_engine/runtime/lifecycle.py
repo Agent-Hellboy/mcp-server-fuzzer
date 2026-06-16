@@ -10,6 +10,7 @@ import subprocess
 from typing import Any
 
 from ...exceptions import MCPError, ProcessStartError, ProcessStopError
+from ...safety_system.policy import sanitize_subprocess_env
 from .config import ProcessConfig, merge_env
 from .registry import ProcessRecord, ProcessRegistry
 from .signals import SignalDispatcher
@@ -52,7 +53,7 @@ class ProcessLifecycle:
     async def start(self, config: ProcessConfig) -> asyncio.subprocess.Process:
         """Start a new process asynchronously."""
         cwd = str(config.cwd) if config.cwd is not None else None
-        env = merge_env(None, config.env)
+        env = sanitize_subprocess_env(merge_env(None, config.env))
 
         try:
             await self.watchdog.start()

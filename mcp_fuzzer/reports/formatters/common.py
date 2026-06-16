@@ -86,9 +86,16 @@ def tool_run_has_failure(result: dict[str, Any] | None) -> bool:
     Failure classification rules are centralized here:
     - malformed/non-dict entries are failures
     - safety-blocked entries are failures
-    - exceptions, explicit errors, server errors, or falsey success are failures
+    - accepted malformed input is a fuzzer finding (failure)
+    - server rejection of malformed input is success
+    - exceptions, explicit errors, or transport failures are failures
     """
     if not isinstance(result, dict):
+        return True
+    outcome = result.get("outcome")
+    if outcome == "server_rejected":
+        return False
+    if outcome == "accepted_malformed" or result.get("accepted_malformed"):
         return True
     if result.get("safety_blocked", False):
         return True
@@ -133,6 +140,11 @@ def calculate_protocol_success_rate(total_runs: int, errors: int) -> float:
 def result_has_failure(result: dict[str, Any] | None) -> bool:
     """Return True if a protocol result represents an error condition."""
     if not isinstance(result, dict):
+        return True
+    outcome = result.get("outcome")
+    if outcome == "server_rejected":
+        return False
+    if outcome == "accepted_malformed" or result.get("accepted_malformed"):
         return True
     nested_error = None
     result_payload = result.get("result")

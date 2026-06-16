@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-import random
+from ..rng_context import get_fuzz_rng
 from datetime import datetime, timezone
 from typing import Any
 
@@ -236,7 +236,7 @@ def _edge_string(schema: dict[str, Any], key: str | None) -> str:
 
     # Pick payload that fits, or use shortest
     fitting = [t for t in special_tokens if len(t) <= target_length]
-    base = random.choice(fitting) if fitting else special_tokens[-1]
+    base = get_fuzz_rng().choice(fitting) if fitting else special_tokens[-1]
     return _resize_string(base, min_length, target_length)
 
 

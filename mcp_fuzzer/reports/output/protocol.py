@@ -234,7 +234,7 @@ class OutputProtocol:
             raise ValidationError("Cannot save invalid output")
 
         output_path = Path(output_dir)
-        output_path.mkdir(exist_ok=True)
+        output_path.mkdir(parents=True, exist_ok=True)
 
         session_dir = output_path / "sessions" / self.session_id
         session_dir.mkdir(parents=True, exist_ok=True)

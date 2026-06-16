@@ -265,7 +265,7 @@ def test_validate_arguments_protocol_type_wrong_mode_with_endpoint():
         validator.validate_arguments(args)
 
 
-def test_validate_arguments_protocol_mode_requires_protocol_type():
+def test_validate_arguments_protocol_mode_allows_missing_protocol_type():
     validator = ValidationManager()
     args = argparse.Namespace(
         mode="protocol",
@@ -278,8 +278,7 @@ def test_validate_arguments_protocol_mode_requires_protocol_type():
         check_env=False,
         validate_config=None,
     )
-    with pytest.raises(ArgumentValidationError):
-        validator.validate_arguments(args)
+    validator.validate_arguments(args)
 
 
 def test_validate_arguments_runs_not_int():

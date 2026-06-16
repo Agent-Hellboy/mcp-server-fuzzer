@@ -41,7 +41,7 @@ async def test_pipeline_resolves_named_tool_before_fuzzing():
 
     result = await pipeline.fuzz_tools()
 
-    assert result == [{"success": True}]
+    assert result == {"echo": {"runs": [{"success": True}]}}
     assert client.fuzz_tool_calls == [(tool, 2)]
 
 
@@ -55,7 +55,7 @@ async def test_pipeline_resolves_named_tool_before_two_phase_fuzzing():
 
     result = await pipeline.fuzz_tools()
 
-    assert result == {"realistic": [], "aggressive": []}
+    assert result == {"echo": {"realistic": [], "aggressive": []}}
     assert client.fuzz_tool_both_phase_calls == [(tool, 3)]
 
 

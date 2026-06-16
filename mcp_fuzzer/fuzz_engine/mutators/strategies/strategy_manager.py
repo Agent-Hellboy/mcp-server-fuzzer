@@ -27,12 +27,13 @@ class ProtocolStrategies:
     def get_protocol_fuzzer_method(
         protocol_type: str,
         phase: str = "aggressive",
+        rng: random.Random | None = None,
     ) -> Callable[[], dict[str, Any] | None] | None:
         """Get the fuzzer method for a protocol type and phase using spec_protocol."""
         override = strategy_registry.get_protocol(protocol_type, phase)
         if override:
             return override
-        return get_spec_protocol_fuzzer_method(protocol_type, phase)
+        return get_spec_protocol_fuzzer_method(protocol_type, phase, rng=rng)
 
     @staticmethod
     def generate_batch_request(

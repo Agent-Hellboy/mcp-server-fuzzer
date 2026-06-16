@@ -10,13 +10,18 @@ from __future__ import annotations
 
 import json
 import os
-import random
+import random as _stdlib_random
+
+from ..rng_context import get_fuzz_rng, lazy_rng
 import re
 from pathlib import Path
 from typing import Any, Callable
 
+from ....protocol_registry import EXECUTABLE_PROTOCOL_METHODS
 from .schema_helpers import apply_schema_edge_cases, apply_semantic_combos
 from .schema_parser import make_fuzz_strategy_from_jsonschema
+
+random = lazy_rng
 
 _SCHEMA_CACHE: dict[str, dict[str, Any]] = {}
 
@@ -245,7 +250,9 @@ def _build_schema_request(
     phase: str,
     overrides: dict[str, Any] | None = None,
     schema_version: str | None = None,
+    rng: _stdlib_random.Random | None = None,
 ) -> dict[str, Any] | None:
+    rng = rng or get_fuzz_rng()
     version = _schema_version_or_env(schema_version)
     definition = _definition_for(protocol_type, version)
     if not definition:
@@ -258,13 +265,17 @@ def _build_schema_request(
         "params": params,
     }
     if not protocol_type.endswith("Notification"):
-        envelope["id"] = random.randint(1, 1000000)
+        envelope["id"] = rng.randint(1, 1000000)
     return envelope
 
 
-def _build_generic_jsonrpc_request(phase: str = "aggressive") -> dict[str, Any]:
+def _build_generic_jsonrpc_request(
+    phase: str = "aggressive",
+    rng: _stdlib_random.Random | None = None,
+) -> dict[str, Any]:
     """Build a generic JSON-RPC request without schema definitions."""
-    method = random.choice(
+    rng = rng or get_fuzz_rng()
+    method = rng.choice(
         [
             "resources/list",
             "resources/read",
@@ -276,8 +287,8 @@ def _build_generic_jsonrpc_request(phase: str = "aggressive") -> dict[str, Any]:
     )
     if phase == "aggressive":
         params: dict[str, Any] = {
-            "value": random.choice(MALICIOUS_STRINGS + MALICIOUS_NUMBERS),
-            "metadata": {"nested": random.choice(MALICIOUS_STRINGS)},
+            "value": rng.choice(MALICIOUS_STRINGS + MALICIOUS_NUMBERS),
+            "metadata": {"nested": rng.choice(MALICIOUS_STRINGS)},
         }
     else:
         params = {"value": "test", "metadata": {"nested": "ok"}}
@@ -285,30 +296,69 @@ def _build_generic_jsonrpc_request(phase: str = "aggressive") -> dict[str, Any]:
         "jsonrpc": "2.0",
         "method": method,
         "params": params,
-        "id": random.randint(1, 1000000),
+        "id": rng.randint(1, 1000000),
     }
+
+
+def _build_fallback_request(
+    protocol_type: str,
+    phase: str,
+    rng: _stdlib_random.Random | None = None,
+) -> dict[str, Any] | None:
+    """Build a minimal JSON-RPC envelope when schema definitions are unavailable."""
+    rng = rng or get_fuzz_rng()
+    method_info = EXECUTABLE_PROTOCOL_METHODS.get(protocol_type)
+    if not method_info:
+        return None
+    method, is_notification = method_info
+    params: dict[str, Any]
+    if phase == "aggressive":
+        params = {
+            "value": rng.choice(MALICIOUS_STRINGS + MALICIOUS_NUMBERS),
+            "metadata": {"nested": rng.choice(MALICIOUS_STRINGS)},
+        }
+    else:
+        params = {"value": "test"}
+    envelope: dict[str, Any] = {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+    }
+    if not is_notification:
+        envelope["id"] = rng.randint(1, 1_000_000)
+    return envelope
 
 
 def get_spec_protocol_fuzzer_method(
     protocol_type: str,
     phase: str = "aggressive",
     schema_version: str | None = None,
+    rng: _stdlib_random.Random | None = None,
 ) -> Callable[[], dict[str, Any] | None] | None:
     if protocol_type == "GenericJSONRPCRequest":
         def _build_generic() -> dict[str, Any] | None:
-            return _build_generic_jsonrpc_request(phase)
+            return _build_generic_jsonrpc_request(phase, rng=rng)
 
         return _build_generic
 
-    if not _definition_for(protocol_type, _schema_version_or_env(schema_version)):
-        return None
+    if _definition_for(protocol_type, _schema_version_or_env(schema_version)):
+        def _build() -> dict[str, Any] | None:
+            return _build_schema_request(
+                protocol_type,
+                phase,
+                schema_version=_schema_version_or_env(schema_version),
+                rng=rng,
+            )
 
-    def _build() -> dict[str, Any] | None:
-        return _build_schema_request(
-            protocol_type, phase, schema_version=_schema_version_or_env(schema_version)
-        )
+        return _build
 
-    return _build
+    if protocol_type in EXECUTABLE_PROTOCOL_METHODS:
+        def _build_fallback() -> dict[str, Any] | None:
+            return _build_fallback_request(protocol_type, phase, rng=rng)
+
+        return _build_fallback
+
+    return None
 
 
 def build_spec_params(

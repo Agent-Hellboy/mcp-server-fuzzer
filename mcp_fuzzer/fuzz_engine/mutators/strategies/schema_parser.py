@@ -20,13 +20,21 @@ realistic mode generates valid data conforming to the schema, while aggressive
 mode intentionally generates edge cases and invalid data to test error handling.
 """
 
-import random
+import random as _stdlib_random
 import string
 from datetime import datetime, timezone
 from typing import Any
 
+from ..rng_context import get_fuzz_rng, lazy_rng
+
+random = lazy_rng
+
 # Maximum depth for recursive parsing
 MAX_RECURSION_DEPTH = 5
+
+
+def _get_rng() -> _stdlib_random.Random:
+    return get_fuzz_rng()
 
 
 def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
@@ -40,6 +48,8 @@ def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
     props: dict[str, Any] = {}
     required: list[str] = []
     merged_types = None  # track intersection of declared types
+    had_type_branch = False
+    enum_values: list[Any] | None = None
 
     # Track min/max constraint values
     min_constraints = {
@@ -69,8 +79,20 @@ def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
         # Intersect types
         t = s.get("type")
         if t is not None:
+            had_type_branch = True
             tset = set(t if isinstance(t, list) else [t])
             merged_types = tset if merged_types is None else (merged_types & tset)
+
+        if "enum" in s and isinstance(s["enum"], list):
+            branch_enum = s["enum"]
+            if enum_values is None:
+                enum_values = list(branch_enum)
+            else:
+                enum_values = [
+                    value
+                    for value in enum_values
+                    if any(value == candidate for candidate in branch_enum)
+                ]
 
         # Handle const values
         if "const" in s:
@@ -95,11 +117,14 @@ def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
         # Copy other fields (non-constraint)
         for k, v in s.items():
             if (
-                k not in ("properties", "required", "type", "const")
+                k not in ("properties", "required", "type", "const", "enum")
                 and k not in min_constraints
                 and k not in max_constraints
             ):
-                merged[k] = v if k not in merged else merged[k]
+                if k == "enum" and enum_values is not None:
+                    continue
+                if k not in merged:
+                    merged[k] = v
 
     # Apply merged properties
     if props:
@@ -110,11 +135,19 @@ def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
         merged["required"] = sorted(set(required))
 
     # Apply merged types
-    if merged_types:
-        if len(merged_types) > 1:
+    if had_type_branch:
+        if not merged_types:
+            merged["_schema_contradiction"] = "empty_type_intersection"
+        elif len(merged_types) > 1:
             merged["type"] = list(merged_types)
         else:
             merged["type"] = next(iter(merged_types))
+
+    if enum_values is not None:
+        if not enum_values:
+            merged["_schema_contradiction"] = "empty_enum_intersection"
+        else:
+            merged["enum"] = enum_values
 
     # Apply min constraints
     for key, value in min_constraints.items():
@@ -177,8 +210,9 @@ def make_fuzz_strategy_from_jsonschema(
         )
 
     if "allOf" in schema and isinstance(schema["allOf"], list):
-        # Merge all schemas in the allOf list
         merged_schema = _merge_allOf(schema["allOf"])
+        if merged_schema.get("_schema_contradiction"):
+            return {"__schema_contradiction__": merged_schema["_schema_contradiction"]}
         return make_fuzz_strategy_from_jsonschema(
             merged_schema, phase, recursion_depth + 1
         )
@@ -255,6 +289,13 @@ def _handle_object_type(
                 prop_schema, phase, recursion_depth + 1
             )
 
+    for prop_name in required:
+        if prop_name not in result:
+            prop_schema = properties.get(prop_name, {"type": "string"})
+            result[prop_name] = make_fuzz_strategy_from_jsonschema(
+                prop_schema, phase, recursion_depth + 1
+            )
+
     # Ensure we meet minProperties constraint
     if len(result) < min_properties:
         # Respect additionalProperties; if false, do not synthesize extras
@@ -322,6 +363,7 @@ def _handle_array_type(
             import json as _json
 
             attempts = 0
+            is_unique = False
             while attempts < 10:
                 try:
                     item_hash = _json.dumps(item, sort_keys=True, default=str)
@@ -330,11 +372,17 @@ def _handle_array_type(
                     item_hash = repr(item)
                 if item_hash not in seen_values:
                     seen_values.add(item_hash)
+                    is_unique = True
                     break
                 item = make_fuzz_strategy_from_jsonschema(
                     items_schema, phase, recursion_depth + 1
                 )
                 attempts += 1
+            # If a unique item couldn't be produced, skip it to honor
+            # uniqueItems -- unless we still need items to satisfy minItems
+            # (genuinely unsatisfiable constraints fall back to best effort).
+            if not is_unique and len(result) >= min_items:
+                continue
 
         result.append(item)
 
@@ -489,7 +537,8 @@ def _generate_string_from_pattern(
         # Alphanumeric
         length = random.randint(min_length, min(max_length, 20))
         return "".join(
-            random.choice(string.ascii_letters + string.digits) for _ in range(length)
+            random.choice(string.ascii_letters + string.digits)
+            for _ in range(length)
         )
 
     elif pattern == "^[0-9]+$":
@@ -582,7 +631,11 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
             # Boundary values within range
             boundary_values = [minimum, maximum, 0, -1, 1] + BOUNDARY_INTS_MEDIUM
             valid = [v for v in boundary_values if minimum <= v <= maximum]
-            value = random.choice(valid) if valid else random.randint(minimum, maximum)
+            value = (
+                random.choice(valid)
+                if valid
+                else random.randint(minimum, maximum)
+            )
 
         if multiple_of:
             try:
@@ -627,7 +680,11 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
         # Generate boundary float values
         boundaries = [minimum, maximum, (minimum + maximum) / 2, 0.0, 1.0, -1.0]
         valid = [v for v in boundaries if minimum <= v <= maximum]
-        value = random.choice(valid) if valid else random.uniform(minimum, maximum)
+        value = (
+            random.choice(valid)
+            if valid
+            else random.uniform(minimum, maximum)
+        )
 
         if multiple_of:
             try:
@@ -666,7 +723,11 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
             # Boundary values
             boundaries = [minimum, maximum, 0.0, -0.0, 1.0, -1.0]
             valid = [v for v in boundaries if minimum <= v <= maximum]
-            value = random.choice(valid) if valid else random.uniform(minimum, maximum)
+            value = (
+            random.choice(valid)
+            if valid
+            else random.uniform(minimum, maximum)
+        )
 
         if multiple_of:
             try:

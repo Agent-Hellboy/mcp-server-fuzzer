@@ -245,7 +245,11 @@ class ToolExecutor:
 
         # Calculate statistics
         successful = sum(1 for r in results if r.get("success", False))
-        exceptions = len(results) - successful
+        exceptions = sum(
+            1
+            for r in results
+            if r.get("exception") is not None and not r.get("safety_blocked", False)
+        )
 
         self._logger.info(
             "Completed fuzzing %s: %d successful, %d exceptions out of %d runs",

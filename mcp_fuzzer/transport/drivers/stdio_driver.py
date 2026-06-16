@@ -50,7 +50,14 @@ class StdioDriver(TransportDriver):
         self.stdin = None
         self.stdout = None
         self.stderr = None
+        self._stderr_drain_task: asyncio.Task | None = None
         self._lock = None  # Will be created lazily when needed
+        # Serializes a full request/response exchange so concurrent callers
+        # (e.g. bounded asyncio.gather fuzz runs) never read the single stdout
+        # stream at the same time ("readuntil() called while another coroutine
+        # is already waiting for incoming data").
+        self._io_lock = None
+        self._io_lock_loop = None
         self._initialized = False
         self._mcp_initialized = False
         self._last_activity = time.time()
@@ -68,6 +75,14 @@ class StdioDriver(TransportDriver):
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
+
+    def _get_io_lock(self) -> asyncio.Lock:
+        """Get the request/response serialization lock for the running loop."""
+        loop = asyncio.get_running_loop()
+        if self._io_lock is None or self._io_lock_loop is not loop:
+            self._io_lock = asyncio.Lock()
+            self._io_lock_loop = loop
+        return self._io_lock
 
     def add_observer(self, callback: Callable[[str, dict[str, Any]], None]) -> None:
         """Register an observer for lifecycle events."""
@@ -169,6 +184,7 @@ class StdioDriver(TransportDriver):
                 self.stdin = self.process.stdin
                 self.stdout = self.process.stdout
                 self.stderr = self.process.stderr
+                self._start_stderr_drain()
 
                 # Register with process manager for monitoring
                 if hasattr(self.process, "pid"):
@@ -202,6 +218,29 @@ class StdioDriver(TransportDriver):
     def _get_activity_timestamp(self) -> float:
         """Callback for process manager to get last activity timestamp."""
         return self._last_activity
+
+    def _start_stderr_drain(self) -> None:
+        if self.stderr is None:
+            return
+        if self._stderr_drain_task is not None and not self._stderr_drain_task.done():
+            return
+        self._stderr_drain_task = asyncio.create_task(self._drain_stderr())
+
+    async def _drain_stderr(self) -> None:
+        if self.stderr is None:
+            return
+        try:
+            while True:
+                line = await self.stderr.readline()
+                if not line:
+                    break
+                decoded = line.decode(errors="replace").rstrip()
+                if decoded:
+                    logging.debug("stdio stderr: %s", decoded[-500:])
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logging.debug("stdio stderr drain stopped: %s", exc)
 
     async def _send_message(self, message: dict[str, Any]) -> None:
         """Send a message to the subprocess."""
@@ -280,42 +319,48 @@ class StdioDriver(TransportDriver):
             "params": params or {},
         }
 
-        await self._send_message(message)
+        # Serialize the full send+receive exchange: stdio has a single stdout,
+        # so two concurrent receive loops would collide on readuntil().
+        async with self._get_io_lock():
+            await self._send_message(message)
 
-        # Wait for response
-        # Safety: limit iterations to prevent infinite loops
-        max_iterations = 1000
-        iteration_count = 0
-        while iteration_count < max_iterations:
-            iteration_count += 1
-            response = await self._receive_message()
-            if response is None:
-                raise TransportError(
-                    "No response received from stdio transport",
-                    context={"request_id": request_id},
-                )
-
-            if await self._handle_server_request(response):
-                continue
-
-            if response.get("id") == request_id:
-                if "error" in response:
-                    logging.error(f"Server returned error: {response['error']}")
-                    raise ServerError(
-                        "Server returned error",
-                        context={"request_id": request_id, "error": response["error"]},
+            # Wait for response
+            # Safety: limit iterations to prevent infinite loops
+            max_iterations = 1000
+            iteration_count = 0
+            while iteration_count < max_iterations:
+                iteration_count += 1
+                response = await self._receive_message()
+                if response is None:
+                    raise TransportError(
+                        "No response received from stdio transport",
+                        context={"request_id": request_id},
                     )
-                result = response.get("result", response)
-                if method == "initialize":
-                    maybe_update_spec_version_from_result(result)
-                    self._mcp_initialized = True
-                return result if isinstance(result, dict) else {"result": result}
-        
-        # If we've exhausted iterations, raise an error
-        raise TransportError(
-            "Too many responses received without matching request ID",
-            context={"request_id": request_id, "iterations": iteration_count},
-        )
+
+                if await self._handle_server_request(response):
+                    continue
+
+                if response.get("id") == request_id:
+                    if "error" in response:
+                        logging.error(f"Server returned error: {response['error']}")
+                        raise ServerError(
+                            "Server returned error",
+                            context={
+                                "request_id": request_id,
+                                "error": response["error"],
+                            },
+                        )
+                    result = response.get("result", response)
+                    if method == "initialize":
+                        maybe_update_spec_version_from_result(result)
+                        self._mcp_initialized = True
+                    return result if isinstance(result, dict) else {"result": result}
+
+            # If we've exhausted iterations, raise an error
+            raise TransportError(
+                "Too many responses received without matching request ID",
+                context={"request_id": request_id, "iterations": iteration_count},
+            )
 
     async def send_raw(self, payload: dict[str, Any]) -> Any:
         """Send raw payload and wait for response."""
@@ -326,40 +371,41 @@ class StdioDriver(TransportDriver):
         ):
             await self._do_initialize()
 
-        await self._send_message(payload)
+        async with self._get_io_lock():
+            await self._send_message(payload)
 
-        # Wait for response
-        max_iterations = 1000
-        iteration_count = 0
-        while iteration_count < max_iterations:
-            iteration_count += 1
-            response = await self._receive_message()
-            if response is None:
-                raise TransportError(
-                    "No response received from stdio transport",
-                    context={"payload": payload},
-                )
+            # Wait for response
+            max_iterations = 1000
+            iteration_count = 0
+            while iteration_count < max_iterations:
+                iteration_count += 1
+                response = await self._receive_message()
+                if response is None:
+                    raise TransportError(
+                        "No response received from stdio transport",
+                        context={"payload": payload},
+                    )
 
-            if await self._handle_server_request(response):
-                continue
+                if await self._handle_server_request(response):
+                    continue
 
-            if "error" in response:
-                logging.error(f"Server returned error: {response['error']}")
-                raise ServerError(
-                    "Server returned error",
-                    context={"error": response["error"]},
-                )
+                if "error" in response:
+                    logging.error(f"Server returned error: {response['error']}")
+                    raise ServerError(
+                        "Server returned error",
+                        context={"error": response["error"]},
+                    )
 
-            result = response.get("result", response)
-            if payload.get("method") == "initialize":
-                maybe_update_spec_version_from_result(result)
-                self._mcp_initialized = True
-            return result if isinstance(result, dict) else {"result": result}
+                result = response.get("result", response)
+                if payload.get("method") == "initialize":
+                    maybe_update_spec_version_from_result(result)
+                    self._mcp_initialized = True
+                return result if isinstance(result, dict) else {"result": result}
 
-        raise TransportError(
-            "Too many responses received without matching request",
-            context={"payload": payload, "iterations": iteration_count},
-        )
+            raise TransportError(
+                "Too many responses received without matching request",
+                context={"payload": payload, "iterations": iteration_count},
+            )
 
     async def send_notification(
         self, method: str, params: dict[str, Any | None] | None = None
@@ -370,7 +416,10 @@ class StdioDriver(TransportDriver):
             "method": method,
             "params": params or {},
         }
-        await self._send_message(message)
+        # Serialize the write against in-flight request/response exchanges so a
+        # notification cannot interleave bytes on stdin.
+        async with self._get_io_lock():
+            await self._send_message(message)
         if method == "notifications/initialized":
             self._mcp_initialized = True
 
@@ -461,6 +510,15 @@ class StdioDriver(TransportDriver):
         except Exception as e:
             logging.warning(f"Error stopping stdio transport process: {e}")
         finally:
+            if self._stderr_drain_task is not None:
+                self._stderr_drain_task.cancel()
+                try:
+                    await self._stderr_drain_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
+                self._stderr_drain_task = None
             self._initialized = False
             self.process = None
             self.stdin = None

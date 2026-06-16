@@ -65,7 +65,7 @@ def test_default_shim_without_emoji(monkeypatch, capsys):
     assert excinfo.value.code == 0
     captured = capsys.readouterr()
     assert "[FUZZER BLOCKED]" in captured.err
-    assert "was blocked" in captured.out
+    assert "was blocked" in captured.err
 
 
 def test_strict_shim_log_write_failure(monkeypatch, capsys):

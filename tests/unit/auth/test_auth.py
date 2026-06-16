@@ -662,7 +662,7 @@ def test_load_auth_config_invalid_json():
 
 
 def test_load_auth_config_missing_providers():
-    """Test loading auth config with missing providers."""
+    """Test loading auth config with tool_mapping referencing missing providers."""
     config_data = {"tool_mapping": {"tool1": "api_key"}}
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -670,10 +670,8 @@ def test_load_auth_config_missing_providers():
         config_file = f.name
 
     try:
-        auth_manager = load_auth_config(config_file)
-
-        assert isinstance(auth_manager, AuthManager)
-        assert auth_manager.auth_providers == {}
+        with pytest.raises(AuthConfigError, match="unknown provider"):
+            load_auth_config(config_file)
     finally:
         os.unlink(config_file)
 

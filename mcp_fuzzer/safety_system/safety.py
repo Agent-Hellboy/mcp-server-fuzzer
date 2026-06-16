@@ -400,7 +400,7 @@ class SafetyFilter(SafetyProvider, ProtocolSafetyProvider):
                         summary["dangerous_content_types"]["urls"] = (
                             summary["dangerous_content_types"].get("urls", 0) + 1
                         )
-                    elif "Command" in content:
+                    elif "COMMAND" in content:
                         summary["dangerous_content_types"]["commands"] = (
                             summary["dangerous_content_types"].get("commands", 0) + 1
                         )

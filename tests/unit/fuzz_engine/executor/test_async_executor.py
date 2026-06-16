@@ -169,7 +169,8 @@ async def test_run_hypothesis_strategy_complex(executor):
 async def test_shutdown(executor):
     """Test executor shutdown."""
     await executor.shutdown()
-    assert executor._thread_pool._shutdown
+    assert executor._shutdown is True
+    assert executor._thread_pool is None
 
 
 @pytest.mark.asyncio

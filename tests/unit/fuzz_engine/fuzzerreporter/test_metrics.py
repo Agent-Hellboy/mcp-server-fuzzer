@@ -42,8 +42,8 @@ def test_calculate_tool_metrics_all_success(metrics_calculator):
 def test_calculate_tool_metrics_all_failure(metrics_calculator):
     """Test calculating metrics for all failed tool runs."""
     results = [
-        {"success": False, "run": 1},
-        {"success": False, "run": 2},
+        {"success": False, "exception": "boom", "run": 1},
+        {"success": False, "exception": "boom", "run": 2},
     ]
     metrics = metrics_calculator.calculate_tool_metrics(results)
     assert metrics["total"] == 2
@@ -56,7 +56,7 @@ def test_calculate_tool_metrics_mixed(metrics_calculator):
     """Test calculating metrics for mixed tool runs."""
     results = [
         {"success": True, "run": 1},
-        {"success": False, "run": 2},
+        {"success": False, "exception": "err", "run": 2},
         {"success": True, "run": 3},
     ]
     metrics = metrics_calculator.calculate_tool_metrics(results)

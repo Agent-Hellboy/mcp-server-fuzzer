@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import Any
 
 from ..exceptions import AuthConfigError, AuthProviderError
 from .manager import AuthManager
@@ -103,7 +104,28 @@ def load_auth_config(config_file: str) -> AuthManager:
     with open(config_file, "r") as f:
         config = json.load(f)
 
+    populate_auth_manager(auth_manager, config)
+    return auth_manager
+
+
+def load_auth_from_dict(config: dict[str, Any]) -> AuthManager:
+    """Load auth configuration from an in-memory dict."""
+    auth_manager = AuthManager()
+    populate_auth_manager(auth_manager, config)
+    return auth_manager
+
+
+def populate_auth_manager(auth_manager: AuthManager, config: dict[str, Any]) -> None:
+    if not isinstance(config, dict):
+        raise AuthConfigError(
+            f"Auth config must be a JSON object, got {type(config).__name__}"
+        )
+
     providers = config.get("providers", {})
+    if not isinstance(providers, dict):
+        raise AuthConfigError(
+            f"'providers' must be an object, got {type(providers).__name__}"
+        )
     for name, provider_config in providers.items():
         if not isinstance(provider_config, dict):
             raise AuthProviderError(
@@ -222,17 +244,32 @@ def load_auth_config(config_file: str) -> AuthManager:
 
     final_tool_mappings = config.get("tool_mapping")
     if final_tool_mappings is None:
-        final_tool_mappings = {}
+        final_tool_mappings = config.get("mappings", {})
     if not isinstance(final_tool_mappings, dict):
         raise AuthConfigError(
             f"'tool_mapping' must be a dict, got {type(final_tool_mappings).__name__}"
         )
 
     for tool_name, auth_provider_name in final_tool_mappings.items():
-        auth_manager.map_tool_to_auth(tool_name, auth_provider_name)
+        if not isinstance(auth_provider_name, str):
+            raise AuthConfigError(
+                f"tool_mapping value for tool '{tool_name}' must be a string, "
+                f"got {type(auth_provider_name).__name__}"
+            )
+        if auth_provider_name not in auth_manager.auth_providers:
+            raise AuthConfigError(
+                f"tool_mapping references unknown provider '{auth_provider_name}' "
+                f"for tool '{tool_name}'. Known providers: "
+                f"{', '.join(sorted(auth_manager.auth_providers)) or '(none)'}"
+            )
+        auth_manager.map_tool_to_auth(str(tool_name), auth_provider_name)
 
     default_provider = config.get("default_provider")
     if default_provider:
+        if default_provider not in auth_manager.auth_providers:
+            raise AuthConfigError(
+                f"default_provider '{default_provider}' is not configured. "
+                f"Known providers: "
+                f"{', '.join(sorted(auth_manager.auth_providers)) or '(none)'}"
+            )
         auth_manager.set_default_provider(default_provider)
-
-    return auth_manager

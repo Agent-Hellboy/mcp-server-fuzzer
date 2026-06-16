@@ -12,10 +12,12 @@ from ..client.adapters import config_mediator
 from ..client.settings import CliConfig
 from ..client.transport.auth_port import resolve_auth_port
 from .parser import create_argument_parser
+from .config_normalize import apply_nested_config_to_args
 
 
 def _transfer_config_to_args(args: argparse.Namespace) -> None:
     defaults_parser = create_argument_parser()
+    apply_nested_config_to_args(args, defaults_parser)
     mapping = [
         ("endpoint", "endpoint"),
         ("protocol", "protocol"),
@@ -72,6 +74,7 @@ def _transfer_config_to_args(args: argparse.Namespace) -> None:
         ("validate_config", "validate_config"),
         ("check_env", "check_env"),
         ("retry_with_safety_on_interrupt", "retry_with_safety_on_interrupt"),
+        ("seed", "seed"),
     ]
 
     for config_key, args_key in mapping:
@@ -137,7 +140,7 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         "enable_safety_system": getattr(args, "enable_safety_system", False),
         "safety_report": getattr(args, "safety_report", False),
         "export_safety_data": getattr(args, "export_safety_data", None),
-        "output_dir": getattr(args, "output_dir", "reports"),
+        "output_dir": getattr(args, "output_dir", None) or "reports",
         "retry_with_safety_on_interrupt": getattr(
             args, "retry_with_safety_on_interrupt", False
         ),
@@ -164,6 +167,7 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         "output_compress": getattr(args, "output_compress", False),
         "output_session_id": getattr(args, "output_session_id", None),
         "enable_aiomonitor": getattr(args, "enable_aiomonitor", False),
+        "fail_if_no_tools": getattr(args, "fail_if_no_tools", False),
         "auth_manager": auth_manager,
     }
 

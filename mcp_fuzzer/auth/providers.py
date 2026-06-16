@@ -143,10 +143,6 @@ class OAuthClientCredentialsAuth(AuthProvider):
                     "OAuth client credentials response missing access_token"
                 )
 
-            response_token_type = payload.get("token_type")
-            if isinstance(response_token_type, str) and response_token_type:
-                self.token_type = response_token_type
-
             expires_in = payload.get("expires_in")
             try:
                 ttl = float(expires_in)

@@ -16,6 +16,7 @@ from .strategies import ProtocolStrategies
 from .seed_pool import SeedPool
 from .seed_mutation import mutate_seed_payload
 from .utils import havoc_stack
+from .rng_context import fuzz_rng_scope
 
 
 class ProtocolMutator(Mutator):
@@ -61,7 +62,9 @@ class ProtocolMutator(Mutator):
         Returns:
             Fuzzer method or None if not found
         """
-        return self.strategies.get_protocol_fuzzer_method(protocol_type, phase)
+        return self.strategies.get_protocol_fuzzer_method(
+            protocol_type, phase, rng=self._rng
+        )
 
     async def mutate(
         self,
@@ -81,26 +84,26 @@ class ProtocolMutator(Mutator):
         if self.seed_pool.should_reseed(self._seed_ratio_for_phase(phase)):
             seed = self.seed_pool.pick_seed(protocol_type)
             if isinstance(seed, dict):
-                return self._mutate_from_seed(protocol_type, seed, phase)
+                with fuzz_rng_scope(self._rng):
+                    return self._mutate_from_seed(protocol_type, seed, phase)
 
-        fuzzer_method = self.get_fuzzer_method(protocol_type, phase)
-        if not fuzzer_method:
-            raise ValueError(
-                f"Unknown protocol type: {protocol_type} for phase: {phase}"
+        with fuzz_rng_scope(self._rng):
+            fuzzer_method = self.get_fuzzer_method(protocol_type, phase)
+            if not fuzzer_method:
+                raise ValueError(
+                    f"Unknown protocol type: {protocol_type} for phase: {phase}"
+                )
+
+            kwargs = (
+                {"phase": phase}
+                if "phase" in inspect.signature(fuzzer_method).parameters
+                else {}
             )
 
-        # Check if method accepts phase parameter
-        kwargs = (
-            {"phase": phase}
-            if "phase" in inspect.signature(fuzzer_method).parameters
-            else {}
-        )
-
-        # Execute the fuzzer method
-        maybe_coro = fuzzer_method(**kwargs)
-        if inspect.isawaitable(maybe_coro):
-            return await maybe_coro
-        return maybe_coro
+            maybe_coro = fuzzer_method(**kwargs)
+            if inspect.isawaitable(maybe_coro):
+                return await maybe_coro
+            return maybe_coro
 
     def record_feedback(
         self,
@@ -136,9 +139,8 @@ class ProtocolMutator(Mutator):
         phase: str,
     ) -> dict[str, Any]:
         stack = self._havoc_stack()
-        mutated = mutate_seed_payload(seed, stack=stack)
-        if "jsonrpc" in mutated:
-            mutated["jsonrpc"] = "2.0"
+        mutated = mutate_seed_payload(seed, stack=stack, rng=self._rng)
+        mutated["jsonrpc"] = "2.0"
         if "method" not in mutated:
             fuzzer_method = self.get_fuzzer_method(protocol_type, phase)
             if fuzzer_method and not inspect.iscoroutinefunction(fuzzer_method):

@@ -5,6 +5,7 @@ Protocol Client Module
 This module provides functionality for fuzzing MCP protocol types.
 """
 
+import asyncio
 import copy
 import json
 import logging
@@ -19,7 +20,9 @@ from ..protocol_registry import EXECUTABLE_PROTOCOL_TYPES
 from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
 
 from ..fuzz_engine.mutators import ProtocolMutator
+from ..fuzz_engine.mutators.seed_pool import SeedPool
 from ..fuzz_engine.mutators.seed_mutation import mutate_seed_payload
+from ..outcomes import FuzzOutcome, classify_protocol_run
 from .. import spec_guard
 from ..safety_system.safety import CombinedSafetyProvider, ProtocolSafetyProvider
 
@@ -132,6 +135,7 @@ class ProtocolClient:
         max_concurrency: int = 5,
         corpus_root: Path | None = None,
         havoc_mode: bool = False,
+        seed_pool: SeedPool | None = None,
     ):
         """
         Initialize the protocol client.
@@ -153,8 +157,11 @@ class ProtocolClient:
             )
         # Important: let ProtocolClient own sending (safety checks happen here)
         self.protocol_mutator = ProtocolMutator(
-            corpus_dir=corpus_root, havoc_mode=havoc_mode
+            corpus_dir=corpus_root,
+            havoc_mode=havoc_mode,
+            seed_pool=seed_pool,
         )
+        self.max_concurrency = max(1, max_concurrency)
         self._logger = logging.getLogger(__name__)
         self._observed_resources: set[str] = set()
         self._observed_prompts: set[str] = set()
@@ -256,20 +263,26 @@ class ProtocolClient:
             }
 
         data_to_send = safety_result["data"]
+        send_exception: Exception | None = None
         try:
             server_response = await self._send_protocol_request(
                 protocol_type, data_to_send
             )
             server_error = None
-            success = True
         except Exception as send_exc:
+            send_exception = send_exc
             server_response = None
             server_error = str(send_exc)
-            success = False
 
         result = {"response": server_response, "error": server_error}
         safety_blocked = safety_result["blocked"]
         safety_sanitized = safety_result["sanitized"]
+        success, outcome = classify_protocol_run(
+            server_response=server_response,
+            server_error=server_error,
+            exception=send_exception,
+            safety_blocked=safety_blocked,
+        )
         spec_checks: list[dict[str, Any]] = []
         spec_scope: str | None = None
         if isinstance(server_response, dict):
@@ -322,6 +335,9 @@ class ProtocolClient:
             "spec_checks": spec_checks,
             "spec_scope": spec_scope,
             "success": success,
+            "outcome": str(outcome),
+            "accepted_malformed": outcome == FuzzOutcome.ACCEPTED_MALFORMED,
+            "server_rejected_input": outcome == FuzzOutcome.SERVER_REJECTED,
         }
 
     async def fuzz_stateful_sequences(
@@ -515,20 +531,29 @@ class ProtocolClient:
                 "exception": str(e),
                 "traceback": traceback.format_exc(),
                 "success": False,
+                "safety_blocked": False,
+                "safety_sanitized": False,
             }
+
+    async def _run_bounded(self, count: int, factory) -> list[ProtocolFuzzResult]:
+        semaphore = asyncio.Semaphore(self.max_concurrency)
+
+        async def _limited(index: int):
+            async with semaphore:
+                return await factory(index)
+
+        return list(await asyncio.gather(*(_limited(i) for i in range(count))))
 
     async def fuzz_protocol_type(
         self, protocol_type: str, runs: int = 10, phase: str = "realistic"
     ) -> list[ProtocolFuzzResult]:
         """Fuzz a specific protocol type."""
-        results = []
-
-        for i in range(runs):
-            result = await self._process_single_protocol_fuzz(
+        results = await self._run_bounded(
+            runs,
+            lambda i: self._process_single_protocol_fuzz(
                 protocol_type, i, runs, phase
-            )
-            results.append(result)
-
+            ),
+        )
         await self._append_follow_up_results(results, protocol_type)
         return results
 
@@ -551,13 +576,12 @@ class ProtocolClient:
                 return {}
             all_results: dict[str, list[dict[str, Any]]] = {}
             for pt in protocol_types:
-                per_type: list[dict[str, Any]] = []
-                for i in range(runs_per_type):
-                    per_type.append(
-                        await self._process_single_protocol_fuzz(
-                            pt, i, runs_per_type, phase
-                        )
-                    )
+                per_type = await self._run_bounded(
+                    runs_per_type,
+                    lambda i, protocol=pt: self._process_single_protocol_fuzz(
+                        protocol, i, runs_per_type, phase
+                    ),
+                )
                 all_results[pt] = per_type
             for protocol_type, results in all_results.items():
                 await self._append_follow_up_results(results, protocol_type)
