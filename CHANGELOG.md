@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-18
+
 ### Added
 
 - SOLID session architecture: top-level `orchestrator/` drives fuzz → diagnostics
@@ -13,19 +15,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   composition root with `SessionBootstrap` and `PostRunPresenter`
 - `ARCHITECTURE.md` documenting layer rules, session flow, and structural
   conventions; `tests/unit/test_layer_imports.py` guards L2 import boundaries
-- MCP OAuth authentication-security audit, mapping the nine flaw types (F1–F9)
-  from [*A First Measurement Study on Authentication Security in Real-World
-  Remote MCP Servers*](https://arxiv.org/abs/2605.22333) onto black-box checks:
-  - `--auth-audit` (read-only): RFC 9728/8414 metadata review, authorization-
-    endpoint probes (PKCE downgrade, blind client trust, weak state, consent-page
-    heuristic), and `unauthenticated_tools` (tools callable without credentials
-    when OAuth is advertised).
-  - `--auth-audit-intrusive` (opt-in, authorized targets only): malicious
-    Dynamic Client Registration (F1) and open-redirect (F7) probes.
-  - Findings carry their paper `flaw_id` and citation in `evidence`, with a
-    top-level `auth_audit` block in `findings.json` and a paper link in the
-    stdout summary. The audit runs after the fuzz pass and never aborts it;
-    skipped/errored runs log a reason instead of reporting a clean result.
+- Paper-backed MCP security diagnostics in `mcp_fuzzer/diagnostics/`, run
+  post-fuzz by the orchestrator. Each finding family stamps `paper_arxiv_id`,
+  `paper_url`, and `paper_title` in `evidence`; `findings.json` and the stdout
+  summary link back to the source paper:
+  - [*A First Measurement Study on Authentication Security in Real-World Remote
+    MCP Servers*](https://arxiv.org/abs/2605.22333) — OAuth flaw types F1–F9
+    (`--auth-audit`, `--auth-audit-intrusive`): RFC 9728/8414 metadata review,
+    authorization-endpoint probes (PKCE downgrade, blind client trust, weak
+    state, consent-page heuristic), unauthenticated tool exposure when OAuth is
+    advertised, and opt-in intrusive DCR / open-redirect probes (F1, F7)
+  - [*MCP Safety Audit: LLMs with the Model Context Protocol*](https://arxiv.org/abs/2503.23278)
+    — tool/schema poisoning markers, cross-tool shadowing, and output prompt-
+    injection oracles on fuzz runs (`--security-audit`)
+  - [*Uncovering MCP Security Vulnerabilities in AI Agent Ecosystems*](https://arxiv.org/abs/2509.06572)
+    — dangerous capability combinations (local-read plus network-egress tools on
+    the same server) (`--security-audit`)
+  - [*MCPSecBench: A Benchmark for MCP Server Security*](https://arxiv.org/abs/2508.13220)
+    — cleartext / non-TLS transport detection for remote endpoints
+    (`--security-audit`)
+  - Active injection oracles on collected tool-run output (command, path traversal,
+    SQL, echoed prompt-injection markers) are also surfaced under
+    `--security-audit`, primarily aligned with MCPSecBench and the MCP Safety
+    Audit poisoning taxonomy above
+  - Auth and server audit phases never abort the fuzz pass; skipped or errored
+    runs log a reason instead of reporting a clean result
 
 ### Changed
 
