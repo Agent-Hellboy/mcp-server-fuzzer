@@ -118,18 +118,42 @@ These are the rules the restructure enforced. Follow them when adding code.
 
 ---
 
-## 4. Recommended follow-ups (not yet done)
+## 4. SOLID & naming
 
-- **Drop the config Port/Adapter ceremony.** `client/ports.py::ConfigPort` is an
-  ABC with one implementation — delete it. Keep a single concrete config facade
-  (`config_mediator`) but **move it into `config/`** (e.g. `config/access.py`),
-  since it's a config concern, not a `client/` one. The facade is justified
-  (it composes `config`'s submodules above the `manager ↔ loader` layer, avoiding
-  a cycle) — only the *interface* is ceremony. Updates ~10 importers in `cli/`,
-  `reports/`, `client/`.
-- **`fuzz_engine/fuzzerreporter/`** (collector/metrics/result_builder) — review
-  whether it should fold into `reports/` or stay; it's a 3-module package so it
-  currently earns its keep.
+The structural rules above are SOLID applied to *packages*; the same principles
+drive module/symbol design:
+
+- **SRP** — a module/class does one thing. Smell: a class with both `fuzz_*` and
+  `print_*`/`generate_report` methods is two responsibilities wearing one name.
+- **OCP / ISP** — extend via small focused seams (a new `diagnostics/*.py`, a new
+  `Mutator`, a new `RunCommand`), not by editing a god-class. Keep interfaces
+  narrow (`ReportSaver` ⊂ `ReportFormatter`).
+- **DIP** — depend on the abstraction *only where polymorphism is real*
+  (`TransportDriver` → 4 drivers, `AuthProvider` → many). A one-impl ABC is not
+  DIP, it's ceremony — we deleted `ConfigPort` and `SafetyPort`.
+- **Names state the role, not the layer mechanics.** `base.py` (a concrete
+  facade) → `fuzzer_client.py`; the real base class is `mutators/base.py::Mutator`.
+  Avoid near-twin module names (`spec_version` vs `spec_versions` — merged).
+- **Naming conventions:** packages = plural domain area (`reports/`, `mutators/`);
+  modules = the noun they own (`reporter.py`, `retrying.py`); flat variants carry
+  a prefix (`aggressive_tool_strategy.py`). One concept → one home (we merged
+  `protocol_types.py` into `protocol_registry.py`).
+
+## 5. Recommended follow-ups (behavior-sensitive — get sign-off)
+
+- **Split `MCPFuzzerClient` (SRP).** `client/fuzzer_client.py` mixes a *fuzzing
+  facade* (`fuzz_tool`, `fuzz_all_protocol_types`, …) with a *reporting facade*
+  (`print_*`, `generate_*_report`). Extract the reporting methods to a collaborator
+  that wraps the `reporter`, leaving the client to orchestrate fuzzing only.
+- **`client/protocol_client.py` is a 1049-line god-module.** Split by concern
+  (resources / prompts / tools / spec) behind the existing facade. Large; ~30
+  tests patch it — do as its own focused pass.
+- **Relocate the composition root.** `client/main.py::unified_client_main` is
+  application wiring (transport + client + reporter + orchestrator), i.e. L4 app
+  glue living inside an L1 subsystem. Move it to the app layer (e.g. `cli/app.py`)
+  so `client/` is purely "the MCP fuzzing client".
+- **`fuzz_engine/fuzzerreporter/`** — 3-module package; fine as-is, but its
+  result-building overlaps `reports/collector` — worth a dedup look.
 
 ---
 
