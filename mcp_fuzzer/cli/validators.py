@@ -64,6 +64,13 @@ class ValidationManager:
                 "--protocol-type can only be used with --mode protocol"
             )
 
+        if getattr(args, "auth_audit_intrusive", False) and not getattr(
+            args, "auth_audit", False
+        ):
+            raise ArgumentValidationError(
+                "--auth-audit-intrusive requires --auth-audit"
+            )
+
         if args.mode == "tools" and getattr(args, "tool", None):
             if not args.tool.strip():
                 raise ArgumentValidationError("--tool cannot be empty")

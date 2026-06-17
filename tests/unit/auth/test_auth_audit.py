@@ -149,6 +149,26 @@ def test_f7_no_finding_when_rejected():
     assert findings == []
 
 
+def test_authorize_does_not_follow_redirects_even_on_redirecting_client():
+    # The shared audit client uses follow_redirects=True for discovery; the
+    # per-request override in _authorize must still surface the raw 3xx so the
+    # open-redirect Location is observable (otherwise httpx would chase the
+    # redirect and F7 detection would fail).
+    def handler(r):
+        return httpx.Response(
+            302, headers={"location": "https://attacker.example/callback?code=x"}
+        )
+
+    http = httpx.Client(
+        transport=httpx.MockTransport(handler), follow_redirects=True
+    )
+    try:
+        findings = probe_open_redirect(http, _AE, client_id="c")
+    finally:
+        http.close()
+    assert _flaws(findings) == {"F7"}
+
+
 # --- F6 consent page bypass -------------------------------------------------
 
 

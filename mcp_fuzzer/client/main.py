@@ -120,19 +120,26 @@ def _oauth_client_id(config: dict[str, Any]) -> str | None:
 
 async def _run_auth_security_audit(
     config: dict[str, Any], transport: Any
-) -> list[Any]:
+) -> tuple[list[Any], bool]:
     """Run arXiv 2605.22333 authorization-server and MCP auth boundary checks.
 
-    Best-effort and network-active. Never raises.
+    Best-effort and network-active. Never raises. Returns ``(findings, ran)``
+    where ``ran`` is False when the audit was skipped (disabled, no network,
+    unsupported transport, or an error) so callers do not misreport a skipped
+    audit as "complete with no findings".
     """
     if not config.get("auth_audit"):
-        return []
+        return [], False
     if config.get("no_network"):
-        return []
+        logging.warning("Auth audit skipped: --no-network is set")
+        return [], False
     probe = getattr(transport, "probe_auth_discovery", None)
     if not callable(probe):
-        logging.debug("Auth audit skipped: transport lacks probe_auth_discovery")
-        return []
+        logging.warning(
+            "Auth audit skipped: transport does not support auth discovery "
+            "(requires an HTTP/SSE remote endpoint)"
+        )
+        return [], False
     try:
         import httpx
 
@@ -197,17 +204,23 @@ async def _run_auth_security_audit(
                         await close()
                     except Exception:
                         pass
-        return findings
+        return findings, True
     except Exception as exc:  # pragma: no cover - probe is best-effort
-        logging.debug("Auth security audit skipped: %s", exc)
-        return []
+        logging.warning("Auth audit skipped after an error: %s", exc)
+        return [], False
 
 
-def _log_auth_audit_results(findings: list[Any], *, enabled: bool) -> None:
+def _log_auth_audit_results(
+    findings: list[Any], *, enabled: bool, ran: bool
+) -> None:
     if not enabled:
         return
     from ..analysis.auth_audit import AUTH_AUDIT_PAPER_URL, is_auth_audit_finding
 
+    if not ran:
+        # Skip/error paths already logged a specific reason; do not claim a
+        # clean run here.
+        return
     auth_audit_findings = [f for f in findings if is_auth_audit_finding(f)]
     if auth_audit_findings:
         logging.warning(
@@ -329,10 +342,14 @@ async def unified_client_main(settings: ClientSettings) -> int:
             findings = analyze_findings(tr, pr)
             if mode in ("tools", "all"):
                 findings.extend(await _run_auth_bypass_probe(config))
-            auth_audit_findings = await _run_auth_security_audit(config, transport)
+            auth_audit_findings, auth_audit_ran = await _run_auth_security_audit(
+                config, transport
+            )
             findings.extend(auth_audit_findings)
             _log_auth_audit_results(
-                auth_audit_findings, enabled=bool(config.get("auth_audit"))
+                auth_audit_findings,
+                enabled=bool(config.get("auth_audit")),
+                ran=auth_audit_ran,
             )
             findings_summary = summarize_findings(findings)
             out_dir = config.get("output_dir") or "reports"

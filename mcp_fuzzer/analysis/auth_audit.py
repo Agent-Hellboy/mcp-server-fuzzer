@@ -147,7 +147,13 @@ def _authorize(
     ``error``.
     """
     try:
-        resp = http.get(authorization_endpoint, params=params)
+        # Never follow redirects here: F2/F5/F7 classification depends on
+        # observing the raw 3xx and its Location header. The shared audit client
+        # is created with follow_redirects=True for metadata discovery, so this
+        # per-request override is required.
+        resp = http.get(
+            authorization_endpoint, params=params, follow_redirects=False
+        )
     except httpx.HTTPError as exc:
         return "error", str(exc)
     code = resp.status_code
@@ -371,6 +377,9 @@ def probe_malicious_dcr(
         )
     except AuthProviderError:
         return findings  # registration required auth or rejected -> not vulnerable
+    except Exception as exc:  # transient/protocol error must not abort the audit
+        logger.debug("Malicious DCR probe skipped: %s", exc)
+        return findings
     if reg is not None and reg.get("client_id"):
         findings.append(
             _finding(

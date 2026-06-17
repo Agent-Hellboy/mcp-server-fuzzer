@@ -371,6 +371,52 @@ redirect, exchanges the code, and fuzzes the authenticated tools.
 > See the [CLI Reference](../development/reference.md#authentication-options) for
 > the full list of `--oauth*` flags.
 
+### Authentication Security Audit
+
+Beyond *using* OAuth to reach protected tools, the fuzzer can also *audit* a
+server's OAuth deployment for the nine authentication flaw types described in
+[*A First Measurement Study on Authentication Security in Real-World Remote MCP
+Servers*](https://arxiv.org/abs/2605.22333). That study found ~40% of live
+remote MCP servers expose tools without authentication, and that nearly every
+authenticated server had at least one OAuth flaw.
+
+Enable the read-only audit with `--auth-audit`:
+
+```bash
+mcp-fuzzer --mode tools --protocol streamablehttp \
+  --endpoint https://host/mcp --auth-audit --runs 5
+```
+
+This performs only safe, read-only checks against the discovered authorization
+server:
+
+- **Metadata review** — missing PKCE `S256`, `plain`-only PKCE, deprecated
+  grant types (`implicit`/`password`).
+- **Authorization-endpoint probes** — blind client trust (unknown `client_id`
+  accepted), PKCE downgrade (request without `code_challenge` accepted), weak
+  state, and a consent-page heuristic.
+- **Unauthenticated tool exposure** — when the server advertises OAuth but
+  `tools/list` still returns tools without credentials (the paper's ~40% case).
+
+For the intrusive probes — Dynamic Client Registration with an attacker redirect
+URI and open-redirect tests — add `--auth-audit-intrusive`. These register state
+on the target, so **only run them against servers you are authorized to test**:
+
+```bash
+mcp-fuzzer --mode tools --protocol streamablehttp \
+  --endpoint https://host/mcp --auth-audit --auth-audit-intrusive --runs 5
+```
+
+Findings are written to `<output_dir>/findings.json`, each tagged with its paper
+`flaw_id` (F1–F9) and citation, under a top-level `auth_audit` block. The audit
+runs after the fuzz pass and never aborts it; if it can't run (no network, a
+non-HTTP transport, or a discovery error) it logs the reason and is skipped
+rather than reported as clean.
+
+> `--auth-audit-intrusive` requires `--auth-audit`; passing it alone is a usage
+> error. See the [CLI Reference](../development/reference.md#authentication-security-audit-options)
+> for the full flag list and severity notes.
+
 ## Safety System
 
 ### Basic Safety Features

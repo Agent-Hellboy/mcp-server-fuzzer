@@ -249,7 +249,33 @@ async def test_auth_bypass_probe_skipped_without_auth_manager():
 async def test_auth_security_audit_skipped_when_disabled():
     from mcp_fuzzer.client.main import _run_auth_security_audit
 
-    assert await _run_auth_security_audit({"auth_audit": False}, object()) == []
+    assert await _run_auth_security_audit({"auth_audit": False}, object()) == (
+        [],
+        False,
+    )
+
+
+@_pytest.mark.asyncio
+async def test_auth_security_audit_skipped_without_probe_support():
+    from mcp_fuzzer.client.main import _run_auth_security_audit
+
+    # auth_audit enabled but the transport cannot do auth discovery -> skipped,
+    # reported as ran=False so it is not logged as a clean run.
+    findings, ran = await _run_auth_security_audit(
+        {"auth_audit": True}, object()
+    )
+    assert findings == []
+    assert ran is False
+
+
+def test_log_auth_audit_results_does_not_claim_clean_when_skipped(caplog):
+    import logging as _logging
+
+    from mcp_fuzzer.client.main import _log_auth_audit_results
+
+    with caplog.at_level(_logging.INFO):
+        _log_auth_audit_results([], enabled=True, ran=False)
+    assert "no findings" not in caplog.text
 
 
 @_pytest.mark.asyncio
