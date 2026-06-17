@@ -25,8 +25,8 @@ flowchart TB
   end
 
   subgraph Client
-    B0[Unified Runner (client/main.py)]
-    B1[MCPFuzzerClient (client/base.py)]
+    B0[App (cli/app.py)]
+    B1[MCPFuzzerClient (client/fuzzer_client.py)]
     B2[ToolClient]
     B3[ProtocolClient]
   end
@@ -222,7 +222,7 @@ The fuzzing engine orchestrates the testing process through three specialized mo
   - `BatchExecutor`: Orchestrates batch fuzzing
   - `AsyncFuzzExecutor`: Async execution framework with concurrency control
   - `invariants.py`: Property-based testing invariants
-- `fuzzerreporter/`: Result collection and reporting module
+- `executor/results.py`: Executor-local result collection and normalization
   - `ResultBuilder`: Creates standardized result dictionaries
   - `ResultCollector`: Aggregates results from multiple runs
   - `MetricsCalculator`: Calculates comprehensive metrics

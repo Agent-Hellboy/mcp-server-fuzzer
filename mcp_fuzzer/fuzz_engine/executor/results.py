@@ -1,13 +1,32 @@
-#!/usr/bin/env python3
-"""
-Result Builder
-
-This module contains logic for building standardized fuzzing results.
-"""
+"""Result collection, building, and metrics for fuzz execution."""
 
 from typing import Any
 
 from ...types import FuzzDataResult
+
+
+class ResultCollector:
+    """Collects and aggregates results from multiple fuzzing runs."""
+
+    def collect_results(
+        self, batch_results: dict[str, list[Any]]
+    ) -> list[dict[str, Any]]:
+        results = [
+            result for result in batch_results.get("results", []) if result is not None
+        ]
+        results.extend(
+            {"exception": str(error), "success": False}
+            for error in batch_results.get("errors", [])
+            if error is not None
+        )
+        return results
+
+    def filter_results(
+        self, results: list[dict[str, Any]], success_only: bool = False
+    ) -> list[dict[str, Any]]:
+        if success_only:
+            return [r for r in results if r.get("success", False)]
+        return results
 
 
 class ResultBuilder:
@@ -25,23 +44,6 @@ class ResultBuilder:
         safety_reason: str | None = None,
         safety_sanitized: bool = False,
     ) -> dict[str, Any]:
-        """
-        Create standardized tool fuzzing result.
-
-        Args:
-            tool_name: Name of the tool
-            run_index: Run index (0-based)
-            args: Fuzzed arguments (sanitized if applicable)
-            original_args: Original arguments before sanitization
-            success: Whether the run was successful
-            exception: Exception message if any
-            safety_blocked: Whether the operation was blocked by safety system
-            safety_reason: Reason for safety blocking
-            safety_sanitized: Whether arguments were sanitized
-
-        Returns:
-            Standardized tool result dictionary
-        """
         result: dict[str, Any] = {
             "tool_name": tool_name,
             "run": run_index + 1,
@@ -81,22 +83,6 @@ class ResultBuilder:
         spec_checks: list[dict[str, Any]] | None = None,
         spec_scope: str | None = None,
     ) -> FuzzDataResult:
-        """
-        Create standardized protocol fuzzing result.
-
-        Args:
-            protocol_type: Protocol type being fuzzed
-            run_index: Run index (0-based)
-            fuzz_data: Generated fuzz data
-            server_response: Response from server, if any
-            server_error: Error from server, if any
-            invariant_violations: List of invariant violations, if any
-            spec_checks: List of spec guard check results, if any
-            spec_scope: Scope identifier for spec checks, if any
-
-        Returns:
-            Standardized protocol result dictionary
-        """
         result: FuzzDataResult = {
             "protocol_type": protocol_type,
             "run": run_index + 1,
@@ -122,19 +108,6 @@ class ResultBuilder:
         server_error: str | None = None,
         invariant_violations: list[str] | None = None,
     ) -> FuzzDataResult:
-        """
-        Create standardized batch fuzzing result.
-
-        Args:
-            run_index: Run index (0-based)
-            batch_request: Generated batch request
-            server_response: Response from server, if any
-            server_error: Error from server, if any
-            invariant_violations: List of invariant violations, if any
-
-        Returns:
-            Standardized batch result dictionary
-        """
         result: FuzzDataResult = {
             "protocol_type": "BatchRequest",
             "run": run_index + 1,
@@ -148,3 +121,49 @@ class ResultBuilder:
         }
 
         return result
+
+
+class MetricsCalculator:
+    """Calculates metrics from fuzzing results."""
+
+    def calculate_tool_metrics(self, results: list[dict[str, Any]]) -> dict[str, Any]:
+        total = len(results)
+        successful = len([r for r in results if r.get("success", False)])
+        exceptions = len(
+            [
+                r
+                for r in results
+                if r.get("exception") is not None and not r.get("safety_blocked", False)
+            ]
+        )
+
+        return {
+            "total": total,
+            "successful": successful,
+            "exceptions": exceptions,
+            "success_rate": successful / total if total > 0 else 0.0,
+        }
+
+    def calculate_protocol_metrics(
+        self, results: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        total = len(results)
+        successful = len([r for r in results if r.get("success", False)])
+        server_rejections = len(
+            [r for r in results if r.get("server_rejected_input", False)]
+        )
+
+        return {
+            "total": total,
+            "successful": successful,
+            "server_rejections": server_rejections,
+            "success_rate": successful / total if total > 0 else 0.0,
+            "rejection_rate": server_rejections / total if total > 0 else 0.0,
+        }
+
+
+__all__ = [
+    "MetricsCalculator",
+    "ResultBuilder",
+    "ResultCollector",
+]

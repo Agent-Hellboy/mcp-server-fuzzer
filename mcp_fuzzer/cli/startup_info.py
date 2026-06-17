@@ -238,7 +238,7 @@ def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> 
 
     # Built argv information (what gets passed to the fuzzer)
     try:
-        from ..client.runtime.argv_builder import prepare_inner_argv
+        from .runtime.argv_builder import prepare_inner_argv
 
         built_argv = prepare_inner_argv(args)
 

@@ -3,40 +3,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any, Protocol
 
-from ...reports import FuzzerReporter
-from ..fuzzer_client import MCPFuzzerClient
-from .pipeline import ClientExecutionPipeline
-
-
-@dataclass
-class RunContext:
-    """Execution context shared across run-plan commands."""
-
-    client: MCPFuzzerClient
-    config: dict[str, Any]
-    reporter: FuzzerReporter | None
-    protocol_phase: str
-    pipeline: ClientExecutionPipeline | None = None
-    tool_results: dict[str, Any] = field(default_factory=dict)
-    protocol_results: dict[str, Any] = field(default_factory=dict)
-
-    def ensure_pipeline(self) -> ClientExecutionPipeline:
-        if self.pipeline is None:
-            self.pipeline = ClientExecutionPipeline(self.client, self.config)
-        return self.pipeline
-
-
-class RunCommand(Protocol):
-    """Command interface for a single run step."""
-
-    name: str
-
-    async def run(self, context: RunContext) -> None: ...
+from ..client.fuzzer_client import MCPFuzzerClient
+from ..reports import FuzzerReporter
+from .models import SessionContext
 
 
 @dataclass
@@ -45,9 +19,17 @@ class RunPlan:
 
     steps: list[RunCommand]
 
-    async def execute(self, context: RunContext) -> None:
+    async def execute(self, context: SessionContext) -> None:
         for step in self.steps:
             await step.run(context)
+
+
+class RunCommand(Protocol):
+    """Command interface for a single run step."""
+
+    name: str
+
+    async def run(self, context: SessionContext) -> None: ...
 
 
 async def _run_spec_guard_if_enabled(
@@ -85,7 +67,7 @@ async def _run_spec_guard_if_enabled(
 class SpecGuardCommand:
     name = "spec_guard"
 
-    async def run(self, context: RunContext) -> None:
+    async def run(self, context: SessionContext) -> None:
         await _run_spec_guard_if_enabled(
             context.client, context.config, context.reporter
         )
@@ -94,7 +76,7 @@ class SpecGuardCommand:
 class ToolsCommand:
     name = "tools"
 
-    async def run(self, context: RunContext) -> None:
+    async def run(self, context: SessionContext) -> None:
         pipeline = context.ensure_pipeline()
         context.tool_results = await pipeline.fuzz_tools()
 
@@ -102,7 +84,7 @@ class ToolsCommand:
 class ProtocolCommand:
     name = "protocol"
 
-    async def run(self, context: RunContext) -> None:
+    async def run(self, context: SessionContext) -> None:
         pipeline = context.ensure_pipeline()
         context.protocol_results = await pipeline.fuzz_protocol()
 
@@ -110,7 +92,7 @@ class ProtocolCommand:
 class ResourcesCommand:
     name = "resources"
 
-    async def run(self, context: RunContext) -> None:
+    async def run(self, context: SessionContext) -> None:
         pipeline = context.ensure_pipeline()
         context.protocol_results = await pipeline.fuzz_resources()
 
@@ -118,7 +100,7 @@ class ResourcesCommand:
 class PromptsCommand:
     name = "prompts"
 
-    async def run(self, context: RunContext) -> None:
+    async def run(self, context: SessionContext) -> None:
         pipeline = context.ensure_pipeline()
         context.protocol_results = await pipeline.fuzz_prompts()
 
@@ -126,7 +108,7 @@ class PromptsCommand:
 class StatefulCommand:
     name = "stateful"
 
-    async def run(self, context: RunContext) -> None:
+    async def run(self, context: SessionContext) -> None:
         config = context.config
         if not config.get("stateful", False):
             return
@@ -167,3 +149,10 @@ def build_run_plan(mode: str, config: dict[str, Any]) -> RunPlan:
             steps.append(StatefulCommand())
 
     return RunPlan(steps)
+
+
+__all__ = [
+    "RunPlan",
+    "build_run_plan",
+    "_run_spec_guard_if_enabled",
+]

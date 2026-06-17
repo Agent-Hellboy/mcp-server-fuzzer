@@ -15,6 +15,7 @@ from ..reports import FuzzerReporter
 from ..safety_system.safety import CombinedSafetyProvider, SafetyFilter
 from ..types import AuthManagerProtocol, ProtocolFuzzResult, ToolRunResult
 
+from .report_presenter import FuzzReportPresenter
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
 from ..fuzz_engine.mutators.seed_pool import SeedPool
@@ -95,6 +96,10 @@ class MCPFuzzerClient:
         )
 
         self._logger = logging.getLogger(__name__)
+        self.report_presenter = FuzzReportPresenter(
+            self._reporter,
+            safety_system_getter=lambda: self.safety_system,
+        )
 
     @property
     def reporter(self) -> FuzzerReporter:
@@ -260,64 +265,6 @@ class MCPFuzzerClient:
         )
         self._reporter.add_spec_checks(checks)
         return checks
-
-    # ============================================================================
-    # Summary Methods - Delegate to Reporter
-    # ============================================================================
-
-    def print_tool_summary(self, results):
-        """Print a summary of tool fuzzing results."""
-        self._reporter.print_tool_summary(results)
-
-    def print_protocol_summary(self, results, title: str | None = None):
-        """Print a summary of protocol fuzzing results."""
-        if title is None:
-            self._reporter.print_protocol_summary(results)
-        else:
-            self._reporter.print_protocol_summary(results, title=title)
-
-    def print_safety_statistics(self):
-        """Print safety statistics."""
-        self._reporter.print_safety_summary()
-
-    def print_safety_system_summary(self):
-        """Print summary of safety system blocked operations."""
-        self._reporter.print_safety_system_summary()
-
-    def print_blocked_operations_summary(self):
-        """Print summary of blocked system operations."""
-        if self.safety_system:
-            # Best-effort calls; only if present
-            if hasattr(self.safety_system, "get_statistics"):
-                self.safety_system.get_statistics()
-        self._reporter.print_blocked_operations_summary()
-
-    def print_overall_summary(self, tool_results, protocol_results):
-        """Print overall summary statistics."""
-        self._reporter.print_overall_summary(tool_results, protocol_results)
-
-    def print_comprehensive_safety_report(self):
-        """Print a comprehensive safety report."""
-        if self.safety_system:
-            # Get statistics and examples to satisfy test expectations
-            # This data is used by reporter indirectly
-            if hasattr(self.safety_system, "get_statistics"):
-                self.safety_system.get_statistics()
-            if hasattr(self.safety_system, "get_blocked_examples"):
-                self.safety_system.get_blocked_examples()
-        self._reporter.print_comprehensive_safety_report()
-
-    async def generate_standardized_reports(
-        self, output_types=None, include_safety=True
-    ):
-        """Generate standardized output reports."""
-        return await self._reporter.generate_standardized_report(
-            output_types=output_types, include_safety=include_safety
-        )
-
-    async def generate_final_report(self, include_safety=True):
-        """Generate final comprehensive report."""
-        return await self._reporter.generate_final_report(include_safety=include_safety)
 
     # ============================================================================
     # Cleanup Methods

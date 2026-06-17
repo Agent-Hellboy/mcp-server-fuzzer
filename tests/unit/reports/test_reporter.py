@@ -17,6 +17,12 @@ import pytest
 from mcp_fuzzer.reports.collector import ReportCollector
 from mcp_fuzzer.reports.reporter import FuzzerReporter
 from mcp_fuzzer.reports.reporter_config import ReporterConfig
+from mcp_fuzzer.reports.reporter_snapshot import (
+    ensure_metadata,
+    gather_runtime_data,
+    gather_safety_data,
+    prepare_snapshot,
+)
 from mcp_fuzzer.reports.safety_reporter import SafetyReporter
 
 
@@ -346,8 +352,8 @@ class TestFuzzerReporter:
     @pytest.mark.asyncio
     async def test_generate_summary_stats_empty_results(self, reporter):
         """Test generating summary stats with empty results."""
-        snapshot = await reporter._prepare_snapshot(
-            include_safety=False, finalize=False
+        snapshot = await prepare_snapshot(
+            reporter, include_safety=False, finalize=False
         )
         stats = snapshot.summary.to_dict()
 
@@ -376,8 +382,8 @@ class TestFuzzerReporter:
             "protocol1", [{"success": True}, {"error": "test_error"}]
         )
 
-        snapshot = await reporter._prepare_snapshot(
-            include_safety=False, finalize=False
+        snapshot = await prepare_snapshot(
+            reporter, include_safety=False, finalize=False
         )
         stats = snapshot.summary.to_dict()
 
@@ -531,7 +537,7 @@ class TestFuzzerReporter:
             "boom"
         )
 
-        data = reporter._gather_safety_data(True)
+        data = gather_safety_data(reporter, True)
 
         assert data == {}
 
@@ -542,7 +548,7 @@ class TestFuzzerReporter:
         transport.get_process_stats = AsyncMock(return_value={"active": 1})
         reporter.set_transport(transport)
 
-        data = await reporter._gather_runtime_data()
+        data = await gather_runtime_data(reporter)
 
         assert data == {"process_stats": {"active": 1}}
 
@@ -553,14 +559,14 @@ class TestFuzzerReporter:
         transport.get_process_stats = AsyncMock(side_effect=Exception("boom"))
         reporter.set_transport(transport)
 
-        data = await reporter._gather_runtime_data()
+        data = await gather_runtime_data(reporter)
 
         assert data == {}
 
     def test_ensure_metadata_defaults(self, reporter):
         """Test default metadata creation when missing."""
         reporter._metadata = None
-        metadata = reporter._ensure_metadata()
+        metadata = ensure_metadata(reporter)
 
         assert metadata.mode == "unknown"
         assert metadata.protocol == "unknown"
@@ -588,13 +594,20 @@ class TestFuzzerReporter:
             "csv": str(tmp_path / "report.csv"),
             "xml": str(tmp_path / "report.xml"),
         }
-        reporter.export_format = AsyncMock(
-            side_effect=[RuntimeError("csv failed"), str(tmp_path / "report.xml")]
-        )
-
-        with patch("mcp_fuzzer.reports.reporter.logging.error") as mock_error:
+        with (
+            patch(
+                "mcp_fuzzer.reports.reporter_export.export_format",
+                new=AsyncMock(
+                    side_effect=[
+                        RuntimeError("csv failed"),
+                        str(tmp_path / "report.xml"),
+                    ]
+                ),
+            ) as mock_export,
+            patch("mcp_fuzzer.reports.reporter_export.logging.error") as mock_error,
+        ):
             exported = await reporter.export_requested_formats(export_targets)
 
         assert exported == {"xml": str(tmp_path / "report.xml")}
-        assert reporter.export_format.await_count == 2
+        assert mock_export.await_count == 2
         mock_error.assert_called_once()

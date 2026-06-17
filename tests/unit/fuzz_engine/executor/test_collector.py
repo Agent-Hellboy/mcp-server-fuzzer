@@ -5,12 +5,12 @@ Unit tests for ResultCollector.
 
 import pytest
 
-from mcp_fuzzer.fuzz_engine.fuzzerreporter import ResultCollector
+from mcp_fuzzer.fuzz_engine.executor.results import ResultCollector
 
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.fuzz_engine,
-    pytest.mark.fuzzerreporter,
+    pytest.mark.executor,
 ]
 
 

@@ -23,7 +23,7 @@ from mcp_fuzzer.fuzz_engine.mutators.seed_pool import SeedPool
 from mcp_fuzzer.fuzz_engine.mutators.strategies.spec_protocol import (
     get_spec_protocol_fuzzer_method,
 )
-from mcp_fuzzer.fuzz_engine.fuzzerreporter.metrics import MetricsCalculator
+from mcp_fuzzer.fuzz_engine.executor.results import MetricsCalculator
 from mcp_fuzzer.outcomes import FuzzOutcome, classify_protocol_run, classify_tool_run
 from mcp_fuzzer.protocol_registry import FUZZABLE_PROTOCOL_TYPES
 from mcp_fuzzer.reports.formatters.markdown_fmt import MarkdownFormatter

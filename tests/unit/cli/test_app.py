@@ -1,4 +1,4 @@
-"""Tests for the refactored client.main entrypoint."""
+"""Tests for the CLI app composition root."""
 
 import asyncio
 import os
@@ -7,9 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mcp_fuzzer.client import main as client_main
-from mcp_fuzzer.client.main import unified_client_main
-from mcp_fuzzer.client.runtime.run_plan import _run_spec_guard_if_enabled
+import mcp_fuzzer.cli.app as fuzz_app
+import mcp_fuzzer.cli.bootstrap as bootstrap
+from mcp_fuzzer.cli.app import run_fuzz_app
+from mcp_fuzzer.orchestrator.run_plan import _run_spec_guard_if_enabled
 from mcp_fuzzer.client.settings import ClientSettings
 from mcp_fuzzer.exceptions import MCPError
 
@@ -45,7 +46,7 @@ def _make_reporter():
     return reporter
 
 
-def test_unified_client_main_tools_mode():
+def test_run_fuzz_app_tools_mode():
     settings = _settings()
     mock_transport = MagicMock()
     mock_safety = MagicMock()
@@ -59,14 +60,14 @@ def test_unified_client_main_tools_mode():
 
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=mock_transport,
         ) as mock_transport_factory,
-        patch("mcp_fuzzer.client.main.SafetyFilter", return_value=mock_safety),
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=mock_reporter),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter", return_value=mock_safety),
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=mock_reporter),
+        patch("mcp_fuzzer.cli.bootstrap.MCPFuzzerClient", return_value=client_instance),
     ):
-        rc = asyncio.run(unified_client_main(settings))
+        rc = asyncio.run(run_fuzz_app(settings))
 
     assert rc == 0
     mock_transport_factory.assert_called_once()
@@ -78,26 +79,26 @@ def test_unified_client_main_tools_mode():
     )
 
 
-def test_unified_client_main_unknown_mode_logs_error_and_returns_nonzero():
+def test_run_fuzz_app_unknown_mode_logs_error_and_returns_nonzero():
     settings = _settings(mode="unknown")
     client_instance = MagicMock()
     client_instance.cleanup = AsyncMock()
     client_instance.reporter = _make_reporter()
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=MagicMock(),
         ),
-        patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.MCPFuzzerClient", return_value=client_instance),
     ):
-        rc = asyncio.run(unified_client_main(settings))
+        rc = asyncio.run(run_fuzz_app(settings))
     assert rc == 1
     client_instance.cleanup.assert_awaited()
 
 
-def test_unified_client_main_sets_fs_root_when_provided():
+def test_run_fuzz_app_sets_fs_root_when_provided():
     settings = _settings(fs_root="/tmp/safe")
     mock_safety = MagicMock()
     client_instance = MagicMock()
@@ -107,19 +108,19 @@ def test_unified_client_main_sets_fs_root_when_provided():
 
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=MagicMock(),
         ),
-        patch("mcp_fuzzer.client.main.SafetyFilter", return_value=mock_safety),
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter", return_value=mock_safety),
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.MCPFuzzerClient", return_value=client_instance),
     ):
-        asyncio.run(unified_client_main(settings))
+        asyncio.run(run_fuzz_app(settings))
 
     mock_safety.set_fs_root.assert_called_once_with("/tmp/safe")
 
 
-def test_unified_client_main_protocol_and_both_modes():
+def test_run_fuzz_app_protocol_and_both_modes():
     # Protocol mode without protocol_type
     settings = _settings(mode="protocol", runs_per_type=2)
     client_instance = MagicMock()
@@ -129,14 +130,14 @@ def test_unified_client_main_protocol_and_both_modes():
     client_instance.reporter = _make_reporter()
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=MagicMock(),
         ),
-        patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.MCPFuzzerClient", return_value=client_instance),
     ):
-        asyncio.run(unified_client_main(settings))
+        asyncio.run(run_fuzz_app(settings))
     client_instance.fuzz_all_protocol_types.assert_awaited()
     client_instance.run_spec_suite.assert_awaited()
 
@@ -150,20 +151,23 @@ def test_unified_client_main_protocol_and_both_modes():
     client_instance2.reporter = _make_reporter()
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=MagicMock(),
         ),
-        patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance2),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=MagicMock()),
+        patch(
+            "mcp_fuzzer.cli.bootstrap.MCPFuzzerClient",
+            return_value=client_instance2,
+        ),
     ):
-        asyncio.run(unified_client_main(settings_both))
+        asyncio.run(run_fuzz_app(settings_both))
     client_instance2.fuzz_all_tools_both_phases.assert_awaited()
     client_instance2.fuzz_protocol_type.assert_awaited()
     client_instance2.run_spec_suite.assert_awaited()
 
 
-def test_unified_client_main_exports_reports_and_handles_errors():
+def test_run_fuzz_app_exports_reports_and_handles_errors():
     settings = _settings(
         mode="tools",
         tool="x",
@@ -180,21 +184,21 @@ def test_unified_client_main_exports_reports_and_handles_errors():
     client_instance.reporter = reporter
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=MagicMock(),
         ),
-        patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=reporter),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=reporter),
+        patch("mcp_fuzzer.cli.bootstrap.MCPFuzzerClient", return_value=client_instance),
     ):
-        asyncio.run(unified_client_main(settings))
+        asyncio.run(run_fuzz_app(settings))
     reporter.export_requested_formats.assert_awaited_once_with(
         {"csv": "out.csv", "markdown": "md.md"},
         include_safety=False,
     )
 
 
-def test_unified_client_main_exports_html_xml():
+def test_run_fuzz_app_exports_html_xml():
     settings = _settings(
         mode="tools",
         tool="x",
@@ -211,21 +215,21 @@ def test_unified_client_main_exports_html_xml():
     client_instance.reporter = reporter
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=MagicMock(),
         ),
-        patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=reporter),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=reporter),
+        patch("mcp_fuzzer.cli.bootstrap.MCPFuzzerClient", return_value=client_instance),
     ):
-        asyncio.run(unified_client_main(settings))
+        asyncio.run(run_fuzz_app(settings))
     reporter.export_requested_formats.assert_awaited_once_with(
         {"html": "out.html", "xml": "out.xml"},
         include_safety=False,
     )
 
 
-def test_unified_client_main_safety_disabled():
+def test_run_fuzz_app_safety_disabled():
     settings = _settings(safety_enabled=False)
     client_instance = MagicMock()
     client_instance.fuzz_all_tools = AsyncMock(return_value={})
@@ -233,18 +237,18 @@ def test_unified_client_main_safety_disabled():
     client_instance.reporter = _make_reporter()
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=MagicMock(),
         ),
-        patch("mcp_fuzzer.client.main.SafetyFilter") as mock_safety,
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter") as mock_safety,
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.MCPFuzzerClient", return_value=client_instance),
     ):
-        asyncio.run(unified_client_main(settings))
+        asyncio.run(run_fuzz_app(settings))
     mock_safety.assert_not_called()
 
 
-def test_unified_client_main_tool_results_summary(monkeypatch):
+def test_run_fuzz_app_tool_results_summary(monkeypatch):
     settings = _settings(mode="tools")
     client_instance = MagicMock()
     reporter = _make_reporter()
@@ -255,19 +259,19 @@ def test_unified_client_main_tool_results_summary(monkeypatch):
     client_instance.reporter = reporter
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=MagicMock(),
         ),
-        patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.MCPFuzzerClient", return_value=client_instance),
         patch("builtins.print"),
     ):
-        asyncio.run(unified_client_main(settings))
+        asyncio.run(run_fuzz_app(settings))
     reporter.print_tool_execution_summary.assert_called_once()
 
 
-def test_unified_client_main_returns_one_on_exception():
+def test_run_fuzz_app_returns_one_on_exception():
     settings = _settings()
     client_instance = MagicMock()
     client_instance.fuzz_all_tools = AsyncMock(side_effect=Exception("boom"))
@@ -275,14 +279,14 @@ def test_unified_client_main_returns_one_on_exception():
     client_instance.reporter = _make_reporter()
     with (
         patch(
-            "mcp_fuzzer.client.main.build_driver_with_auth",
+            "mcp_fuzzer.cli.bootstrap.build_driver_with_auth",
             return_value=MagicMock(),
         ),
-        patch("mcp_fuzzer.client.main.SafetyFilter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.FuzzerReporter", return_value=MagicMock()),
-        patch("mcp_fuzzer.client.main.MCPFuzzerClient", return_value=client_instance),
+        patch("mcp_fuzzer.cli.bootstrap.SafetyFilter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.FuzzerReporter", return_value=MagicMock()),
+        patch("mcp_fuzzer.cli.bootstrap.MCPFuzzerClient", return_value=client_instance),
     ):
-        rc = asyncio.run(unified_client_main(settings))
+        rc = asyncio.run(run_fuzz_app(settings))
     assert rc == 1
 
 
@@ -333,10 +337,10 @@ async def test_run_spec_guard_disabled():
 
 
 @pytest.mark.asyncio
-async def test_unified_client_main_tools_phase_both(monkeypatch):
-    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+async def test_run_fuzz_app_tools_phase_both(monkeypatch):
+    monkeypatch.setattr(bootstrap, "MCPFuzzerClient", StubClient)
     monkeypatch.setattr(
-        client_main,
+        bootstrap,
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
@@ -352,14 +356,14 @@ async def test_unified_client_main_tools_phase_both(monkeypatch):
         }
     )
 
-    assert await client_main.unified_client_main(settings) == 0
+    assert await fuzz_app.run_fuzz_app(settings) == 0
 
 
 @pytest.mark.asyncio
-async def test_unified_client_main_protocol_type(monkeypatch):
-    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+async def test_run_fuzz_app_protocol_type(monkeypatch):
+    monkeypatch.setattr(bootstrap, "MCPFuzzerClient", StubClient)
     monkeypatch.setattr(
-        client_main,
+        bootstrap,
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
@@ -374,14 +378,14 @@ async def test_unified_client_main_protocol_type(monkeypatch):
         }
     )
 
-    assert await client_main.unified_client_main(settings) == 0
+    assert await fuzz_app.run_fuzz_app(settings) == 0
 
 
 @pytest.mark.asyncio
-async def test_unified_client_main_resources(monkeypatch):
-    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+async def test_run_fuzz_app_resources(monkeypatch):
+    monkeypatch.setattr(bootstrap, "MCPFuzzerClient", StubClient)
     monkeypatch.setattr(
-        client_main,
+        bootstrap,
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
@@ -395,14 +399,14 @@ async def test_unified_client_main_resources(monkeypatch):
         }
     )
 
-    assert await client_main.unified_client_main(settings) == 0
+    assert await fuzz_app.run_fuzz_app(settings) == 0
 
 
 @pytest.mark.asyncio
-async def test_unified_client_main_prompts(monkeypatch):
-    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+async def test_run_fuzz_app_prompts(monkeypatch):
+    monkeypatch.setattr(bootstrap, "MCPFuzzerClient", StubClient)
     monkeypatch.setattr(
-        client_main,
+        bootstrap,
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
@@ -416,14 +420,14 @@ async def test_unified_client_main_prompts(monkeypatch):
         }
     )
 
-    assert await client_main.unified_client_main(settings) == 0
+    assert await fuzz_app.run_fuzz_app(settings) == 0
 
 
 @pytest.mark.asyncio
-async def test_unified_client_main_all_with_tool(monkeypatch):
-    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+async def test_run_fuzz_app_all_with_tool(monkeypatch):
+    monkeypatch.setattr(bootstrap, "MCPFuzzerClient", StubClient)
     monkeypatch.setattr(
-        client_main,
+        bootstrap,
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
@@ -439,15 +443,15 @@ async def test_unified_client_main_all_with_tool(monkeypatch):
         }
     )
 
-    assert await client_main.unified_client_main(settings) == 0
+    assert await fuzz_app.run_fuzz_app(settings) == 0
 
 
 @pytest.mark.asyncio
-async def test_unified_client_main_sets_schema_env(monkeypatch):
+async def test_run_fuzz_app_sets_schema_env(monkeypatch):
     monkeypatch.delenv("MCP_SPEC_SCHEMA_VERSION", raising=False)
-    monkeypatch.setattr(client_main, "MCPFuzzerClient", StubClient)
+    monkeypatch.setattr(bootstrap, "MCPFuzzerClient", StubClient)
     monkeypatch.setattr(
-        client_main,
+        bootstrap,
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
@@ -462,19 +466,19 @@ async def test_unified_client_main_sets_schema_env(monkeypatch):
         }
     )
 
-    await client_main.unified_client_main(settings)
+    await fuzz_app.run_fuzz_app(settings)
     assert os.getenv("MCP_SPEC_SCHEMA_VERSION") == "2025-11-25"
 
 
 @pytest.mark.asyncio
-async def test_unified_client_main_raises_mcp_error(monkeypatch):
+async def test_run_fuzz_app_raises_mcp_error(monkeypatch):
     class ErrorClient(StubClient):
         async def fuzz_all_tools(self, *_args, **_kwargs):
             raise MCPError("boom")
 
-    monkeypatch.setattr(client_main, "MCPFuzzerClient", ErrorClient)
+    monkeypatch.setattr(bootstrap, "MCPFuzzerClient", ErrorClient)
     monkeypatch.setattr(
-        client_main,
+        bootstrap,
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
@@ -488,4 +492,4 @@ async def test_unified_client_main_raises_mcp_error(monkeypatch):
     )
 
     with pytest.raises(MCPError):
-        await client_main.unified_client_main(settings)
+        await fuzz_app.run_fuzz_app(settings)

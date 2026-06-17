@@ -18,7 +18,7 @@ from .invariants import (
     verify_batch_responses,
 )
 from ..mutators import ProtocolMutator, BatchMutator
-from ..fuzzerreporter import ResultBuilder, ResultCollector
+from .results import ResultBuilder, ResultCollector
 from ... import spec_guard
 
 

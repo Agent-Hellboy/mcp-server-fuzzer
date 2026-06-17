@@ -19,12 +19,12 @@ from mcp_fuzzer.cli import (
 )
 from mcp_fuzzer import __version__
 from mcp_fuzzer.cli.config_merge import CliConfig
-from mcp_fuzzer.client.runtime.argv_builder import prepare_inner_argv
-from mcp_fuzzer.client.runtime.async_runner import AsyncRunner
-from mcp_fuzzer.client.runtime.async_runner import execute_inner_client
-from mcp_fuzzer.client.runtime.retry import run_with_retry_on_interrupt
+from mcp_fuzzer.cli.runtime.argv_builder import prepare_inner_argv
+from mcp_fuzzer.cli.runtime.async_runner import AsyncRunner
+from mcp_fuzzer.cli.runtime.async_runner import execute_inner_client
+from mcp_fuzzer.cli.runtime.retry import run_with_retry_on_interrupt
 from mcp_fuzzer.client.safety import SafetyController
-from mcp_fuzzer.client.transport.factory import (
+from mcp_fuzzer.transport.bootstrap import (
     TransportBuildRequest,
     build_driver_with_auth,
 )
@@ -399,7 +399,7 @@ def test_transport_factory_applies_auth_headers():
     request.auth_manager.get_default_auth_headers.return_value = {
         "Authorization": "x"
     }
-    with patch("mcp_fuzzer.client.transport.factory.base_build_driver") as mock_create:
+    with patch("mcp_fuzzer.transport.bootstrap.base_build_driver") as mock_create:
         build_driver_with_auth(request)
         mock_create.assert_called_once_with(
             "http",
@@ -430,7 +430,7 @@ def test_execute_inner_client_pytest_branch(monkeypatch):
     async def dummy_main():
         return None
 
-    with patch("mcp_fuzzer.client.runtime.async_runner.asyncio.run") as mock_run:
+    with patch("mcp_fuzzer.cli.runtime.async_runner.asyncio.run") as mock_run:
         execute_inner_client(argparse.Namespace(), dummy_main, ["prog"])
         mock_run.assert_called_once()
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
@@ -443,11 +443,11 @@ def test_execute_inner_client_network_policy(monkeypatch):
         allow_hosts=None,
     )
     with patch(
-        "mcp_fuzzer.client.runtime.async_runner.asyncio.new_event_loop"
+        "mcp_fuzzer.cli.runtime.async_runner.asyncio.new_event_loop"
     ) as mock_loop:
         loop = MagicMock()
         mock_loop.return_value = loop
-        with patch("mcp_fuzzer.client.runtime.async_runner.asyncio.set_event_loop"):
+        with patch("mcp_fuzzer.cli.runtime.async_runner.asyncio.set_event_loop"):
             with patch.object(
                 SafetyController, "configure_network_policy"
             ) as mock_policy:
@@ -473,11 +473,11 @@ def test_run_with_retry_on_interrupt_retry_path():
 
     with (
         patch(
-            "mcp_fuzzer.client.runtime.retry.execute_inner_client",
+            "mcp_fuzzer.cli.runtime.retry.execute_inner_client",
             side_effect=fake_execute,
         ),
-        patch("mcp_fuzzer.client.runtime.retry.start_system_blocking") as mock_start,
-        patch("mcp_fuzzer.client.runtime.retry.stop_system_blocking") as mock_stop,
+        patch("mcp_fuzzer.cli.runtime.retry.start_system_blocking") as mock_start,
+        patch("mcp_fuzzer.cli.runtime.retry.stop_system_blocking") as mock_stop,
     ):
         run_with_retry_on_interrupt(args, lambda: None, ["prog"])
         assert calls["n"] == 2

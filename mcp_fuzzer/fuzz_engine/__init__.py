@@ -4,7 +4,7 @@ MCP Server Fuzzer - Core Fuzzing Engine
 This package contains the core fuzzing orchestration logic including:
 - Mutators (data generation and mutation)
 - Executors (execution and orchestration)
-- FuzzerReporter (result collection and reporting)
+- Executor results (collection, building, metrics)
 - Runtime execution management (process lifecycle, monitoring, safety)
 """
 
@@ -22,7 +22,7 @@ from .executor import (
     BatchExecutor,
     InvariantViolation,
 )
-from .fuzzerreporter import (
+from .executor.results import (
     ResultBuilder,
     ResultCollector,
     MetricsCalculator,
@@ -42,7 +42,7 @@ __all__ = [
     "ProtocolExecutor",
     "BatchExecutor",
     "InvariantViolation",
-    # FuzzerReporter
+    # Executor results
     "ResultBuilder",
     "ResultCollector",
     "MetricsCalculator",

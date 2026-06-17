@@ -7,14 +7,13 @@ and result aggregation.
 """
 
 import logging
-from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
 from rich.console import Console
 
-from .models import FuzzingMetadata, ReportSnapshot
+from .models import FuzzingMetadata
 from .collector import ReportCollector
 from .formatters import (
     CSVFormatter,
@@ -27,9 +26,19 @@ from .formatters import (
     ReportSaveAdapter,
     FormatterRegistry,
 )
-from .formatters.common import extract_tool_runs
 from .output_manager import OutputManager
 from .reporter_config import ReporterConfig
+from .reporter_console import (
+    print_protocol_summary as _print_protocol_summary,
+    print_tool_execution_summary as _print_tool_execution_summary,
+    print_tool_summary as _print_tool_summary,
+)
+from .reporter_export import (
+    export_format as _export_format,
+    export_requested_formats as _export_requested_formats,
+    generate_final_report as _generate_final_report,
+    generate_standardized_report as _generate_standardized_report,
+)
 from .safety_reporter import SafetyReporter
 from ..safety_system.safety import CombinedSafetyProvider
 
@@ -202,19 +211,11 @@ class FuzzerReporter:
 
     def print_tool_summary(self, results: dict[str, Any]):
         """Print tool fuzzing summary to console."""
-        self.console_formatter.print_tool_summary(results)
-
-        # Store results for final report
-        for tool_name, tool_results in results.items():
-            runs, _ = extract_tool_runs(tool_results)
-            self.add_tool_results(tool_name, runs)
+        _print_tool_summary(self, results)
 
     def print_tool_execution_summary(self, results: dict[str, Any]) -> None:
         """Print tool summary plus aggregate run statistics."""
-        self.console_formatter.print_tool_execution_summary(results)
-        for tool_name, tool_results in results.items():
-            runs, _ = extract_tool_runs(tool_results)
-            self.add_tool_results(tool_name, runs)
+        _print_tool_execution_summary(self, results)
 
     def print_protocol_summary(
         self,
@@ -223,11 +224,7 @@ class FuzzerReporter:
         title: str = "MCP Protocol Fuzzing Summary",
     ):
         """Print protocol fuzzing summary to console."""
-        self.console_formatter.print_protocol_summary(results, title=title)
-
-        # Store results for final report
-        for protocol_type, protocol_results in results.items():
-            self.add_protocol_results(protocol_type, protocol_results)
+        _print_protocol_summary(self, results, title=title)
 
     def print_spec_guard_summary(
         self,
@@ -269,78 +266,17 @@ class FuzzerReporter:
 
     async def generate_final_report(self, include_safety: bool = True) -> str:
         """Generate comprehensive final report and save to file."""
-        snapshot = await self._prepare_snapshot(
-            include_safety=include_safety, finalize=True
-        )
-        json_filename = f"fuzzing_report_{self.session_id}.json"
-        self.formatter_registry.save(
-            "json", snapshot, self.output_dir, json_filename
-        )
-
-        text_filename = f"fuzzing_report_{self.session_id}.txt"
-        self.formatter_registry.save(
-            "text", snapshot, self.output_dir, text_filename
-        )
-
-        if include_safety and self.safety_reporter.has_safety_data():
-            safety_filename = self.output_dir / f"safety_report_{self.session_id}.json"
-            self.safety_reporter.export_safety_data(str(safety_filename))
-
-        logging.info(f"Final report generated: {json_filename}")
-        return str(self.output_dir / json_filename)
+        return await _generate_final_report(self, include_safety=include_safety)
 
     async def generate_standardized_report(
         self, output_types: list[str] = None, include_safety: bool = True
     ) -> dict[str, str]:
         """Generate standardized reports using the new output protocol."""
-        generated_files = {}
-        snapshot = await self._prepare_snapshot(
-            include_safety=include_safety, finalize=True
+        return await _generate_standardized_report(
+            self,
+            output_types=output_types,
+            include_safety=include_safety,
         )
-
-        # Use configured output types if none specified
-        if output_types is None:
-            if self.output_types:
-                output_types = self.output_types
-            else:
-                output_types = ["fuzzing_results"]
-                if include_safety and self.safety_reporter.has_safety_data():
-                    output_types.append("safety_summary")
-
-        # Generate fuzzing results
-        if "fuzzing_results" in output_types:
-            try:
-                filepath = self.output_manager.save_fuzzing_snapshot(
-                    snapshot=snapshot,
-                    safety_enabled=include_safety,
-                )
-                generated_files["fuzzing_results"] = filepath
-            except Exception as e:
-                logging.error(f"Failed to generate standardized fuzzing results: {e}")
-
-        # Generate safety summary
-        if "safety_summary" in output_types and include_safety:
-            try:
-                safety_data = snapshot.safety_data or self._gather_safety_data(True)
-                filepath = self.output_manager.save_safety_summary(safety_data)
-                generated_files["safety_summary"] = filepath
-            except Exception as e:
-                logging.error(f"Failed to generate standardized safety summary: {e}")
-
-        # Generate error report if there are errors
-        if "error_report" in output_types:
-            try:
-                errors = self.collector.collect_errors()
-                if errors:
-                    filepath = self.output_manager.save_error_report(
-                        errors=errors,
-                        execution_context=snapshot.metadata.to_dict(),
-                    )
-                    generated_files["error_report"] = filepath
-            except Exception as e:
-                logging.error(f"Failed to generate standardized error report: {e}")
-
-        return generated_files
 
     def export_safety_data(self, filename: str = None) -> str:
         """Export safety data to JSON file."""
@@ -379,14 +315,12 @@ class FuzzerReporter:
         include_safety: bool = False,
     ) -> str:
         """Export report data to a named format."""
-        snapshot = await self._prepare_snapshot(
-            include_safety=include_safety, finalize=False
-        )
-        if title is not None and format_name == "html":
-            self._html_adapter = replace(self._html_adapter, title=title)
-            self.formatter_registry.register("html", self._html_adapter)
-        return self.formatter_registry.save(
-            format_name, snapshot, self.output_dir, filename
+        return await _export_format(
+            self,
+            format_name,
+            filename,
+            title=title,
+            include_safety=include_safety,
         )
 
     async def export_requested_formats(
@@ -396,91 +330,15 @@ class FuzzerReporter:
         include_safety: bool = False,
     ) -> dict[str, str]:
         """Export all requested named formats and return written file names."""
-        exported: dict[str, str] = {}
-        for format_name, filename in export_targets.items():
-            try:
-                exported[format_name] = await self.export_format(
-                    format_name,
-                    filename,
-                    include_safety=include_safety,
-                )
-            except Exception as exc:
-                logging.error(
-                    "Failed to export %s report to %s: %s",
-                    format_name,
-                    filename,
-                    exc,
-                )
-        return exported
-
-    async def _prepare_snapshot(
-        self, include_safety: bool, finalize: bool
-    ) -> ReportSnapshot:
-        """Create a snapshot of the current report state."""
-        metadata = self._finalize_metadata() if finalize else self._ensure_metadata()
-        safety_data = self._gather_safety_data(include_safety)
-        if include_safety and safety_data:
-            self.collector.update_safety_data(safety_data)
-        runtime_data = await self._gather_runtime_data()
-        if runtime_data:
-            self.collector.update_runtime_data(runtime_data)
-        return self.collector.snapshot(
-            metadata,
-            safety_data=None,
-            runtime_data=None,
+        return await _export_requested_formats(
+            self,
+            export_targets,
             include_safety=include_safety,
         )
-
-    def _ensure_metadata(self) -> FuzzingMetadata:
-        """Ensure metadata exists and return it."""
-        if self._metadata:
-            return self._metadata
-        self._metadata = FuzzingMetadata(
-            session_id=self.session_id,
-            mode="unknown",
-            protocol="unknown",
-            endpoint="unknown",
-            runs=0,
-            runs_per_type=None,
-            fuzzer_version=self._fuzzer_version,
-            start_time=datetime.now(),
-        )
-        return self._metadata
-
-    def _finalize_metadata(self) -> FuzzingMetadata:
-        """Ensure metadata has an end_time and return it."""
-        metadata = self._ensure_metadata()
-        closed = metadata.close()
-        self._metadata = closed
-        return closed
-
-    def _gather_safety_data(self, include_safety: bool) -> dict[str, Any]:
-        if not include_safety:
-            return {}
-        try:
-            return self.safety_reporter.get_comprehensive_safety_data()
-        except Exception as exc:
-            logging.error("Failed to gather safety data: %s", exc)
-            return {}
 
     def set_transport(self, transport: Any) -> None:
         """Set the transport for gathering runtime statistics."""
         self._transport = transport
-
-    async def _gather_runtime_data(self) -> dict[str, Any]:
-        """Gather runtime/process statistics from transport if available."""
-        if not self._transport:
-            return {}
-
-        try:
-            # Check if transport has get_process_stats method
-            if hasattr(self._transport, "get_process_stats"):
-                stats = await self._transport.get_process_stats()
-                return {"process_stats": stats}
-        except Exception as exc:
-            logging.debug("Failed to gather runtime data: %s", exc)
-
-        return {}
 
     @property
     def tool_results(self) -> dict[str, list[dict[str, Any]]]:

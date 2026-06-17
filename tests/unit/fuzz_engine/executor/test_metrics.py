@@ -5,12 +5,12 @@ Unit tests for MetricsCalculator.
 
 import pytest
 
-from mcp_fuzzer.fuzz_engine.fuzzerreporter import MetricsCalculator
+from mcp_fuzzer.fuzz_engine.executor.results import MetricsCalculator
 
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.fuzz_engine,
-    pytest.mark.fuzzerreporter,
+    pytest.mark.executor,
 ]
 
 

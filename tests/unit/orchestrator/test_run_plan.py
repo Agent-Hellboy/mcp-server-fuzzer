@@ -1,6 +1,7 @@
 import pytest
 
-from mcp_fuzzer.client.runtime.run_plan import RunContext, build_run_plan
+from mcp_fuzzer.orchestrator.models import SessionContext
+from mcp_fuzzer.orchestrator.run_plan import build_run_plan
 
 
 class DummyReporter:
@@ -53,7 +54,7 @@ async def test_run_plan_all_mode_executes_steps():
     client = DummyClient()
     reporter = DummyReporter()
     config = {"mode": "all", "spec_guard": True, "stateful": True}
-    context = RunContext(
+    context = SessionContext(
         client=client,
         config=config,
         reporter=reporter,
@@ -74,7 +75,7 @@ async def test_run_plan_tools_mode_only_runs_tools():
     client = DummyClient()
     reporter = DummyReporter()
     config = {"mode": "tools", "spec_guard": True, "stateful": True}
-    context = RunContext(
+    context = SessionContext(
         client=client,
         config=config,
         reporter=reporter,
@@ -91,7 +92,7 @@ async def test_run_plan_protocol_mode_only_runs_protocol():
     client = DummyClient()
     reporter = DummyReporter()
     config = {"mode": "protocol", "spec_guard": True, "stateful": False}
-    context = RunContext(
+    context = SessionContext(
         client=client,
         config=config,
         reporter=reporter,
@@ -108,7 +109,7 @@ async def test_run_plan_resources_mode_only_runs_resources():
     client = DummyClient()
     reporter = DummyReporter()
     config = {"mode": "resources", "spec_guard": True, "stateful": False}
-    context = RunContext(
+    context = SessionContext(
         client=client,
         config=config,
         reporter=reporter,
@@ -125,7 +126,7 @@ async def test_run_plan_prompts_mode_only_runs_prompts():
     client = DummyClient()
     reporter = DummyReporter()
     config = {"mode": "prompts", "spec_guard": True, "stateful": False}
-    context = RunContext(
+    context = SessionContext(
         client=client,
         config=config,
         reporter=reporter,
@@ -142,7 +143,7 @@ async def test_run_plan_stateful_disabled_skips_stateful():
     client = DummyClient()
     reporter = DummyReporter()
     config = {"mode": "protocol", "spec_guard": True, "stateful": False}
-    context = RunContext(
+    context = SessionContext(
         client=client,
         config=config,
         reporter=reporter,
@@ -158,7 +159,7 @@ async def test_run_plan_spec_guard_disabled_skips_checks():
     client = DummyClient()
     reporter = DummyReporter()
     config = {"mode": "protocol", "spec_guard": False, "stateful": False}
-    context = RunContext(
+    context = SessionContext(
         client=client,
         config=config,
         reporter=reporter,
@@ -175,7 +176,7 @@ async def test_run_plan_spec_guard_enabled_records_checks():
     client = DummyClient()
     reporter = DummyReporter()
     config = {"mode": "protocol", "spec_guard": True, "stateful": False}
-    context = RunContext(
+    context = SessionContext(
         client=client,
         config=config,
         reporter=reporter,

@@ -240,14 +240,14 @@ import pytest as _pytest  # noqa: E402
 
 @_pytest.mark.asyncio
 async def test_auth_bypass_probe_skipped_without_auth_manager():
-    from mcp_fuzzer.orchestrator.session import run_auth_bypass_phase
+    from mcp_fuzzer.orchestrator.audit_phases import run_auth_bypass_phase
 
     assert await run_auth_bypass_phase({"auth_manager": None}, lambda c: c) == []
 
 
 @_pytest.mark.asyncio
 async def test_auth_security_audit_skipped_when_disabled():
-    from mcp_fuzzer.orchestrator.session import run_oauth_audit_phase
+    from mcp_fuzzer.orchestrator.audit_phases import run_oauth_audit_phase
 
     result = await run_oauth_audit_phase(
         {"auth_audit": False}, object(), lambda c: c
@@ -257,7 +257,7 @@ async def test_auth_security_audit_skipped_when_disabled():
 
 @_pytest.mark.asyncio
 async def test_auth_security_audit_skipped_without_probe_support():
-    from mcp_fuzzer.orchestrator.session import run_oauth_audit_phase
+    from mcp_fuzzer.orchestrator.audit_phases import run_oauth_audit_phase
 
     # auth_audit enabled but the transport cannot do auth discovery -> skipped,
     # reported as ran=False so it is not logged as a clean run.
@@ -271,7 +271,7 @@ async def test_auth_security_audit_skipped_without_probe_support():
 def test_log_auth_audit_results_does_not_claim_clean_when_skipped(caplog):
     import logging as _logging
 
-    from mcp_fuzzer.orchestrator.session import log_oauth_audit_results
+    from mcp_fuzzer.orchestrator.audit_phases import log_oauth_audit_results
 
     with caplog.at_level(_logging.INFO):
         log_oauth_audit_results([], enabled=True, ran=False)

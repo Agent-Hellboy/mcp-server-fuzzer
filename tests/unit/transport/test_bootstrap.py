@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Unit tests for the transport factory with auth support."""
+"""Unit tests for transport bootstrap with auth support."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_fuzzer.client.transport.factory import (
+from mcp_fuzzer.transport.bootstrap import (
     AUTH_PROTOCOLS,
     TransportBuildRequest,
     build_driver_with_auth,
 )
 from mcp_fuzzer.transport.retrying import RetryingTransport
 
-pytestmark = [pytest.mark.unit, pytest.mark.client]
+pytestmark = [pytest.mark.unit, pytest.mark.transport]
 
 
 def test_transport_build_request_defaults():
@@ -48,7 +48,7 @@ def test_build_driver_no_auth_non_http():
     req = TransportBuildRequest(protocol="stdio", endpoint="cmd")
 
     with patch(
-        "mcp_fuzzer.client.transport.factory.base_build_driver",
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
         return_value=mock_transport,
     ) as mock_build:
         result = build_driver_with_auth(req)
@@ -63,7 +63,7 @@ def test_build_driver_http_no_auth_manager():
     req = TransportBuildRequest(protocol="http", endpoint="http://localhost:8080")
 
     with patch(
-        "mcp_fuzzer.client.transport.factory.base_build_driver",
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
         return_value=mock_transport,
     ) as mock_build:
         result = build_driver_with_auth(req)
@@ -87,7 +87,7 @@ def test_build_driver_http_with_auth_manager():
     )
 
     with patch(
-        "mcp_fuzzer.client.transport.factory.base_build_driver",
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
         return_value=mock_transport,
     ) as mock_build:
         result = build_driver_with_auth(req)
@@ -111,7 +111,7 @@ def test_build_driver_sse_with_auth_manager():
     )
 
     with patch(
-        "mcp_fuzzer.client.transport.factory.base_build_driver",
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
         return_value=mock_transport,
     ) as mock_build:
         build_driver_with_auth(req)
@@ -130,7 +130,7 @@ def test_build_driver_streamablehttp_safety_disabled():
     )
 
     with patch(
-        "mcp_fuzzer.client.transport.factory.base_build_driver",
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
         return_value=mock_transport,
     ) as mock_build:
         build_driver_with_auth(req)
@@ -153,7 +153,7 @@ def test_build_driver_with_retries_wraps_transport():
     )
 
     with patch(
-        "mcp_fuzzer.client.transport.factory.base_build_driver",
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
         return_value=mock_transport,
     ):
         result = build_driver_with_auth(req)
@@ -169,7 +169,7 @@ def test_build_driver_retries_one_no_wrap():
     )
 
     with patch(
-        "mcp_fuzzer.client.transport.factory.base_build_driver",
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
         return_value=mock_transport,
     ):
         result = build_driver_with_auth(req)
@@ -187,7 +187,7 @@ def test_build_driver_invalid_retries_fallback_to_one():
     )
 
     with patch(
-        "mcp_fuzzer.client.transport.factory.base_build_driver",
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
         return_value=mock_transport,
     ):
         result = build_driver_with_auth(req)
@@ -208,7 +208,7 @@ def test_build_driver_non_auth_protocol_with_auth_manager_skips_auth():
     )
 
     with patch(
-        "mcp_fuzzer.client.transport.factory.base_build_driver",
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
         return_value=mock_transport,
     ) as mock_build:
         build_driver_with_auth(req)

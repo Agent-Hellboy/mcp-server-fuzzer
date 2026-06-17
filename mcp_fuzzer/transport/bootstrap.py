@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Transport factory that layers auth resolution on top of the base registry."""
+"""Transport bootstrap that layers auth resolution on top of the base registry."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from ...transport.catalog import build_driver as base_build_driver
-from ...transport.retrying import RetryingTransport, RetryPolicy
-from ...exceptions import TransportRegistrationError
-from ...types import AuthManagerProtocol
+
+from ..exceptions import TransportRegistrationError
+from ..transport.catalog import build_driver as base_build_driver
+from ..transport.retrying import RetryingTransport, RetryPolicy
+from ..types import AuthManagerProtocol
 
 logger = logging.getLogger(__name__)
 AUTH_PROTOCOLS = ("http", "https", "streamablehttp", "sse")
@@ -38,6 +39,7 @@ def build_driver_with_auth(request: TransportBuildRequest):
         auth_manager = resolved.auth_manager
 
         if auth_manager:
+
             def auth_header_provider() -> dict[str, str]:
                 auth_headers = auth_manager.get_default_auth_headers()
                 if not auth_headers:
@@ -96,4 +98,4 @@ def build_driver_with_auth(request: TransportBuildRequest):
         ) from transport_error
 
 
-__all__ = ["TransportBuildRequest", "build_driver_with_auth"]
+__all__ = ["AUTH_PROTOCOLS", "TransportBuildRequest", "build_driver_with_auth"]

@@ -8,7 +8,6 @@ import logging
 from typing import Any
 
 from ..exceptions import ConfigFileError, MCPError
-from ..transport.catalog import register_custom_driver
 from ..transport.interfaces.driver import TransportDriver
 
 logger = logging.getLogger(__name__)
@@ -20,6 +19,8 @@ def load_custom_transports(config_data: dict[str, Any]) -> None:
     Args:
         config_data: Configuration dictionary containing custom_transports section
     """
+    from ..transport.catalog import register_custom_driver
+
     custom_transports = config_data.get("custom_transports", {})
 
     for transport_name, transport_config in custom_transports.items():

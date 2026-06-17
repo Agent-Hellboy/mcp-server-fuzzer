@@ -22,7 +22,7 @@ def test_print_startup_info_basic(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(startup_info, "Console", _dummy_console_factory(calls))
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.argv_builder.prepare_inner_argv",
+        "mcp_fuzzer.cli.runtime.argv_builder.prepare_inner_argv",
         lambda args: ["mcp-fuzzer", "--mode", "tools"],
     )
     monkeypatch.setattr(
@@ -91,7 +91,7 @@ def test_print_startup_info_argv_error(monkeypatch):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.argv_builder.prepare_inner_argv",
+        "mcp_fuzzer.cli.runtime.argv_builder.prepare_inner_argv",
         lambda args: _raise(),
     )
 
@@ -144,7 +144,7 @@ def test_print_startup_info_config_and_auth_errors(monkeypatch):
     calls = []
     monkeypatch.setattr(startup_info, "Console", _dummy_console_factory(calls))
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.argv_builder.prepare_inner_argv",
+        "mcp_fuzzer.cli.runtime.argv_builder.prepare_inner_argv",
         lambda args: ["mcp-fuzzer", "--mode", "tools"],
     )
 
@@ -207,7 +207,7 @@ def test_print_startup_info_auth_env_found_vars(monkeypatch):
     monkeypatch.setattr(startup_info, "Console", _dummy_console_factory(calls))
     monkeypatch.setenv("MCP_API_KEY", "abc123")
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.argv_builder.prepare_inner_argv",
+        "mcp_fuzzer.cli.runtime.argv_builder.prepare_inner_argv",
         lambda args: ["mcp-fuzzer", "--mode", "tools"],
     )
 
@@ -260,7 +260,7 @@ def test_print_startup_info_auth_providers_and_config_rows(monkeypatch, tmp_path
     calls = []
     monkeypatch.setattr(startup_info, "Console", _dummy_console_factory(calls))
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.argv_builder.prepare_inner_argv",
+        "mcp_fuzzer.cli.runtime.argv_builder.prepare_inner_argv",
         lambda args: ["mcp-fuzzer", "--mode", "tools"],
     )
 

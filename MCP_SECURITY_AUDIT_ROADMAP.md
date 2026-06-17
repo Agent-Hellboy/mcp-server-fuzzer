@@ -5,7 +5,7 @@
 > Not a permanent doc — fold the useful parts into real docs before release and
 > delete this. Keep it updated at the end of every work session.
 
-Last updated: 2026-06-17
+Last updated: 2026-06-18
 
 ---
 
@@ -32,9 +32,9 @@ arXiv 2605.22333 onto black-box probes.
   - Task ID: `w57bc844n` · Run ID: `wf_2717f333-3e1`
   - Output: paste/synthesize into **§ Research findings** below when it completes.
 - [~] **Phase 2 — Design.** Turn probeable vectors into a checks taxonomy (IDs, severity, detection method). Get scope sign-off from user. Fill **§ Proposed checks**.
-- [~] **Phase 3 — Implement (IN PROGRESS).** Branch `mcp-tool-security-checks`, uncommitted. Checks live in flat `mcp_fuzzer/findings/` (server checks #1–9 in `server.py`), driven by top-level `mcp_fuzzer/orchestrator/`. `--security-audit` CLI wired. Deferred: name squatting (#10), origin/rebinding (#11), token passthrough (#12).
-  - **Structure cleanup done:** replaced the over-nested `inspection/audits/...` tree (dirs holding only `__init__.py`, logic in `__init__.py`) with a flat `findings/` library + a top-level `orchestrator/` that drives the analysis pipeline. Full suite green (2524) both orderings.
-  - **Next structural step (per user):** orchestrator should also *drive `fuzz_engine`* — extract the run-plan execution (`build_run_plan` + `plan.execute`) out of `client/main.py:unified_client_main` into `orchestrator/`, so the orchestrator owns "run fuzz → analyze → persist" and `main.py` is thin setup + reporting.
+- [~] **Phase 3 — Implement (IN PROGRESS).** Branch `mcp-tool-security-checks`, uncommitted. Checks live in flat `mcp_fuzzer/diagnostics/` (server checks in `server.py` + `server_*` modules), driven by top-level `mcp_fuzzer/orchestrator/`. `--security-audit` CLI wired. Deferred: name squatting (#10), origin/rebinding (#11), token passthrough (#12).
+  - **Structure cleanup done:** flat `diagnostics/` library + top-level `orchestrator/` (run plan, audit registry, persist). Full suite green both orderings.
+  - **Orchestrator owns the session spine:** `orchestrator/run_plan.py` executes fuzz; `cli/app.py` is thin bootstrap → `run_session` → `PostRunPresenter`.
 - [ ] **Phase 4 — Release 0.4.0.** CHANGELOG dated section, version bump, Testing Check, tag + push.
 
 ---
@@ -62,14 +62,12 @@ follow the identical wiring. Files and what each does:
 
 | Path | Role |
 |------|------|
-| `mcp_fuzzer/inspection/findings/` | `Finding` dataclass + `classify_fuzz_runs()` |
-| `mcp_fuzzer/inspection/audits/auth/` | OAuth F1–F9 probes (arXiv 2605.22333) |
-| `mcp_fuzzer/inspection/audits/server/` | Non-OAuth checks: `metadata/`, `transport/`, `oracles/` |
-| `mcp_fuzzer/inspection/orchestrator/` | Post-fuzz pipeline: classify runs, run audit phases, persist `findings.json` |
-| `mcp_fuzzer/cli/parser.py` | Add `--<flag>` `action="store_true"` with help text citing the paper. |
+| `mcp_fuzzer/diagnostics/` | `Finding` model, `classify_fuzz_runs()`, auth + server audit probes |
+| `mcp_fuzzer/orchestrator/` | Post-fuzz pipeline: run plan, audit registry, persist `findings.json` |
+| `mcp_fuzzer/cli/parser_audit.py` | Add `--<flag>` `action="store_true"` with help text citing the paper. |
 | `mcp_fuzzer/cli/config_merge.py` | Add `("<flag>", "<flag>")` to the `_transfer_config_to_args` mapping AND to the `merged` dict in `build_cli_config`. (Both! PR #174 review caught the mapping miss.) |
 | `mcp_fuzzer/cli/validators.py` | `validate_arguments` — add cross-flag rules (e.g. intrusive requires base). Runs *after* config merge. |
-| `mcp_fuzzer/client/main.py` | Calls `inspection.orchestrator.collect_session_findings` after fuzz. Audit phases return `(findings, ran)` so skips aren't logged as clean. |
+| `mcp_fuzzer/cli/app.py` | Thin composition root: `SessionBootstrap` → `run_session` → `PostRunPresenter`. |
 | `mcp_fuzzer/reports/crash_repro.py` | `write_findings_report` — optional top-level metadata block (paper citation + count), guarded by try/except. |
 | `mcp_fuzzer/reports/formatters/plain_summary.py` | stdout summary — link the paper when a finding category is present. Import guarded by try/except ImportError. |
 

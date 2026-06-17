@@ -12,7 +12,7 @@ from typing import Any
 from ...safety_system.safety import SafetyFilter, CombinedSafetyProvider
 from .async_executor import AsyncFuzzExecutor
 from ..mutators import ToolMutator
-from ..fuzzerreporter import ResultBuilder, ResultCollector
+from .results import ResultBuilder, ResultCollector
 
 
 class ToolExecutor:

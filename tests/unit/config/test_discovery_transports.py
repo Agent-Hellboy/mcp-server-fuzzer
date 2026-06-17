@@ -211,7 +211,10 @@ def test_load_custom_transports_invalid_factory_path(monkeypatch):
         raise ImportError(name)
 
     monkeypatch.setattr(transports.importlib, "import_module", fake_import)
-    monkeypatch.setattr(transports, "register_custom_driver", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        "mcp_fuzzer.transport.catalog.register_custom_driver",
+        lambda **_kwargs: None,
+    )
 
     config_data = {
         "custom_transports": {
@@ -241,7 +244,10 @@ def test_load_custom_transports_non_callable_factory(monkeypatch):
         raise ImportError(name)
 
     monkeypatch.setattr(transports.importlib, "import_module", fake_import)
-    monkeypatch.setattr(transports, "register_custom_driver", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        "mcp_fuzzer.transport.catalog.register_custom_driver",
+        lambda **_kwargs: None,
+    )
 
     config_data = {
         "custom_transports": {

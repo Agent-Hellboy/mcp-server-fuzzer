@@ -53,14 +53,13 @@ grab-bag).
 ### Session flow (the spine)
 ```
 cli.run_cli
-  └─ build settings ──► orchestrator.run_session(context)
-                          ├─ build_run_plan + plan.execute      → fuzz_engine
-                          ├─ collect_session_findings           → diagnostics
-                          │     ├─ classify_fuzz_runs (crash/hang/leak/…)
-                          │     ├─ auth audit (F1–F9)            [--auth-audit]
-                          │     └─ server audit (poisoning/…)    [--security-audit]
-                          └─ persist_session_findings → findings.json + crash repros
-  └─ reporter renders summaries / standardized reports / exports
+  └─ build settings ──► cli/app.run_fuzz_app
+                          ├─ SessionBootstrap (transport, client, reporter, context)
+                          └─ orchestrator.run_session(context) → SessionResult
+                                ├─ orchestrator/run_plan + plan.execute   → fuzz_engine
+                                ├─ audit_registry → diagnostics phases
+                                └─ persist_session_findings
+  └─ PostRunPresenter (stdout summaries, exports via FuzzReportPresenter)
 ```
 
 ---
@@ -69,14 +68,14 @@ cli.run_cli
 
 | Package | Layer | Responsibility |
 |---------|-------|----------------|
-| `cli/` | L4 | argument parsing, config merge, validation, entrypoint |
-| `orchestrator/` | L3 | drive a session: fuzz run → diagnostics → persist (`run_session`) |
+| `cli/` | L4 | argument parsing, config merge, validation, bootstrap, post-run, entrypoint |
+| `orchestrator/` | L3 | session models, run plan, audit registry, `run_session`, persist |
 | `fuzz_engine/` | L2 | executors, mutators, strategies, runtime/watchdog |
 | `diagnostics/` | L2 | `Finding` model, fuzz-run classifier, paper-backed audits (auth + server) |
 | `reports/` | L2 | report collection, formatters, output protocol, exports |
-| `transport/` | L1 | stdio/HTTP/SSE drivers, JSON-RPC adapter, catalog, retry wrapper |
+| `transport/` | L1 | stdio/HTTP/SSE drivers, JSON-RPC adapter, catalog, bootstrap, retry wrapper |
 | `auth/` | L1 | OAuth client (discovery, registration, grants, token cache) |
-| `client/` | L1 | MCP client wrapper, run-plan runtime, transport factory |
+| `client/` | L1 | MCP client facades (`fuzzer_client`, `tool_client`, `protocol_client`) |
 | `safety_system/` | L1 | input blocking, danger detection, fs sandbox, safety events |
 | `config/` | L0 | constants, config singleton, loaders, schema |
 | `spec_guard/`, `utils/`, `logging/`, `corpus` | L0 | foundation helpers |
@@ -131,6 +130,9 @@ drive module/symbol design:
 - **DIP** — depend on the abstraction *only where polymorphism is real*
   (`TransportDriver` → 4 drivers, `AuthProvider` → many). A one-impl ABC is not
   DIP, it's ceremony — we deleted `ConfigPort` and `SafetyPort`.
+- **SRP** — `MCPFuzzerClient` fuzzes; `FuzzReportPresenter` / `PostRunPresenter`
+  print/export; `cli/app.py::run_fuzz_app` is the composition root; `SessionBootstrap`
+  wires dependencies.
 - **Names state the role, not the layer mechanics.** `base.py` (a concrete
   facade) → `fuzzer_client.py`; the real base class is `mutators/base.py::Mutator`.
   Avoid near-twin module names (`spec_version` vs `spec_versions` — merged).
@@ -141,27 +143,31 @@ drive module/symbol design:
 
 ## 5. Recommended follow-ups (behavior-sensitive — get sign-off)
 
-- **Split `MCPFuzzerClient` (SRP).** `client/fuzzer_client.py` mixes a *fuzzing
-  facade* (`fuzz_tool`, `fuzz_all_protocol_types`, …) with a *reporting facade*
-  (`print_*`, `generate_*_report`). Extract the reporting methods to a collaborator
-  that wraps the `reporter`, leaving the client to orchestrate fuzzing only.
-- **`client/protocol_client.py` is a 1049-line god-module.** Split by concern
-  (resources / prompts / tools / spec) behind the existing facade. Large; ~30
-  tests patch it — do as its own focused pass.
-- **Relocate the composition root.** `client/main.py::unified_client_main` is
-  application wiring (transport + client + reporter + orchestrator), i.e. L4 app
-  glue living inside an L1 subsystem. Move it to the app layer (e.g. `cli/app.py`)
-  so `client/` is purely "the MCP fuzzing client".
-- **`fuzz_engine/fuzzerreporter/`** — 3-module package; fine as-is, but its
-  result-building overlaps `reports/collector` — worth a dedup look.
+All items from the 2026-06 SOLID/architecture pass are **done** except optional
+future work:
+
+- ~~**Split `MCPFuzzerClient` (SRP).**~~ Done: `client/report_presenter.py`.
+- ~~**Split `protocol_client.py`.**~~ Done: `protocol_specs.py`, `protocol_send_handlers.py`,
+  `protocol_listings.py`, facade `protocol_client.py`.
+- ~~**Relocate the composition root.**~~ Done: `cli/app.py`, `cli/bootstrap.py`,
+  `cli/post_run.py`.
+- ~~**Move run plan to orchestrator.**~~ Done: `orchestrator/run_plan.py`,
+  `orchestrator/models.py::SessionContext`.
+- ~~**Transport bootstrap.**~~ Done: `transport/bootstrap.py` (auth-aware driver build).
+- ~~**CLI runtime.**~~ Done: `cli/runtime/` (async runner, retry, argv builder).
+- ~~**Dedup `fuzzerreporter/`.**~~ Done: merged into `fuzz_engine/executor/results.py`.
+- ~~**Split god-modules.**~~ Done: `diagnostics/server_*`, `auth_oauth_probes`,
+  `spec_checks_*`, `tool_client_*`, `cli/parser_*`.
+- ~~**Audit phase registry.**~~ Done: `orchestrator/audit_registry.py`.
+- ~~**Typed session config.**~~ Done: `cli/session_settings.py::SessionSettings`.
+- ~~**Split `reports/reporter.py`.**~~ Done: `reporter_console.py`,
+  `reporter_snapshot.py`, `reporter_export.py`; facade `reporter.py`.
 
 ---
 
-## 5. Restructure log (done)
+## 6. Restructure log (done)
 
-`config/`, `reports/`, `fuzz_engine` strategies flattened; the 527-line reporter
-moved out of `__init__`; the security-audit feature flattened into `diagnostics/`
-+ a top-level `orchestrator/` that now drives `fuzz_engine`; `client/` single-file
-dirs, `transport/wrappers/`, `safety_system/reporting/` flattened; dead empty
-`security_mode/` removed. Full unit suite green (2524) in both orderings after
-each step.
+`config/`, `reports/`, `fuzz_engine` strategies flattened; security-audit feature in
+flat `diagnostics/` + top-level `orchestrator/`; client god-modules split; composition
+root and bootstrap in `cli/`; transport bootstrap relocated; executor result types
+unified. Full unit suite green in both orderings after each step.

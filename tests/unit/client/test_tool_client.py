@@ -126,7 +126,9 @@ async def test_fuzz_single_tool_with_timeout_returns_timeout_error():
     async def _fake_wait_for(task, timeout=None):
         raise asyncio.TimeoutError()
 
-    with patch("mcp_fuzzer.client.tool_client.asyncio.wait_for", _fake_wait_for):
+    with patch(
+        "mcp_fuzzer.client.tool_client_fuzzing.asyncio.wait_for", _fake_wait_for
+    ):
         results = await client._fuzz_single_tool_with_timeout(tool, runs_per_tool=1)
 
     assert results[0]["error"] == "tool_timeout"

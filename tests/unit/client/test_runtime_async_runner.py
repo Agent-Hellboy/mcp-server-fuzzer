@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_fuzzer.client.runtime.async_runner import execute_inner_client, AsyncRunner
-from mcp_fuzzer.client.runtime.retry import run_with_retry_on_interrupt
+from mcp_fuzzer.cli.runtime.async_runner import execute_inner_client, AsyncRunner
+from mcp_fuzzer.cli.runtime.retry import run_with_retry_on_interrupt
 from mcp_fuzzer.client.safety import SafetyController
 
 
@@ -79,7 +79,7 @@ def test_async_runner_disables_aiomonitor_when_missing(monkeypatch):
     runner = AsyncRunner(args, SafetyController())
 
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.async_runner.importlib.util.find_spec",
+        "mcp_fuzzer.cli.runtime.async_runner.importlib.util.find_spec",
         lambda name: None,
     )
 
@@ -98,15 +98,15 @@ def test_async_runner_cleanup_pending_tasks_timeout(monkeypatch):
     mock_task.done.return_value = False
 
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.async_runner.asyncio.all_tasks",
+        "mcp_fuzzer.cli.runtime.async_runner.asyncio.all_tasks",
         lambda _loop: {mock_task},
     )
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.async_runner.asyncio.gather",
+        "mcp_fuzzer.cli.runtime.async_runner.asyncio.gather",
         lambda *args, **kwargs: object(),
     )
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.async_runner.asyncio.wait_for",
+        "mcp_fuzzer.cli.runtime.async_runner.asyncio.wait_for",
         lambda *args, **kwargs: (_ for _ in ()).throw(asyncio.TimeoutError()),
     )
 
@@ -120,10 +120,10 @@ def test_run_with_retry_on_interrupt_exits_when_no_retry(monkeypatch):
     args = MagicMock(enable_safety_system=False, retry_with_safety_on_interrupt=False)
     with (
         patch(
-            "mcp_fuzzer.client.runtime.retry.execute_inner_client",
+            "mcp_fuzzer.cli.runtime.retry.execute_inner_client",
             side_effect=KeyboardInterrupt,
         ),
-        patch("mcp_fuzzer.client.runtime.retry.Console") as mock_console,
+        patch("mcp_fuzzer.cli.runtime.retry.Console") as mock_console,
     ):
         with pytest.raises(SystemExit) as exc:
             run_with_retry_on_interrupt(args, lambda: None, ["prog"])

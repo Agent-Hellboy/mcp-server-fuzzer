@@ -17,7 +17,6 @@ COMPONENT_MARKERS = {
     "unit/fuzz_engine": ["unit", "fuzz_engine"],
     "unit/fuzz_engine/executor": ["unit", "fuzz_engine", "executor"],
     "unit/fuzz_engine/fuzzer": ["unit", "fuzz_engine", "fuzzer"],
-    "unit/fuzz_engine/fuzzerreporter": ["unit", "fuzz_engine", "fuzzerreporter"],
     "unit/fuzz_engine/mutators": ["unit", "fuzz_engine", "mutators"],
     "unit/fuzz_engine/runtime": ["unit", "fuzz_engine", "runtime"],
     "unit/fuzz_engine/strategy": ["unit", "fuzz_engine", "strategy"],
