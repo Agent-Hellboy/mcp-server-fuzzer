@@ -242,14 +242,34 @@ class MCPAuthorizationFlow:
         # 3. Dynamic Client Registration -- register the *actual* redirect URI
         #    so it matches the authorization request (exact-match validation).
         if as_metadata.registration_endpoint:
-            registration = register_dynamic_client(
-                as_metadata.registration_endpoint,
-                redirect_uris=[redirect_uri] if redirect_uri else [],
-                client_name=self.config.client_name,
-                scope=self._resolve_scope(),
-                http=self._http,
-                timeout=self.config.timeout,
-            )
+            reg_kwargs: dict[str, Any] = {
+                "redirect_uris": [redirect_uri] if redirect_uri else [],
+                "client_name": self.config.client_name,
+                "http": self._http,
+                "timeout": self.config.timeout,
+            }
+            scope = self._resolve_scope()
+            try:
+                registration = register_dynamic_client(
+                    as_metadata.registration_endpoint, scope=scope, **reg_kwargs
+                )
+            except AuthProviderError:
+                # ``scope`` is optional in RFC 7591 and is still requested in the
+                # authorization request, so it is not required at registration
+                # time. Some authorization servers (e.g. locked-down Keycloak
+                # realms whose "Allowed Client Scopes" policy rejects anonymous
+                # registration that names scopes) only accept a scope-less
+                # registration -- retry once without it before giving up.
+                if not scope:
+                    raise
+                logger.info(
+                    "Dynamic client registration with scope=%r was rejected; "
+                    "retrying without the optional scope parameter",
+                    scope,
+                )
+                registration = register_dynamic_client(
+                    as_metadata.registration_endpoint, scope=None, **reg_kwargs
+                )
             return registration["client_id"], registration.get("client_secret")
         raise AuthProviderError(
             "No client credentials available: provide a client_id, a Client ID "
