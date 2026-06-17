@@ -143,8 +143,16 @@ drive module/symbol design:
 
 ## 5. Recommended follow-ups (behavior-sensitive — get sign-off)
 
-All items from the 2026-06 SOLID/architecture pass are **done** except optional
-future work:
+All items from the 2026-06 SOLID/architecture pass are **done**. Layer-hygiene
+follow-ups in the same refactor:
+
+- ~~**Break L2 peer coupling.**~~ Done: `utils/result_shape.py::extract_tool_runs`
+  shared by `diagnostics/` and `reports/`; `findings.json` audit metadata built in
+  `orchestrator/persist.py` and passed into `write_findings_report`.
+- ~~**Move execution pipeline.**~~ Done: `orchestrator/pipeline.py::ClientExecutionPipeline`.
+- ~~**Import-layer guard.**~~ Done: `tests/unit/test_layer_imports.py`.
+
+Optional future work:
 
 - ~~**Split `MCPFuzzerClient` (SRP).**~~ Done: `client/report_presenter.py`.
 - ~~**Split `protocol_client.py`.**~~ Done: `protocol_specs.py`, `protocol_send_handlers.py`,

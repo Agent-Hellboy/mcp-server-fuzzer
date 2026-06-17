@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..client.fuzzer_client import MCPFuzzerClient
-from ..client.runtime.pipeline import ClientExecutionPipeline
+from .pipeline import ClientExecutionPipeline
 from ..reports import FuzzerReporter
 
 

@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from ..reports.formatters.common import extract_tool_runs
+from ..utils.result_shape import extract_tool_runs
 from .model import Finding
 from .server import server_finding
 

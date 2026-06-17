@@ -16,7 +16,7 @@ import pytest
 from mcp_fuzzer.auth.loaders import load_auth_config
 from mcp_fuzzer.cli.parser import create_argument_parser
 from mcp_fuzzer.cli.validators import ValidationManager
-from mcp_fuzzer.client.runtime.pipeline import ClientExecutionPipeline
+from mcp_fuzzer.orchestrator.pipeline import ClientExecutionPipeline
 from mcp_fuzzer.exceptions import AuthConfigError, ServerError
 from mcp_fuzzer.fuzz_engine.mutators import ProtocolMutator, ToolMutator
 from mcp_fuzzer.fuzz_engine.mutators.seed_pool import SeedPool

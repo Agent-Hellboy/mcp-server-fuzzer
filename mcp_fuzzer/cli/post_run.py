@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from ..client.report_presenter import FuzzReportPresenter
+from ..orchestrator.audit_metadata import audit_summary_footnotes
 from ..orchestrator.models import SessionResult
 from ..reports import FuzzerReporter
 from ..reports.formatters.plain_summary import write_stdout_summary
@@ -89,6 +90,11 @@ class PostRunPresenter:
                 protocol_results=pr,
                 blocked=no_tools_available,
                 findings_summary=findings_summary,
+                audit_footnotes=(
+                    audit_summary_footnotes(findings_summary)
+                    if findings_summary
+                    else None
+                ),
             )
         except Exception as exc:  # pragma: no cover
             logging.warning("Failed to write plain stdout summary: %s", exc)

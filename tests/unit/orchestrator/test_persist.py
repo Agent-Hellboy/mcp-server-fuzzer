@@ -64,3 +64,22 @@ def test_persist_session_findings_skips_empty_findings():
 
     mock_crash.assert_called_once()
     mock_findings.assert_not_called()
+
+
+def test_build_findings_audit_sections_includes_auth_metadata():
+    from mcp_fuzzer.diagnostics.auth_oauth import audit_as_metadata
+    from mcp_fuzzer.orchestrator.audit_metadata import build_findings_audit_sections
+
+    auth_findings = audit_as_metadata(
+        type(
+            "Meta",
+            (),
+            {
+                "code_challenge_methods_supported": [],
+                "grant_types_supported": ["authorization_code"],
+            },
+        )()
+    )
+    sections = build_findings_audit_sections(auth_findings)
+    assert sections["auth_audit"]["finding_count"] == len(auth_findings)
+    assert "paper_url" in sections["auth_audit"]

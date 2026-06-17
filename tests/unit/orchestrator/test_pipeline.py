@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from mcp_fuzzer.client.runtime.pipeline import ClientExecutionPipeline
+from mcp_fuzzer.orchestrator.pipeline import ClientExecutionPipeline
 
 
 class FakeClient:

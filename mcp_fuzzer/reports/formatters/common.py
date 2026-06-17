@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Literal, Protocol
 
-from ...types import ExtractedToolRuns, ToolRunResult
+from ...utils.result_shape import extract_tool_runs
 
 
 class SupportsToDict(Protocol):
@@ -21,43 +21,6 @@ def normalize_report_data(
     if hasattr(report, "to_dict"):
         return report.to_dict()  # type: ignore[return-value]
     return report
-
-
-def extract_tool_runs(
-    tool_entry: Any,
-) -> ExtractedToolRuns:
-    if isinstance(tool_entry, list):
-        return ExtractedToolRuns(tool_entry, None)
-    if not isinstance(tool_entry, dict):
-        return ExtractedToolRuns([], None)
-    runs = tool_entry.get("runs")
-    if isinstance(runs, list):
-        return ExtractedToolRuns(runs, tool_entry)
-    combined: list[ToolRunResult] = []
-    realistic = tool_entry.get("realistic")
-    aggressive = tool_entry.get("aggressive")
-    if isinstance(realistic, list):
-        combined.extend(realistic)
-    if isinstance(aggressive, list):
-        combined.extend(aggressive)
-    if combined:
-        return ExtractedToolRuns(combined, tool_entry)
-    if "error" in tool_entry or "exception" in tool_entry:
-        synthetic_run: ToolRunResult = {
-            "success": bool(tool_entry.get("success", False)),
-            "safety_blocked": bool(tool_entry.get("safety_blocked", False)),
-            "safety_sanitized": bool(tool_entry.get("safety_sanitized", False)),
-        }
-        if "args" in tool_entry:
-            synthetic_run["args"] = tool_entry.get("args")
-        if "label" in tool_entry:
-            synthetic_run["label"] = tool_entry.get("label")
-        if "error" in tool_entry:
-            synthetic_run["error"] = tool_entry.get("error")
-        if "exception" in tool_entry:
-            synthetic_run["exception"] = tool_entry.get("exception")
-        return ExtractedToolRuns([synthetic_run], tool_entry)
-    return ExtractedToolRuns(combined, tool_entry)
 
 
 def calculate_tool_success_rate(
@@ -212,3 +175,21 @@ def collect_and_summarize_protocol_items(
     """Collect labeled protocol items and summarize them."""
     items = collect_labeled_protocol_items(protocol_results, prefix)
     return items, summarize_protocol_items(items)
+
+
+__all__ = [
+    "LABEL_PREFIXES",
+    "LabelPrefix",
+    "SupportsToDict",
+    "calculate_protocol_success_rate",
+    "calculate_tool_success_rate",
+    "collect_and_summarize_protocol_items",
+    "collect_labeled_protocol_items",
+    "extract_tool_runs",
+    "normalize_report_data",
+    "result_has_failure",
+    "summarize_protocol_items",
+    "summarize_tool_runs",
+    "tool_run_has_exception",
+    "tool_run_has_failure",
+]

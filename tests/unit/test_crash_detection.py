@@ -197,6 +197,7 @@ def test_sample_server_memory_none_without_process():
 def test_write_findings_report(tmp_path):
     from mcp_fuzzer.diagnostics import classify_fuzz_runs
     from mcp_fuzzer.diagnostics.auth_oauth import audit_as_metadata
+    from mcp_fuzzer.orchestrator.audit_metadata import build_findings_audit_sections
     from mcp_fuzzer.reports.crash_repro import write_findings_report
 
     findings = classify_fuzz_runs(
@@ -221,7 +222,11 @@ def test_write_findings_report(tmp_path):
             },
         )()
     )
-    path = write_findings_report(tmp_path, auth_findings)
+    path = write_findings_report(
+        tmp_path,
+        auth_findings,
+        audit_sections=build_findings_audit_sections(auth_findings),
+    )
     data = json.loads(path.read_text())
     assert data["auth_audit"]["paper_url"] == "https://arxiv.org/abs/2605.22333"
     assert data["auth_audit"]["finding_count"] == len(auth_findings)
@@ -299,13 +304,16 @@ async def test_probe_advertised_auth_open_tools():
 
 
 def test_plain_summary_links_auth_audit_paper(capsys):
+    from mcp_fuzzer.orchestrator.audit_metadata import audit_summary_footnotes
     from mcp_fuzzer.reports.formatters.plain_summary import write_stdout_summary
 
+    findings_summary = {"pkce_downgrade": 1}
     write_stdout_summary(
         mode="tools",
         tool_results={},
         protocol_results=None,
-        findings_summary={"pkce_downgrade": 1},
+        findings_summary=findings_summary,
+        audit_footnotes=audit_summary_footnotes(findings_summary),
     )
     out = capsys.readouterr().out
     assert "2605.22333" in out

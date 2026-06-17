@@ -12,7 +12,7 @@ import re
 import statistics
 from typing import Any, Iterable
 
-from ..reports.formatters.common import extract_tool_runs
+from ..utils.result_shape import extract_tool_runs
 from .model import SEVERITY_ORDER, Finding
 
 # Patterns that indicate a leaked stack trace / unhandled error in output.

@@ -78,8 +78,8 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
   protocol, and batch runs.
 - **Strengths:** Executors isolate concurrency concerns; builders make results
   consistent across clients and reporters.
-- **Notes:** A shared execution pipeline (`ClientExecutionPipeline`) coordinates
-  tool/protocol runs from a single interface.
+- **Notes:** The execution pipeline (`ClientExecutionPipeline` in
+  `orchestrator/pipeline.py`) coordinates tool/protocol runs from a single interface.
 
 ### Safety System (Fit Score: 7/10)
 

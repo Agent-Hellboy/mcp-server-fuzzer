@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from ..reports.crash_repro import write_crash_repros, write_findings_report
+from .audit_metadata import build_findings_audit_sections
 
 
 def persist_session_findings(
@@ -26,7 +27,11 @@ def persist_session_findings(
             crash_files[0].parent,
         )
     if findings:
-        report_path = write_findings_report(out_dir, findings)
+        report_path = write_findings_report(
+            out_dir,
+            findings,
+            audit_sections=build_findings_audit_sections(findings),
+        )
         logging.warning(
             "Recorded %d finding(s) across %d categor(y/ies) in %s",
             len(findings),

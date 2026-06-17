@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Execution pipeline interface for client fuzzing workflows."""
+"""Execution pipeline for orchestrator-driven fuzzing workflows."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any, Protocol
 
-from ..fuzzer_client import MCPFuzzerClient
-
+from ..client.fuzzer_client import MCPFuzzerClient
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +70,9 @@ class ClientExecutionPipeline:
             if tool is None:
                 return {}
             tool_name = tool.get("name", "unknown")
-            runs = await self.client.fuzz_tool(
-                tool, runs=config.get("runs", 10)
-            )
+            runs = await self.client.fuzz_tool(tool, runs=config.get("runs", 10))
             return self._wrap_tool_results(tool_name, runs)
-        return await self.client.fuzz_all_tools(
-            runs_per_tool=config.get("runs", 10)
-        )
+        return await self.client.fuzz_all_tools(runs_per_tool=config.get("runs", 10))
 
     async def fuzz_protocol(self) -> dict[str, Any]:
         config = self.config
