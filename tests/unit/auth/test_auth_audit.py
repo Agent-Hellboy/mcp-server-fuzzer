@@ -127,6 +127,8 @@ def test_f8_weak_state_flagged():
             client_id="c", redirect_uri=_RU,
         )
     assert _flaws(findings) == {"F8"}
+    # 'state' is optional in OAuth 2.0, so this is informational, not a defect.
+    assert findings[0].severity == "info"
 
 
 # --- F7 open redirect -------------------------------------------------------
@@ -159,10 +161,23 @@ def test_f6_consent_bypass_when_redirect_absent():
             client_id="c", redirect_uri=_RU,
         )
     assert _flaws(findings) == {"F6"}
+    assert findings[0].severity == "low"  # heuristic; verify manually
 
 
 def test_f6_no_finding_when_redirect_shown():
-    body = "<html>Send code to http://127.0.0.1/cb ?</html>"
+    body = "<html>Allow this app? Send code to http://127.0.0.1/cb ?</html>"
+    with _http(lambda r: httpx.Response(200, text=body)) as http:
+        findings = probe_consent_page_bypass(
+            http, _AE,
+            client_id="c", redirect_uri=_RU,
+        )
+    assert findings == []
+
+
+def test_f6_no_finding_on_login_page_without_consent_markers():
+    # A 200 that is a login page (no consent markers) must not be flagged --
+    # it isn't a consent page omitting the redirect_uri.
+    body = "<html><form>Username Password Sign in</form></html>"
     with _http(lambda r: httpx.Response(200, text=body)) as http:
         findings = probe_consent_page_bypass(
             http, _AE,

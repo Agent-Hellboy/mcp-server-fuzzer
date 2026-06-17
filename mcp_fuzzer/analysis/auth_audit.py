@@ -232,9 +232,11 @@ def probe_weak_state(
     if kind in ("page", "redirect"):
         return [
             _finding(
-                "F8", "weak_state", "medium",
-                "Authorization server did not require a 'state' parameter "
-                "(reduced CSRF protection for clients).",
+                "F8", "weak_state", "info",
+                "Authorization server did not enforce a 'state' parameter "
+                "(reduced CSRF protection for clients). Note: 'state' is "
+                "optional in OAuth 2.0, so most spec-compliant servers do not "
+                "reject its absence -- verify the client always sends one.",
                 {"response_kind": kind},
             )
         ]
@@ -285,10 +287,17 @@ def probe_consent_page_bypass(
             "code_challenge_method": "S256",
         },
     )
-    if kind == "page" and redirect_uri not in detail:
+    # Only flag a page that actually looks like a consent/authorization screen.
+    # A 200 that lacks consent markers is usually a login page (auth required
+    # before consent), not a consent page omitting the redirect_uri.
+    looks_like_consent = kind == "page" and any(
+        marker in detail.lower()
+        for marker in ("authorize", "consent", "allow", "grant", "permission")
+    )
+    if looks_like_consent and redirect_uri not in detail:
         return [
             _finding(
-                "F6", "consent_page_bypass", "medium",
+                "F6", "consent_page_bypass", "low",
                 "Consent page did not display the redirect_uri (users cannot see "
                 "where a code will be sent). Heuristic -- verify manually.",
                 {},
@@ -345,9 +354,20 @@ def probe_malicious_dcr(
     from ..exceptions import AuthProviderError
 
     findings: list[Finding] = []
+    # Registration must NOT follow redirects: a 307/308 would replay the POST
+    # body to a new target. The shared audit client follows redirects, so wrap
+    # its transport in a non-redirecting client (this also preserves an injected
+    # MockTransport for tests). The wrapper is intentionally not closed -- the
+    # transport's lifecycle is owned by the caller's ``http`` client, and
+    # closing it here would break later probes that reuse the same transport.
+    reg_client = httpx.Client(
+        transport=getattr(http, "_transport", None),
+        timeout=http.timeout,
+        follow_redirects=False,
+    )
     try:
         reg = register_dynamic_client(
-            registration_endpoint, redirect_uris=[evil_redirect], http=http
+            registration_endpoint, redirect_uris=[evil_redirect], http=reg_client
         )
     except AuthProviderError:
         return findings  # registration required auth or rejected -> not vulnerable

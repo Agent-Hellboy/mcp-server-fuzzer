@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Any
@@ -99,12 +100,16 @@ async def _run_auth_bypass_probe(config: dict[str, Any]) -> list[Any]:
         return []
 
 
-def _oauth_client_id(config: dict[str, Any]) -> str | None:
+def _oauth_provider(config: dict[str, Any]) -> Any | None:
     auth_manager = config.get("auth_manager")
     if auth_manager is None:
         return None
     providers = getattr(auth_manager, "auth_providers", {}) or {}
-    provider = providers.get("mcp_oauth")
+    return providers.get("mcp_oauth")
+
+
+def _oauth_client_id(config: dict[str, Any]) -> str | None:
+    provider = _oauth_provider(config)
     if provider is None:
         return None
     provider_config = getattr(provider, "config", None)
@@ -139,19 +144,35 @@ async def _run_auth_security_audit(
 
         hints = await probe()
         www_authenticate = hints.get("www_authenticate")
-        auth_advertised = hints.get("status") == 401 or bool(www_authenticate)
+        # The probe above runs through the (possibly authenticated) transport, so
+        # a credentialed run sees 200 / no WWW-Authenticate. Treat OAuth being
+        # configured as an "auth advertised" signal too -- the unauthenticated
+        # tool-exposure check matters most exactly when auth is configured but
+        # the server fails to enforce it.
+        auth_advertised = (
+            hints.get("status") == 401
+            or bool(www_authenticate)
+            or _oauth_provider(config) is not None
+        )
         timeout = float(config.get("timeout", 30.0))
+        intrusive = bool(config.get("auth_audit_intrusive"))
+        client_id = _oauth_client_id(config)
+        endpoint = config["endpoint"]
         findings: list[Any] = []
-        with httpx.Client(timeout=timeout, follow_redirects=True) as http:
-            findings.extend(
-                discover_and_audit_authorization_server(
-                    config["endpoint"],
+
+        def _discover() -> list[Any]:
+            # auth_audit uses a synchronous httpx.Client; run it off the event
+            # loop so its blocking network I/O does not stall the async runtime.
+            with httpx.Client(timeout=timeout, follow_redirects=True) as http:
+                return discover_and_audit_authorization_server(
+                    endpoint,
                     www_authenticate=www_authenticate,
                     http=http,
-                    intrusive=bool(config.get("auth_audit_intrusive")),
-                    client_id=_oauth_client_id(config),
+                    intrusive=intrusive,
+                    client_id=client_id,
                 )
-            )
+
+        findings.extend(await asyncio.to_thread(_discover))
         if auth_advertised:
             unauth_request = _build_transport_request(
                 {**config, "auth_manager": None}
