@@ -121,15 +121,33 @@ def build_protected_resource_metadata_urls(endpoint_url: str) -> list[str]:
     path = parsed.path or "/"
     normalized_path = path if path.startswith("/") else f"/{path}"
     trimmed_path = normalized_path.strip("/")
+    path_no_trailing = normalized_path.rstrip("/")
 
     candidates = []
     if trimmed_path:
+        # RFC 9728: the well-known segment is inserted *before* the resource
+        # path component.
         candidates.append(
             urlunsplit(
                 (
                     parsed.scheme,
                     parsed.netloc,
                     f"/.well-known/oauth-protected-resource/{trimmed_path}",
+                    "",
+                    "",
+                )
+            )
+        )
+        # Path-suffix form: the well-known segment *appended* after the resource
+        # path. This is what several MCP servers serve (and advertise in the
+        # WWW-Authenticate ``resource_metadata`` URL), and mirrors the path-suffix
+        # variant already produced for authorization-server metadata.
+        candidates.append(
+            urlunsplit(
+                (
+                    parsed.scheme,
+                    parsed.netloc,
+                    f"{path_no_trailing}/.well-known/oauth-protected-resource",
                     "",
                     "",
                 )

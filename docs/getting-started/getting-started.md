@@ -287,6 +287,90 @@ export MCP_PASSWORD="password"
 mcp-fuzzer --mode tools --protocol http --auth-env --endpoint http://localhost:8000
 ```
 
+### MCP OAuth 2.1 Authorization (`--oauth`)
+
+The methods above attach a **static** credential you already hold (an API key, a
+bearer token, or a client id/secret for a known token endpoint). When the MCP
+server is an OAuth 2.1 *protected resource* — it answers an unauthenticated
+request with `401` and a `WWW-Authenticate: Bearer resource_metadata="..."`
+header — the fuzzer can acquire a token for you with the `--oauth` flag. No
+hand-built `auth_config.json` is needed.
+
+`--oauth` runs the full MCP authorization flow (per the MCP 2025-11-25 spec):
+
+1. **Discover** the Protected Resource Metadata (RFC 9728) and the Authorization
+   Server Metadata (RFC 8414) starting from the endpoint's `.well-known`
+   documents / `WWW-Authenticate` challenge.
+2. **Obtain a client** — use a pre-registered `--oauth-client-id`, a Client ID
+   Metadata Document URL, or fall back to Dynamic Client Registration (RFC 7591)
+   if the server's authorization server supports it.
+3. **Run the grant** — `authorization_code` with PKCE (browser, user-delegated)
+   or `client_credentials` (machine-to-machine).
+4. **Attach** the resulting bearer token to every fuzzing request and refresh it
+   transparently when it expires.
+
+The acquired token is cached on disk (under `~/.cache/mcp-fuzzer/oauth/`, or
+`$XDG_CACHE_HOME/mcp-fuzzer/oauth/`) so the browser step happens at most once;
+subsequent runs reuse or silently refresh it. Use `--oauth-no-token-cache` to
+disable this.
+
+#### Authorization code + PKCE (browser-based, default)
+
+Use this for user-delegated access. The fuzzer starts a one-shot
+`http://127.0.0.1:<port>/callback` loopback server, prints (or opens) the
+authorization URL, and waits for the redirect after you log in.
+
+```bash
+mcp-fuzzer --mode tools --protocol streamablehttp \
+  --endpoint https://your-server.example.com/mcp \
+  --oauth --oauth-open-browser --runs 5
+```
+
+If the authorization server supports anonymous Dynamic Client Registration, the
+command above needs nothing else — the fuzzer registers a public, PKCE-only
+client on the fly with the exact loopback redirect URI. To reuse a
+pre-registered client instead, pass `--oauth-client-id` (and
+`--oauth-client-secret` for a confidential client). When using a pre-registered
+client, its allowed redirect URIs must permit the loopback callback (e.g. a
+`http://127.0.0.1/*` pattern), since the port is chosen at runtime.
+
+Omit `--oauth-open-browser` for unattended runs: the URL is printed to the log
+instead of hijacking a browser.
+
+#### Client credentials (machine-to-machine, non-interactive)
+
+Use this for a confidential service client with no user in the loop:
+
+```bash
+mcp-fuzzer --mode tools --protocol streamablehttp \
+  --endpoint https://your-server.example.com/mcp \
+  --oauth --oauth-grant client_credentials \
+  --oauth-client-id my-service --oauth-client-secret "$CLIENT_SECRET" \
+  --oauth-scope "openid profile email"
+```
+
+To keep the secret off the command line, set `MCP_OAUTH_CLIENT_ID`,
+`MCP_OAUTH_CLIENT_SECRET`, and `MCP_OAUTH_SCOPE` in the environment; CLI flags
+take precedence over these when both are present.
+
+#### Example: a Keycloak-protected server
+
+A server that returns
+`WWW-Authenticate: Bearer resource_metadata="https://host/mcp/.well-known/oauth-protected-resource"`
+pointing at a Keycloak realm works out of the box. If the realm allows anonymous
+client registration and advertises PKCE `S256`, this is the entire command:
+
+```bash
+mcp-fuzzer --mode tools --protocol streamablehttp \
+  --endpoint https://host/mcp --oauth --oauth-open-browser --runs 5
+```
+
+Log in as a realm test user when the browser opens; the fuzzer captures the
+redirect, exchanges the code, and fuzzes the authenticated tools.
+
+> See the [CLI Reference](../development/reference.md#authentication-options) for
+> the full list of `--oauth*` flags.
+
 ## Safety System
 
 ### Basic Safety Features

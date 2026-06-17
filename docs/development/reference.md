@@ -44,8 +44,9 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol|resources|prompts|all} --protocol {h
 | `--transport-retry-backoff` | Float | 2.0 | Backoff multiplier for transport retry delay |
 | `--transport-retry-max-delay` | Float | 5.0 | Maximum delay between retries (seconds) |
 | `--transport-retry-jitter` | Float | 0.1 | Jitter factor for retry delay |
-| `--auth-config` | Path | - | Path to authentication configuration file |
-| `--auth-env` | Flag | False | Use authentication from environment variables |
+
+> Authentication flags (`--auth-config`, `--auth-env`, `--oauth*`) are listed
+> under [Authentication Options](#authentication-options).
 
 Notes:
 
@@ -100,6 +101,31 @@ Notes:
 |--------|------|---------|-------------|
 | `--no-network` | Flag | False | Disallow network to non-local hosts |
 | `--allow-host` | String | - | Permit additional hostnames when `--no-network` is set (repeatable) |
+
+### Authentication Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--auth-config` | Path | - | Path to a JSON authentication configuration file (static providers + tool mapping) |
+| `--auth-env` | Flag | False | Load authentication from environment variables (`MCP_API_KEY`, `MCP_USERNAME`/`MCP_PASSWORD`, `MCP_OAUTH_*`, …) |
+| `--oauth` | Flag | False | Run the MCP OAuth 2.1 authorization flow (RFC 9728/8414 discovery → client → grant) to obtain a bearer token. Requires `--endpoint` |
+| `--oauth-grant` | Choice | authorization_code | Grant to use: `authorization_code` (PKCE, browser, user-delegated) or `client_credentials` (machine-to-machine) |
+| `--oauth-client-id` | String | - | Pre-registered client id (skips dynamic registration). Falls back to `MCP_OAUTH_CLIENT_ID` |
+| `--oauth-client-secret` | String | - | Client secret for a confidential client. Falls back to `MCP_OAUTH_CLIENT_SECRET` |
+| `--oauth-scope` | String | - | OAuth scope(s) to request (space-separated). Falls back to `MCP_OAUTH_SCOPE` |
+| `--oauth-client-id-metadata-url` | String | - | HTTPS URL of a Client ID Metadata Document to use as the `client_id` |
+| `--oauth-open-browser` | Flag | False | Auto-open the browser for the authorization-code flow (off by default; the URL is printed instead) |
+| `--oauth-no-token-cache` | Flag | False | Disable the on-disk token cache (`~/.cache/mcp-fuzzer/oauth/`); re-authorize every run |
+
+Notes:
+
+- Auth source priority: `--oauth` → `--auth-config` → YAML `auth` section →
+  `--auth-env` → auto-detected env vars → none.
+- With `--oauth`, if no client id is supplied the fuzzer attempts Dynamic Client
+  Registration (RFC 7591) against the discovered authorization server, registering
+  a public PKCE-only client with the exact loopback redirect URI.
+- See [Authentication](../getting-started/getting-started.md#authentication) for
+  worked examples.
 
 ### Reporting Options
 

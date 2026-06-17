@@ -1006,6 +1006,7 @@ async def test_probe_auth_discovery_falls_back_to_well_known(monkeypatch):
 
     assert result["protected_resource_metadata_urls"] == [
         "https://redirected.example.com/.well-known/oauth-protected-resource/alt/mcp",
+        "https://redirected.example.com/alt/mcp/.well-known/oauth-protected-resource",
         "https://redirected.example.com/.well-known/oauth-protected-resource",
     ]
     assert result["required_scopes"] == []
