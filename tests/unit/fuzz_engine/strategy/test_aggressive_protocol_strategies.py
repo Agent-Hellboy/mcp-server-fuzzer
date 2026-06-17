@@ -3,7 +3,7 @@ Unit tests for aggressive protocol type strategies.
 """
 
 import pytest
-from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive.protocol_type_strategy import (  # noqa: E501
+from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive_protocol_type_strategy import (  # noqa: E501
     generate_malicious_string,
     generate_malicious_value,
     choice_lazy,

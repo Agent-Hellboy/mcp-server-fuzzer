@@ -15,7 +15,7 @@ Key principles:
 import asyncio
 import base64
 import math
-from ...rng_context import lazy_rng as random
+from ..rng_context import lazy_rng as random
 import re
 import string
 import threading
@@ -25,7 +25,7 @@ from typing import Any
 
 from hypothesis import strategies as st
 
-from ..interesting_values import (
+from .interesting_values import (
     REALISTIC_SAMPLES,
     get_realistic_boundary_int,
     get_realistic_boundary_string,
@@ -422,7 +422,7 @@ async def fuzz_tool_arguments_realistic(tool: dict[str, Any]) -> dict[str, Any]:
     - All enum values are cycled through
     - No attack payloads or invalid data
     """
-    from ..schema_parser import make_fuzz_strategy_from_jsonschema
+    from .schema_parser import make_fuzz_strategy_from_jsonschema
 
     schema = tool.get("inputSchema")
     if not isinstance(schema, dict):
@@ -558,7 +558,7 @@ async def _generate_realistic_array(
     run_index: int = 0,
 ) -> list[Any]:
     """Generate a schema-valid array with randomized item counts."""
-    from ..schema_parser import make_fuzz_strategy_from_jsonschema
+    from .schema_parser import make_fuzz_strategy_from_jsonschema
 
     min_items = max(0, int(schema.get("minItems", 0)))
     max_items = int(schema.get("maxItems", 5))

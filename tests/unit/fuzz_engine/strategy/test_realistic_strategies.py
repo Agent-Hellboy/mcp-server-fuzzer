@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 import pytest
 from hypothesis import given
 
-from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.tool_strategy import (
+from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic_tool_strategy import (
     base64_strings,
     timestamp_strings,
     uuid_strings,
@@ -22,8 +22,8 @@ from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.tool_strategy import (
     fuzz_tool_arguments_realistic,
     reset_run_counter,
 )
-from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic import tool_strategy
-from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic.protocol_type_strategy import (  # noqa: E501
+from mcp_fuzzer.fuzz_engine.mutators.strategies import realistic_tool_strategy as tool_strategy  # noqa: E501
+from mcp_fuzzer.fuzz_engine.mutators.strategies.realistic_protocol_type_strategy import (  # noqa: E501
     json_rpc_id_values,
     method_names,
     protocol_version_strings,

@@ -6,7 +6,7 @@ Unit tests for aggressive tool strategy helpers.
 import pytest
 
 from mcp_fuzzer.fuzz_engine.mutators.strategies import schema_parser
-from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive import tool_strategy as ts
+from mcp_fuzzer.fuzz_engine.mutators.strategies import aggressive_tool_strategy as ts
 
 
 def test_generate_aggressive_text_broken_uuid(monkeypatch):

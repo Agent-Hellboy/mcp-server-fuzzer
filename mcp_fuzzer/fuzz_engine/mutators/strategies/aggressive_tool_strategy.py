@@ -14,12 +14,12 @@ Key principles:
 - No random garbage (e.g., "A" * 10000) - use targeted attacks instead
 """
 
-from ...rng_context import lazy_rng as random
+from ..rng_context import lazy_rng as random
 import string
 from typing import Any
 
-from ..schema_helpers import apply_schema_edge_cases
-from ..interesting_values import (
+from .schema_helpers import apply_schema_edge_cases
+from .interesting_values import (
     COMMAND_INJECTION,
     ENCODING_BYPASS,
     NOSQL_INJECTION,
@@ -352,7 +352,7 @@ def _generate_aggressive_float(
     2. Special float values (inf, -inf, tiny, huge)
     3. Boundary values
     """
-    from ..interesting_values import SPECIAL_FLOATS
+    from .interesting_values import SPECIAL_FLOATS
 
     # Extract constraints from schema if provided
     if schema:
@@ -569,7 +569,7 @@ def fuzz_tool_arguments_aggressive(tool: dict[str, Any]) -> dict[str, Any]:
     - Off-by-one boundary violations
     - Type confusion attempts
     """
-    from ..schema_parser import make_fuzz_strategy_from_jsonschema
+    from .schema_parser import make_fuzz_strategy_from_jsonschema
 
     schema = tool.get("inputSchema")
     if not isinstance(schema, dict):

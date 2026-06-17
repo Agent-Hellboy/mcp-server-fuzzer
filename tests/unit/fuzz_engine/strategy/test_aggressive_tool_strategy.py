@@ -5,7 +5,7 @@ Tests for aggressive tool argument strategies.
 
 import re
 
-from mcp_fuzzer.fuzz_engine.mutators.strategies.aggressive import tool_strategy
+from mcp_fuzzer.fuzz_engine.mutators.strategies import aggressive_tool_strategy as tool_strategy  # noqa: E501
 from mcp_fuzzer.fuzz_engine.mutators.strategies import schema_parser
 
 
