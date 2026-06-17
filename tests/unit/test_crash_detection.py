@@ -226,3 +226,46 @@ async def test_auth_bypass_probe_skipped_without_auth_manager():
     from mcp_fuzzer.client.main import _run_auth_bypass_probe
 
     assert await _run_auth_bypass_probe({"auth_manager": None}) == []
+
+
+@_pytest.mark.asyncio
+async def test_send_request_raises_server_crash_on_dead_process():
+    from unittest.mock import AsyncMock
+
+    driver = StdioDriver("dummy", timeout=5)
+    driver._mcp_initialized = True
+    driver._send_message = AsyncMock()
+    driver._receive_message = AsyncMock(return_value=None)  # EOF / no response
+    driver.process = _FakeProc(-11)  # crashed via SIGSEGV
+    driver._stderr_tail.append("AddressSanitizer: SEGV on unknown address")
+    with _pytest.raises(ServerCrashError) as exc:
+        await driver.send_request("tools/list")
+    assert exc.value.context["signal_name"] == "SIGSEGV"
+
+
+@_pytest.mark.asyncio
+async def test_receive_message_raises_crash_on_broken_read():
+    from unittest.mock import AsyncMock
+
+    driver = StdioDriver("dummy", timeout=5)
+    driver._initialized = True
+    driver.stdout = object()
+    driver._readline_with_cap = AsyncMock(side_effect=OSError("broken pipe"))
+    driver.process = _FakeProc(2)  # non-zero exit -> crash
+    with _pytest.raises(ServerCrashError):
+        await driver._receive_message()
+
+
+@_pytest.mark.asyncio
+async def test_send_request_transport_error_when_not_crashed():
+    from unittest.mock import AsyncMock
+
+    driver = StdioDriver("dummy", timeout=5)
+    driver._mcp_initialized = True
+    driver._send_message = AsyncMock()
+    driver._receive_message = AsyncMock(return_value=None)
+    driver.process = _FakeProc(0)  # clean / still-running -> not a crash
+    from mcp_fuzzer.exceptions import TransportError
+
+    with _pytest.raises(TransportError):
+        await driver.send_request("tools/list")
