@@ -195,11 +195,11 @@ def test_sample_server_memory_none_without_process():
 
 
 def test_write_findings_report(tmp_path):
-    from mcp_fuzzer.analysis import analyze_findings
-    from mcp_fuzzer.analysis.auth_audit import audit_as_metadata
+    from mcp_fuzzer.findings import classify_fuzz_runs
+    from mcp_fuzzer.findings.auth_oauth import audit_as_metadata
     from mcp_fuzzer.reports.crash_repro import write_findings_report
 
-    findings = analyze_findings(
+    findings = classify_fuzz_runs(
         {"t": {"runs": [{"outcome": "timeout", "args": {"x": 1}}]}}, None
     )
     assert write_findings_report(tmp_path, []) is None
@@ -228,7 +228,7 @@ def test_write_findings_report(tmp_path):
 
 
 def test_auth_probe_str_error_and_truncate():
-    from mcp_fuzzer.analysis.auth_probe import is_auth_enforced, _truncate
+    from mcp_fuzzer.findings.auth_probe import is_auth_enforced, _truncate
 
     assert is_auth_enforced(response={"error": "Unauthorized access"}) is True
     assert is_auth_enforced(response={"error": "weird"}) is False
@@ -240,29 +240,29 @@ import pytest as _pytest  # noqa: E402
 
 @_pytest.mark.asyncio
 async def test_auth_bypass_probe_skipped_without_auth_manager():
-    from mcp_fuzzer.client.main import _run_auth_bypass_probe
+    from mcp_fuzzer.orchestrator.session import run_auth_bypass_phase
 
-    assert await _run_auth_bypass_probe({"auth_manager": None}) == []
+    assert await run_auth_bypass_phase({"auth_manager": None}, lambda c: c) == []
 
 
 @_pytest.mark.asyncio
 async def test_auth_security_audit_skipped_when_disabled():
-    from mcp_fuzzer.client.main import _run_auth_security_audit
+    from mcp_fuzzer.orchestrator.session import run_oauth_audit_phase
 
-    assert await _run_auth_security_audit({"auth_audit": False}, object()) == (
-        [],
-        False,
+    result = await run_oauth_audit_phase(
+        {"auth_audit": False}, object(), lambda c: c
     )
+    assert result == ([], False)
 
 
 @_pytest.mark.asyncio
 async def test_auth_security_audit_skipped_without_probe_support():
-    from mcp_fuzzer.client.main import _run_auth_security_audit
+    from mcp_fuzzer.orchestrator.session import run_oauth_audit_phase
 
     # auth_audit enabled but the transport cannot do auth discovery -> skipped,
     # reported as ran=False so it is not logged as a clean run.
-    findings, ran = await _run_auth_security_audit(
-        {"auth_audit": True}, object()
+    findings, ran = await run_oauth_audit_phase(
+        {"auth_audit": True}, object(), lambda c: c
     )
     assert findings == []
     assert ran is False
@@ -271,16 +271,16 @@ async def test_auth_security_audit_skipped_without_probe_support():
 def test_log_auth_audit_results_does_not_claim_clean_when_skipped(caplog):
     import logging as _logging
 
-    from mcp_fuzzer.client.main import _log_auth_audit_results
+    from mcp_fuzzer.orchestrator.session import log_oauth_audit_results
 
     with caplog.at_level(_logging.INFO):
-        _log_auth_audit_results([], enabled=True, ran=False)
+        log_oauth_audit_results([], enabled=True, ran=False)
     assert "no findings" not in caplog.text
 
 
 @_pytest.mark.asyncio
 async def test_probe_advertised_auth_open_tools():
-    from mcp_fuzzer.analysis import probe_advertised_auth_open_tools
+    from mcp_fuzzer.findings import probe_advertised_auth_open_tools
 
     findings = probe_advertised_auth_open_tools(
         [{"name": "alpha"}, {"name": "beta"}],

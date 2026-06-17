@@ -77,6 +77,7 @@ def _transfer_config_to_args(args: argparse.Namespace) -> None:
         ("seed", "seed"),
         ("auth_audit", "auth_audit"),
         ("auth_audit_intrusive", "auth_audit_intrusive"),
+        ("security_audit", "security_audit"),
     ]
 
     for config_key, args_key in mapping:
@@ -172,6 +173,7 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         "fail_if_no_tools": getattr(args, "fail_if_no_tools", False),
         "auth_audit": getattr(args, "auth_audit", False),
         "auth_audit_intrusive": getattr(args, "auth_audit_intrusive", False),
+        "security_audit": getattr(args, "security_audit", False),
         "auth_manager": auth_manager,
     }
 

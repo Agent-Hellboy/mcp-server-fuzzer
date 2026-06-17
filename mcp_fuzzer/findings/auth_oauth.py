@@ -32,7 +32,7 @@ from typing import Any
 
 import httpx
 
-from .findings import Finding
+from .model import Finding
 
 logger = logging.getLogger(__name__)
 

@@ -113,7 +113,7 @@ def write_findings_report(
     ]
     doc: dict[str, Any] = {"findings": payload, "count": len(payload)}
     try:
-        from ..analysis.auth_audit import (
+        from ..findings.auth_oauth import (
             auth_audit_report_metadata,
             is_auth_audit_finding,
         )
@@ -125,6 +125,20 @@ def write_findings_report(
             doc["auth_audit"] = {
                 **auth_audit_report_metadata(),
                 "finding_count": len(auth_audit_findings),
+            }
+    except Exception:  # pragma: no cover - metadata is best-effort
+        pass
+    try:
+        from ..findings.server import (
+            is_server_audit_finding,
+            server_audit_report_metadata,
+        )
+
+        server_findings = [f for f in findings if is_server_audit_finding(f)]
+        if server_findings:
+            doc["server_audit"] = {
+                **server_audit_report_metadata(),
+                "finding_count": len(server_findings),
             }
     except Exception:  # pragma: no cover - metadata is best-effort
         pass

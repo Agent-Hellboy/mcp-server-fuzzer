@@ -342,6 +342,16 @@ Examples:
             "against servers you are authorized to test."
         ),
     )
+    parser.add_argument(
+        "--security-audit",
+        action="store_true",
+        help=(
+            "Run MCP tool-security audit checks (arXiv 2503.23278 / 2509.06572): "
+            "tool/schema poisoning markers, tool shadowing, dangerous capability "
+            "combos, cleartext transport, and active injection oracles on fuzz "
+            "outputs (command/path/SQL/output prompt injection)."
+        ),
+    )
 
     parser.add_argument(
         "--enable-safety-system",

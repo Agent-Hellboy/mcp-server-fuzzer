@@ -8,7 +8,7 @@ from typing import Any
 from .common import extract_tool_runs, summarize_tool_runs
 
 try:
-    from ...analysis.auth_audit import (
+    from ...findings.auth_oauth import (
         AUTH_AUDIT_FLAW_CATEGORIES,
         AUTH_AUDIT_PAPER_ARXIV_ID,
         AUTH_AUDIT_PAPER_URL,
@@ -17,6 +17,17 @@ except ImportError:  # pragma: no cover
     AUTH_AUDIT_FLAW_CATEGORIES = frozenset()
     AUTH_AUDIT_PAPER_ARXIV_ID = ""
     AUTH_AUDIT_PAPER_URL = ""
+
+try:
+    from ...findings.server import (
+        SERVER_AUDIT_FLAW_CATEGORIES,
+        TOOL_POISONING_PAPER_ARXIV_ID,
+        server_audit_paper_evidence,
+    )
+except ImportError:  # pragma: no cover
+    SERVER_AUDIT_FLAW_CATEGORIES = frozenset()
+    TOOL_POISONING_PAPER_ARXIV_ID = ""
+    server_audit_paper_evidence = None  # type: ignore[assignment,misc]
 
 
 def _tool_outcome_buckets(runs: list[dict[str, Any]]) -> dict[str, int]:
@@ -157,6 +168,19 @@ def write_stdout_summary(
             lines.append(
                 "Auth security audit findings map to flaw types in "
                 f"arXiv {AUTH_AUDIT_PAPER_ARXIV_ID} ({AUTH_AUDIT_PAPER_URL})"
+            )
+        if SERVER_AUDIT_FLAW_CATEGORIES & set(findings_summary):
+            paper_url = (
+                server_audit_paper_evidence(TOOL_POISONING_PAPER_ARXIV_ID)[
+                    "paper_url"
+                ]
+                if server_audit_paper_evidence
+                else f"https://arxiv.org/abs/{TOOL_POISONING_PAPER_ARXIV_ID}"
+            )
+            lines.append("")
+            lines.append(
+                "Server audit findings map to checks from arXiv "
+                f"{TOOL_POISONING_PAPER_ARXIV_ID} ({paper_url})"
             )
 
     lines.append("")

@@ -16,8 +16,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ..exceptions import AuthenticationError
-from .findings import Finding
-from .auth_audit import auth_audit_paper_evidence
+from .model import Finding
+from .auth_oauth import auth_audit_paper_evidence
 
 logger = logging.getLogger(__name__)
 
