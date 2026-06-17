@@ -41,6 +41,7 @@ def test_plain_transport_error_is_not_a_crash():
 class _FakeProc:
     def __init__(self, returncode):
         self.returncode = returncode
+        self.pid = 999999
 
     async def wait(self):
         return self.returncode
@@ -165,3 +166,63 @@ def test_stdout_summary_reports_crashes(capsys):
     out = capsys.readouterr().out
     assert "CRASHES: 1" in out
     assert "1 crashes" in out
+
+
+# --- memory sampling + findings report + auth probe wiring -----------------
+
+
+def test_sample_server_memory_returns_rss_for_live_pid():
+    import os
+
+    driver = StdioDriver("dummy", timeout=5)
+    driver.process = _FakeProc(None)  # returncode None = running
+    driver.process.pid = os.getpid()
+    rss = driver.sample_server_memory()
+    assert isinstance(rss, int) and rss > 0
+
+
+def test_sample_server_memory_none_when_exited():
+    driver = StdioDriver("dummy", timeout=5)
+    driver.process = _FakeProc(0)
+    driver.process.pid = 1  # exited (returncode set) -> None
+    assert driver.sample_server_memory() is None
+
+
+def test_sample_server_memory_none_without_process():
+    driver = StdioDriver("dummy", timeout=5)
+    driver.process = None
+    assert driver.sample_server_memory() is None
+
+
+def test_write_findings_report(tmp_path):
+    from mcp_fuzzer.analysis import analyze_findings
+    from mcp_fuzzer.reports.crash_repro import write_findings_report
+
+    findings = analyze_findings(
+        {"t": {"runs": [{"outcome": "timeout", "args": {"x": 1}}]}}, None
+    )
+    assert write_findings_report(tmp_path, []) is None
+    path = write_findings_report(tmp_path, findings)
+    assert path is not None and path.name == "findings.json"
+    import json
+
+    data = json.loads(path.read_text())
+    assert data["count"] == len(findings)
+
+
+def test_auth_probe_str_error_and_truncate():
+    from mcp_fuzzer.analysis.auth_probe import is_auth_enforced, _truncate
+
+    assert is_auth_enforced(response={"error": "Unauthorized access"}) is True
+    assert is_auth_enforced(response={"error": "weird"}) is False
+    assert _truncate("x" * 500).endswith("…")
+
+
+import pytest as _pytest  # noqa: E402
+
+
+@_pytest.mark.asyncio
+async def test_auth_bypass_probe_skipped_without_auth_manager():
+    from mcp_fuzzer.client.main import _run_auth_bypass_probe
+
+    assert await _run_auth_bypass_probe({"auth_manager": None}) == []
