@@ -75,6 +75,8 @@ def _transfer_config_to_args(args: argparse.Namespace) -> None:
         ("check_env", "check_env"),
         ("retry_with_safety_on_interrupt", "retry_with_safety_on_interrupt"),
         ("seed", "seed"),
+        ("auth_audit", "auth_audit"),
+        ("auth_audit_intrusive", "auth_audit_intrusive"),
     ]
 
     for config_key, args_key in mapping:
@@ -168,6 +170,8 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         "output_session_id": getattr(args, "output_session_id", None),
         "enable_aiomonitor": getattr(args, "enable_aiomonitor", False),
         "fail_if_no_tools": getattr(args, "fail_if_no_tools", False),
+        "auth_audit": getattr(args, "auth_audit", False),
+        "auth_audit_intrusive": getattr(args, "auth_audit_intrusive", False),
         "auth_manager": auth_manager,
     }
 

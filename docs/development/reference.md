@@ -127,6 +127,36 @@ Notes:
 - See [Authentication](../getting-started/getting-started.md#authentication) for
   worked examples.
 
+### Authentication Security Audit Options
+
+These flags audit a remote server's OAuth deployment for the nine authentication
+flaw types catalogued in
+[*A First Measurement Study on Authentication Security in Real-World Remote MCP
+Servers*](https://arxiv.org/abs/2605.22333) (F1–F9). They run after fuzzing and
+write findings into `findings.json` alongside the regular results.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--auth-audit` | Flag | False | Run read-only auth-security checks: RFC 9728/8414 metadata review, authorization-endpoint probes (PKCE downgrade, blind client trust, weak state, consent-page heuristics), and `unauthenticated_tools` (tools callable without credentials when auth is advertised). Requires an HTTP/SSE remote `--endpoint` |
+| `--auth-audit-intrusive` | Flag | False | Add the intrusive probes — Dynamic Client Registration with an attacker redirect URI (F1) and open-redirect tests (F7). Requires `--auth-audit`. Only run against servers you are authorized to test |
+
+Notes:
+
+- **Read-only by default.** Without `--auth-audit-intrusive`, the audit only
+  issues `GET`s to the authorization endpoint and reads published metadata — it
+  never registers clients or submits redirect URIs.
+- **Intrusive probes register state on the target.** `--auth-audit-intrusive`
+  creates an OAuth client (DCR) and probes redirect handling; use it only with
+  explicit authorization.
+- Findings are tagged with their paper `flaw_id` (F1–F9) and a citation in each
+  finding's `evidence`, plus a top-level `auth_audit` block in `findings.json`.
+- Severities reflect false-positive risk: `weak_state` is `info` (`state` is
+  optional in OAuth 2.0) and the consent-page heuristic is `low` ("verify
+  manually"); enforceable defects (PKCE downgrade, open redirect, code replay,
+  blind client trust, malicious DCR) are `high`.
+- See [Authentication Security Audit](../getting-started/getting-started.md#authentication-security-audit)
+  for worked examples.
+
 ### Reporting Options
 
 | Option | Type | Default | Description |

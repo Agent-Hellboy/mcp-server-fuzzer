@@ -196,6 +196,7 @@ def test_sample_server_memory_none_without_process():
 
 def test_write_findings_report(tmp_path):
     from mcp_fuzzer.analysis import analyze_findings
+    from mcp_fuzzer.analysis.auth_audit import audit_as_metadata
     from mcp_fuzzer.reports.crash_repro import write_findings_report
 
     findings = analyze_findings(
@@ -208,6 +209,22 @@ def test_write_findings_report(tmp_path):
 
     data = json.loads(path.read_text())
     assert data["count"] == len(findings)
+    assert "auth_audit" not in data
+
+    auth_findings = audit_as_metadata(
+        type(
+            "Meta",
+            (),
+            {
+                "code_challenge_methods_supported": [],
+                "grant_types_supported": ["authorization_code"],
+            },
+        )()
+    )
+    path = write_findings_report(tmp_path, auth_findings)
+    data = json.loads(path.read_text())
+    assert data["auth_audit"]["paper_url"] == "https://arxiv.org/abs/2605.22333"
+    assert data["auth_audit"]["finding_count"] == len(auth_findings)
 
 
 def test_auth_probe_str_error_and_truncate():
@@ -226,6 +243,73 @@ async def test_auth_bypass_probe_skipped_without_auth_manager():
     from mcp_fuzzer.client.main import _run_auth_bypass_probe
 
     assert await _run_auth_bypass_probe({"auth_manager": None}) == []
+
+
+@_pytest.mark.asyncio
+async def test_auth_security_audit_skipped_when_disabled():
+    from mcp_fuzzer.client.main import _run_auth_security_audit
+
+    assert await _run_auth_security_audit({"auth_audit": False}, object()) == (
+        [],
+        False,
+    )
+
+
+@_pytest.mark.asyncio
+async def test_auth_security_audit_skipped_without_probe_support():
+    from mcp_fuzzer.client.main import _run_auth_security_audit
+
+    # auth_audit enabled but the transport cannot do auth discovery -> skipped,
+    # reported as ran=False so it is not logged as a clean run.
+    findings, ran = await _run_auth_security_audit(
+        {"auth_audit": True}, object()
+    )
+    assert findings == []
+    assert ran is False
+
+
+def test_log_auth_audit_results_does_not_claim_clean_when_skipped(caplog):
+    import logging as _logging
+
+    from mcp_fuzzer.client.main import _log_auth_audit_results
+
+    with caplog.at_level(_logging.INFO):
+        _log_auth_audit_results([], enabled=True, ran=False)
+    assert "no findings" not in caplog.text
+
+
+@_pytest.mark.asyncio
+async def test_probe_advertised_auth_open_tools():
+    from mcp_fuzzer.analysis import probe_advertised_auth_open_tools
+
+    findings = probe_advertised_auth_open_tools(
+        [{"name": "alpha"}, {"name": "beta"}],
+        auth_advertised=True,
+    )
+    assert len(findings) == 1
+    assert findings[0].category == "unauthenticated_tools"
+    assert findings[0].evidence["tool_count"] == 2
+    assert probe_advertised_auth_open_tools([], auth_advertised=True) == []
+    assert (
+        probe_advertised_auth_open_tools([{"name": "x"}], auth_advertised=False)
+        == []
+    )
+    findings = probe_advertised_auth_open_tools([{"name": "x"}], auth_advertised=True)
+    assert findings[0].evidence["paper_url"] == "https://arxiv.org/abs/2605.22333"
+
+
+def test_plain_summary_links_auth_audit_paper(capsys):
+    from mcp_fuzzer.reports.formatters.plain_summary import write_stdout_summary
+
+    write_stdout_summary(
+        mode="tools",
+        tool_results={},
+        protocol_results=None,
+        findings_summary={"pkce_downgrade": 1},
+    )
+    out = capsys.readouterr().out
+    assert "2605.22333" in out
+    assert "https://arxiv.org/abs/2605.22333" in out
 
 
 @_pytest.mark.asyncio

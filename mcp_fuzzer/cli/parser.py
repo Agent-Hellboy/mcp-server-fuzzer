@@ -323,6 +323,25 @@ Examples:
             "'no tools available' is easy to misread as success."
         ),
     )
+    parser.add_argument(
+        "--auth-audit",
+        action="store_true",
+        help=(
+            "Run MCP OAuth authorization-security audit checks (arXiv "
+            "2605.22333): metadata review, authorization-endpoint probes, and "
+            "unauthenticated tool exposure when auth is advertised. Requires an "
+            "HTTP/SSE remote endpoint."
+        ),
+    )
+    parser.add_argument(
+        "--auth-audit-intrusive",
+        action="store_true",
+        help=(
+            "Include intrusive auth-audit probes (dynamic client registration "
+            "with attacker redirect URIs, open-redirect tests). Only use "
+            "against servers you are authorized to test."
+        ),
+    )
 
     parser.add_argument(
         "--enable-safety-system",

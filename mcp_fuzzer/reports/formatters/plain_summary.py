@@ -7,6 +7,17 @@ from typing import Any
 
 from .common import extract_tool_runs, summarize_tool_runs
 
+try:
+    from ...analysis.auth_audit import (
+        AUTH_AUDIT_FLAW_CATEGORIES,
+        AUTH_AUDIT_PAPER_ARXIV_ID,
+        AUTH_AUDIT_PAPER_URL,
+    )
+except ImportError:  # pragma: no cover
+    AUTH_AUDIT_FLAW_CATEGORIES = frozenset()
+    AUTH_AUDIT_PAPER_ARXIV_ID = ""
+    AUTH_AUDIT_PAPER_URL = ""
+
 
 def _tool_outcome_buckets(runs: list[dict[str, Any]]) -> dict[str, int]:
     """Group tool runs by outcome so a server *rejecting* malformed input is not
@@ -141,6 +152,12 @@ def write_stdout_summary(
             findings_summary.items(), key=lambda kv: (-kv[1], kv[0])
         ):
             lines.append(f"  {category}: {count}")
+        if AUTH_AUDIT_FLAW_CATEGORIES & set(findings_summary):
+            lines.append("")
+            lines.append(
+                "Auth security audit findings map to flaw types in "
+                f"arXiv {AUTH_AUDIT_PAPER_ARXIV_ID} ({AUTH_AUDIT_PAPER_URL})"
+            )
 
     lines.append("")
     sys.stdout.write("\n".join(lines) + "\n")

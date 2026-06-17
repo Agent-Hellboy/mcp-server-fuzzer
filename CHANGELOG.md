@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- MCP OAuth authentication-security audit, mapping the nine flaw types (F1–F9)
+  from [*A First Measurement Study on Authentication Security in Real-World
+  Remote MCP Servers*](https://arxiv.org/abs/2605.22333) onto black-box checks:
+  - `--auth-audit` (read-only): RFC 9728/8414 metadata review, authorization-
+    endpoint probes (PKCE downgrade, blind client trust, weak state, consent-page
+    heuristic), and `unauthenticated_tools` (tools callable without credentials
+    when OAuth is advertised).
+  - `--auth-audit-intrusive` (opt-in, authorized targets only): malicious
+    Dynamic Client Registration (F1) and open-redirect (F7) probes.
+  - Findings carry their paper `flaw_id` and citation in `evidence`, with a
+    top-level `auth_audit` block in `findings.json` and a paper link in the
+    stdout summary. The audit runs after the fuzz pass and never aborts it;
+    skipped/errored runs log a reason instead of reporting a clean result.
+
 ## [0.3.6] - 2026-06-17
 
 ### Added

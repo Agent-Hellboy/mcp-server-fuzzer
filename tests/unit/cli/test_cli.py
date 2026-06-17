@@ -265,6 +265,41 @@ def test_validate_arguments_protocol_type_wrong_mode_with_endpoint():
         validator.validate_arguments(args)
 
 
+def test_validate_arguments_intrusive_requires_auth_audit():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tools",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=10,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+        auth_audit=False,
+        auth_audit_intrusive=True,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
+
+
+def test_validate_arguments_intrusive_with_auth_audit_ok():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tools",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=10,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+        auth_audit=True,
+        auth_audit_intrusive=True,
+    )
+    validator.validate_arguments(args)
+
+
 def test_validate_arguments_protocol_mode_allows_missing_protocol_type():
     validator = ValidationManager()
     args = argparse.Namespace(
