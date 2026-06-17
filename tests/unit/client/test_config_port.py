@@ -3,7 +3,7 @@
 
 import pytest
 
-from mcp_fuzzer.client.ports.config_port import ConfigPort
+from mcp_fuzzer.client.ports import ConfigPort
 
 
 def test_config_port_is_abstract():

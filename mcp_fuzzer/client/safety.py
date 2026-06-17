@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 from typing import Protocol
-from ...safety_system import start_system_blocking, stop_system_blocking
+from ..safety_system import start_system_blocking, stop_system_blocking
 
 
 class SafetyPort(Protocol):
@@ -43,7 +43,7 @@ class SafetyController:
         reset_allowed_hosts: bool = False,
     ) -> None:
         """Port for configuring network safety policies."""
-        from ...safety_system.policy import configure_network_policy
+        from ..safety_system.policy import configure_network_policy
 
         configure_network_policy(
             deny_network_by_default=deny_network_by_default,

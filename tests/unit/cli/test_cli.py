@@ -415,11 +415,11 @@ def test_transport_factory_applies_auth_headers():
 def test_safety_controller():
     controller = SafetyController()
     with patch(
-        "mcp_fuzzer.client.safety.controller.start_system_blocking"
+        "mcp_fuzzer.client.safety.start_system_blocking"
     ) as mock_start:
         controller.start_if_enabled(True)
         mock_start.assert_called_once()
-    with patch("mcp_fuzzer.client.safety.controller.stop_system_blocking") as mock_stop:
+    with patch("mcp_fuzzer.client.safety.stop_system_blocking") as mock_stop:
         controller.stop_if_started()
         mock_stop.assert_called_once()
 

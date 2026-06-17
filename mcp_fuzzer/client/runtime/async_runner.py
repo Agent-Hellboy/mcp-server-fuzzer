@@ -13,7 +13,7 @@ import importlib.util
 
 from rich.console import Console
 
-from ...client.safety.controller import SafetyController
+from ...client.safety import SafetyController
 
 
 class AsyncRunner:

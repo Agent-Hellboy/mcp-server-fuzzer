@@ -5,7 +5,7 @@ Unit tests for ConfigPort interface coverage.
 
 import pytest
 
-from mcp_fuzzer.client.ports.config_port import ConfigPort
+from mcp_fuzzer.client.ports import ConfigPort
 
 pytestmark = [pytest.mark.unit, pytest.mark.client]
 
