@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Iterable
 
-from ..detection import DangerDetector, DangerMatch, DangerType
+from .detection import DangerDetector, DangerMatch, DangerType
 
 
 @dataclass

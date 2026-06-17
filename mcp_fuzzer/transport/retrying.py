@@ -8,8 +8,8 @@ from dataclasses import dataclass
 import random
 from typing import Any, AsyncIterator
 
-from ...exceptions import PayloadValidationError, TransportError
-from ..interfaces.driver import TransportDriver
+from ..exceptions import PayloadValidationError, TransportError
+from .interfaces.driver import TransportDriver
 
 
 @dataclass(frozen=True)

@@ -10,7 +10,7 @@ from mcp_fuzzer.client.transport.factory import (
     TransportBuildRequest,
     build_driver_with_auth,
 )
-from mcp_fuzzer.transport.wrappers import RetryingTransport
+from mcp_fuzzer.transport.retrying import RetryingTransport
 
 pytestmark = [pytest.mark.unit, pytest.mark.client]
 

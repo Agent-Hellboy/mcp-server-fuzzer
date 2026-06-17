@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from ...transport.catalog import build_driver as base_build_driver
-from ...transport.wrappers import RetryingTransport, RetryPolicy
+from ...transport.retrying import RetryingTransport, RetryPolicy
 from ...exceptions import TransportRegistrationError
 from ...types import AuthManagerProtocol
 
