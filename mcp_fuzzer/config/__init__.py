@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Configuration module for MCP Fuzzer."""
 
-# Import all constants and core functionality
-from .core import (
+# Constants + configuration singleton
+from .constants import (
     CONTENT_TYPE_HEADER,
     DEFAULT_FORCE_KILL_TIMEOUT,
     DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT,
@@ -30,23 +30,22 @@ from .core import (
     WATCHDOG_DEFAULT_CHECK_INTERVAL,
     WATCHDOG_EXTRA_BUFFER,
     WATCHDOG_MAX_HANG_ADDITIONAL,
-    config,
 )
+from .manager import config
 
-# Import loader functions
-from .loading import (
-    ConfigLoader,
-    ConfigSearchParams,
-    apply_config_file,
-    find_config_file,
-    load_config_file,
-)
+# Loader helpers
+from .loader import ConfigLoader, apply_config_file
+from .discovery import find_config_file
+from .parser import load_config_file
+from .search_params import ConfigSearchParams
 
-# Import schema
-from .schema import get_config_schema
+# Schema + extensions
+from .schema_composer import get_config_schema
+from .transports import load_custom_transports
 
-# Import extensions
-from .extensions import load_custom_transports
+# Configuration facade (composes the submodules above; imported last to avoid
+# a cycle with loader/manager).
+from .access import ConfigMediator, config_mediator
 
 __all__ = [
     # Constants
@@ -88,4 +87,7 @@ __all__ = [
     "load_custom_transports",
     # Search parameters
     "ConfigSearchParams",
+    # Facade
+    "ConfigMediator",
+    "config_mediator",
 ]

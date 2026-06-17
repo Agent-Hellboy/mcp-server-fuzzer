@@ -5,8 +5,8 @@ from datetime import datetime
 
 import pytest
 
-from mcp_fuzzer.reports.core.collector import ReportCollector
-from mcp_fuzzer.reports.core.models import FuzzingMetadata
+from mcp_fuzzer.reports.collector import ReportCollector
+from mcp_fuzzer.reports.models import FuzzingMetadata
 
 
 def _metadata():

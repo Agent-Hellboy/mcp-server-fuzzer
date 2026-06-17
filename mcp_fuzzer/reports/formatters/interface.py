@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from ..core.models import ReportSnapshot
+from ..models import ReportSnapshot
 
 
 class ReportSaver(Protocol):

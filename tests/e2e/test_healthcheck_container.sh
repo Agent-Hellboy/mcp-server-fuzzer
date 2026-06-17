@@ -7,6 +7,6 @@ set -euo pipefail
 IMAGE="${IMAGE:-mcp-fuzzer:latest}"
 
 echo "[healthcheck] Running container healthcheck against ${IMAGE}"
-docker run --rm --entrypoint /usr/bin/python3 "$IMAGE" -m mcp_fuzzer.healthcheck --verbose
+docker run --rm --entrypoint /usr/bin/python3 "$IMAGE" -m mcp_fuzzer.client.healthcheck --verbose
 
 echo "[healthcheck] Success"

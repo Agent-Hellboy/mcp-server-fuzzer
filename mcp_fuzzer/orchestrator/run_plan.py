@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Run-plan commands for the unified client entrypoint."""
+
+from __future__ import annotations
+
+import logging
+import os
+from dataclasses import dataclass
+from typing import Any, Protocol
+
+from ..client.fuzzer_client import MCPFuzzerClient
+from ..reports import FuzzerReporter
+from .models import SessionContext
+
+
+@dataclass
+class RunPlan:
+    """Explicit list of commands to execute for a given mode."""
+
+    steps: list[RunCommand]
+
+    async def execute(self, context: SessionContext) -> None:
+        for step in self.steps:
+            await step.run(context)
+
+
+class RunCommand(Protocol):
+    """Command interface for a single run step."""
+
+    name: str
+
+    async def run(self, context: SessionContext) -> None: ...
+
+
+async def _run_spec_guard_if_enabled(
+    client: MCPFuzzerClient,
+    config: dict[str, Any],
+    reporter: FuzzerReporter | None,
+) -> None:
+    if not config.get("spec_guard", True):
+        return
+    requested_version = (
+        str(config.get("spec_schema_version"))
+        if config.get("spec_schema_version") is not None
+        else os.getenv("MCP_SPEC_SCHEMA_VERSION")
+    )
+    checks = await client.run_spec_suite(
+        resource_uri=config.get("spec_resource_uri"),
+        prompt_name=config.get("spec_prompt_name"),
+        prompt_args=config.get("spec_prompt_args"),
+    )
+    negotiated_version = os.getenv("MCP_SPEC_SCHEMA_VERSION")
+    failed = [c for c in checks if str(c.get("status", "")).upper() == "FAIL"]
+    logging.info(
+        "Spec guard checks completed: %d total, %d failed",
+        len(checks),
+        len(failed),
+    )
+    if reporter:
+        reporter.print_spec_guard_summary(
+            checks,
+            requested_version=requested_version,
+            negotiated_version=negotiated_version,
+        )
+
+
+class SpecGuardCommand:
+    name = "spec_guard"
+
+    async def run(self, context: SessionContext) -> None:
+        await _run_spec_guard_if_enabled(
+            context.client, context.config, context.reporter
+        )
+
+
+class ToolsCommand:
+    name = "tools"
+
+    async def run(self, context: SessionContext) -> None:
+        pipeline = context.ensure_pipeline()
+        context.tool_results = await pipeline.fuzz_tools()
+
+
+class ProtocolCommand:
+    name = "protocol"
+
+    async def run(self, context: SessionContext) -> None:
+        pipeline = context.ensure_pipeline()
+        context.protocol_results = await pipeline.fuzz_protocol()
+
+
+class ResourcesCommand:
+    name = "resources"
+
+    async def run(self, context: SessionContext) -> None:
+        pipeline = context.ensure_pipeline()
+        context.protocol_results = await pipeline.fuzz_resources()
+
+
+class PromptsCommand:
+    name = "prompts"
+
+    async def run(self, context: SessionContext) -> None:
+        pipeline = context.ensure_pipeline()
+        context.protocol_results = await pipeline.fuzz_prompts()
+
+
+class StatefulCommand:
+    name = "stateful"
+
+    async def run(self, context: SessionContext) -> None:
+        config = context.config
+        if not config.get("stateful", False):
+            return
+        pipeline = context.ensure_pipeline()
+        context.protocol_results.update(await pipeline.fuzz_stateful())
+
+
+def build_run_plan(mode: str, config: dict[str, Any]) -> RunPlan:
+    steps: list[RunCommand] = []
+    supported_modes = {"all", "protocol", "resources", "prompts", "tools"}
+    if mode not in supported_modes:
+        raise ValueError(f"Unsupported mode: {mode}")
+
+    if mode == "all":
+        steps.append(ToolsCommand())
+        steps.append(SpecGuardCommand())
+        steps.append(ProtocolCommand())
+        if config.get("stateful", False):
+            steps.append(StatefulCommand())
+        return RunPlan(steps)
+
+    if mode in {"protocol", "resources", "prompts"}:
+        steps.append(SpecGuardCommand())
+
+    if mode == "tools":
+        steps.append(ToolsCommand())
+    elif mode == "protocol":
+        steps.append(ProtocolCommand())
+        if config.get("stateful", False):
+            steps.append(StatefulCommand())
+    elif mode == "resources":
+        steps.append(ResourcesCommand())
+        if config.get("stateful", False):
+            steps.append(StatefulCommand())
+    elif mode == "prompts":
+        steps.append(PromptsCommand())
+        if config.get("stateful", False):
+            steps.append(StatefulCommand())
+
+    return RunPlan(steps)
+
+
+__all__ = [
+    "RunPlan",
+    "build_run_plan",
+    "_run_spec_guard_if_enabled",
+]

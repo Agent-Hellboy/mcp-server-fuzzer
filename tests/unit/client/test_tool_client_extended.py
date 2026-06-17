@@ -235,7 +235,9 @@ class TestFuzzSingleToolWithTimeout:
         
         # Patch the default max time to be very short
         with patch.object(tool_client, "fuzz_tool", slow_fuzz):
-            with patch("mcp_fuzzer.client.tool_client.DEFAULT_MAX_TOOL_TIME", 0.1):
+            with patch(
+                "mcp_fuzzer.client.tool_client_fuzzing.DEFAULT_MAX_TOOL_TIME", 0.1
+            ):
                 results = await tool_client._fuzz_single_tool_with_timeout(tool, 1)
         
                 assert len(results) == 1

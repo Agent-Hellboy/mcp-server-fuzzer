@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from mcp_fuzzer.reports.core.models import (
+from mcp_fuzzer.reports.models import (
     FuzzingMetadata,
     ReportSnapshot,
     SummaryStats,

@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""
+Base MCP Fuzzer Client
+
+This module provides the base client class for fuzzing MCP servers.
+"""
+
+import logging
+import random
+from pathlib import Path
+from typing import Any
+
+from ..auth import AuthManager
+from ..reports import FuzzerReporter
+from ..safety_system.safety import CombinedSafetyProvider, SafetyFilter
+from ..types import AuthManagerProtocol, ProtocolFuzzResult, ToolRunResult
+
+from .tool_client import ToolClient
+from .protocol_client import ProtocolClient
+from ..fuzz_engine.mutators.seed_pool import SeedPool
+from .. import spec_guard
+
+
+class MCPFuzzerClient:
+    """
+    Main client for fuzzing MCP servers.
+
+    This class integrates tool and protocol fuzzing functionality,
+    along with safety, authentication, and reporting capabilities.
+    """
+
+    def __init__(
+        self,
+        transport,
+        auth_manager: AuthManagerProtocol | None = None,
+        tool_timeout: float | None = None,
+        reporter: FuzzerReporter | None = None,
+        safety_system: CombinedSafetyProvider | None = None,
+        safety_enabled: bool = True,
+        max_concurrency: int = 5,
+        tool_client: ToolClient | None = None,
+        protocol_client: ProtocolClient | None = None,
+        corpus_root: str | None = None,
+        havoc_mode: bool = False,
+        seed: int | None = None,
+    ):
+        """
+        Initialize the MCP Fuzzer Client.
+
+        Args:
+            transport: Transport protocol for server communication
+            auth_manager: Authentication manager for tool authentication
+            tool_timeout: Default timeout for tool calls
+            reporter: Reporter for fuzzing results
+            safety_system: Safety system for filtering operations
+            max_concurrency: Maximum number of concurrent operations
+            tool_client: Optional pre-created ToolClient
+            protocol_client: Optional pre-created ProtocolClient
+        """
+        self.transport = transport
+        self.auth_manager = auth_manager or AuthManager()
+        self._reporter = reporter
+        if self._reporter is not None:
+            self._reporter.set_transport(transport)
+        self.tool_timeout = tool_timeout
+        self.safety_enabled = safety_enabled
+        if not safety_enabled:
+            self.safety_system = None
+        else:
+            self.safety_system = safety_system or SafetyFilter()
+
+        rng = random.Random(seed) if seed is not None else random.Random()
+        self._rng = rng
+        shared_seed_pool = SeedPool(rng=rng)
+
+        # Create specialized clients if not provided
+        self.tool_client = tool_client or ToolClient(
+            transport=transport,
+            auth_manager=self.auth_manager,
+            safety_system=self.safety_system,
+            enable_safety=self.safety_enabled,
+            max_concurrency=max_concurrency,
+            corpus_root=(Path(corpus_root) if corpus_root else None),
+            havoc_mode=havoc_mode,
+            seed_pool=shared_seed_pool,
+        )
+
+        self.protocol_client = protocol_client or ProtocolClient(
+            transport=transport,
+            safety_system=self.safety_system,
+            max_concurrency=max_concurrency,
+            corpus_root=(Path(corpus_root) if corpus_root else None),
+            havoc_mode=havoc_mode,
+            seed_pool=shared_seed_pool,
+        )
+
+        self._logger = logging.getLogger(__name__)
+
+    @property
+    def reporter(self) -> FuzzerReporter | None:
+        """Direct access to the reporter for advanced usage."""
+        return self._reporter
+
+    def _resolve_tool_timeout(self, tool_timeout: float | None) -> float | None:
+        if tool_timeout is not None:
+            return tool_timeout
+        return self.tool_timeout
+
+    async def _fuzz_protocol_group(
+        self, protocol_types: tuple[str, ...], runs_per_type: int, phase: str
+    ) -> dict[str, list[ProtocolFuzzResult]]:
+        results: dict[str, list[ProtocolFuzzResult]] = {}
+        for protocol_type in protocol_types:
+            results[protocol_type] = await self.protocol_client.fuzz_protocol_type(
+                protocol_type, runs=runs_per_type, phase=phase
+            )
+        return results
+
+    # ============================================================================
+    # Tool Fuzzing Methods - Delegate to ToolClient
+    # ============================================================================
+
+    async def fuzz_tool(
+        self,
+        tool: dict[str, Any],
+        runs: int = 10,
+        tool_timeout: float | None = None,
+    ) -> list[ToolRunResult]:
+        """Fuzz a specific tool."""
+        effective_timeout = self._resolve_tool_timeout(tool_timeout)
+        return await self.tool_client.fuzz_tool(
+            tool, runs=runs, tool_timeout=effective_timeout
+        )
+
+    async def get_tool_by_name(self, tool_name: str) -> dict[str, Any] | None:
+        """Return a tool definition from the server by name."""
+        tools = await self.tool_client._get_tools_from_server()
+        for tool in tools:
+            if tool.get("name") == tool_name:
+                return tool
+        return None
+
+    async def fuzz_all_tools(
+        self,
+        runs_per_tool: int = 10,
+        tool_timeout: float | None = None,
+    ):
+        """Fuzz all available tools."""
+        effective_timeout = self._resolve_tool_timeout(tool_timeout)
+        return await self.tool_client.fuzz_all_tools(
+            runs_per_tool=runs_per_tool,
+            tool_timeout=effective_timeout,
+        )
+
+    async def fuzz_tool_both_phases(
+        self,
+        tool: dict[str, Any],
+        runs_per_phase: int = 5,
+        tool_timeout: float | None = None,
+    ):
+        """Fuzz a tool in both realistic and aggressive phases."""
+        effective_timeout = self._resolve_tool_timeout(tool_timeout)
+        return await self.tool_client.fuzz_tool_both_phases(
+            tool,
+            runs_per_phase=runs_per_phase,
+            tool_timeout=effective_timeout,
+        )
+
+    async def fuzz_all_tools_both_phases(
+        self,
+        runs_per_phase: int = 5,
+        tool_timeout: float | None = None,
+    ):
+        """Fuzz all tools in both realistic and aggressive phases."""
+        effective_timeout = self._resolve_tool_timeout(tool_timeout)
+        return await self.tool_client.fuzz_all_tools_both_phases(
+            runs_per_phase=runs_per_phase,
+            tool_timeout=effective_timeout,
+        )
+
+    # ============================================================================
+    # Protocol Fuzzing Methods - Delegate to ProtocolClient
+    # ============================================================================
+
+    async def fuzz_protocol_type(
+        self,
+        protocol_type: str,
+        runs: int = 10,
+        phase: str | None = None,
+    ) -> list[ProtocolFuzzResult]:
+        """Fuzz a specific protocol type."""
+        if phase is None:
+            return await self.protocol_client.fuzz_protocol_type(
+                protocol_type, runs=runs
+            )
+        return await self.protocol_client.fuzz_protocol_type(
+            protocol_type, runs=runs, phase=phase
+        )
+
+    async def fuzz_all_protocol_types(
+        self,
+        runs_per_type: int = 5,
+        phase: str | None = None,
+    ) -> dict[str, list[ProtocolFuzzResult]]:
+        """Fuzz all protocol types."""
+        if phase is None:
+            return await self.protocol_client.fuzz_all_protocol_types(
+                runs_per_type=runs_per_type
+            )
+        return await self.protocol_client.fuzz_all_protocol_types(
+            runs_per_type=runs_per_type, phase=phase
+        )
+
+    async def fuzz_stateful_sequences(self, runs: int = 5, phase: str = "realistic"):
+        """Fuzz using learned stateful sequences."""
+        return await self.protocol_client.fuzz_stateful_sequences(
+            runs=runs, phase=phase
+        )
+
+    async def fuzz_resources(self, runs_per_type=5, phase="realistic"):
+        """Fuzz resource-related protocol endpoints."""
+        return await self._fuzz_protocol_group(
+            (
+                "ListResourcesRequest",
+                "ReadResourceRequest",
+                "ListResourceTemplatesRequest",
+            ),
+            runs_per_type,
+            phase,
+        )
+
+    async def fuzz_prompts(self, runs_per_type=5, phase="realistic"):
+        """Fuzz prompt-related protocol endpoints."""
+        return await self._fuzz_protocol_group(
+            (
+                "ListPromptsRequest",
+                "GetPromptRequest",
+                "CompleteRequest",
+            ),
+            runs_per_type,
+            phase,
+        )
+
+    # ============================================================================
+    # Spec Guard Methods
+    # ============================================================================
+
+    async def run_spec_suite(
+        self,
+        resource_uri: str | None = None,
+        prompt_name: str | None = None,
+        prompt_args: str | None = None,
+    ):
+        """Run spec guard checks against core MCP endpoints."""
+        checks = await spec_guard.run_spec_suite(
+            self.transport,
+            resource_uri=resource_uri,
+            prompt_name=prompt_name,
+            prompt_args=prompt_args,
+        )
+        if self._reporter is not None:
+            self._reporter.add_spec_checks(checks)
+        return checks
+
+    # ============================================================================
+    # Cleanup Methods
+    # ============================================================================
+
+    async def cleanup(self):
+        """Clean up resources, especially the transport and fuzzers."""
+        # Shutdown fuzzers
+        try:
+            await self.tool_client.shutdown()
+            await self.protocol_client.shutdown()
+        except Exception as e:
+            self._logger.warning(f"Error during fuzzer cleanup: {e}")
+
+        # Close transport
+        if hasattr(self.transport, "close"):
+            try:
+                await self.transport.close()
+            except Exception as e:
+                self._logger.warning(f"Error during transport cleanup: {e}")

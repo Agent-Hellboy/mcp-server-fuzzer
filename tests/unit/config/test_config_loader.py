@@ -19,7 +19,7 @@ from mcp_fuzzer.config import (
     get_config_schema,
     load_config_file,
 )
-from mcp_fuzzer.config.core.manager import Configuration
+from mcp_fuzzer.config.manager import Configuration
 from mcp_fuzzer.exceptions import ConfigFileError
 
 
@@ -103,8 +103,8 @@ def test_load_config_file_invalid_yaml(tmp_path):
         load_config_file(str(invalid))
 
 
-@patch("mcp_fuzzer.config.loading.loader.load_custom_transports")
-@patch("mcp_fuzzer.config.loading.loader.config")
+@patch("mcp_fuzzer.config.loader.load_custom_transports")
+@patch("mcp_fuzzer.config.loader.config")
 def test_apply_config_file_updates_global_state(
     mock_config, mock_transports, config_files
 ):
@@ -116,8 +116,8 @@ def test_apply_config_file_updates_global_state(
     assert mock_config.update.call_count == 1
 
 
-@patch("mcp_fuzzer.config.loading.loader.load_custom_transports")
-@patch("mcp_fuzzer.config.loading.loader.config")
+@patch("mcp_fuzzer.config.loader.load_custom_transports")
+@patch("mcp_fuzzer.config.loader.config")
 def test_apply_config_file_returns_false_when_missing(mock_config, mock_transports):
     result = apply_config_file(config_path="/nope.yaml")
     assert result is False
@@ -199,7 +199,7 @@ def test_config_loader_load_logs_at_debug_level(config_files):
     """Test that loading configuration logs at DEBUG level."""
     import logging
 
-    with patch("mcp_fuzzer.config.loading.loader.logger") as mock_logger:
+    with patch("mcp_fuzzer.config.loader.logger") as mock_logger:
         loader = ConfigLoader()
         loader.load(config_path=config_files["yaml_path"])
         # Should log at DEBUG level, not INFO
@@ -217,7 +217,7 @@ def test_config_loader_apply_logs_failures():
         transport_loader=Mock(),
         config_instance=mock_config,
     )
-    with patch("mcp_fuzzer.config.loading.loader.logger") as mock_logger:
+    with patch("mcp_fuzzer.config.loader.logger") as mock_logger:
         result = loader.apply()
         assert result is False
         # Should log the failure at DEBUG level

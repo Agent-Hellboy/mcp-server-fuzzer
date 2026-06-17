@@ -10,10 +10,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_fuzzer.reports.output import OutputProtocol, OutputManager
+from mcp_fuzzer.reports.output_protocol import OutputProtocol
+from mcp_fuzzer.reports.output_manager import OutputManager
 from datetime import datetime
 
-from mcp_fuzzer.reports.core.models import (
+from mcp_fuzzer.reports.models import (
     FuzzingMetadata,
     ReportSnapshot,
     RunRecord,

@@ -13,7 +13,7 @@ Uses deferred imports to avoid circular dependencies.
 # Import is wrapped in a function to delay resolution until after module init
 def _get_constants():
     """Import constants from config module to break circular dependencies."""
-    from mcp_fuzzer.config.core.constants import (
+    from mcp_fuzzer.config.constants import (
         CONTENT_TYPE_HEADER,
         DEFAULT_FORCE_KILL_TIMEOUT,
         DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT,

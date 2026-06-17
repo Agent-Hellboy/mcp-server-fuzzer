@@ -9,57 +9,56 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from mcp_fuzzer.client.adapters import ConfigAdapter, config_mediator
-from mcp_fuzzer.client.ports import ConfigPort
+from mcp_fuzzer.config import ConfigMediator, config_mediator
 from mcp_fuzzer.exceptions import ConfigFileError
 
 
 def test_config_adapter_implements_port():
-    """Test that ConfigAdapter implements ConfigPort interface."""
-    adapter = ConfigAdapter()
-    assert isinstance(adapter, ConfigPort)
+    """Test that ConfigMediator implements ConfigMediator interface."""
+    adapter = ConfigMediator()
+    assert isinstance(adapter, ConfigMediator)
 
 
 def test_config_adapter_get_set():
-    """Test ConfigAdapter get and set methods."""
-    adapter = ConfigAdapter()
+    """Test ConfigMediator get and set methods."""
+    adapter = ConfigMediator()
     adapter.set("test_key", "test_value")
     assert adapter.get("test_key") == "test_value"
     assert adapter.get("nonexistent", "default") == "default"
 
 
 def test_config_adapter_update():
-    """Test ConfigAdapter update method."""
-    adapter = ConfigAdapter()
+    """Test ConfigMediator update method."""
+    adapter = ConfigMediator()
     adapter.update({"key1": "value1", "key2": "value2"})
     assert adapter.get("key1") == "value1"
     assert adapter.get("key2") == "value2"
 
 
 def test_config_adapter_load_file(tmp_path):
-    """Test ConfigAdapter load_file method."""
+    """Test ConfigMediator load_file method."""
     config_file = tmp_path / "test.yaml"
     config_file.write_text("timeout: 30.0\nlog_level: DEBUG")
 
-    adapter = ConfigAdapter()
+    adapter = ConfigMediator()
     config_data = adapter.load_file(str(config_file))
     assert config_data["timeout"] == 30.0
     assert config_data["log_level"] == "DEBUG"
 
 
 def test_config_adapter_load_file_not_found():
-    """Test ConfigAdapter load_file raises error for missing file."""
-    adapter = ConfigAdapter()
+    """Test ConfigMediator load_file raises error for missing file."""
+    adapter = ConfigMediator()
     with pytest.raises(ConfigFileError):
         adapter.load_file("/nonexistent/path.yaml")
 
 
 def test_config_adapter_apply_file(tmp_path):
-    """Test ConfigAdapter apply_file method."""
+    """Test ConfigMediator apply_file method."""
     config_file = tmp_path / "test.yaml"
     config_file.write_text("timeout: 45.0\nlog_level: INFO")
 
-    adapter = ConfigAdapter()
+    adapter = ConfigMediator()
     result = adapter.apply_file(config_path=str(config_file))
     assert result is True
     assert adapter.get("timeout") == 45.0
@@ -67,15 +66,15 @@ def test_config_adapter_apply_file(tmp_path):
 
 
 def test_config_adapter_apply_file_not_found():
-    """Test ConfigAdapter apply_file returns False for missing file."""
-    adapter = ConfigAdapter()
+    """Test ConfigMediator apply_file returns False for missing file."""
+    adapter = ConfigMediator()
     result = adapter.apply_file(config_path="/nonexistent/path.yaml")
     assert result is False
 
 
 def test_config_adapter_get_schema():
-    """Test ConfigAdapter get_schema method."""
-    adapter = ConfigAdapter()
+    """Test ConfigMediator get_schema method."""
+    adapter = ConfigMediator()
     schema = adapter.get_schema()
     assert isinstance(schema, dict)
     assert schema["type"] == "object"
@@ -83,21 +82,21 @@ def test_config_adapter_get_schema():
 
 
 def test_config_adapter_custom_instance():
-    """Test ConfigAdapter with custom config instance."""
+    """Test ConfigMediator with custom config instance."""
     mock_config = Mock()
     mock_config.get = Mock(return_value="custom_value")
     mock_config.set = Mock()
     mock_config.update = Mock()
 
-    adapter = ConfigAdapter(config_instance=mock_config)
+    adapter = ConfigMediator(config_instance=mock_config)
     assert adapter.get("test_key") == "custom_value"
     mock_config.get.assert_called_once_with("test_key", None)
 
 
 def test_config_mediator_is_global_instance():
-    """Test that config_mediator is a global ConfigAdapter instance."""
-    assert isinstance(config_mediator, ConfigAdapter)
-    assert isinstance(config_mediator, ConfigPort)
+    """Test that config_mediator is a global ConfigMediator instance."""
+    assert isinstance(config_mediator, ConfigMediator)
+    assert isinstance(config_mediator, ConfigMediator)
 
 
 def test_config_mediator_functionality(tmp_path):

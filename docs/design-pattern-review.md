@@ -23,11 +23,11 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 ### CLI & Config (Fit Score: 8/10)
 
 - **Patterns Used:** Facade (`mcp_fuzzer/cli/entrypoint.py` `run_cli` and
-  `mcp_fuzzer/client/main.py` `unified_client_main`) as the single entry point
+  `mcp_fuzzer/cli/app.py` `run_fuzz_app`) as the single entry point
   that wires parsing, validation, safety, transport, and execution. Builder
   (`mcp_fuzzer/fuzz_engine/runtime/config.py` `ProcessConfigBuilder`) for
-  composing process configs. Port/Adapter (Hexagonal) for config access
-  (`mcp_fuzzer/client/ports/config_port.py` + `mcp_fuzzer/client/adapters/config_adapter.py`).
+  composing process configs. `SessionBootstrap` (`cli/bootstrap.py`) composes
+  transport, client, and reporter from merged settings.
 - **Strengths:** Clear top-level flow: parse → validate → merge config → execute.
   Config access is mediated through a port, so core components avoid direct
   coupling to config storage.
@@ -36,11 +36,12 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
 
 ### Client Orchestration (Fit Score: 8/10)
 
-- **Patterns Used:** Facade (`mcp_fuzzer/client/base.py` `MCPFuzzerClient`) exposes
-  a unified API for tool/protocol fuzzing and reporting. Mediator-style
-  coordination happens in `MCPFuzzerClient` and `unified_client_main`, which
-  orchestrate `ToolClient`, `ProtocolClient`, `SafetyFilter`, and `FuzzerReporter`
-  without those components knowing about each other.
+- **Patterns Used:** Facade (`mcp_fuzzer/client/fuzzer_client.py` `MCPFuzzerClient`) exposes
+  a unified API for tool/protocol fuzzing. Mediator-style coordination happens in
+  `run_fuzz_app` and `orchestrator/run_session`, which orchestrate `ToolClient`,
+  `ProtocolClient`, `SafetyFilter`, and `FuzzerReporter` without those components
+  knowing about each other. Reporting is split to `FuzzReportPresenter` and
+  `PostRunPresenter`.
 - **Strengths:** The client layer is the single high-level surface area for
   fuzzing operations, keeping CLI and tests simple.
 - **Notes:** Mode handling is consolidated via a run plan and execution pipeline.
@@ -77,8 +78,8 @@ patterns in play, a qualitative "fit score" (0-10), and concrete next steps.
   protocol, and batch runs.
 - **Strengths:** Executors isolate concurrency concerns; builders make results
   consistent across clients and reporters.
-- **Notes:** A shared execution pipeline (`ClientExecutionPipeline`) coordinates
-  tool/protocol runs from a single interface.
+- **Notes:** The execution pipeline (`ClientExecutionPipeline` in
+  `orchestrator/pipeline.py`) coordinates tool/protocol runs from a single interface.
 
 ### Safety System (Fit Score: 7/10)
 

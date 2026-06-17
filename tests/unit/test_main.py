@@ -32,5 +32,6 @@ class TestMain(unittest.TestCase):
         self.assertTrue(hasattr(mcp_fuzzer.__main__, "main"))
         self.assertTrue(hasattr(mcp_fuzzer.__main__, "run"))
 
+
 if __name__ == "__main__":
     unittest.main()

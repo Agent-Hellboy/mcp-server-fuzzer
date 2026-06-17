@@ -17,7 +17,7 @@ from ..interfaces.server_requests import (
     ServerRequestHandlerProtocol,
 )
 from ...exceptions import TransportError
-from ...spec_version import maybe_update_spec_version_from_result
+from ...spec_guard.spec_version import maybe_update_spec_version_from_result
 
 
 class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):

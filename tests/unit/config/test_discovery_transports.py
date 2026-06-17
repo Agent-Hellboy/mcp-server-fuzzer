@@ -9,12 +9,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from mcp_fuzzer.config.loading.discovery import (
+from mcp_fuzzer.config.discovery import (
     find_config_file,
     find_config_file_from_params,
 )
-from mcp_fuzzer.config.loading.search_params import ConfigSearchParams
-from mcp_fuzzer.config.extensions.transports import load_custom_transports
+from mcp_fuzzer.config.search_params import ConfigSearchParams
+from mcp_fuzzer.config.transports import load_custom_transports
 from mcp_fuzzer.exceptions import ConfigFileError
 from mcp_fuzzer.transport.catalog import clear_custom_drivers, list_custom_drivers
 from mcp_fuzzer.transport.interfaces.driver import TransportDriver
@@ -175,7 +175,7 @@ def test_load_custom_transports_logs_with_percent_formatting(monkeypatch):
     from unittest.mock import Mock
 
     mock_logger = Mock()
-    monkeypatch.setattr("mcp_fuzzer.config.extensions.transports.logger", mock_logger)
+    monkeypatch.setattr("mcp_fuzzer.config.transports.logger", mock_logger)
 
     config_data = {
         "custom_transports": {
@@ -201,7 +201,7 @@ def test_load_custom_transports_logs_with_percent_formatting(monkeypatch):
 
 
 def test_load_custom_transports_invalid_factory_path(monkeypatch):
-    from mcp_fuzzer.config.extensions import transports
+    from mcp_fuzzer.config import transports
 
     dummy_module = SimpleNamespace(DummyTransport=DummyTransport)
 
@@ -211,7 +211,6 @@ def test_load_custom_transports_invalid_factory_path(monkeypatch):
         raise ImportError(name)
 
     monkeypatch.setattr(transports.importlib, "import_module", fake_import)
-    monkeypatch.setattr(transports, "register_custom_driver", lambda **_kwargs: None)
 
     config_data = {
         "custom_transports": {
@@ -228,7 +227,7 @@ def test_load_custom_transports_invalid_factory_path(monkeypatch):
 
 
 def test_load_custom_transports_non_callable_factory(monkeypatch):
-    from mcp_fuzzer.config.extensions import transports
+    from mcp_fuzzer.config import transports
 
     dummy_module = SimpleNamespace(DummyTransport=DummyTransport)
     factory_module = SimpleNamespace(not_callable="nope")
@@ -241,7 +240,6 @@ def test_load_custom_transports_non_callable_factory(monkeypatch):
         raise ImportError(name)
 
     monkeypatch.setattr(transports.importlib, "import_module", fake_import)
-    monkeypatch.setattr(transports, "register_custom_driver", lambda **_kwargs: None)
 
     config_data = {
         "custom_transports": {

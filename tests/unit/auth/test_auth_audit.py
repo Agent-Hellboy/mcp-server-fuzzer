@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import httpx
 
-from mcp_fuzzer.analysis import (
+from mcp_fuzzer.diagnostics import (
     audit_as_metadata,
     inspect_state_for_routing,
     probe_blind_client_trust,

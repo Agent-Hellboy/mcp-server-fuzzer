@@ -273,7 +273,7 @@ def test_stdout_summary_completed_with_outcome_buckets(capsys):
 
 def test_fail_if_no_tools_flag_parses_and_merges():
     from mcp_fuzzer.cli.config_merge import build_cli_config
-    from mcp_fuzzer.client.adapters import config_mediator
+    from mcp_fuzzer.config import config_mediator
 
     parser = create_argument_parser()
     args = parser.parse_args(

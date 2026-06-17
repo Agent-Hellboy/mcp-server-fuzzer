@@ -21,7 +21,7 @@ from typing import Any, Awaitable, Callable, Protocol
 
 # Import constants directly from config (constants are values, not behavior)
 # Behavior (functions/classes) should go through client mediator
-from ...config.core.constants import (
+from ...config.constants import (
     PROCESS_FORCE_KILL_TIMEOUT,
     PROCESS_TERMINATION_TIMEOUT,
 )

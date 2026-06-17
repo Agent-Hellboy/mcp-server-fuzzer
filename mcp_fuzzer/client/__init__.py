@@ -1,7 +1,6 @@
 """Public client exports."""
 
-from .base import MCPFuzzerClient
-from .adapters import ConfigAdapter, config_mediator
+from .fuzzer_client import MCPFuzzerClient
 from .constants import (
     CONTENT_TYPE_HEADER,
     DEFAULT_FORCE_KILL_TIMEOUT,
@@ -31,13 +30,9 @@ from .constants import (
     WATCHDOG_EXTRA_BUFFER,
     WATCHDOG_MAX_HANG_ADDITIONAL,
 )
-from .ports import ConfigPort
 
 __all__ = [
     "MCPFuzzerClient",
-    "ConfigPort",
-    "ConfigAdapter",
-    "config_mediator",
     # Constants
     "DEFAULT_PROTOCOL_VERSION",
     "CONTENT_TYPE_HEADER",

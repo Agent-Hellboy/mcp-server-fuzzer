@@ -9,8 +9,8 @@ It handles the dispatch between realistic and aggressive phases.
 from typing import Any, Callable
 import random
 
-from .realistic import fuzz_tool_arguments_realistic
-from .aggressive import fuzz_tool_arguments_aggressive
+from .realistic_tool_strategy import fuzz_tool_arguments_realistic
+from .aggressive_tool_strategy import fuzz_tool_arguments_aggressive
 from .spec_protocol import get_spec_protocol_fuzzer_method
 from .registry import strategy_registry
 from ....protocol_registry import DEFAULT_PROTOCOL_TYPES

@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_fuzzer.exceptions import ServerError
-from mcp_fuzzer.outcomes import (
+from mcp_fuzzer.exceptions import OversizedResponseError, ServerError
+from mcp_fuzzer.client.outcomes import (
     FuzzOutcome,
     classify_protocol_run,
     classify_tool_run,
@@ -144,6 +144,19 @@ def test_classify_protocol_run_error_without_code():
 
 def test_classify_protocol_run_non_dict_response():
     success, outcome = classify_protocol_run(server_response=["not", "a", "dict"])
+    assert success is False
+    assert outcome == FuzzOutcome.TRANSPORT_ERROR
+
+
+def test_classify_protocol_run_oversized_response():
+    exc = OversizedResponseError("too big")
+    success, outcome = classify_protocol_run(exception=exc)
+    assert success is False
+    assert outcome == FuzzOutcome.OVERSIZED_RESPONSE
+
+
+def test_classify_protocol_run_non_dict_error_payload():
+    success, outcome = classify_protocol_run(server_response="not-a-dict")
     assert success is False
     assert outcome == FuzzOutcome.TRANSPORT_ERROR
 

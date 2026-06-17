@@ -14,7 +14,7 @@ from collections.abc import Iterable
 
 # Import constants directly from config (constants are values, not behavior)
 # Behavior (functions/classes) should go through client mediator
-from ..config.core.constants import (
+from ..config.constants import (
     SAFETY_LOCAL_HOSTS,
     SAFETY_NO_NETWORK_DEFAULT,
     SAFETY_PROXY_ENV_DENYLIST,

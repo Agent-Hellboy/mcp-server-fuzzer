@@ -11,7 +11,7 @@ from typing import Any
 from ...types import FuzzDataResult
 from .async_executor import AsyncFuzzExecutor
 from ..mutators import BatchMutator
-from ..fuzzerreporter import ResultBuilder
+from .results import ResultBuilder
 
 
 class BatchExecutor:

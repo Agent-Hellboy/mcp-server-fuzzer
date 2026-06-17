@@ -15,7 +15,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-from ...utils.icons import BLOCKED, SHIELD, UNLOCKED
+from ...icons import BLOCKED, SHIELD, UNLOCKED
 
 from .shims import load_shim_template
 

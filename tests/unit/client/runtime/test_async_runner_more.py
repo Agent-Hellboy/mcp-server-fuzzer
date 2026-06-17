@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mcp_fuzzer.client.runtime.async_runner import AsyncRunner
+from mcp_fuzzer.cli.runtime.async_runner import AsyncRunner
 
 
 class DummyLoop:
@@ -32,7 +32,7 @@ def test_setup_aiomonitor_disables_when_missing(monkeypatch, capsys):
     runner = AsyncRunner(args, safety=SimpleNamespace())
 
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.async_runner.importlib.util.find_spec",
+        "mcp_fuzzer.cli.runtime.async_runner.importlib.util.find_spec",
         lambda _name: None,
     )
 
@@ -48,7 +48,7 @@ def test_setup_aiomonitor_prints_when_present(monkeypatch):
     calls = []
 
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.async_runner.importlib.util.find_spec",
+        "mcp_fuzzer.cli.runtime.async_runner.importlib.util.find_spec",
         lambda _name: object(),
     )
     monkeypatch.setattr("builtins.print", lambda *args, **_kwargs: calls.append(args))
@@ -96,11 +96,11 @@ def test_cancel_all_tasks_marks_notice(monkeypatch):
     tasks = [FakeTask(), FakeTask()]
 
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.async_runner.Console",
+        "mcp_fuzzer.cli.runtime.async_runner.Console",
         DummyConsole,
     )
     monkeypatch.setattr(
-        "mcp_fuzzer.client.runtime.async_runner.asyncio.all_tasks",
+        "mcp_fuzzer.cli.runtime.async_runner.asyncio.all_tasks",
         lambda _loop: tasks,
     )
 

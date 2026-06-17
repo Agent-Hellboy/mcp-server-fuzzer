@@ -9,7 +9,6 @@ from mcp_fuzzer.reports.formatters.common import (
     calculate_protocol_success_rate,
     collect_and_summarize_protocol_items,
     collect_labeled_protocol_items,
-    extract_tool_runs,
     normalize_report_data,
     result_has_failure,
     summarize_protocol_items,
@@ -39,48 +38,6 @@ def test_normalize_report_data_uses_to_dict_method():
     normalized = normalize_report_data(report)
     assert normalized == {"converted": 1}
     assert report.called
-
-
-def test_extract_tool_runs_from_runs_key():
-    entry = {"runs": [{"success": True}]}
-    runs, metadata = extract_tool_runs(entry)
-    assert runs == [{"success": True}]
-    assert metadata is entry
-
-
-def test_extract_tool_runs_from_phase_keys():
-    entry = {"realistic": [{"success": True}], "aggressive": [{"success": False}]}
-    runs, metadata = extract_tool_runs(entry)
-    assert runs == [{"success": True}, {"success": False}]
-    assert metadata is entry
-
-
-def test_extract_tool_runs_from_list():
-    entry = [{"success": True}]
-    runs, metadata = extract_tool_runs(entry)
-    assert runs == [{"success": True}]
-    assert metadata is None
-
-
-def test_extract_tool_runs_from_unexpected_value():
-    runs, metadata = extract_tool_runs(None)
-    assert runs == []
-    assert metadata is None
-
-
-def test_extract_tool_runs_from_error_only_entry():
-    entry = {"success": False, "error": "phase failed", "exception": "boom"}
-    runs, metadata = extract_tool_runs(entry)
-    assert runs == [
-        {
-            "success": False,
-            "error": "phase failed",
-            "exception": "boom",
-            "safety_blocked": False,
-            "safety_sanitized": False,
-        }
-    ]
-    assert metadata is entry
 
 
 def test_calculate_protocol_success_rate_handles_zero_runs():

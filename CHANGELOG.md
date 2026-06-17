@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- SOLID session architecture: top-level `orchestrator/` drives fuzz → diagnostics
+  audits → persist (`findings.json`, crash repros); `cli/app.py` is the
+  composition root with `SessionBootstrap` and `PostRunPresenter`
+- `ARCHITECTURE.md` documenting layer rules, session flow, and structural
+  conventions; `tests/unit/test_layer_imports.py` guards L2 import boundaries
 - MCP OAuth authentication-security audit, mapping the nine flaw types (F1–F9)
   from [*A First Measurement Study on Authentication Security in Real-World
   Remote MCP Servers*](https://arxiv.org/abs/2605.22333) onto black-box checks:
@@ -22,6 +27,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     stdout summary. The audit runs after the fuzz pass and never aborts it;
     skipped/errored runs log a reason instead of reporting a clean result.
 
+### Changed
+
+- Rename `findings/` → `diagnostics/`; flatten nested packages across `cli/`,
+  `client/`, `config/`, `fuzz_engine/`, `reports/`, `transport/`, and
+  `safety_system/`
+- Relocate root helpers into layer homes (no compatibility shims): `corpus` →
+  `fuzz_engine/`, `env` → `config/`, `outcomes` and container `healthcheck` →
+  `client/`, `spec_version` and tool schema helpers → `spec_guard/`; merge
+  `extract_tool_runs` into `types.py` and remove `utils/`
+- Docker healthcheck entrypoint: `python -m mcp_fuzzer.client.healthcheck`
+- Merge `ClientSettings` into `SessionSettings`; remove reporter/orchestrator
+  compatibility shims and duplicate settings types
+- Split god-modules (`protocol_client`, `tool_client`, `diagnostics/server`,
+  `auth_oauth`, `spec_checks`, `FuzzerReporter`) and move execution pipeline
+  to `orchestrator/pipeline.py`
+
 ## [0.3.6] - 2026-06-17
 
 ### Added
@@ -32,7 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `ServerCrashError`, capturing the exit code/signal and a tail of the server's
   stderr (panic trace / ASan report). Per-crash reproduction files are written
   to `<output_dir>/crashes/`.
-- Post-run findings analyzer (`mcp_fuzzer/analysis`) that classifies a broad set
+- Post-run findings analyzer (`mcp_fuzzer/diagnostics/`) that classifies a broad set
   of MCP-server issue classes from the collected run data, written to
   `<output_dir>/findings.json` and summarized by category on stdout:
   - `crash`, `oversized_response` (resource exhaustion), `hang` (timeout)

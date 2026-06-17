@@ -1,7 +1,7 @@
 import pytest
 
 from mcp_fuzzer.exceptions import PayloadValidationError, TransportError
-from mcp_fuzzer.transport.wrappers.retrying import RetryingTransport, RetryPolicy
+from mcp_fuzzer.transport.retrying import RetryingTransport, RetryPolicy
 from mcp_fuzzer.transport.interfaces.driver import TransportDriver
 
 
@@ -107,7 +107,7 @@ def test_retry_policy_clamp_and_next_delay(monkeypatch):
 
 def test_next_delay_with_jitter(monkeypatch):
     monkeypatch.setattr(
-        "mcp_fuzzer.transport.wrappers.retrying.random.uniform", lambda a, b: b
+        "mcp_fuzzer.transport.retrying.random.uniform", lambda a, b: b
     )
     transport = RetryingTransport(
         NoBatchTransport(),

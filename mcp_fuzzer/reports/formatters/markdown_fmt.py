@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...types import extract_tool_runs
 from .common import (
     calculate_protocol_success_rate,
     collect_and_summarize_protocol_items,
-    extract_tool_runs,
     normalize_report_data,
     result_has_failure,
 )
-from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
-from ...utils.icons import CHECK, CROSS
+from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
+from ...icons import CHECK, CROSS
 
 
 class MarkdownFormatter:

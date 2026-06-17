@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from mcp_fuzzer.fuzz_engine.executor import BatchExecutor
 from mcp_fuzzer.fuzz_engine.mutators import BatchMutator
-from mcp_fuzzer.fuzz_engine.fuzzerreporter import ResultBuilder
+from mcp_fuzzer.fuzz_engine.executor.results import ResultBuilder
 
 pytestmark = [pytest.mark.unit, pytest.mark.fuzz_engine, pytest.mark.executor]
 

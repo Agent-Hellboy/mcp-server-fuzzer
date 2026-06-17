@@ -1,6 +1,6 @@
 import os
 
-from mcp_fuzzer import spec_version
+import mcp_fuzzer.spec_guard.spec_version as spec_version
 
 
 def test_maybe_update_spec_version_valid(monkeypatch):
@@ -17,6 +17,7 @@ def test_maybe_update_spec_version_invalid(monkeypatch):
     assert spec_version.maybe_update_spec_version(123) is None
     assert spec_version.maybe_update_spec_version("") is None
     assert spec_version.maybe_update_spec_version("2025-1-01") is None
+    assert spec_version.maybe_update_spec_version("2025-13-40") is None
 
 
 def test_maybe_update_spec_version_from_result(monkeypatch):

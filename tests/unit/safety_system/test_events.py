@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mcp_fuzzer.safety_system.detection import DangerDetector, DangerMatch, DangerType
-from mcp_fuzzer.safety_system.reporting.events import (
+from mcp_fuzzer.safety_system.reporting import (
     BlockedOperation,
     DangerousArgument,
     SafetyEventLogger,

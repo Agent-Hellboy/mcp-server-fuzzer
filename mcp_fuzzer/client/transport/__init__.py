@@ -1,3 +1,5 @@
-from .factory import TransportBuildRequest, build_driver_with_auth
+"""Client transport auth port helpers."""
 
-__all__ = ["TransportBuildRequest", "build_driver_with_auth"]
+from . import auth_port
+
+__all__ = ["auth_port"]

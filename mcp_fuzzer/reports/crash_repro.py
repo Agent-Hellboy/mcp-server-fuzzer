@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .formatters.common import extract_tool_runs
+from ..types import extract_tool_runs
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +102,8 @@ def write_crash_repros(
 def write_findings_report(
     output_dir: str | os.PathLike[str],
     findings: list[Any],
+    *,
+    audit_sections: dict[str, Any] | None = None,
 ) -> Path | None:
     """Write all analyzed findings to ``<output_dir>/findings.json``."""
     if not findings:
@@ -112,22 +114,8 @@ def write_findings_report(
         f.to_dict() if hasattr(f, "to_dict") else f for f in findings
     ]
     doc: dict[str, Any] = {"findings": payload, "count": len(payload)}
-    try:
-        from ..analysis.auth_audit import (
-            auth_audit_report_metadata,
-            is_auth_audit_finding,
-        )
-
-        auth_audit_findings = [
-            f for f in findings if is_auth_audit_finding(f)
-        ]
-        if auth_audit_findings:
-            doc["auth_audit"] = {
-                **auth_audit_report_metadata(),
-                "finding_count": len(auth_audit_findings),
-            }
-    except Exception:  # pragma: no cover - metadata is best-effort
-        pass
+    if audit_sections:
+        doc.update(audit_sections)
     try:
         out.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:

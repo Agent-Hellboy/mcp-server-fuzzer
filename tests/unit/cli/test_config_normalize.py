@@ -7,7 +7,7 @@ import argparse
 
 from mcp_fuzzer.cli.config_normalize import apply_nested_config_to_args
 from mcp_fuzzer.cli.parser import create_argument_parser
-from mcp_fuzzer.client.adapters import config_mediator
+from mcp_fuzzer.config import config_mediator
 
 
 def test_apply_nested_output_section_fields():

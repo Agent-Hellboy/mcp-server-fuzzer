@@ -56,7 +56,7 @@ docker run --rm -it \
   --mode tools --protocol stdio --endpoint "node /servers/my-server.js stdio" --output-dir /output
 
 # Quick healthcheck (distroless-safe)
-docker run --rm --entrypoint /usr/bin/python3 mcp-fuzzer:latest -m mcp_fuzzer.healthcheck --verbose
+docker run --rm --entrypoint /usr/bin/python3 mcp-fuzzer:latest -m mcp_fuzzer.client.healthcheck --verbose
 ```
 
 ### Pattern 3: Remote HTTP Server
