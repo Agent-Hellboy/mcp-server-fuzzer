@@ -14,6 +14,7 @@ from ..interfaces.driver import TransportDriver
 from ...exceptions import (
     ProcessSignalError,
     ProcessStartError,
+    ServerCrashError,
     ServerError,
     TransportError,
 )
@@ -33,6 +34,15 @@ from ...safety_system.policy import sanitize_subprocess_env
 from ...config import DEFAULT_PROTOCOL_VERSION, PROCESS_WAIT_TIMEOUT
 from ..controller.process_supervisor import ProcessSupervisor
 
+# Signals that indicate the server crashed itself (not our own SIGKILL/SIGTERM
+# used for cleanup/restart between runs).
+_CRASH_SIGNALS = {
+    getattr(_signal, name).value
+    for name in ("SIGSEGV", "SIGABRT", "SIGBUS", "SIGFPE", "SIGILL", "SIGSYS")
+    if hasattr(_signal, name)
+}
+
+
 class StdioDriver(TransportDriver):
     def __init__(
         self,
@@ -51,6 +61,11 @@ class StdioDriver(TransportDriver):
         self.stdout = None
         self.stderr = None
         self._stderr_drain_task: asyncio.Task | None = None
+        # Bounded tail of the server's stderr, attached to crash findings so a
+        # panic trace / sanitizer (ASan) report travels with the report.
+        from collections import deque
+
+        self._stderr_tail: deque[str] = deque(maxlen=50)
         self._lock = None  # Will be created lazily when needed
         # Serializes a full request/response exchange so concurrent callers
         # (e.g. bounded asyncio.gather fuzz runs) never read the single stdout
@@ -236,11 +251,72 @@ class StdioDriver(TransportDriver):
                     break
                 decoded = line.decode(errors="replace").rstrip()
                 if decoded:
+                    self._stderr_tail.append(decoded)
                     logging.debug("stdio stderr: %s", decoded[-500:])
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logging.debug("stdio stderr drain stopped: %s", exc)
+
+    def sample_server_memory(self) -> int | None:
+        """Return the current RSS (bytes) of the server process, or None.
+
+        Used for memory-growth/leak detection on stdio targets. Safe to call
+        when psutil is unavailable or the process has exited.
+        """
+        proc = self.process
+        pid = getattr(proc, "pid", None)
+        if pid is None or getattr(proc, "returncode", None) is not None:
+            return None
+        try:
+            import psutil
+
+            return int(psutil.Process(pid).memory_info().rss)
+        except Exception:
+            return None
+
+    async def _detect_crash(self) -> dict[str, Any] | None:
+        """Return crash context if the server process died abnormally.
+
+        Distinguishes a genuine server crash (a crash signal or a positive
+        non-zero exit) from our own SIGKILL/SIGTERM used to recycle processes.
+        Returns ``None`` while the process is still running or exited cleanly.
+        """
+        proc = self.process
+        if proc is None:
+            return None
+        if proc.returncode is None:
+            # stdout EOF can precede reaping; give the process a moment to exit.
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=0.5)
+            except (asyncio.TimeoutError, Exception):
+                return None
+        rc = proc.returncode
+        if rc is None or rc == 0:
+            return None
+        if rc < 0 and (-rc) not in _CRASH_SIGNALS:
+            # Negative code from our own SIGKILL/SIGTERM, not a server crash.
+            return None
+        context: dict[str, Any] = {"exit_code": rc}
+        if rc < 0:
+            context["signal"] = -rc
+            try:
+                context["signal_name"] = _signal.Signals(-rc).name
+            except ValueError:
+                pass
+        if self._stderr_tail:
+            context["stderr_tail"] = list(self._stderr_tail)
+        return context
+
+    async def _raise_if_crashed(self, cause: BaseException | None = None) -> None:
+        """Raise ServerCrashError if the server process terminated abnormally."""
+        context = await self._detect_crash()
+        if context is not None:
+            self._initialized = False
+            raise ServerCrashError(
+                "Server process terminated abnormally during a request",
+                context=context,
+            ) from cause
 
     async def _send_message(self, message: dict[str, Any]) -> None:
         """Send a message to the subprocess."""
@@ -256,6 +332,7 @@ class StdioDriver(TransportDriver):
             logging.error(f"Failed to send message to stdio transport: {e}")
             self._initialized = False
             self.manager.state.record_error(str(e))
+            await self._raise_if_crashed(e)
             raise TransportError(
                 "Failed to send message over stdio transport",
                 context={"message": message},
@@ -295,10 +372,13 @@ class StdioDriver(TransportDriver):
             self.manager.state.record_stdout_tail(decoded[-200:])
             message = json.loads(decoded)
             return message
+        except ServerCrashError:
+            raise
         except Exception as e:
             logging.error(f"Failed to receive message from stdio transport: {e}")
             self._initialized = False
             self.manager.state.record_error(str(e))
+            await self._raise_if_crashed(e)
             raise TransportError(
                 "Failed to receive message from stdio transport",
                 context={"command": self.command},
@@ -332,6 +412,7 @@ class StdioDriver(TransportDriver):
                 iteration_count += 1
                 response = await self._receive_message()
                 if response is None:
+                    await self._raise_if_crashed()
                     raise TransportError(
                         "No response received from stdio transport",
                         context={"request_id": request_id},
@@ -381,6 +462,7 @@ class StdioDriver(TransportDriver):
                 iteration_count += 1
                 response = await self._receive_message()
                 if response is None:
+                    await self._raise_if_crashed()
                     raise TransportError(
                         "No response received from stdio transport",
                         context={"payload": payload},

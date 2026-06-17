@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ...events import ProcessEventObserver
-from ...exceptions import TransportError
+from ...exceptions import OversizedResponseError
 
 
 @dataclass
@@ -132,7 +132,7 @@ class ProcessSupervisor:
                 size=size,
                 limit=self._max_read_bytes,
             )
-            raise TransportError(
+            raise OversizedResponseError(
                 "Received oversized message from stdio transport",
                 context={
                     "size": size,
@@ -150,7 +150,7 @@ class ProcessSupervisor:
                 size=len(line),
                 limit=self._max_read_bytes,
             )
-            raise TransportError(
+            raise OversizedResponseError(
                 "Received oversized message from stdio transport",
                 context={"size": len(line), "limit": self._max_read_bytes},
             )

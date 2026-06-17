@@ -24,6 +24,7 @@ class ErrorType(StringValueEnum):
 
     PHASE_EXECUTION_FAILED = "phase_execution_failed"
     SAFETY_BLOCKED = "safety_blocked"
+    SERVER_CRASHED = "server_crashed"
     TOOL_CALL_FAILED = "tool_call_failed"
     TOOL_MUTATION_FAILED = "tool_mutation_failed"
     TOOL_TIMEOUT = "tool_timeout"

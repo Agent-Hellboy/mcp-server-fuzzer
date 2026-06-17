@@ -57,6 +57,48 @@ def _set_report_metadata(reporter: FuzzerReporter, config: dict[str, Any]) -> No
     )
 
 
+async def _run_auth_bypass_probe(config: dict[str, Any]) -> list[Any]:
+    """Probe configured-but-unenforced auth by calling tools without credentials.
+
+    Best-effort and network-active: returns ``auth_bypass`` findings for any
+    protected tool that responds without an auth challenge. Never raises.
+    """
+    auth_manager = config.get("auth_manager")
+    if auth_manager is None:
+        return []
+    try:
+        from ..analysis import probe_auth_bypass, secured_tool_names
+        from ..transport.interfaces import JsonRpcAdapter
+
+        unauth_request = _build_transport_request({**config, "auth_manager": None})
+        unauth_transport = build_driver_with_auth(unauth_request)
+        adapter = JsonRpcAdapter(unauth_transport)
+        try:
+            tools = await adapter.get_tools()
+        except Exception:
+            # Discovery itself requires auth -> calls do too; no bypass.
+            return []
+        secured = secured_tool_names(auth_manager, tools)
+        if not secured:
+            return []
+
+        async def attempt(tool_name: str) -> Any:
+            return await adapter.call_tool(tool_name, {})
+
+        try:
+            return await probe_auth_bypass(secured, attempt)
+        finally:
+            close = getattr(unauth_transport, "close", None)
+            if callable(close):
+                try:
+                    await close()
+                except Exception:
+                    pass
+    except Exception as exc:  # pragma: no cover - probe is best-effort
+        logging.debug("Auth-bypass probe skipped: %s", exc)
+        return []
+
+
 async def unified_client_main(settings: ClientSettings) -> int:
     """Run the fuzzing workflow using merged client settings."""
     config = settings.data
@@ -153,14 +195,43 @@ async def unified_client_main(settings: ClientSettings) -> int:
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display protocol summary tables: {exc}")
 
+        findings_summary: dict[str, int] = {}
+        tr = tool_results if isinstance(tool_results, dict) else None
+        pr = protocol_results if isinstance(protocol_results, dict) else None
+        try:
+            from ..analysis import analyze_findings, summarize_findings
+            from ..reports.crash_repro import write_crash_repros, write_findings_report
+
+            findings = analyze_findings(tr, pr)
+            if mode in ("tools", "all"):
+                findings.extend(await _run_auth_bypass_probe(config))
+            findings_summary = summarize_findings(findings)
+            out_dir = config.get("output_dir") or "reports"
+            crash_files = write_crash_repros(out_dir, tr, pr)
+            if crash_files:
+                logging.warning(
+                    "Recorded %d server crash reproduction(s) in %s",
+                    len(crash_files),
+                    crash_files[0].parent,
+                )
+            if findings:
+                report_path = write_findings_report(out_dir, findings)
+                logging.warning(
+                    "Recorded %d finding(s) across %d categor(y/ies) in %s",
+                    len(findings),
+                    len(findings_summary),
+                    report_path,
+                )
+        except Exception as exc:  # pragma: no cover
+            logging.warning("Failed to analyze/record findings: %s", exc)
+
         try:
             write_stdout_summary(
                 mode=mode,
-                tool_results=tool_results if isinstance(tool_results, dict) else None,
-                protocol_results=(
-                    protocol_results if isinstance(protocol_results, dict) else None
-                ),
+                tool_results=tr,
+                protocol_results=pr,
                 blocked=no_tools_available,
+                findings_summary=findings_summary,
             )
         except Exception as exc:  # pragma: no cover
             logging.warning("Failed to write plain stdout summary: %s", exc)

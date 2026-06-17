@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.6]
+
+### Added
+
+- Server-crash detection: a stdio server that dies mid-request (crash signal
+  SIGSEGV/SIGABRT/... or a positive non-zero exit, distinct from the fuzzer's
+  own SIGKILL/SIGTERM) is classified as a new `crashed` outcome via
+  `ServerCrashError`, capturing the exit code/signal and a tail of the server's
+  stderr (panic trace / ASan report). Per-crash reproduction files are written
+  to `<output_dir>/crashes/`.
+- Post-run findings analyzer (`mcp_fuzzer/analysis`) that classifies a broad set
+  of MCP-server issue classes from the collected run data, written to
+  `<output_dir>/findings.json` and summarized by category on stdout:
+  - `crash`, `oversized_response` (resource exhaustion), `hang` (timeout)
+  - `internal_error` (JSON-RPC -32603 / unhandled server exception)
+  - `error_leakage` (stack trace / panic / sanitizer report in output)
+  - `injection_reflection` (dangerous input token echoed back verbatim)
+  - `performance_outlier` (response time far above the per-target median)
+  - `non_determinism` (identical input producing differing outcomes)
+  - `memory_growth` (server RSS grows multi-fold across runs of a stdio target,
+    sampled via psutil)
+  - `auth_bypass` (a protected tool answers an unauthenticated call when auth is
+    configured) -- an active probe that issues unauthenticated calls
+- `OversizedResponseError` for responses exceeding the stdio read cap.
+
 ## [0.3.5] - 2026-06-17
 
 ### Added

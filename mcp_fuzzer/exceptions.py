@@ -66,6 +66,30 @@ class ResponseError(TransportError):
     description = "Malformed or unexpected server response"
 
 
+class ServerCrashError(TransportError):
+    """Raised when the target server process terminated abnormally mid-request.
+
+    This is a high-signal fuzzing finding (e.g. a segfault/abort in a C/C++
+    server or an unrecovered panic in Go/Rust). ``context`` carries the
+    ``exit_code``/``signal`` and a tail of the server's stderr for triage.
+    """
+
+    code = "10004"
+    description = "Server process crashed during a request"
+
+
+class OversizedResponseError(TransportError):
+    """Raised when the server emits a response exceeding the read cap.
+
+    A fuzzing finding indicating possible unbounded output / memory blow-up
+    (resource exhaustion / DoS). ``context`` carries the observed ``size`` and
+    the ``limit``.
+    """
+
+    code = "10005"
+    description = "Server returned an oversized response"
+
+
 class AuthenticationError(TransportError):
     """Raised when authentication with the server fails."""
 
