@@ -10,7 +10,7 @@ from typing import Any
 from rich.console import Console
 
 from ..exceptions import ArgumentValidationError
-from ..client.adapters import config_mediator
+from ..config import config_mediator
 from ..transport.catalog import build_driver
 from ..exceptions import MCPError, TransportError
 from ..env import ENVIRONMENT_VARIABLES, ValidationType

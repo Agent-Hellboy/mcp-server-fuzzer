@@ -126,7 +126,7 @@ class FuzzerReporter:
     ) -> Mapping[str, Any]:
         if config_provider is not None:
             return config_provider
-        from ..client.adapters import config_mediator
+        from ..config import config_mediator
 
         # config_mediator implements dict-like get()
         return config_mediator

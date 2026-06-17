@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-from ..client.adapters import config_mediator
+from ..config import config_mediator
 
 
 def apply_nested_config_to_args(args: argparse.Namespace, defaults_parser) -> None:

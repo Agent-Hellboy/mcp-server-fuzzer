@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from ..exceptions import ConfigFileError
-from ..client.adapters import config_mediator
+from ..config import config_mediator
 from ..client.settings import CliConfig
 from ..client.transport.auth_port import resolve_auth_port
 from .parser import create_argument_parser

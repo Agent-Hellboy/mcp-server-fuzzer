@@ -8,7 +8,7 @@ import os
 
 from ...auth import load_auth_config, setup_auth_from_env
 from ...auth.yaml_loader import build_auth_from_yaml_section
-from ...client.adapters import config_mediator
+from ...config import config_mediator
 
 
 def _build_oauth_auth_manager(args: argparse.Namespace):

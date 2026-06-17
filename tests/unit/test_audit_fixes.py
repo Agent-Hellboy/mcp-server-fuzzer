@@ -38,7 +38,7 @@ def _restore_config_mediator():
     do not leak ``output``/``auth`` config into later tests."""
     import copy
 
-    from mcp_fuzzer.client.adapters import config_mediator
+    from mcp_fuzzer.config import config_mediator
 
     snapshot = copy.deepcopy(config_mediator._config._config)
     try:
@@ -301,7 +301,7 @@ def test_output_dir_none_allows_config_override():
 
 def test_nested_output_directory_applied(tmp_path):
     from mcp_fuzzer.cli.config_normalize import apply_nested_config_to_args
-    from mcp_fuzzer.client.adapters import config_mediator
+    from mcp_fuzzer.config import config_mediator
 
     config_mediator.update({"output": {"directory": str(tmp_path / "nested")}})
     parser = create_argument_parser()
@@ -323,7 +323,7 @@ def test_env_choice_validation_is_case_sensitive():
 
 def test_yaml_auth_section_resolves_auth_manager():
     from mcp_fuzzer.client.transport.auth_port import resolve_auth_port
-    from mcp_fuzzer.client.adapters import config_mediator
+    from mcp_fuzzer.config import config_mediator
 
     config_mediator.update(
         {

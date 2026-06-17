@@ -43,6 +43,10 @@ from .search_params import ConfigSearchParams
 from .schema_composer import get_config_schema
 from .transports import load_custom_transports
 
+# Configuration facade (composes the submodules above; imported last to avoid
+# a cycle with loader/manager).
+from .access import ConfigMediator, config_mediator
+
 __all__ = [
     # Constants
     "DEFAULT_PROTOCOL_VERSION",
@@ -83,4 +87,7 @@ __all__ = [
     "load_custom_transports",
     # Search parameters
     "ConfigSearchParams",
+    # Facade
+    "ConfigMediator",
+    "config_mediator",
 ]
