@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_fuzzer.findings import classify_fuzz_runs, summarize_findings
+from mcp_fuzzer.diagnostics import classify_fuzz_runs, summarize_findings
 from mcp_fuzzer.exceptions import OversizedResponseError
 from mcp_fuzzer.outcomes import FuzzOutcome, classify_tool_run
 
@@ -199,7 +199,7 @@ def test_stable_memory_not_flagged():
 
 
 def test_is_auth_enforced_classification():
-    from mcp_fuzzer.findings import is_auth_enforced
+    from mcp_fuzzer.diagnostics import is_auth_enforced
     from mcp_fuzzer.exceptions import AuthenticationError
 
     assert is_auth_enforced(exception=AuthenticationError("nope")) is True
@@ -211,7 +211,7 @@ def test_is_auth_enforced_classification():
 
 
 def test_secured_tool_names_with_mapping():
-    from mcp_fuzzer.findings import secured_tool_names
+    from mcp_fuzzer.diagnostics import secured_tool_names
 
     class AM:
         tool_auth_mapping = {"secure_tool": "api"}
@@ -222,7 +222,7 @@ def test_secured_tool_names_with_mapping():
 
 
 def test_secured_tool_names_default_provider_covers_all():
-    from mcp_fuzzer.findings import secured_tool_names
+    from mcp_fuzzer.diagnostics import secured_tool_names
 
     class AM:
         tool_auth_mapping = {}
@@ -234,7 +234,7 @@ def test_secured_tool_names_default_provider_covers_all():
 
 @pytest.mark.asyncio
 async def test_probe_auth_bypass_flags_unenforced_tool():
-    from mcp_fuzzer.findings import probe_auth_bypass
+    from mcp_fuzzer.diagnostics import probe_auth_bypass
 
     async def attempt(tool_name):
         # Server happily answers without auth -> bypass.
@@ -248,7 +248,7 @@ async def test_probe_auth_bypass_flags_unenforced_tool():
 
 @pytest.mark.asyncio
 async def test_probe_auth_bypass_no_finding_when_enforced():
-    from mcp_fuzzer.findings import probe_auth_bypass
+    from mcp_fuzzer.diagnostics import probe_auth_bypass
     from mcp_fuzzer.exceptions import AuthenticationError
 
     async def attempt(tool_name):

@@ -113,7 +113,7 @@ def write_findings_report(
     ]
     doc: dict[str, Any] = {"findings": payload, "count": len(payload)}
     try:
-        from ..findings.auth_oauth import (
+        from ..diagnostics.auth_oauth import (
             auth_audit_report_metadata,
             is_auth_audit_finding,
         )
@@ -129,7 +129,7 @@ def write_findings_report(
     except Exception:  # pragma: no cover - metadata is best-effort
         pass
     try:
-        from ..findings.server import (
+        from ..diagnostics.server import (
             is_server_audit_finding,
             server_audit_report_metadata,
         )

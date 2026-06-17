@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from mcp_fuzzer.findings.server import (
+from mcp_fuzzer.diagnostics.server import (
     audit_insecure_transport,
     audit_tool_metadata,
     audit_tool_run_oracles,

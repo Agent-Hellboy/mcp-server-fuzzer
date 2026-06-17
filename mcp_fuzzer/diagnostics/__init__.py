@@ -1,6 +1,7 @@
-"""MCP findings: issue model, fuzz-run classifiers, and paper-backed audits.
+"""MCP diagnostics: issue model, fuzz-run classifiers, and paper-backed audits.
 
-Flat modules (no nested packages):
+Diagnoses a target server's security and robustness from fuzz results and live
+probes, producing ``Finding`` records. Flat modules (no nested packages):
 - ``model``       -- the ``Finding`` record and severity ordering
 - ``classify``    -- turn fuzz runs into categorized findings
 - ``auth_oauth``  -- OAuth F1-F9 audit (arXiv 2605.22333)

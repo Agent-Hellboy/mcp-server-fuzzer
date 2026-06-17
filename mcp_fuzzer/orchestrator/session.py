@@ -14,7 +14,7 @@ from typing import Any
 
 from ..client.runtime import build_run_plan
 from ..client.transport import build_driver_with_auth
-from ..findings import (
+from ..diagnostics import (
     AUTH_AUDIT_PAPER_URL,
     TOOL_POISONING_PAPER_ARXIV_ID,
     classify_fuzz_runs,
@@ -316,7 +316,7 @@ async def run_session(
 
     The orchestrator owns the end-to-end flow — it builds and executes the
     run plan (driving ``fuzz_engine`` via the client), then classifies the runs
-    and runs the paper-backed audits (``mcp_fuzzer.findings``), and persists the
+    and runs the paper-backed audits (``mcp_fuzzer.diagnostics``), and persists the
     artifacts. Returns ``(tool_results, protocol_results, findings,
     findings_summary)`` for the caller to report on.
 

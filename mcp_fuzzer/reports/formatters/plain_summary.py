@@ -8,7 +8,7 @@ from typing import Any
 from .common import extract_tool_runs, summarize_tool_runs
 
 try:
-    from ...findings.auth_oauth import (
+    from ...diagnostics.auth_oauth import (
         AUTH_AUDIT_FLAW_CATEGORIES,
         AUTH_AUDIT_PAPER_ARXIV_ID,
         AUTH_AUDIT_PAPER_URL,
@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover
     AUTH_AUDIT_PAPER_URL = ""
 
 try:
-    from ...findings.server import (
+    from ...diagnostics.server import (
         SERVER_AUDIT_FLAW_CATEGORIES,
         TOOL_POISONING_PAPER_ARXIV_ID,
         server_audit_paper_evidence,

@@ -195,8 +195,8 @@ def test_sample_server_memory_none_without_process():
 
 
 def test_write_findings_report(tmp_path):
-    from mcp_fuzzer.findings import classify_fuzz_runs
-    from mcp_fuzzer.findings.auth_oauth import audit_as_metadata
+    from mcp_fuzzer.diagnostics import classify_fuzz_runs
+    from mcp_fuzzer.diagnostics.auth_oauth import audit_as_metadata
     from mcp_fuzzer.reports.crash_repro import write_findings_report
 
     findings = classify_fuzz_runs(
@@ -228,7 +228,7 @@ def test_write_findings_report(tmp_path):
 
 
 def test_auth_probe_str_error_and_truncate():
-    from mcp_fuzzer.findings.auth_probe import is_auth_enforced, _truncate
+    from mcp_fuzzer.diagnostics.auth_probe import is_auth_enforced, _truncate
 
     assert is_auth_enforced(response={"error": "Unauthorized access"}) is True
     assert is_auth_enforced(response={"error": "weird"}) is False
@@ -280,7 +280,7 @@ def test_log_auth_audit_results_does_not_claim_clean_when_skipped(caplog):
 
 @_pytest.mark.asyncio
 async def test_probe_advertised_auth_open_tools():
-    from mcp_fuzzer.findings import probe_advertised_auth_open_tools
+    from mcp_fuzzer.diagnostics import probe_advertised_auth_open_tools
 
     findings = probe_advertised_auth_open_tools(
         [{"name": "alpha"}, {"name": "beta"}],

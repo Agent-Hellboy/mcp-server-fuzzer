@@ -2,7 +2,7 @@
 
 Black-box post-processor: reads per-run result dicts from tool/protocol clients
 and reports distinct issue classes (crash, hang, leak, injection reflection, …).
-Auth-bypass and paper-backed audit checks live under ``mcp_fuzzer.findings``.
+Auth-bypass and paper-backed audit checks live under ``mcp_fuzzer.diagnostics``.
 """
 
 from __future__ import annotations
