@@ -20,7 +20,7 @@ from ..safety_system.safety import SafetyFilter, CombinedSafetyProvider
 from ..types import ErrorType, TimeoutScope, ToolRunResult
 
 # Import constants directly from config (constants are values, not behavior)
-from ..config.core.constants import (
+from ..config.constants import (
     DEFAULT_TOOL_RUNS,
     DEFAULT_MAX_TOOL_TIME,
     DEFAULT_MAX_TOTAL_FUZZING_TIME,

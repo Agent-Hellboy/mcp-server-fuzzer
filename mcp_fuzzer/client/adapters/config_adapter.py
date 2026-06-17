@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...config import ConfigLoader, get_config_schema, load_config_file
-from ...config.core.manager import config as global_config
+from ...config.manager import config as global_config
 from ..ports.config_port import ConfigPort
 
 

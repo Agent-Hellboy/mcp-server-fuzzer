@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcp_fuzzer.config.core.manager import (
+from mcp_fuzzer.config.manager import (
     Configuration,
     _get_bool_from_env,
     _get_float_from_env,

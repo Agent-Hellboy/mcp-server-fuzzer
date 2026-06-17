@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_fuzzer.config.schema.builders import (
+from mcp_fuzzer.config.schema_builders import (
     build_auth_schema,
     build_basic_schema,
     build_custom_transports_schema,
@@ -15,7 +15,7 @@ from mcp_fuzzer.config.schema.builders import (
     build_safety_schema,
     build_timeout_schema,
 )
-from mcp_fuzzer.config.schema.composer import get_config_schema
+from mcp_fuzzer.config.schema_composer import get_config_schema
 
 
 def test_build_timeout_schema():

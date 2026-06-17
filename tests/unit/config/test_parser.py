@@ -9,7 +9,7 @@ from unittest.mock import mock_open, patch
 import pytest
 import yaml
 
-from mcp_fuzzer.config.loading.parser import load_config_file
+from mcp_fuzzer.config.parser import load_config_file
 from mcp_fuzzer.exceptions import ConfigFileError
 
 

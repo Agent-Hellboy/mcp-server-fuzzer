@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_fuzzer.config.loading.search_params import ConfigSearchParams
+from mcp_fuzzer.config.search_params import ConfigSearchParams
 
 
 def test_config_search_params_defaults():
