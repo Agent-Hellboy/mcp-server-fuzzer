@@ -586,6 +586,20 @@ class TestFuzzerReporter:
         reporter.markdown_formatter.save_markdown_report.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_export_format_html_with_title(self, reporter, tmp_path):
+        """Test HTML export applies a custom title."""
+        from mcp_fuzzer.reports.reporter_export import export_format
+
+        await export_format(
+            reporter,
+            "html",
+            str(tmp_path / "report.html"),
+            title="Custom Title",
+        )
+        assert reporter._html_adapter.title == "Custom Title"
+        reporter._test_mocks.html_formatter.save_html_report.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_export_requested_formats_continues_after_failure(
         self, reporter, tmp_path
     ):

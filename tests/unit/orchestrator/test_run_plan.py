@@ -186,3 +186,21 @@ async def test_run_plan_spec_guard_enabled_records_checks():
     await plan.execute(context)
     assert "spec" in client.calls
     assert reporter.calls
+
+
+@pytest.mark.asyncio
+async def test_run_plan_stateful_enabled_for_protocol_resources_prompts():
+    client = DummyClient()
+    reporter = DummyReporter()
+    for mode in ("protocol", "resources", "prompts"):
+        client.calls.clear()
+        config = {"mode": mode, "spec_guard": False, "stateful": True}
+        context = SessionContext(
+            client=client,
+            config=config,
+            reporter=reporter,
+            protocol_phase="realistic",
+        )
+        plan = build_run_plan(mode, config)
+        await plan.execute(context)
+        assert "stateful" in client.calls

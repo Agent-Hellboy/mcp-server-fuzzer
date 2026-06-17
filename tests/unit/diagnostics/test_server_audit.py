@@ -134,6 +134,45 @@ def test_output_prompt_injection_oracle():
     assert "output_prompt_injection" in _cats(findings)
 
 
+def test_oracle_skips_non_dict_runs_and_bad_json():
+    tool_results = {
+        "echo": {
+            "runs": [
+                "not-a-dict",
+                {
+                    "args": object(),
+                    "result": object(),
+                    "exception": "failed",
+                    "crash": {"stderr_tail": ["line1"]},
+                },
+            ]
+        }
+    }
+    findings = audit_tool_run_oracles(tool_results)
+    assert isinstance(findings, list)
+
+
+def test_oracle_detects_sql_injection_signature():
+    tool_results = {
+        "query": {
+            "runs": [
+                {
+                    "args": {"sql": "' or 1=1"},
+                    "result": "SQL syntax error near 'or'",
+                }
+            ]
+        }
+    }
+    findings = audit_tool_run_oracles(tool_results)
+    assert "sql_injection" in _cats(findings)
+
+
+def test_oracle_handles_missing_args():
+    tool_results = {"echo": {"runs": [{"result": "ok"}]}}
+    findings = audit_tool_run_oracles(tool_results)
+    assert findings == []
+
+
 def test_run_server_audit_orchestrator():
     findings = run_server_audit(
         [{"name": "clean", "description": "ok", "inputSchema": {}}],
