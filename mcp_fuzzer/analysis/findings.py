@@ -68,6 +68,12 @@ _PERF_OUTLIER_FACTOR = 5.0
 _PERF_MIN_SAMPLES = 4
 _PERF_MIN_SECONDS = 0.5
 
+# Memory-growth detection (RSS samples per target). Conservative to avoid
+# flagging normal allocator warm-up: needs a sustained multi-fold increase.
+_MEM_MIN_SAMPLES = 8
+_MEM_GROWTH_FACTOR = 2.0
+_MEM_MIN_DELTA_BYTES = 20 * 1024 * 1024  # 20 MB
+
 
 @dataclass
 class Finding:
@@ -156,6 +162,7 @@ def analyze_findings(
     # Per-(kind,target) accumulators for the cross-run detectors.
     response_times: dict[tuple[str, str], list[float]] = {}
     outcomes_by_input: dict[tuple[str, str, str], set[str]] = {}
+    rss_series: dict[tuple[str, str], list[int]] = {}
 
     for kind, target, run_no, run in runs:
         outcome = run.get("outcome")
@@ -270,6 +277,10 @@ def analyze_findings(
         if isinstance(rt, (int, float)) and rt >= 0:
             response_times.setdefault((kind, target), []).append(float(rt))
 
+        rss = run.get("rss_bytes")
+        if isinstance(rss, int) and rss > 0:
+            rss_series.setdefault((kind, target), []).append(rss)
+
         if run_input is not None:
             try:
                 input_key = json.dumps(run_input, sort_keys=True, default=str)
@@ -315,6 +326,35 @@ def analyze_findings(
                     "Identical input produced differing outcomes across runs "
                     "(possible state corruption / nondeterministic handling).",
                     {"outcomes": sorted(meaningful)},
+                )
+            )
+
+    # Cross-run: memory growth / leak (stdio targets with RSS samples).
+    for (kind, target), series in rss_series.items():
+        if len(series) < _MEM_MIN_SAMPLES:
+            continue
+        quartile = max(1, len(series) // 4)
+        baseline = statistics.median(series[:quartile])
+        recent = statistics.median(series[-quartile:])
+        if (
+            baseline > 0
+            and recent >= baseline * _MEM_GROWTH_FACTOR
+            and (recent - baseline) >= _MEM_MIN_DELTA_BYTES
+        ):
+            findings.append(
+                Finding(
+                    "memory_growth",
+                    "medium",
+                    kind,
+                    target,
+                    None,
+                    f"Server RSS grew from ~{baseline / 1e6:.1f}MB to "
+                    f"~{recent / 1e6:.1f}MB across runs (possible memory leak).",
+                    {
+                        "baseline_bytes": int(baseline),
+                        "recent_bytes": int(recent),
+                        "samples": len(series),
+                    },
                 )
             )
 

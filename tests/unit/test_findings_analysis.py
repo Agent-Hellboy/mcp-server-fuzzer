@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from mcp_fuzzer.analysis import analyze_findings, summarize_findings
 from mcp_fuzzer.exceptions import OversizedResponseError
 from mcp_fuzzer.outcomes import FuzzOutcome, classify_tool_run
@@ -163,3 +165,94 @@ def test_findings_to_dict_roundtrip():
     assert d["category"] == "hang"
     assert set(d) == {"category", "severity", "kind", "target", "run", "detail",
                       "evidence"}
+
+
+# --- memory growth ----------------------------------------------------------
+
+
+def test_memory_growth_detected():
+    base = 50 * 1024 * 1024  # 50 MB
+    runs = []
+    for i in range(12):
+        runs.append(
+            {
+                "outcome": "valid_response",
+                "args": {"i": i},
+                "rss_bytes": base + i * 15 * 1024 * 1024,  # grows ~15MB/run
+            }
+        )
+    findings = analyze_findings({"leaky": {"runs": runs}}, None)
+    assert "memory_growth" in _categories(findings)
+
+
+def test_stable_memory_not_flagged():
+    base = 50 * 1024 * 1024
+    runs = [
+        {"outcome": "valid_response", "args": {"i": i}, "rss_bytes": base + (i % 2)}
+        for i in range(12)
+    ]
+    findings = analyze_findings({"stable": {"runs": runs}}, None)
+    assert "memory_growth" not in _categories(findings)
+
+
+# --- auth bypass ------------------------------------------------------------
+
+
+def test_is_auth_enforced_classification():
+    from mcp_fuzzer.analysis import is_auth_enforced
+    from mcp_fuzzer.exceptions import AuthenticationError
+
+    assert is_auth_enforced(exception=AuthenticationError("nope")) is True
+    assert is_auth_enforced(exception=Exception("HTTP 401 Unauthorized")) is True
+    assert is_auth_enforced(response={"error": {"code": 403, "message": "Forbidden"}})
+    # success without auth -> NOT enforced (bypass)
+    assert is_auth_enforced(response={"result": {"ok": True}}) is False
+    assert is_auth_enforced(exception=Exception("boom")) is False
+
+
+def test_secured_tool_names_with_mapping():
+    from mcp_fuzzer.analysis import secured_tool_names
+
+    class AM:
+        tool_auth_mapping = {"secure_tool": "api"}
+        default_provider = None
+
+    tools = [{"name": "secure_tool"}, {"name": "open_tool"}]
+    assert secured_tool_names(AM(), tools) == ["secure_tool"]
+
+
+def test_secured_tool_names_default_provider_covers_all():
+    from mcp_fuzzer.analysis import secured_tool_names
+
+    class AM:
+        tool_auth_mapping = {}
+        default_provider = "api"
+
+    tools = [{"name": "a"}, {"name": "b"}]
+    assert set(secured_tool_names(AM(), tools)) == {"a", "b"}
+
+
+@pytest.mark.asyncio
+async def test_probe_auth_bypass_flags_unenforced_tool():
+    from mcp_fuzzer.analysis import probe_auth_bypass
+
+    async def attempt(tool_name):
+        # Server happily answers without auth -> bypass.
+        return {"result": {"content": []}}
+
+    findings = await probe_auth_bypass(["secure_tool"], attempt)
+    assert len(findings) == 1
+    assert findings[0].category == "auth_bypass"
+    assert findings[0].severity == "high"
+
+
+@pytest.mark.asyncio
+async def test_probe_auth_bypass_no_finding_when_enforced():
+    from mcp_fuzzer.analysis import probe_auth_bypass
+    from mcp_fuzzer.exceptions import AuthenticationError
+
+    async def attempt(tool_name):
+        raise AuthenticationError("401 Unauthorized")
+
+    findings = await probe_auth_bypass(["secure_tool"], attempt)
+    assert findings == []

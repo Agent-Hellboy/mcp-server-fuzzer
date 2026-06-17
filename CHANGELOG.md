@@ -23,12 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `injection_reflection` (dangerous input token echoed back verbatim)
   - `performance_outlier` (response time far above the per-target median)
   - `non_determinism` (identical input producing differing outcomes)
+  - `memory_growth` (server RSS grows multi-fold across runs of a stdio target,
+    sampled via psutil)
+  - `auth_bypass` (a protected tool answers an unauthenticated call when auth is
+    configured) -- an active probe that issues unauthenticated calls
 - `OversizedResponseError` for responses exceeding the stdio read cap.
-
-### Roadmap (not yet implemented)
-
-- Auth-bypass detection (needs paired authed/unauthed request orchestration)
-- Memory-growth/leak sampling (needs per-run RSS series plumbing)
 
 ## [0.3.5] - 2026-06-17
 

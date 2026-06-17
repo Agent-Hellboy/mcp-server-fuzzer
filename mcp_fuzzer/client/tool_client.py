@@ -243,7 +243,20 @@ class ToolClient:
                 crash=crash,
             )
 
+        rss = self._sample_server_memory()
+        if rss is not None:
+            call_result["rss_bytes"] = rss
         return call_result
+
+    def _sample_server_memory(self) -> int | None:
+        """Best-effort RSS sample of the server process (stdio targets only)."""
+        sampler = getattr(self.transport, "sample_server_memory", None)
+        if callable(sampler):
+            try:
+                return sampler()
+            except Exception:
+                return None
+        return None
 
     async def _call_tool(
         self,

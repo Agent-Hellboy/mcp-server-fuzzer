@@ -258,6 +258,23 @@ class StdioDriver(TransportDriver):
         except Exception as exc:
             logging.debug("stdio stderr drain stopped: %s", exc)
 
+    def sample_server_memory(self) -> int | None:
+        """Return the current RSS (bytes) of the server process, or None.
+
+        Used for memory-growth/leak detection on stdio targets. Safe to call
+        when psutil is unavailable or the process has exited.
+        """
+        proc = self.process
+        pid = getattr(proc, "pid", None)
+        if pid is None or getattr(proc, "returncode", None) is not None:
+            return None
+        try:
+            import psutil
+
+            return int(psutil.Process(pid).memory_info().rss)
+        except Exception:
+            return None
+
     async def _detect_crash(self) -> dict[str, Any] | None:
         """Return crash context if the server process died abnormally.
 
