@@ -19,6 +19,10 @@ sdks/
 doc_ref/
 # Project exploration directory
 explore/
+
+# Graphify knowledge graph (local generated cache — do not commit)
+graphify-out/
+**/graphify-out/
 examples/go_stdio_server/go-stdio-server
 examples/typescript-stdio-server/node_modules/
 examples/typescript-stdio-server/dist/
