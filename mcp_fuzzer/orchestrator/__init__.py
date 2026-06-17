@@ -13,9 +13,11 @@ from .session import (
     run_auth_bypass_phase,
     run_oauth_audit_phase,
     run_server_audit_phase,
+    run_session,
 )
 
 __all__ = [
+    "run_session",
     "collect_session_findings",
     "persist_session_findings",
     "log_oauth_audit_results",

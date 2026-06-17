@@ -12,11 +12,11 @@ from ..reports.formatters.plain_summary import write_stdout_summary
 from ..safety_system.safety import SafetyFilter
 from ..exceptions import MCPError
 from ..corpus import build_corpus_root, build_target_id, default_fs_root
-from ..orchestrator import collect_session_findings, persist_session_findings
+from ..orchestrator import run_session
 from .settings import ClientSettings
 from .base import MCPFuzzerClient
 from .transport import TransportBuildRequest, build_driver_with_auth
-from .runtime import RunContext, build_run_plan
+from .runtime import RunContext
 
 
 def _build_transport_request(config: dict[str, Any]) -> TransportBuildRequest:
@@ -125,14 +125,20 @@ async def unified_client_main(settings: ClientSettings) -> int:
             reporter=reporter,
             protocol_phase=protocol_phase,
         )
+        # The orchestrator drives the fuzz_engine run plan AND the findings
+        # pipeline; this entrypoint only wires setup and reports the results.
+        findings_summary: dict[str, int] = {}
         try:
-            plan = build_run_plan(mode, config)
+            tool_results, protocol_results, _findings, findings_summary = (
+                await run_session(
+                    context,
+                    transport=transport,
+                    build_transport_request=_build_transport_request,
+                )
+            )
         except ValueError as exc:
             logging.error("Failed to build run plan: %s", exc)
             return 1
-        await plan.execute(context)
-        tool_results = context.tool_results
-        protocol_results = context.protocol_results
 
         tools_mode = mode in ("tools", "all")
         tools_fuzzed = isinstance(tool_results, dict) and len(tool_results) > 0
@@ -151,27 +157,8 @@ async def unified_client_main(settings: ClientSettings) -> int:
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display protocol summary tables: {exc}")
 
-        findings_summary: dict[str, int] = {}
         tr = tool_results if isinstance(tool_results, dict) else None
         pr = protocol_results if isinstance(protocol_results, dict) else None
-        try:
-            findings, findings_summary = await collect_session_findings(
-                config,
-                transport,
-                mode=mode,
-                tool_results=tr,
-                protocol_results=pr,
-                build_transport_request=_build_transport_request,
-            )
-            persist_session_findings(
-                config,
-                findings,
-                findings_summary,
-                tool_results=tr,
-                protocol_results=pr,
-            )
-        except Exception as exc:  # pragma: no cover
-            logging.warning("Failed to analyze/record findings: %s", exc)
 
         try:
             write_stdout_summary(

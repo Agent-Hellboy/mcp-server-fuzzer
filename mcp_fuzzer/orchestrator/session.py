@@ -12,6 +12,7 @@ import asyncio
 import logging
 from typing import Any
 
+from ..client.runtime import build_run_plan
 from ..client.transport import build_driver_with_auth
 from ..findings import (
     AUTH_AUDIT_PAPER_URL,
@@ -303,3 +304,53 @@ def persist_session_findings(
             len(findings_summary),
             report_path,
         )
+
+
+async def run_session(
+    context: Any,
+    *,
+    transport: Any,
+    build_transport_request: Any,
+) -> tuple[Any, Any, list[Any], dict[str, int]]:
+    """Drive a full session: run the fuzz_engine plan, then the findings pipeline.
+
+    The orchestrator owns the end-to-end flow — it builds and executes the
+    run plan (driving ``fuzz_engine`` via the client), then classifies the runs
+    and runs the paper-backed audits (``mcp_fuzzer.findings``), and persists the
+    artifacts. Returns ``(tool_results, protocol_results, findings,
+    findings_summary)`` for the caller to report on.
+
+    Raises ``ValueError`` if the run plan cannot be built for the mode.
+    """
+    config = context.config
+    mode = config["mode"]
+    plan = build_run_plan(mode, config)
+    await plan.execute(context)
+
+    tool_results = context.tool_results
+    protocol_results = context.protocol_results
+    tr = tool_results if isinstance(tool_results, dict) else None
+    pr = protocol_results if isinstance(protocol_results, dict) else None
+
+    # Analysis is best-effort: a findings failure must not fail the whole run.
+    findings: list[Any] = []
+    findings_summary: dict[str, int] = {}
+    try:
+        findings, findings_summary = await collect_session_findings(
+            config,
+            transport,
+            mode=mode,
+            tool_results=tr,
+            protocol_results=pr,
+            build_transport_request=build_transport_request,
+        )
+        persist_session_findings(
+            config,
+            findings,
+            findings_summary,
+            tool_results=tr,
+            protocol_results=pr,
+        )
+    except Exception as exc:  # pragma: no cover - analysis is best-effort
+        logging.warning("Failed to analyze/record findings: %s", exc)
+    return tool_results, protocol_results, findings, findings_summary
