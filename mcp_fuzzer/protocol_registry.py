@@ -128,3 +128,8 @@ EXECUTABLE_PROTOCOL_METHODS: dict[str, tuple[str, bool]] = {
 }
 
 FUZZABLE_PROTOCOL_TYPES: tuple[str, ...] = tuple(EXECUTABLE_PROTOCOL_METHODS.keys())
+
+
+# Selected protocol-type string constants (used by clients/formatters).
+READ_RESOURCE_REQUEST = "ReadResourceRequest"
+GET_PROMPT_REQUEST = "GetPromptRequest"

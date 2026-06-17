@@ -14,7 +14,7 @@ from .common import (
     result_has_failure,
     summarize_tool_runs,
 )
-from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
+from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 
 class ConsoleFormatter:

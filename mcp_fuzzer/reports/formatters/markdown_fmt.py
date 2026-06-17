@@ -11,7 +11,7 @@ from .common import (
     normalize_report_data,
     result_has_failure,
 )
-from ...protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
+from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 from ...utils.icons import CHECK, CROSS
 
 

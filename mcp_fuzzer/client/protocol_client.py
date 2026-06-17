@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ..types import PREVIEW_LENGTH, ProtocolFuzzResult, ProtocolSpec, SafetyCheckResult
-from ..protocol_types import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
+from ..protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 from ..protocol_registry import EXECUTABLE_PROTOCOL_TYPES
 from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
 

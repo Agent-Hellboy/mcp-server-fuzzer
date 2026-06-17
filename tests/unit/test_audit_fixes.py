@@ -29,7 +29,7 @@ from mcp_fuzzer.protocol_registry import FUZZABLE_PROTOCOL_TYPES
 from mcp_fuzzer.reports.formatters.markdown_fmt import MarkdownFormatter
 from mcp_fuzzer.reports.formatters.plain_summary import write_stdout_summary
 from mcp_fuzzer.reports.reporter import FuzzerReporter
-from mcp_fuzzer.spec_versions import is_supported_protocol_version
+from mcp_fuzzer.spec_version import is_supported_protocol_version
 
 
 @pytest.fixture(autouse=True)

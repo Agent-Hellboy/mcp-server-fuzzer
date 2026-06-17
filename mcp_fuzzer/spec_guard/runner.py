@@ -7,7 +7,7 @@ import os
 import re
 from typing import Any
 
-from ..spec_versions import is_supported_protocol_version, schema_path_for_version
+from ..spec_version import is_supported_protocol_version, schema_path_for_version
 from .helpers import (
     COMPLETIONS_SPEC,
     PROMPTS_SPEC,
