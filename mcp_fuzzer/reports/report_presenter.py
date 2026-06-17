@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..reports import FuzzerReporter
+from .reporter import FuzzerReporter
 from ..safety_system.safety import CombinedSafetyProvider
 
 

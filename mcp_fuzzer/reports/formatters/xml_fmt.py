@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .common import extract_tool_runs, normalize_report_data
+from ...utils.result_shape import extract_tool_runs
+from .common import normalize_report_data
 
 
 class XMLFormatter:

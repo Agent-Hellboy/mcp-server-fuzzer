@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ..client.fuzzer_client import MCPFuzzerClient
-from ..client.settings import ClientSettings
 from ..corpus import build_corpus_root, build_target_id, default_fs_root
 from ..orchestrator.models import SessionContext
 from ..reports import FuzzerReporter
@@ -31,8 +30,8 @@ class SessionBundle:
 class SessionBootstrap:
     """Build transport, safety, reporter, client, and session context."""
 
-    def __init__(self, settings: ClientSettings) -> None:
-        self._settings = SessionSettings(settings.data)
+    def __init__(self, settings: SessionSettings) -> None:
+        self._settings = settings
 
     @staticmethod
     def build_transport_request(config: dict[str, Any]) -> TransportBuildRequest:

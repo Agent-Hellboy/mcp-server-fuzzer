@@ -1,34 +1,38 @@
 """Tests for FuzzReportPresenter."""
 
-from types import SimpleNamespace
+from __future__ import annotations
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from mcp_fuzzer.client.fuzzer_client import MCPFuzzerClient
-from mcp_fuzzer.client.report_presenter import FuzzReportPresenter
+from mcp_fuzzer.reports.report_presenter import FuzzReportPresenter
 
 
 def test_print_summary_methods_delegate():
     reporter = MagicMock()
     presenter = FuzzReportPresenter(reporter, safety_system=None)
+    results = {"tool": {"runs": []}}
 
-    presenter.print_tool_summary({"tool": []})
-    presenter.print_protocol_summary({"PingRequest": []}, title="Title")
+    presenter.print_tool_summary(results)
+    presenter.print_tool_execution_summary(results)
+    presenter.print_protocol_summary(results)
     presenter.print_safety_statistics()
     presenter.print_safety_system_summary()
-    presenter.print_overall_summary({}, {})
+    presenter.print_overall_summary(results, results)
 
-    reporter.print_tool_summary.assert_called_once()
-    reporter.print_protocol_summary.assert_called_once()
+    reporter.print_tool_summary.assert_called_once_with(results)
+    reporter.print_tool_execution_summary.assert_called_once_with(results)
+    reporter.print_protocol_summary.assert_called_once_with(results)
     reporter.print_safety_summary.assert_called_once()
     reporter.print_safety_system_summary.assert_called_once()
-    reporter.print_overall_summary.assert_called_once()
+    reporter.print_overall_summary.assert_called_once_with(results, results)
 
 
 def test_print_blocked_operations_summary_collects_stats():
-    safety = SimpleNamespace(get_statistics=MagicMock())
     reporter = MagicMock()
+    safety = MagicMock()
+    safety.get_statistics.return_value = {"blocked": 1}
     presenter = FuzzReportPresenter(reporter, safety_system=safety)
 
     presenter.print_blocked_operations_summary()
@@ -41,26 +45,19 @@ def test_print_blocked_operations_summary_collects_stats():
 async def test_generate_reports_delegate():
     reporter = MagicMock()
     reporter.generate_standardized_report = AsyncMock(return_value={"ok": True})
-    reporter.generate_final_report = AsyncMock(return_value={"final": True})
+    reporter.export_requested_formats = AsyncMock(return_value={"csv": "out.csv"})
+    reporter.generate_final_report = AsyncMock(return_value="/tmp/report.json")
     presenter = FuzzReportPresenter(reporter)
 
     output = await presenter.generate_standardized_reports(
-        output_types=["json"], include_safety=False
+        output_types=["fuzzing_results"], include_safety=False
     )
+    exported = await presenter.export_requested_formats({"csv": "out.csv"})
     final = await presenter.generate_final_report(include_safety=False)
 
     assert output == {"ok": True}
-    assert final == {"final": True}
+    assert exported == {"csv": "out.csv"}
+    assert final == "/tmp/report.json"
     reporter.generate_standardized_report.assert_called_once_with(
-        output_types=["json"], include_safety=False
+        output_types=["fuzzing_results"], include_safety=False
     )
-    reporter.generate_final_report.assert_called_once_with(include_safety=False)
-
-
-def test_fuzzer_client_exposes_report_presenter():
-    reporter = MagicMock()
-    client = MCPFuzzerClient(
-        transport=MagicMock(), reporter=reporter, safety_enabled=False
-    )
-    assert isinstance(client.report_presenter, FuzzReportPresenter)
-    assert client.report_presenter.reporter is reporter

@@ -12,7 +12,7 @@ from ..exceptions import ArgumentValidationError, CLIError, MCPError
 from .app import run_fuzz_app
 from .runtime import prepare_inner_argv, run_with_retry_on_interrupt
 from ..client.safety import SafetyController
-from ..client.settings import ClientSettings
+from .session_settings import SessionSettings
 from .config_merge import build_cli_config
 from .validators import ValidationManager
 from ..logging import setup_logging
@@ -53,7 +53,7 @@ def run_cli() -> None:
 
         validator.validate_transport(args)
 
-        client_settings = ClientSettings(config)
+        session_settings = SessionSettings(config)
         safety = SafetyController()
         safety.start_if_enabled(config.get("enable_safety_system", False))
 
@@ -61,7 +61,7 @@ def run_cli() -> None:
 
         run_with_retry_on_interrupt(
             args,
-            lambda: run_fuzz_app(client_settings),
+            lambda: run_fuzz_app(session_settings),
             argv,
         )
     except KeyboardInterrupt:

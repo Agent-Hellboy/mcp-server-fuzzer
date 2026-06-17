@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
-"""Typed view of merged session configuration."""
+"""Typed session configuration and CLI config container."""
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass
+class CliConfig:
+    """Holds parsed args plus merged configuration."""
+
+    args: argparse.Namespace
+    merged: dict[str, Any]
+
+    def to_session_settings(self) -> SessionSettings:
+        return SessionSettings(self.merged)
 
 
 @dataclass
@@ -64,5 +76,11 @@ class SessionSettings:
     def get(self, key: str, default: Any = None) -> Any:
         return self.config.get(key, default)
 
+    def __getattr__(self, item: str) -> Any:
+        try:
+            return self.config[item]
+        except KeyError as exc:
+            raise AttributeError(item) from exc
 
-__all__ = ["SessionSettings"]
+
+__all__ = ["CliConfig", "SessionSettings"]

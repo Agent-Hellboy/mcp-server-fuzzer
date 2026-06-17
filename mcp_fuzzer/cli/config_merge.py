@@ -9,7 +9,7 @@ from typing import Any
 
 from ..exceptions import ConfigFileError
 from ..config import config_mediator
-from ..client.settings import CliConfig
+from .session_settings import CliConfig
 from ..client.transport.auth_port import resolve_auth_port
 from .parser import create_argument_parser
 from .config_normalize import apply_nested_config_to_args

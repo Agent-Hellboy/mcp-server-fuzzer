@@ -16,6 +16,7 @@ import pytest
 from mcp_fuzzer.client.fuzzer_client import MCPFuzzerClient as UnifiedMCPFuzzerClient
 from mcp_fuzzer import spec_guard
 from mcp_fuzzer.reports import FuzzerReporter
+from mcp_fuzzer.reports.report_presenter import FuzzReportPresenter
 from mcp_fuzzer.auth import AuthManager
 from mcp_fuzzer.exceptions import MCPError
 from mcp_fuzzer.client.protocol_client import ProtocolClient
@@ -105,8 +106,10 @@ class TestUnifiedMCPFuzzerClient:
         )
         self.mock_safety_system.get_blocking_reason = MagicMock(return_value=None)
         self.client.safety_system = self.mock_safety_system
-
-        # No need to replace fuzzers anymore, we're using the client directly
+        self.report_presenter = FuzzReportPresenter(
+            self.reporter,
+            safety_system_getter=lambda: self.client.safety_system,
+        )
 
     def teardown_method(self, method):
         """Clean up test fixtures."""
@@ -540,7 +543,7 @@ class TestUnifiedMCPFuzzerClient:
         }
 
         # Call the method
-        self.client.report_presenter.print_tool_summary(results)
+        self.report_presenter.print_tool_summary(results)
 
         # Just verify that the method completes without error
         # We can't check the reporter's internal state easily with the mock
@@ -561,7 +564,7 @@ class TestUnifiedMCPFuzzerClient:
         }
 
         # Call the method
-        self.client.report_presenter.print_protocol_summary(results)
+        self.report_presenter.print_protocol_summary(results)
 
         # Just verify that the method completes without error
         # We can't check the reporter's internal state easily with the mock
@@ -579,7 +582,7 @@ class TestUnifiedMCPFuzzerClient:
         }
 
         # Call the method
-        self.client.report_presenter.print_overall_summary(
+        self.report_presenter.print_overall_summary(
             tool_results, protocol_results
         )
 
@@ -599,7 +602,7 @@ class TestUnifiedMCPFuzzerClient:
         assert client.transport is not None
         assert client.tool_client is not None
         assert client.protocol_client is not None
-        assert client.reporter is not None
+        assert client.reporter is None
         assert client.auth_manager is not None
 
     @pytest.mark.asyncio
@@ -944,7 +947,7 @@ class TestUnifiedMCPFuzzerClient:
     def test_print_blocked_operations_summary(self):
         """Test print_blocked_operations_summary."""
         # Call the method - it should work with the real reporter
-        self.client.report_presenter.print_blocked_operations_summary()
+        self.report_presenter.print_blocked_operations_summary()
 
         # The method should complete without error
         # We can't easily test the actual output without mocking the safety system,
@@ -1403,7 +1406,6 @@ class TestUnifiedMCPFuzzerClient:
             return_value={"InitializeRequest": [{"result": "success"}]}
         )
         mock_presenter = MagicMock()
-        mock_client.report_presenter = mock_presenter
         mock_client.cleanup = AsyncMock()
 
         # Create mock args
@@ -1494,7 +1496,6 @@ class TestUnifiedMCPFuzzerClient:
         # Create mock client
         mock_presenter = MagicMock()
         mock_client = MagicMock()
-        mock_client.report_presenter = mock_presenter
 
         # Set safety_report to True
         args = MagicMock()
@@ -2103,7 +2104,7 @@ class TestUnifiedMCPFuzzerClient:
             await self.client.fuzz_all_tools(runs_per_tool=1)
 
         # Test printing safety report
-        self.client.report_presenter.print_blocked_operations_summary()
+        self.report_presenter.print_blocked_operations_summary()
 
         # Verify safety system statistics were requested
         mock_safety_system.get_statistics.assert_called()
@@ -2158,7 +2159,7 @@ class TestUnifiedMCPFuzzerClient:
         self.client.safety_system = mock_safety_system
 
         # Call the method
-        self.client.report_presenter.print_comprehensive_safety_report()
+        self.report_presenter.print_comprehensive_safety_report()
 
         # Verify the safety system methods were called
         mock_safety_system.get_statistics.assert_called_once()
@@ -2168,7 +2169,8 @@ class TestUnifiedMCPFuzzerClient:
 @pytest.mark.asyncio
 async def test_print_blocked_operations_summary_handles_no_safety():
     client = UnifiedMCPFuzzerClient(transport=MagicMock(), safety_enabled=False)
-    client.report_presenter.print_blocked_operations_summary()
+    report_presenter = FuzzReportPresenter(MagicMock())
+    report_presenter.print_blocked_operations_summary()
 
 
 @pytest.mark.asyncio
@@ -2179,7 +2181,8 @@ async def test_print_comprehensive_safety_report_collects_examples():
     )
     client = UnifiedMCPFuzzerClient(transport=MagicMock(), safety_enabled=False)
     client.safety_system = safety
-    client.report_presenter.print_comprehensive_safety_report()
+    report_presenter = FuzzReportPresenter(MagicMock(), safety_system=safety)
+    report_presenter.print_comprehensive_safety_report()
 
     safety.get_statistics.assert_called_once()
     safety.get_blocked_examples.assert_called_once()

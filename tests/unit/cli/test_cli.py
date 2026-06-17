@@ -527,7 +527,7 @@ def test_run_cli_happy_path():
         patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
         patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
         patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt"),
-        patch("mcp_fuzzer.cli.entrypoint.ClientSettings"),
+        patch("mcp_fuzzer.cli.entrypoint.SessionSettings"),
     ):
         mock_validator = mock_vm_cls.return_value
         mock_validator.validate_arguments.return_value = None
@@ -546,7 +546,7 @@ def test_run_cli_orchestration_invokes_runner():
         patch("mcp_fuzzer.cli.entrypoint.build_cli_config", return_value=cli_config),
         patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
         patch("mcp_fuzzer.cli.entrypoint.prepare_inner_argv", return_value=["prog"]),
-        patch("mcp_fuzzer.cli.entrypoint.ClientSettings") as mock_settings_cls,
+        patch("mcp_fuzzer.cli.entrypoint.SessionSettings") as mock_settings_cls,
         patch("mcp_fuzzer.cli.entrypoint.SafetyController") as mock_safety_cls,
         patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt") as mock_runner,
     ):
@@ -580,7 +580,7 @@ def test_run_cli_uses_endpoint_loaded_from_config():
         patch("mcp_fuzzer.cli.entrypoint.build_cli_config", side_effect=_build_config),
         patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
         patch("mcp_fuzzer.cli.entrypoint.prepare_inner_argv", return_value=["prog"]),
-        patch("mcp_fuzzer.cli.entrypoint.ClientSettings"),
+        patch("mcp_fuzzer.cli.entrypoint.SessionSettings"),
         patch("mcp_fuzzer.cli.entrypoint.SafetyController"),
         patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt"),
     ):

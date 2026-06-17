@@ -8,20 +8,18 @@ import os
 
 from ..exceptions import MCPError
 from ..orchestrator import run_session
-from ..client.settings import ClientSettings
 from .bootstrap import SessionBootstrap
 from .post_run import PostRunPresenter
 from .session_settings import SessionSettings
 
 
-async def run_fuzz_app(settings: ClientSettings) -> int:
-    """Run the fuzzing workflow using merged client settings."""
-    session_settings = SessionSettings(settings.data)
-    config = session_settings.config
+async def run_fuzz_app(settings: SessionSettings) -> int:
+    """Run the fuzzing workflow using merged session settings."""
+    config = settings.config
 
-    if session_settings.spec_schema_version is not None:
+    if settings.spec_schema_version is not None:
         os.environ["MCP_SPEC_SCHEMA_VERSION"] = str(
-            session_settings.spec_schema_version
+            settings.spec_schema_version
         )
 
     logging.info(  # pragma: no cover
@@ -45,7 +43,7 @@ async def run_fuzz_app(settings: ClientSettings) -> int:
             logging.error("Failed to build run plan: %s", exc)
             return 1
 
-        return await PostRunPresenter(session_settings, bundle.reporter).present(result)
+        return await PostRunPresenter(settings, bundle.reporter).present(result)
     except MCPError:
         raise
     except Exception as exc:

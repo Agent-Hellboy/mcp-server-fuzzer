@@ -106,17 +106,9 @@ __all__ = [
     "SERVER_AUDIT_FLAW_CATEGORIES",
     "TOOL_POISONING_PAPER_ARXIV_ID",
     "TRANSPORT_PAPER_ARXIV_ID",
-    "audit_insecure_transport",
-    "audit_tool_metadata",
-    "audit_tool_run_oracles",
     "is_server_audit_finding",
     "run_server_audit",
     "server_audit_paper_evidence",
     "server_audit_report_metadata",
     "server_finding",
 ]
-
-# Re-export check entry points for callers that import from server directly.
-from .server_metadata import audit_tool_metadata  # noqa: E402
-from .server_oracles import audit_tool_run_oracles  # noqa: E402
-from .server_transport import audit_insecure_transport  # noqa: E402

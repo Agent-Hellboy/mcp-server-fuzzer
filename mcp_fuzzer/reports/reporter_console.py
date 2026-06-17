@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .formatters.common import extract_tool_runs
+from ..utils.result_shape import extract_tool_runs
 
 if TYPE_CHECKING:
     from .reporter import FuzzerReporter

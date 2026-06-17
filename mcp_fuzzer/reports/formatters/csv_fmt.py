@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .common import SupportsToDict, extract_tool_runs, normalize_report_data
+from ...utils.result_shape import extract_tool_runs
+from .common import SupportsToDict, normalize_report_data
 
 
 def _csv_cell(value: Any) -> str:

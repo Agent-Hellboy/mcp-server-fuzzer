@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,7 +10,7 @@ import mcp_fuzzer.cli.app as fuzz_app
 import mcp_fuzzer.cli.bootstrap as bootstrap
 from mcp_fuzzer.cli.app import run_fuzz_app
 from mcp_fuzzer.orchestrator.run_plan import _run_spec_guard_if_enabled
-from mcp_fuzzer.client.settings import ClientSettings
+from mcp_fuzzer.cli.session_settings import SessionSettings
 from mcp_fuzzer.exceptions import MCPError
 
 
@@ -34,7 +33,7 @@ def _settings(**overrides):
         protocol_type=None,
     )
     base.update(overrides)
-    return ClientSettings(base)
+    return SessionSettings(base)
 
 
 def _make_reporter():
@@ -344,8 +343,8 @@ async def test_run_fuzz_app_tools_phase_both(monkeypatch):
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
-    settings = SimpleNamespace(
-        data={
+    settings = SessionSettings(
+        {
             "protocol": "stdio",
             "endpoint": "node app.js",
             "mode": "tools",
@@ -367,8 +366,8 @@ async def test_run_fuzz_app_protocol_type(monkeypatch):
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
-    settings = SimpleNamespace(
-        data={
+    settings = SessionSettings(
+        {
             "protocol": "stdio",
             "endpoint": "node app.js",
             "mode": "protocol",
@@ -389,8 +388,8 @@ async def test_run_fuzz_app_resources(monkeypatch):
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
-    settings = SimpleNamespace(
-        data={
+    settings = SessionSettings(
+        {
             "protocol": "stdio",
             "endpoint": "node app.js",
             "mode": "resources",
@@ -410,8 +409,8 @@ async def test_run_fuzz_app_prompts(monkeypatch):
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
-    settings = SimpleNamespace(
-        data={
+    settings = SessionSettings(
+        {
             "protocol": "stdio",
             "endpoint": "node app.js",
             "mode": "prompts",
@@ -431,8 +430,8 @@ async def test_run_fuzz_app_all_with_tool(monkeypatch):
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
-    settings = SimpleNamespace(
-        data={
+    settings = SessionSettings(
+        {
             "protocol": "stdio",
             "endpoint": "node app.js",
             "mode": "all",
@@ -455,8 +454,8 @@ async def test_run_fuzz_app_sets_schema_env(monkeypatch):
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
-    settings = SimpleNamespace(
-        data={
+    settings = SessionSettings(
+        {
             "protocol": "stdio",
             "endpoint": "node app.js",
             "mode": "protocol",
@@ -482,8 +481,8 @@ async def test_run_fuzz_app_raises_mcp_error(monkeypatch):
         "build_driver_with_auth",
         lambda *_args, **_kwargs: MagicMock(),
     )
-    settings = SimpleNamespace(
-        data={
+    settings = SessionSettings(
+        {
             "protocol": "stdio",
             "endpoint": "node app.js",
             "mode": "tools",

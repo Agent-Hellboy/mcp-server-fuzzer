@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Literal, Protocol
 
-from ...utils.result_shape import extract_tool_runs
-
 
 class SupportsToDict(Protocol):
     def to_dict(self) -> dict[str, Any]: ...
@@ -185,7 +183,6 @@ __all__ = [
     "calculate_tool_success_rate",
     "collect_and_summarize_protocol_items",
     "collect_labeled_protocol_items",
-    "extract_tool_runs",
     "normalize_report_data",
     "result_has_failure",
     "summarize_protocol_items",

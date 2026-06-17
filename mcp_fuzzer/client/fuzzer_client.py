@@ -15,7 +15,6 @@ from ..reports import FuzzerReporter
 from ..safety_system.safety import CombinedSafetyProvider, SafetyFilter
 from ..types import AuthManagerProtocol, ProtocolFuzzResult, ToolRunResult
 
-from .report_presenter import FuzzReportPresenter
 from .tool_client import ToolClient
 from .protocol_client import ProtocolClient
 from ..fuzz_engine.mutators.seed_pool import SeedPool
@@ -60,9 +59,9 @@ class MCPFuzzerClient:
         """
         self.transport = transport
         self.auth_manager = auth_manager or AuthManager()
-        self._reporter = reporter or FuzzerReporter(safety_system=safety_system)
-        # Set transport in reporter for runtime statistics collection
-        self._reporter.set_transport(transport)
+        self._reporter = reporter
+        if self._reporter is not None:
+            self._reporter.set_transport(transport)
         self.tool_timeout = tool_timeout
         self.safety_enabled = safety_enabled
         if not safety_enabled:
@@ -96,13 +95,9 @@ class MCPFuzzerClient:
         )
 
         self._logger = logging.getLogger(__name__)
-        self.report_presenter = FuzzReportPresenter(
-            self._reporter,
-            safety_system_getter=lambda: self.safety_system,
-        )
 
     @property
-    def reporter(self) -> FuzzerReporter:
+    def reporter(self) -> FuzzerReporter | None:
         """Direct access to the reporter for advanced usage."""
         return self._reporter
 
@@ -263,7 +258,8 @@ class MCPFuzzerClient:
             prompt_name=prompt_name,
             prompt_args=prompt_args,
         )
-        self._reporter.add_spec_checks(checks)
+        if self._reporter is not None:
+            self._reporter.add_spec_checks(checks)
         return checks
 
     # ============================================================================

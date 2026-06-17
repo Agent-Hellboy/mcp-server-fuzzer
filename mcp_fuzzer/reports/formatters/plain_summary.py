@@ -5,7 +5,8 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from .common import extract_tool_runs, summarize_tool_runs
+from ...utils.result_shape import extract_tool_runs
+from .common import summarize_tool_runs
 
 
 def _tool_outcome_buckets(runs: list[dict[str, Any]]) -> dict[str, int]:

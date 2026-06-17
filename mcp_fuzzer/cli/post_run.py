@@ -6,11 +6,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ..client.report_presenter import FuzzReportPresenter
 from ..orchestrator.audit_metadata import audit_summary_footnotes
 from ..orchestrator.models import SessionResult
 from ..reports import FuzzerReporter
 from ..reports.formatters.plain_summary import write_stdout_summary
+from ..reports.report_presenter import FuzzReportPresenter
 from .session_settings import SessionSettings
 
 
@@ -37,7 +37,6 @@ class PostRunPresenter:
         reporter: FuzzerReporter | None,
     ) -> None:
         self._settings = settings
-        self._reporter = reporter
         self._presenter = (
             FuzzReportPresenter(reporter) if reporter is not None else None
         )
@@ -64,19 +63,6 @@ class PostRunPresenter:
                 if mode not in ("tools",) and isinstance(protocol_results, dict):
                     if protocol_results:
                         self._presenter.print_protocol_summary(protocol_results)
-            except Exception as exc:  # pragma: no cover
-                logging.warning("Failed to display protocol summary tables: %s", exc)
-        elif self._reporter is not None:
-            try:  # pragma: no cover
-                if mode in ("tools", "all") and tool_results:
-                    self._reporter.print_tool_execution_summary(tool_results)
-            except Exception as exc:  # pragma: no cover
-                logging.warning("Failed to display table summary: %s", exc)
-
-            try:  # pragma: no cover
-                if mode not in ("tools",) and isinstance(protocol_results, dict):
-                    if protocol_results:
-                        self._reporter.print_protocol_summary(protocol_results)
             except Exception as exc:  # pragma: no cover
                 logging.warning("Failed to display protocol summary tables: %s", exc)
 
@@ -118,31 +104,6 @@ class PostRunPresenter:
             try:  # pragma: no cover
                 export_targets = _requested_export_targets(self._settings.config)
                 exported_files = await self._presenter.export_requested_formats(
-                    export_targets,
-                    include_safety=self._settings.safety_report,
-                )
-                if exported_files:
-                    logging.info("Exported report formats: %s", exported_files)
-            except Exception as exc:  # pragma: no cover
-                logging.warning("Failed to export additional report formats: %s", exc)
-                logging.exception("Export error details:")
-        elif self._reporter is not None:
-            try:  # pragma: no cover
-                standardized_files = await self._reporter.generate_standardized_report(
-                    output_types=self._settings.output_types,
-                    include_safety=self._settings.safety_report,
-                )
-                if standardized_files:
-                    logging.info(
-                        "Generated standardized reports: %s",
-                        list(standardized_files.keys()),
-                    )
-            except Exception as exc:  # pragma: no cover
-                logging.warning("Failed to generate standardized reports: %s", exc)
-
-            try:  # pragma: no cover
-                export_targets = _requested_export_targets(self._settings.config)
-                exported_files = await self._reporter.export_requested_formats(
                     export_targets,
                     include_safety=self._settings.safety_report,
                 )

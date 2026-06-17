@@ -14,9 +14,9 @@ from importlib.metadata import PackageNotFoundError, version
 
 from ..exceptions import ValidationError
 from .models import ReportSnapshot
+from ..utils.result_shape import extract_tool_runs
 from .formatters.common import (
     calculate_protocol_success_rate,
-    extract_tool_runs,
     result_has_failure,
     summarize_tool_runs,
     tool_run_has_exception,

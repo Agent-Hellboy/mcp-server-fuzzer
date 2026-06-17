@@ -5,10 +5,10 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
+from ...utils.result_shape import extract_tool_runs
 from .common import (
     calculate_protocol_success_rate,
     collect_and_summarize_protocol_items,
-    extract_tool_runs,
     normalize_report_data,
     result_has_failure,
 )
