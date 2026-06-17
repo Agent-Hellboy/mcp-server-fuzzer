@@ -78,6 +78,18 @@ class ServerCrashError(TransportError):
     description = "Server process crashed during a request"
 
 
+class OversizedResponseError(TransportError):
+    """Raised when the server emits a response exceeding the read cap.
+
+    A fuzzing finding indicating possible unbounded output / memory blow-up
+    (resource exhaustion / DoS). ``context`` carries the observed ``size`` and
+    the ``limit``.
+    """
+
+    code = "10005"
+    description = "Server returned an oversized response"
+
+
 class AuthenticationError(TransportError):
     """Raised when authentication with the server fails."""
 

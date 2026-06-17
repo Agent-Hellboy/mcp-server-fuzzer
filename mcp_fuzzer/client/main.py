@@ -153,31 +153,41 @@ async def unified_client_main(settings: ClientSettings) -> int:
         except Exception as exc:  # pragma: no cover
             logging.warning(f"Failed to display protocol summary tables: {exc}")
 
+        findings_summary: dict[str, int] = {}
+        tr = tool_results if isinstance(tool_results, dict) else None
+        pr = protocol_results if isinstance(protocol_results, dict) else None
         try:
-            from ..reports.crash_repro import write_crash_repros
+            from ..analysis import analyze_findings, summarize_findings
+            from ..reports.crash_repro import write_crash_repros, write_findings_report
 
-            crash_files = write_crash_repros(
-                config.get("output_dir") or "reports",
-                tool_results if isinstance(tool_results, dict) else None,
-                protocol_results if isinstance(protocol_results, dict) else None,
-            )
+            findings = analyze_findings(tr, pr)
+            findings_summary = summarize_findings(findings)
+            out_dir = config.get("output_dir") or "reports"
+            crash_files = write_crash_repros(out_dir, tr, pr)
             if crash_files:
                 logging.warning(
                     "Recorded %d server crash reproduction(s) in %s",
                     len(crash_files),
                     crash_files[0].parent,
                 )
+            if findings:
+                report_path = write_findings_report(out_dir, findings)
+                logging.warning(
+                    "Recorded %d finding(s) across %d categor(y/ies) in %s",
+                    len(findings),
+                    len(findings_summary),
+                    report_path,
+                )
         except Exception as exc:  # pragma: no cover
-            logging.warning("Failed to write crash reproductions: %s", exc)
+            logging.warning("Failed to analyze/record findings: %s", exc)
 
         try:
             write_stdout_summary(
                 mode=mode,
-                tool_results=tool_results if isinstance(tool_results, dict) else None,
-                protocol_results=(
-                    protocol_results if isinstance(protocol_results, dict) else None
-                ),
+                tool_results=tr,
+                protocol_results=pr,
                 blocked=no_tools_available,
+                findings_summary=findings_summary,
             )
         except Exception as exc:  # pragma: no cover
             logging.warning("Failed to write plain stdout summary: %s", exc)

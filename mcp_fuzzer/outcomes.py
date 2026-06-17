@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .exceptions import ServerCrashError, ServerError
+from .exceptions import OversizedResponseError, ServerCrashError, ServerError
 from .types import ErrorType, StringValueEnum
 
 
@@ -22,6 +22,9 @@ class FuzzOutcome(StringValueEnum):
     # The server process terminated abnormally (signal / non-zero exit) while
     # handling the input -- the highest-signal fuzzing finding.
     CRASHED = "crashed"
+    # The server emitted a response exceeding the read cap (resource
+    # exhaustion / unbounded output / DoS risk).
+    OVERSIZED_RESPONSE = "oversized_response"
 
 
 # JSON-RPC codes indicating the server rejected malformed input (desired for fuzzing).
@@ -73,6 +76,8 @@ def classify_tool_run(
     if exception is not None:
         if isinstance(exception, ServerCrashError):
             return False, FuzzOutcome.CRASHED
+        if isinstance(exception, OversizedResponseError):
+            return False, FuzzOutcome.OVERSIZED_RESPONSE
         if is_server_rejection_error(exception):
             return True, FuzzOutcome.SERVER_REJECTED
         return False, FuzzOutcome.TRANSPORT_ERROR
@@ -96,6 +101,8 @@ def classify_protocol_run(
     if exception is not None:
         if isinstance(exception, ServerCrashError):
             return False, FuzzOutcome.CRASHED
+        if isinstance(exception, OversizedResponseError):
+            return False, FuzzOutcome.OVERSIZED_RESPONSE
         if is_server_rejection_error(exception):
             return True, FuzzOutcome.SERVER_REJECTED
         return False, FuzzOutcome.TRANSPORT_ERROR

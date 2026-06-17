@@ -77,13 +77,13 @@ def write_crash_repros(
         return []
 
     crash_dir = Path(output_dir) / "crashes"
-    written: list[Path] = []
     try:
         crash_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:  # pragma: no cover - fs edge
         logger.warning("Could not create crash repro directory: %s", exc)
         return []
 
+    written: list[Path] = []
     for index, record in enumerate(crashes, start=1):
         safe_target = "".join(
             ch if ch.isalnum() or ch in "-_." else "_" for ch in str(record["target"])
@@ -97,3 +97,26 @@ def write_crash_repros(
             logger.warning("Could not write crash repro %s: %s", path, exc)
 
     return written
+
+
+def write_findings_report(
+    output_dir: str | os.PathLike[str],
+    findings: list[Any],
+) -> Path | None:
+    """Write all analyzed findings to ``<output_dir>/findings.json``."""
+    if not findings:
+        return None
+    out = Path(output_dir)
+    path = out / "findings.json"
+    payload = [
+        f.to_dict() if hasattr(f, "to_dict") else f for f in findings
+    ]
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({"findings": payload, "count": len(payload)}, handle, indent=2,
+                      default=str)
+    except OSError as exc:  # pragma: no cover - fs edge
+        logger.warning("Could not write findings report: %s", exc)
+        return None
+    return path

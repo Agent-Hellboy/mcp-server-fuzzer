@@ -60,6 +60,7 @@ def write_stdout_summary(
     tool_results: dict[str, Any] | None,
     protocol_results: dict[str, Any] | None,
     blocked: bool = False,
+    findings_summary: dict[str, int] | None = None,
 ) -> None:
     """Write a plain-text fuzzing summary to stdout (always, not only on TTY).
 
@@ -132,6 +133,14 @@ def write_stdout_summary(
                 f"  {protocol_type}: {total} runs, "
                 f"{rejected} server-rejected, {findings} accepted-malformed findings"
             )
+
+    if findings_summary:
+        lines.append("")
+        lines.append("Findings by category:")
+        for category, count in sorted(
+            findings_summary.items(), key=lambda kv: (-kv[1], kv[0])
+        ):
+            lines.append(f"  {category}: {count}")
 
     lines.append("")
     sys.stdout.write("\n".join(lines) + "\n")
