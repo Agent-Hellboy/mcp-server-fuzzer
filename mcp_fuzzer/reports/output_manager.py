@@ -6,8 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..core import ReportSnapshot
-from .protocol import OutputProtocol
+from .models import ReportSnapshot
+from .output_protocol import OutputProtocol
 
 
 class OutputManager:

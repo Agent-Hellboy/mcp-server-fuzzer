@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from .interface import ReportSaver
-from ..core.models import ReportSnapshot
+from ..models import ReportSnapshot
 
 
 @dataclass(frozen=True)

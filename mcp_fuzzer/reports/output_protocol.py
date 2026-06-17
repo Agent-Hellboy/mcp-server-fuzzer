@@ -12,9 +12,9 @@ from typing import Any
 
 from importlib.metadata import PackageNotFoundError, version
 
-from ...exceptions import ValidationError
-from ..core import ReportSnapshot
-from ..formatters.common import (
+from ..exceptions import ValidationError
+from .models import ReportSnapshot
+from .formatters.common import (
     calculate_protocol_success_rate,
     extract_tool_runs,
     result_has_failure,

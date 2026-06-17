@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mcp_fuzzer.reports.core import ReportCollector
+from mcp_fuzzer.reports.collector import ReportCollector
 from mcp_fuzzer.reports.reporter import FuzzerReporter
-from mcp_fuzzer.reports.reporter.config import ReporterConfig
+from mcp_fuzzer.reports.reporter_config import ReporterConfig
 from mcp_fuzzer.reports.safety_reporter import SafetyReporter
 
 

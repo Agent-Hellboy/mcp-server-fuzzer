@@ -14,8 +14,9 @@ from typing import Any, Mapping
 
 from rich.console import Console
 
-from ..core import FuzzingMetadata, ReportCollector, ReportSnapshot
-from ..formatters import (
+from .models import FuzzingMetadata, ReportSnapshot
+from .collector import ReportCollector
+from .formatters import (
     CSVFormatter,
     HTMLFormatter,
     JSONFormatter,
@@ -26,11 +27,11 @@ from ..formatters import (
     ReportSaveAdapter,
     FormatterRegistry,
 )
-from ..formatters.common import extract_tool_runs
-from ..output import OutputManager
-from .config import ReporterConfig
-from ..safety_reporter import SafetyReporter
-from ...safety_system.safety import CombinedSafetyProvider
+from .formatters.common import extract_tool_runs
+from .output_manager import OutputManager
+from .reporter_config import ReporterConfig
+from .safety_reporter import SafetyReporter
+from ..safety_system.safety import CombinedSafetyProvider
 
 from importlib.metadata import version, PackageNotFoundError
 
@@ -125,7 +126,7 @@ class FuzzerReporter:
     ) -> Mapping[str, Any]:
         if config_provider is not None:
             return config_provider
-        from ...client.adapters import config_mediator
+        from ..client.adapters import config_mediator
 
         # config_mediator implements dict-like get()
         return config_mediator
