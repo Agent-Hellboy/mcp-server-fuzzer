@@ -111,11 +111,27 @@ def write_findings_report(
     payload = [
         f.to_dict() if hasattr(f, "to_dict") else f for f in findings
     ]
+    doc: dict[str, Any] = {"findings": payload, "count": len(payload)}
+    try:
+        from ..analysis.auth_audit import (
+            auth_audit_report_metadata,
+            is_auth_audit_finding,
+        )
+
+        auth_audit_findings = [
+            f for f in findings if is_auth_audit_finding(f)
+        ]
+        if auth_audit_findings:
+            doc["auth_audit"] = {
+                **auth_audit_report_metadata(),
+                "finding_count": len(auth_audit_findings),
+            }
+    except Exception:  # pragma: no cover - metadata is best-effort
+        pass
     try:
         out.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:
-            json.dump({"findings": payload, "count": len(payload)}, handle, indent=2,
-                      default=str)
+            json.dump(doc, handle, indent=2, default=str)
     except OSError as exc:  # pragma: no cover - fs edge
         logger.warning("Could not write findings report: %s", exc)
         return None

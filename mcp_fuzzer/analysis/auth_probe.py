@@ -17,6 +17,7 @@ from typing import Any
 
 from ..exceptions import AuthenticationError
 from .findings import Finding
+from .auth_audit import auth_audit_paper_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,45 @@ async def probe_auth_bypass(
                 )
             )
     return findings
+
+
+def probe_advertised_auth_open_tools(
+    tools: list[dict[str, Any]],
+    *,
+    auth_advertised: bool = True,
+) -> list[Finding]:
+    """Flag tools/list succeeding without credentials when OAuth auth is advertised.
+
+    Mirrors the paper's measurement of remote MCP servers that expose tools
+    without authentication despite advertising an authorization boundary.
+    """
+    if not auth_advertised:
+        return []
+    names = [
+        str(t.get("name"))
+        for t in tools
+        if isinstance(t, dict) and t.get("name")
+    ]
+    if not names:
+        return []
+    return [
+        Finding(
+            "unauthenticated_tools",
+            "high",
+            "auth",
+            "mcp_endpoint",
+            None,
+            f"Server advertises OAuth authorization but exposed {len(names)} "
+            "tool(s) without authentication (tools/list callable with no "
+            "credentials).",
+            {
+                "paper_finding": "unauthenticated_tool_exposure",
+                **auth_audit_paper_evidence(),
+                "tool_count": len(names),
+                "tool_names": names[:20],
+            },
+        )
+    ]
 
 
 def secured_tool_names(auth_manager: Any, tools: list[dict[str, Any]]) -> list[str]:

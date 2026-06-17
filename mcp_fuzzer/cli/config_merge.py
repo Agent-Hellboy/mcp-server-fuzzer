@@ -168,6 +168,8 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         "output_session_id": getattr(args, "output_session_id", None),
         "enable_aiomonitor": getattr(args, "enable_aiomonitor", False),
         "fail_if_no_tools": getattr(args, "fail_if_no_tools", False),
+        "auth_audit": getattr(args, "auth_audit", False),
+        "auth_audit_intrusive": getattr(args, "auth_audit_intrusive", False),
         "auth_manager": auth_manager,
     }
 

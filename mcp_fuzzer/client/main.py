@@ -99,6 +99,109 @@ async def _run_auth_bypass_probe(config: dict[str, Any]) -> list[Any]:
         return []
 
 
+def _oauth_client_id(config: dict[str, Any]) -> str | None:
+    auth_manager = config.get("auth_manager")
+    if auth_manager is None:
+        return None
+    providers = getattr(auth_manager, "auth_providers", {}) or {}
+    provider = providers.get("mcp_oauth")
+    if provider is None:
+        return None
+    provider_config = getattr(provider, "config", None)
+    if provider_config is None:
+        return None
+    return getattr(provider_config, "client_id", None)
+
+
+async def _run_auth_security_audit(
+    config: dict[str, Any], transport: Any
+) -> list[Any]:
+    """Run arXiv 2605.22333 authorization-server and MCP auth boundary checks.
+
+    Best-effort and network-active. Never raises.
+    """
+    if not config.get("auth_audit"):
+        return []
+    if config.get("no_network"):
+        return []
+    probe = getattr(transport, "probe_auth_discovery", None)
+    if not callable(probe):
+        logging.debug("Auth audit skipped: transport lacks probe_auth_discovery")
+        return []
+    try:
+        import httpx
+
+        from ..analysis import (
+            discover_and_audit_authorization_server,
+            probe_advertised_auth_open_tools,
+        )
+        from ..transport.interfaces import JsonRpcAdapter
+
+        hints = await probe()
+        www_authenticate = hints.get("www_authenticate")
+        auth_advertised = hints.get("status") == 401 or bool(www_authenticate)
+        timeout = float(config.get("timeout", 30.0))
+        findings: list[Any] = []
+        with httpx.Client(timeout=timeout, follow_redirects=True) as http:
+            findings.extend(
+                discover_and_audit_authorization_server(
+                    config["endpoint"],
+                    www_authenticate=www_authenticate,
+                    http=http,
+                    intrusive=bool(config.get("auth_audit_intrusive")),
+                    client_id=_oauth_client_id(config),
+                )
+            )
+        if auth_advertised:
+            unauth_request = _build_transport_request(
+                {**config, "auth_manager": None}
+            )
+            unauth_transport = build_driver_with_auth(unauth_request)
+            adapter = JsonRpcAdapter(unauth_transport)
+            try:
+                tools = await adapter.get_tools()
+            except Exception:
+                tools = []
+            else:
+                if isinstance(tools, list):
+                    findings.extend(
+                        probe_advertised_auth_open_tools(
+                            tools, auth_advertised=True
+                        )
+                    )
+            finally:
+                close = getattr(unauth_transport, "close", None)
+                if callable(close):
+                    try:
+                        await close()
+                    except Exception:
+                        pass
+        return findings
+    except Exception as exc:  # pragma: no cover - probe is best-effort
+        logging.debug("Auth security audit skipped: %s", exc)
+        return []
+
+
+def _log_auth_audit_results(findings: list[Any], *, enabled: bool) -> None:
+    if not enabled:
+        return
+    from ..analysis.auth_audit import AUTH_AUDIT_PAPER_URL, is_auth_audit_finding
+
+    auth_audit_findings = [f for f in findings if is_auth_audit_finding(f)]
+    if auth_audit_findings:
+        logging.warning(
+            "Auth security audit recorded %d finding(s) mapped to arXiv "
+            "2605.22333 flaw types: %s",
+            len(auth_audit_findings),
+            AUTH_AUDIT_PAPER_URL,
+        )
+    else:
+        logging.info(
+            "Auth security audit complete with no findings (taxonomy: %s)",
+            AUTH_AUDIT_PAPER_URL,
+        )
+
+
 async def unified_client_main(settings: ClientSettings) -> int:
     """Run the fuzzing workflow using merged client settings."""
     config = settings.data
@@ -205,6 +308,11 @@ async def unified_client_main(settings: ClientSettings) -> int:
             findings = analyze_findings(tr, pr)
             if mode in ("tools", "all"):
                 findings.extend(await _run_auth_bypass_probe(config))
+            auth_audit_findings = await _run_auth_security_audit(config, transport)
+            findings.extend(auth_audit_findings)
+            _log_auth_audit_results(
+                auth_audit_findings, enabled=bool(config.get("auth_audit"))
+            )
             findings_summary = summarize_findings(findings)
             out_dir = config.get("output_dir") or "reports"
             crash_files = write_crash_repros(out_dir, tr, pr)
