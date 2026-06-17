@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..outcomes import FuzzOutcome
+from .outcomes import FuzzOutcome
 from ..types import ErrorType, TimeoutScope, ToolRunResult
 
 

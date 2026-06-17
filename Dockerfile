@@ -90,7 +90,7 @@ COPY --chown=nonroot:nonroot schemas ./schemas
 USER nonroot
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD ["/usr/bin/python3", "-m", "mcp_fuzzer.healthcheck"]
+  CMD ["/usr/bin/python3", "-m", "mcp_fuzzer.client.healthcheck"]
 
 ENTRYPOINT ["/usr/bin/python3", "-m", "mcp_fuzzer"]
 CMD ["--help"]
@@ -126,7 +126,7 @@ RUN set -eux; \
 USER 65532:65532
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD ["/usr/bin/python3", "-m", "mcp_fuzzer.healthcheck"]
+  CMD ["/usr/bin/python3", "-m", "mcp_fuzzer.client.healthcheck"]
 
 ENTRYPOINT ["python3", "-m", "mcp_fuzzer"]
 CMD ["--help"]

@@ -7,7 +7,7 @@ import pytest
 
 from mcp_fuzzer.diagnostics import classify_fuzz_runs, summarize_findings
 from mcp_fuzzer.exceptions import OversizedResponseError
-from mcp_fuzzer.outcomes import FuzzOutcome, classify_tool_run
+from mcp_fuzzer.client.outcomes import FuzzOutcome, classify_tool_run
 
 
 def _categories(findings):

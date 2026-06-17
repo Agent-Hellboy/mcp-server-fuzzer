@@ -6,7 +6,7 @@ from typing import Any
 
 from ..protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 from ..types import ProtocolFuzzResult
-from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
+from ..spec_guard.tool_schema import _build_tool_arguments, _tool_task_support
 
 
 class ProtocolListingsMixin:

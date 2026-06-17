@@ -7,7 +7,7 @@ import os
 import re
 from typing import Any
 
-from ..spec_version import is_supported_protocol_version, schema_path_for_version
+from .spec_version import is_supported_protocol_version, schema_path_for_version
 from .helpers import (
     COMPLETIONS_SPEC,
     PROMPTS_SPEC,
@@ -34,7 +34,7 @@ from .spec_checks import (
     check_prompts_get,
     check_tool_schema_fields,
 )
-from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
+from ..spec_guard.tool_schema import _build_tool_arguments, _tool_task_support
 
 _TOOLS_SPEC = TOOLS_SPEC
 _SCHEMA_SPEC = SCHEMA_SPEC

@@ -24,12 +24,16 @@ from mcp_fuzzer.fuzz_engine.mutators.strategies.spec_protocol import (
     get_spec_protocol_fuzzer_method,
 )
 from mcp_fuzzer.fuzz_engine.executor.results import MetricsCalculator
-from mcp_fuzzer.outcomes import FuzzOutcome, classify_protocol_run, classify_tool_run
+from mcp_fuzzer.client.outcomes import (
+    FuzzOutcome,
+    classify_protocol_run,
+    classify_tool_run,
+)
 from mcp_fuzzer.protocol_registry import FUZZABLE_PROTOCOL_TYPES
 from mcp_fuzzer.reports.formatters.markdown_fmt import MarkdownFormatter
 from mcp_fuzzer.reports.formatters.plain_summary import write_stdout_summary
 from mcp_fuzzer.reports.reporter import FuzzerReporter
-from mcp_fuzzer.spec_version import is_supported_protocol_version
+from mcp_fuzzer.spec_guard.spec_version import is_supported_protocol_version
 
 
 @pytest.fixture(autouse=True)
@@ -313,7 +317,7 @@ def test_nested_output_directory_applied(tmp_path):
 
 
 def test_env_choice_validation_is_case_sensitive():
-    from mcp_fuzzer.env import ValidationType
+    from mcp_fuzzer.config.env import ValidationType
 
     vm = ValidationManager()
     params = {"choices": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]}

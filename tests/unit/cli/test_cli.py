@@ -28,7 +28,7 @@ from mcp_fuzzer.transport.bootstrap import (
     TransportBuildRequest,
     build_driver_with_auth,
 )
-from mcp_fuzzer.env import ValidationType
+from mcp_fuzzer.config.env import ValidationType
 from mcp_fuzzer.exceptions import ArgumentValidationError, ConfigFileError, MCPError
 
 

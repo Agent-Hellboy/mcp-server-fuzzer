@@ -58,7 +58,7 @@ def _schema_root() -> Path:
     env_root = os.getenv("MCP_SPEC_SCHEMA_ROOT")
     if env_root:
         return Path(env_root)
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]
     return repo_root / "schemas" / "mcp-spec" / "schema"
 
 

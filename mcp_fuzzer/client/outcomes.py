@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .exceptions import OversizedResponseError, ServerCrashError, ServerError
-from .types import ErrorType, StringValueEnum
+from ..exceptions import OversizedResponseError, ServerCrashError, ServerError
+from ..types import ErrorType, StringValueEnum
 
 
 class FuzzOutcome(StringValueEnum):

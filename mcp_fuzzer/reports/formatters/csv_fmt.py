@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ...utils.result_shape import extract_tool_runs
+from ...types import extract_tool_runs
 from .common import SupportsToDict, normalize_report_data
 
 

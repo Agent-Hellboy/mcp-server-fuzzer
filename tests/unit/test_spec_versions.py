@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-import mcp_fuzzer.spec_version as spec_versions
+import mcp_fuzzer.spec_guard.spec_version as spec_versions
 
 
 @pytest.fixture(autouse=True)

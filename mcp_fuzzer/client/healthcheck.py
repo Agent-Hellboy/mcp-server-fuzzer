@@ -18,7 +18,7 @@ from pathlib import Path
 
 def _check_version() -> str:
     try:
-        from .version import VERSION as __version__
+        from ..version import VERSION as __version__
     except Exception as exc:  # pragma: no cover - healthcheck only
         raise RuntimeError(f"import failure: {exc}") from exc
     return __version__
@@ -28,7 +28,7 @@ def _check_schemas() -> bool:
     # Distroless copies schemas to /app/schemas; keep relative fallback for tests
     candidates = [
         Path("/app/schemas"),
-        Path(__file__).resolve().parent.parent / "schemas",
+        Path(__file__).resolve().parent.parent.parent / "schemas",
     ]
     for path in candidates:
         if path.exists() and any(path.iterdir()):

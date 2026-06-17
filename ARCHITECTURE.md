@@ -34,7 +34,8 @@ grab-bag).
                    └──────┬─────┘ └─────┬──────┘ └───┬──┘ └──────┬───────┘
                           │             │            │           │
   L0  foundation   ┌──────▼─────────────▼────────────▼───────────▼───────┐
-                   │ config/   exceptions   logging/   utils/   corpus    │
+                   │ config/   exceptions   logging/   types/   icons/      │
+                   │ spec_guard/ (spec_version, tool_schema)  fuzz_engine/   │
                    └───────────────────────────────────────────────────────┘
 ```
 
@@ -47,7 +48,7 @@ grab-bag).
   import each other.
 - **L1 subsystems** — `transport/`, `auth/`, `client/`, `safety_system/`. Shared
   services used by L2/L3. Peers.
-- **L0 foundation** — `config/`, `exceptions`, `logging/`, `utils/`, `corpus`.
+- **L0 foundation** — `config/`, `exceptions`, `logging/`, `types`, `icons`, `spec_guard/`.
   Imported by everyone; import almost nothing.
 
 ### Session flow (the spine)
@@ -77,8 +78,9 @@ cli.run_cli
 | `auth/` | L1 | OAuth client (discovery, registration, grants, token cache) |
 | `client/` | L1 | MCP client facades (`fuzzer_client`, `tool_client`, `protocol_client`) |
 | `safety_system/` | L1 | input blocking, danger detection, fs sandbox, safety events |
-| `config/` | L0 | constants, config singleton, loaders, schema |
-| `spec_guard/`, `utils/`, `logging/`, `corpus` | L0 | foundation helpers |
+| `config/` | L0 | constants, config singleton, loaders, schema, env |
+| `spec_guard/` | L0/L2 | schema validation, spec version, tool schema helpers |
+| `logging/` | L0 | logging setup |
 
 ---
 
@@ -146,7 +148,7 @@ drive module/symbol design:
 All items from the 2026-06 SOLID/architecture pass are **done**. Layer-hygiene
 follow-ups in the same refactor:
 
-- ~~**Break L2 peer coupling.**~~ Done: `utils/result_shape.py::extract_tool_runs`
+- ~~**Break L2 peer coupling.**~~ Done: `types.py::extract_tool_runs`
   shared by `diagnostics/` and `reports/`; `findings.json` audit metadata built in
   `orchestrator/persist.py` and passed into `write_findings_report`.
 - ~~**Move execution pipeline.**~~ Done: `orchestrator/pipeline.py::ClientExecutionPipeline`.

@@ -18,7 +18,7 @@ from ..exceptions import ServerCrashError
 from ..fuzz_engine.mutators import ProtocolMutator
 from ..fuzz_engine.mutators.seed_mutation import mutate_seed_payload
 from ..fuzz_engine.mutators.seed_pool import SeedPool
-from ..outcomes import FuzzOutcome, classify_protocol_run
+from .outcomes import FuzzOutcome, classify_protocol_run
 from ..protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 from ..safety_system.safety import CombinedSafetyProvider, ProtocolSafetyProvider
 from ..types import PREVIEW_LENGTH, ProtocolFuzzResult, SafetyCheckResult

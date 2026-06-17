@@ -1,6 +1,6 @@
 """Coverage tests for schema helper utilities."""
 
-from mcp_fuzzer.utils.schema_helpers import (
+from mcp_fuzzer.spec_guard.tool_schema import (
     _build_tool_arguments,
     _default_schema_value,
     _first_schema_choice,
@@ -57,6 +57,19 @@ def test_default_schema_value_array_and_object_and_null_and_fallback():
 
     assert _default_schema_value("nil", {"type": "null"}) is None
     assert _default_schema_value("unknown", {"type": "string"}) == "unknown-value"
+
+
+def test_default_schema_value_array_without_item_schema():
+    assert _default_schema_value("items", {"type": "array"}) == []
+
+
+def test_default_schema_value_object_without_properties():
+    assert _default_schema_value("obj", {"type": "object", "required": ["a"]}) == {}
+
+
+def test_build_tool_arguments_invalid_schema():
+    assert _build_tool_arguments({"inputSchema": "bad"}) == {}
+    assert _build_tool_arguments({"inputSchema": {"properties": "bad"}}) == {}
 
 
 def test_build_tool_arguments_and_task_support():

@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from ..exceptions import ServerCrashError
-from ..outcomes import FuzzOutcome, classify_tool_run, is_server_rejection_error
+from .outcomes import FuzzOutcome, classify_tool_run, is_server_rejection_error
 from .. import spec_guard
 from ..types import ErrorType, TimeoutScope
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mcp_fuzzer.utils.result_shape import extract_tool_runs
+from mcp_fuzzer.types import extract_tool_runs
 
 
 def test_extract_tool_runs_from_runs_key():
@@ -45,3 +45,22 @@ def test_extract_tool_runs_from_error_only_entry():
         }
     ]
     assert metadata is entry
+
+
+def test_extract_tool_runs_from_error_entry_with_args_and_label():
+    entry = {
+        "success": False,
+        "error": "phase failed",
+        "args": {"x": 1},
+        "label": "realistic",
+    }
+    runs, metadata = extract_tool_runs(entry)
+    assert runs[0]["args"] == {"x": 1}
+    assert runs[0]["label"] == "realistic"
+    assert metadata is entry
+
+
+def test_extract_tool_runs_from_empty_dict():
+    runs, metadata = extract_tool_runs({})
+    assert runs == []
+    assert metadata == {}

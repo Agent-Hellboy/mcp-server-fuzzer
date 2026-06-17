@@ -19,14 +19,6 @@ FORBIDDEN_IMPORTS: list[tuple[str, tuple[str, ...]]] = [
     ("safety_system", ("orchestrator", "cli")),
     ("fuzz_engine", ("orchestrator", "cli")),
     ("config", ("orchestrator", "cli", "client", "reports", "diagnostics")),
-    ("utils", (
-        "orchestrator",
-        "cli",
-        "client",
-        "reports",
-        "diagnostics",
-        "fuzz_engine",
-    )),
 ]
 
 

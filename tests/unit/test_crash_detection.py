@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from mcp_fuzzer.exceptions import ServerCrashError, TransportError
-from mcp_fuzzer.outcomes import (
+from mcp_fuzzer.client.outcomes import (
     FuzzOutcome,
     classify_protocol_run,
     classify_tool_run,

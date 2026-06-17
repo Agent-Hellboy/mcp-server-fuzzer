@@ -14,7 +14,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from ..utils.icons import ALERT, BLOCKED
+from ..icons import ALERT, BLOCKED
 
 from .filesystem import (
     PathSanitizer,

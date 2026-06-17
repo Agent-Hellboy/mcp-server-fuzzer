@@ -13,8 +13,8 @@ from ..exceptions import ArgumentValidationError
 from ..config import config_mediator
 from ..transport.catalog import build_driver
 from ..exceptions import MCPError, TransportError
-from ..env import ENVIRONMENT_VARIABLES, ValidationType
-from ..utils.icons import CHECK, CROSS
+from ..config.env import ENVIRONMENT_VARIABLES, ValidationType
+from ..icons import CHECK, CROSS
 
 
 class ValidationManager:

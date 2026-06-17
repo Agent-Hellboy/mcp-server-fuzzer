@@ -18,7 +18,7 @@ from ...exceptions import (
     ServerError,
     TransportError,
 )
-from ...spec_version import maybe_update_spec_version_from_result
+from ...spec_guard.spec_version import maybe_update_spec_version_from_result
 from ..interfaces.server_requests import (
     ServerRequestHandler,
     ServerRequestHandlerProtocol,

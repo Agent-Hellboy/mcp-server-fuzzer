@@ -24,7 +24,7 @@ from ...config import (
     DEFAULT_HTTP_ACCEPT,
 )
 from ...safety_system import policy as safety_policy
-from ...spec_version import maybe_update_spec_version_from_result
+from ...spec_guard.spec_version import maybe_update_spec_version_from_result
 from ...types import HTTP_REDIRECT_STATUS_CODES
 
 

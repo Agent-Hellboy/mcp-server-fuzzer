@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ..utils.result_shape import extract_tool_runs
+from ..types import extract_tool_runs
 
 logger = logging.getLogger(__name__)
 

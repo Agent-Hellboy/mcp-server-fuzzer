@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...utils.result_shape import extract_tool_runs
+from ...types import extract_tool_runs
 from .common import (
     calculate_protocol_success_rate,
     normalize_report_data,

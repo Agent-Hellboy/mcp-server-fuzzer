@@ -139,7 +139,7 @@ docker run --rm -it \
 2. **Read-only Mounts**: Use `:ro` flag for server code mounts when possible
 3. **Isolated Environment**: Stdio servers run in isolated container environment
 4. **No Persistent Storage**: Reports written to mounted volume, not container filesystem
-5. **Healthcheck**: The image exposes a Python-based healthcheck (`mcp_fuzzer.healthcheck`) that validates the package install and schema bundle without relying on a shell.
+5. **Healthcheck**: The image exposes a Python-based healthcheck (`mcp_fuzzer.client.healthcheck`) that validates the package install and schema bundle without relying on a shell.
 6. **Debug Target**: When you need a shell for live debugging, build the `runtime-debug` target. It keeps parity with the distroless runtime (same nonroot UID/GID) but includes bash and common utilities.
 
 ## Troubleshooting

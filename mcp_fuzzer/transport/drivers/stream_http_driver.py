@@ -47,7 +47,7 @@ from ...types import (
 )
 from ...exceptions import TransportError
 from ...safety_system.policy import resolve_redirect_safely
-from ...spec_version import maybe_update_spec_version
+from ...spec_guard.spec_version import maybe_update_spec_version
 
 class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
     """Streamable HTTP transport with MCP session management.

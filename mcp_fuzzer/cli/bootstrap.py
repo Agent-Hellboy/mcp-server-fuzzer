@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ..client.fuzzer_client import MCPFuzzerClient
-from ..corpus import build_corpus_root, build_target_id, default_fs_root
+from ..fuzz_engine.corpus import build_corpus_root, build_target_id, default_fs_root
 from ..orchestrator.models import SessionContext
 from ..reports import FuzzerReporter
 from ..safety_system.safety import SafetyFilter

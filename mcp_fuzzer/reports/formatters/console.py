@@ -7,7 +7,7 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
-from ...utils.result_shape import extract_tool_runs
+from ...types import extract_tool_runs
 from .common import (
     calculate_protocol_success_rate,
     collect_and_summarize_protocol_items,
