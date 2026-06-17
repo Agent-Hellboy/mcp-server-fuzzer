@@ -88,3 +88,50 @@ To rebuild the graph after large changes:
 ## Pull Requests
 
 Open PRs against `main` on `https://github.com/Agent-Hellboy/mcp-server-fuzzer`.
+
+## Testing Check
+
+Run this before opening a PR and before merging:
+
+```bash
+tox -e ruff                                   # lint must be clean
+tox -e tests -- tests/unit/                   # full unit suite (random order)
+tox -e tests -- tests/unit/ -p no:randomly    # again in deterministic order
+```
+
+- Both orderings must pass. Running both catches test-isolation bugs
+  (global state / `sys.modules` leakage) that only surface under a particular
+  order — `pytest-randomly` shuffles order in CI.
+- Tests that need optional server deps (`starlette`/`mcp`/`uvicorn`) must
+  `pytest.importorskip(...)` so they skip cleanly where those deps are absent
+  (the `tests` env does not install them); otherwise CI fails at collection.
+- Coverage: CI runs Codecov with `patch` and `project` gates. Add tests for new
+  code so `codecov/patch` clears its target; the gates are advisory (a PR can
+  still merge) but should be green for feature work.
+- For changes touching live behavior, also confirm the `e2e-test` workflow
+  passes — it fuzzes the upstream "everything" MCP server end to end.
+
+## Release Readiness Check
+
+Before cutting a release `vX.Y.Z`:
+
+1. All intended PRs are merged to `main`; `git checkout main && git pull`.
+2. `CHANGELOG.md` has a dated `## [X.Y.Z]` section listing the changes.
+3. Bump `mcp_fuzzer/version.py` (`VERSION = "X.Y.Z"`) on a `release-vX.Y.Z`
+   branch and open a "Bump version to X.Y.Z" PR.
+4. CI on that PR is green (tests, lint, e2e, codecov) — run the Testing Check.
+5. Sanity-check the build: `.tox/tests/bin/python -m mcp_fuzzer --version`
+   prints `mcp-fuzzer vX.Y.Z`.
+6. Merge the bump PR, then tag and push:
+
+   ```bash
+   git checkout main && git pull origin main
+   git tag -a vX.Y.Z -m "Release vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
+
+   The `v*` tag triggers `publish.yml` (build + upload to PyPI) and
+   `docker-release.yml` (build + push the image).
+7. Verify after publish: PyPI serves `mcp-fuzzer X.Y.Z`
+   (`https://pypi.org/pypi/mcp-fuzzer/json`) and the GitHub Release `vX.Y.Z`
+   exists and is marked latest.
