@@ -49,6 +49,7 @@ def test_build_protected_resource_metadata_urls_prefers_endpoint_path():
 
     assert urls == [
         "https://mcp.example.com/.well-known/oauth-protected-resource/public/mcp",
+        "https://mcp.example.com/public/mcp/.well-known/oauth-protected-resource",
         "https://mcp.example.com/.well-known/oauth-protected-resource",
     ]
 

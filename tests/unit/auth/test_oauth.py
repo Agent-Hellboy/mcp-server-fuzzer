@@ -222,6 +222,53 @@ def test_register_dynamic_client_error():
             )
 
 
+def test_resolve_client_retries_registration_without_scope():
+    """A registration rejected for naming scopes is retried without scope."""
+    from mcp_fuzzer.auth.oauth import AuthorizationServerMetadata
+
+    attempts: list[bool] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        body = json.loads(request.content.decode())
+        has_scope = "scope" in body
+        attempts.append(has_scope)
+        if has_scope:
+            # Locked-down realm: rejects anonymous registration naming scopes.
+            return httpx.Response(403, text="insufficient_scope")
+        return httpx.Response(201, json={"client_id": "dyn-noscope"})
+
+    as_metadata = AuthorizationServerMetadata(
+        issuer="https://auth.example.com",
+        authorization_endpoint="https://auth.example.com/authorize",
+        token_endpoint="https://auth.example.com/token",
+        registration_endpoint="https://auth.example.com/register",
+        code_challenge_methods_supported=["S256"],
+        scopes_supported=[],
+        grant_types_supported=[],
+        token_endpoint_auth_methods_supported=[],
+        client_id_metadata_document_supported=False,
+        metadata_url="https://auth.example.com/.well-known/oauth-authorization-server",
+        raw={},
+    )
+
+    with _mock_client(handler) as http:
+        flow = MCPAuthorizationFlow(
+            "https://mcp.example.com/mcp",
+            OAuthClientConfig(scope="openid profile email"),
+            http=http,
+        )
+        client_id, client_secret = flow._resolve_client(
+            as_metadata, redirect_uri="http://127.0.0.1:5000/callback"
+        )
+
+    assert client_id == "dyn-noscope"
+    assert client_secret is None
+    # First attempt carried the scope (rejected), second omitted it (accepted).
+    assert attempts == [True, False]
+
+
 def test_exchange_code_includes_pkce_and_resource():
     captured = {}
 
