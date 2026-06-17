@@ -22,6 +22,7 @@ from ..utils.schema_helpers import _build_tool_arguments, _tool_task_support
 from ..fuzz_engine.mutators import ProtocolMutator
 from ..fuzz_engine.mutators.seed_pool import SeedPool
 from ..fuzz_engine.mutators.seed_mutation import mutate_seed_payload
+from ..exceptions import ServerCrashError
 from ..outcomes import FuzzOutcome, classify_protocol_run
 from .. import spec_guard
 from ..safety_system.safety import CombinedSafetyProvider, ProtocolSafetyProvider
@@ -326,7 +327,7 @@ class ProtocolClient:
             response_signature=response_signature,
         )
 
-        return {
+        run_result = {
             "fuzz_data": fuzz_data,
             "label": label,
             "result": result,
@@ -339,6 +340,16 @@ class ProtocolClient:
             "accepted_malformed": outcome == FuzzOutcome.ACCEPTED_MALFORMED,
             "server_rejected_input": outcome == FuzzOutcome.SERVER_REJECTED,
         }
+        if outcome == FuzzOutcome.CRASHED and isinstance(
+            send_exception, ServerCrashError
+        ):
+            run_result["crash"] = dict(getattr(send_exception, "context", None) or {})
+            self._logger.error(
+                "Server CRASHED while fuzzing %s: %s",
+                protocol_type,
+                run_result["crash"],
+            )
+        return run_result
 
     async def fuzz_stateful_sequences(
         self, runs: int = 5, phase: str = "realistic"

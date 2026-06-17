@@ -154,6 +154,23 @@ async def unified_client_main(settings: ClientSettings) -> int:
             logging.warning(f"Failed to display protocol summary tables: {exc}")
 
         try:
+            from ..reports.crash_repro import write_crash_repros
+
+            crash_files = write_crash_repros(
+                config.get("output_dir") or "reports",
+                tool_results if isinstance(tool_results, dict) else None,
+                protocol_results if isinstance(protocol_results, dict) else None,
+            )
+            if crash_files:
+                logging.warning(
+                    "Recorded %d server crash reproduction(s) in %s",
+                    len(crash_files),
+                    crash_files[0].parent,
+                )
+        except Exception as exc:  # pragma: no cover
+            logging.warning("Failed to write crash reproductions: %s", exc)
+
+        try:
             write_stdout_summary(
                 mode=mode,
                 tool_results=tool_results if isinstance(tool_results, dict) else None,

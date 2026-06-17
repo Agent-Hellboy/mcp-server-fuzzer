@@ -12,6 +12,7 @@ from typing import Any
 
 from ..auth import AuthManager
 from .. import spec_guard
+from ..exceptions import ServerCrashError
 from ..outcomes import FuzzOutcome, classify_tool_run, is_server_rejection_error
 from ..fuzz_engine.mutators import ToolMutator
 from ..fuzz_engine.mutators.seed_pool import SeedPool
@@ -84,6 +85,7 @@ class ToolClient:
         spec_scope: str | None = None,
         outcome: FuzzOutcome | str | None = None,
         accepted_malformed: bool = False,
+        crash: dict[str, Any] | None = None,
     ) -> ToolRunResult:
         payload: ToolRunResult = {
             "args": args,
@@ -109,6 +111,8 @@ class ToolClient:
             payload["outcome"] = str(outcome)
         if accepted_malformed:
             payload["accepted_malformed"] = True
+        if crash:
+            payload["crash"] = crash
         return payload
 
     @staticmethod
@@ -213,7 +217,15 @@ class ToolClient:
             self.tool_mutator.record_feedback(
                 tool_name, sanitized_args, exception=str(e)
             )
-            if is_server_rejection_error(e):
+            crash = None
+            if isinstance(e, ServerCrashError):
+                success, outcome = False, FuzzOutcome.CRASHED
+                error = ErrorType.SERVER_CRASHED
+                crash = dict(getattr(e, "context", None) or {})
+                self._logger.error(
+                    "Server CRASHED while fuzzing tool %s: %s", tool_name, crash
+                )
+            elif is_server_rejection_error(e):
                 success, outcome = True, FuzzOutcome.SERVER_REJECTED
                 error = None
             else:
@@ -228,6 +240,7 @@ class ToolClient:
                 error=error,
                 exception=str(e) if not success else None,
                 outcome=outcome,
+                crash=crash,
             )
 
         return call_result
