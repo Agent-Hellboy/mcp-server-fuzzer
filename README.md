@@ -33,6 +33,28 @@ MCP Server Fuzzer tests MCP servers by fuzzing:
 It includes optional safety controls such as filesystem sandboxing, PATH-based
 command blocking, and network restrictions for safer local testing.
 
+## Findings It Reports
+
+Beyond protocol/transport errors, runs are classified into categorized findings
+(written to `<output-dir>/findings.json`, with per-crash repros under
+`<output-dir>/crashes/`, and summarized on stdout):
+
+- `crash` — server process terminated abnormally (segfault/abort/panic or
+  non-zero exit); captures the signal and a stderr tail
+- `auth_bypass` — a protected tool answered an unauthenticated call
+- `injection_reflection` — a dangerous input token was echoed back verbatim
+- `oversized_response` — response exceeded the read cap (resource exhaustion)
+- `hang` — request timed out (deadlock / infinite loop / ReDoS)
+- `internal_error` — JSON-RPC `-32603` (unhandled server-side exception)
+- `error_leakage` — stack trace / panic leaked in output
+- `memory_growth` — server RSS grew multi-fold across runs (stdio targets)
+- `non_determinism` — identical input produced differing outcomes
+- `accepted_malformed` — server accepted clearly-invalid input without error
+- `performance_outlier` — response time far above the per-target median
+
+Tip: for compiled-language servers (Go/C/C++/Rust), run the target under a
+sanitizer or race build so memory bugs surface as observable crashes.
+
 ## Install
 
 Requires Python 3.10+.
