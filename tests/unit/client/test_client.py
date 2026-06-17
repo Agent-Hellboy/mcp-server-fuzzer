@@ -13,7 +13,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
 
 # Import the class and functions to test
-from mcp_fuzzer.client.base import MCPFuzzerClient as UnifiedMCPFuzzerClient
+from mcp_fuzzer.client.fuzzer_client import MCPFuzzerClient as UnifiedMCPFuzzerClient
 from mcp_fuzzer import spec_guard
 from mcp_fuzzer.reports import FuzzerReporter
 from mcp_fuzzer.auth import AuthManager
@@ -130,7 +130,7 @@ class TestUnifiedMCPFuzzerClient:
         assert isinstance(client.auth_manager, AuthManager)
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_success(self, mock_logging):
         """Test successful tool fuzzing."""
         tool = {
@@ -169,7 +169,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_exception_handling(self, mock_logging):
         """Test tool fuzzing with exception handling."""
         tool = {
@@ -199,7 +199,7 @@ class TestUnifiedMCPFuzzerClient:
         assert "traceback" in result
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_with_auth_params(self, mock_logging):
         """Test fuzz_tool with authentication parameters."""
         tool = {"name": "test_tool"}
@@ -230,7 +230,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_all_tools_success(self, mock_logging):
         """Test fuzzing all tools successfully."""
         # Mock transport to return tools
@@ -270,7 +270,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_all_tools_empty_list(self, mock_logging):
         """Test fuzzing all tools with empty tool list."""
         self.mock_transport.get_tools.return_value = []
@@ -308,7 +308,7 @@ class TestUnifiedMCPFuzzerClient:
             )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_protocol_type_success(self, mock_logging):
         """Test successful protocol type fuzzing."""
         protocol_type = "InitializeRequest"
@@ -357,7 +357,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_protocol_type_exception_handling(self, mock_logging):
         """Test protocol type fuzzing with exception handling."""
         protocol_type = "InitializeRequest"
@@ -488,7 +488,7 @@ class TestUnifiedMCPFuzzerClient:
         assert result == mock_response
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_all_protocol_types_success(self, mock_logging):
         """Test fuzzing all protocol types successfully."""
         # Mock protocol client results
@@ -523,7 +523,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_all_protocol_types_exception_handling(self, mock_logging):
         """Test fuzzing all protocol types with exception handling."""
         # Skip this test as the exception handling is now done in the protocol_client
@@ -585,7 +585,7 @@ class TestUnifiedMCPFuzzerClient:
         # We can't check the reporter's internal state easily with the mock
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_main_function(self, mock_logging):
         """Test the main function."""
         # This is a basic test - in a real scenario you'd want to test the
@@ -601,7 +601,7 @@ class TestUnifiedMCPFuzzerClient:
         assert client.auth_manager is not None
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_with_safety_metadata(self, mock_logging):
         """Test fuzz_tool with safety metadata in results."""
         tool = {
@@ -636,7 +636,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_with_content_blocking(self, mock_logging):
         """Test fuzz_tool with content-based blocking detection."""
         tool = {
@@ -674,7 +674,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_with_blocked_content_variants(self, mock_logging):
         """Test fuzz_tool with different blocked content variants."""
         tool = {
@@ -710,7 +710,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_all_tools_both_phases(self, mock_logging):
         """Test fuzz_all_tools_both_phases."""
         # Mock tool client result
@@ -741,7 +741,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_all_tools_both_phases_empty_tools(self, mock_logging):
         """Test fuzz_all_tools_both_phases with empty tools list."""
         # Set up the mock return value for empty tools
@@ -1564,7 +1564,7 @@ class TestUnifiedMCPFuzzerClient:
         self.client.safety_system.export_safety_data.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_protocol_type_with_safety_system(self, mock_logging):
         """Test protocol fuzzing with safety system integration."""
         protocol_type = "InitializeRequest"
@@ -1619,7 +1619,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_with_invalid_schema(self, mock_logging):
         """Test fuzzing a tool with invalid schema."""
         tool = {
@@ -1650,7 +1650,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_with_tool_timeout_param(self, mock_logging):
         """Test tool fuzzing with tool_timeout parameter."""
         tool = {
@@ -1683,7 +1683,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_both_phases_single_tool(self, mock_logging):
         """Test fuzz_tool_both_phases for a single tool."""
         tool = {
@@ -1748,7 +1748,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_protocol_type_with_blocked_message(self, mock_logging):
         """Test protocol fuzzing with a message blocked by the safety system."""
         protocol_type = "InitializeRequest"
@@ -1793,7 +1793,7 @@ class TestUnifiedMCPFuzzerClient:
         self.mock_transport.send_request.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_protocol_type_with_fuzzer_error(self, mock_logging):
         """Test protocol fuzzing with an error in the protocol fuzzer."""
         protocol_type = "InitializeRequest"
@@ -1823,7 +1823,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_all_tools_with_tool_timeout(self, mock_logging):
         """Test fuzz_all_tools with tool_timeout parameter."""
         # Set up expected results for tool_client.fuzz_all_tools with a timeout
@@ -1853,7 +1853,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_all_protocol_types_with_empty_result(self, mock_logging):
         """Test fuzz_all_protocol_types when no protocol types are returned."""
         # Set up protocol_client.fuzz_all_protocol_types to return empty results
@@ -1871,7 +1871,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_main_function_error_handling(self, mock_logging):
         """Test error handling in the main function."""
         # Create a simplified test for main function error handling
@@ -1885,7 +1885,7 @@ class TestUnifiedMCPFuzzerClient:
             await test_main()
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_protocol_notification_type(self, mock_logging):
         """Test fuzzing a protocol notification type."""
         protocol_type = "ProgressNotification"
@@ -1930,7 +1930,7 @@ class TestUnifiedMCPFuzzerClient:
         self.mock_transport.close.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_all_tools_both_phases_with_errors(self, mock_logging):
         """Test fuzz_all_tools_both_phases with errors for some tools."""
         # Set up expected results for tool_client.fuzz_all_tools_both_phases with an
@@ -2003,7 +2003,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_report_generation_with_safety_data(self, mock_logging):
         """Test report generation with safety data included."""
         # Add some test data to the reporter
@@ -2037,7 +2037,7 @@ class TestUnifiedMCPFuzzerClient:
         assert os.path.exists(report_path)
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_with_rate_limiting(self, mock_logging):
         """Test fuzzing a tool with rate limiting response."""
         tool = {
@@ -2073,7 +2073,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_safety_system_statistics(self, mock_logging):
         """Test safety system statistics collection during fuzzing."""
         # Mock tools
@@ -2108,7 +2108,7 @@ class TestUnifiedMCPFuzzerClient:
         mock_safety_system.get_statistics.assert_called()
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_fuzz_tool_with_unexpected_response(self, mock_logging):
         """Test fuzzing a tool with unexpected response format."""
         tool = {
@@ -2139,7 +2139,7 @@ class TestUnifiedMCPFuzzerClient:
         )
 
     @pytest.mark.asyncio
-    @patch("mcp_fuzzer.client.base.logging")
+    @patch("mcp_fuzzer.client.fuzzer_client.logging")
     async def test_print_comprehensive_safety_report(self, mock_logging):
         """Test comprehensive safety report generation."""
         # Set up a mock safety system

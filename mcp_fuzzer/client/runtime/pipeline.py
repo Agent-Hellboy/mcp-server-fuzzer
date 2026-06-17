@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol
 
-from ..base import MCPFuzzerClient
+from ..fuzzer_client import MCPFuzzerClient
 
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 """Public client exports."""
 
-from .base import MCPFuzzerClient
+from .fuzzer_client import MCPFuzzerClient
 from .constants import (
     CONTENT_TYPE_HEADER,
     DEFAULT_FORCE_KILL_TIMEOUT,

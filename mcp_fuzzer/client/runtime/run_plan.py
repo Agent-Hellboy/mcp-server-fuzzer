@@ -9,7 +9,7 @@ import os
 from typing import Any, Protocol
 
 from ...reports import FuzzerReporter
-from ..base import MCPFuzzerClient
+from ..fuzzer_client import MCPFuzzerClient
 from .pipeline import ClientExecutionPipeline
 
 

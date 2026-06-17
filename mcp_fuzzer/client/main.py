@@ -14,7 +14,7 @@ from ..exceptions import MCPError
 from ..corpus import build_corpus_root, build_target_id, default_fs_root
 from ..orchestrator import run_session
 from .settings import ClientSettings
-from .base import MCPFuzzerClient
+from .fuzzer_client import MCPFuzzerClient
 from .transport import TransportBuildRequest, build_driver_with_auth
 from .runtime import RunContext
 
