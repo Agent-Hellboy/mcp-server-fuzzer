@@ -746,6 +746,20 @@ async def test_do_initialize_ignores_notification_error(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_do_initialize_uses_seeded_protocol_version(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    driver.protocol_version = "2025-06-18"
+    send_raw = AsyncMock()
+    monkeypatch.setattr(driver, "send_raw", send_raw)
+    monkeypatch.setattr(driver, "send_notification", AsyncMock())
+
+    await driver._do_initialize()
+
+    init_payload = send_raw.call_args.args[0]
+    assert init_payload["params"]["protocolVersion"] == "2025-06-18"
+
+
+@pytest.mark.asyncio
 async def test_yield_streamed_lines_parses_data(monkeypatch):
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
     response = FakeResponse(
