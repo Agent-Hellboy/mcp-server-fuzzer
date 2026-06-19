@@ -6,9 +6,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_fuzzer.cli.runtime.async_runner import AsyncRunner, execute_inner_client
+from mcp_fuzzer.cli.runtime.async_runner import (
+    AsyncRunner,
+    _coerce_exit_code,
+    execute_inner_client,
+)
 from mcp_fuzzer.cli.runtime.retry import run_with_retry_on_interrupt
+from mcp_fuzzer.cli.exit_codes import GENERAL_ERROR, SUCCESS
 from mcp_fuzzer.client.safety import SafetyController
+
+
+def test_coerce_exit_code_rejects_non_int_results():
+    assert _coerce_exit_code(2) == 2
+    assert _coerce_exit_code(None) == SUCCESS
+    assert _coerce_exit_code("2") == GENERAL_ERROR
 
 
 def _make_aiomonitor():

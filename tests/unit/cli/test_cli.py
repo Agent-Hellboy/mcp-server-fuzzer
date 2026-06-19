@@ -459,6 +459,26 @@ def test_run_with_retry_on_interrupt_retry_path():
         mock_stop.assert_called_once()
 
 
+def test_run_with_retry_on_interrupt_second_interrupt_returns_130():
+    args = MagicMock(enable_safety_system=False, retry_with_safety_on_interrupt=True)
+    calls = {"n": 0}
+
+    def fake_execute(_args, _main, _argv, **kwargs):
+        calls["n"] += 1
+        raise KeyboardInterrupt()
+
+    with (
+        patch(
+            "mcp_fuzzer.cli.runtime.retry.execute_inner_client",
+            side_effect=fake_execute,
+        ),
+        patch("mcp_fuzzer.cli.runtime.retry.start_system_blocking"),
+        patch("mcp_fuzzer.cli.runtime.retry.stop_system_blocking"),
+    ):
+        assert run_with_retry_on_interrupt(args, lambda: None, ["prog"]) == 130
+        assert calls["n"] == 2
+
+
 def test_validate_transport_errors():
     validator = ValidationManager()
     args = argparse.Namespace(protocol="http", endpoint="http://x", timeout=1)
@@ -617,10 +637,7 @@ def test_run_cli_keyboard_interrupt(monkeypatch):
     ):
         with pytest.raises(SystemExit) as exc:
             run_cli()
-        assert exc.value.code == 0
-
-
-def test_run_cli_validate_config_exits(monkeypatch):
+        assert exc.value.code == 130
     args = _base_args(validate_config="file.yml")
     with (
         patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),

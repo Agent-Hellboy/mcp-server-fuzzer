@@ -14,7 +14,7 @@ from typing import Any, Awaitable, Callable, TypeVar
 from rich.console import Console
 
 from ...client.safety import SafetyController
-from ..exit_codes import INTERRUPTED, SUCCESS
+from ..exit_codes import GENERAL_ERROR, INTERRUPTED, SUCCESS
 
 _T = TypeVar("_T")
 logger = logging.getLogger(__name__)
@@ -28,8 +28,9 @@ def _coerce_exit_code(result: object | None) -> int:
         logger.warning(
             "Expected coroutine to return int exit code, got %r; using %s",
             result,
-            SUCCESS,
+            GENERAL_ERROR,
         )
+        return GENERAL_ERROR
     return SUCCESS
 
 

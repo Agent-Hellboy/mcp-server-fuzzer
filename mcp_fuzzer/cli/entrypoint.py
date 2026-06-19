@@ -18,6 +18,7 @@ from .validators import ValidationManager
 from ..logging import setup_logging
 from .parser import parse_arguments
 from .startup_info import print_startup_info
+from .exit_codes import INTERRUPTED
 
 
 def _print_mcp_error(error: MCPError) -> None:
@@ -78,7 +79,7 @@ def run_cli() -> None:
     except KeyboardInterrupt:
         console = Console()
         console.print("\n[yellow]Fuzzing interrupted by user[/yellow]")
-        sys.exit(0)
+        sys.exit(INTERRUPTED)
     except MCPError as err:
         _print_mcp_error(err)
         sys.exit(1)

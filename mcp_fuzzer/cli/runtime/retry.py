@@ -41,9 +41,15 @@ def run_with_retry_on_interrupt(
             except Exception:  # pragma: no cover
                 pass
             try:
-                return execute_inner_client(
-                    args, unified_client_main, argv, safety=safety
-                )
+                try:
+                    return execute_inner_client(
+                        args, unified_client_main, argv, safety=safety
+                    )
+                except KeyboardInterrupt:
+                    console.print(
+                        "\n[yellow]Fuzzing interrupted by user[/yellow]"
+                    )
+                    return INTERRUPTED
             finally:
                 if started:
                     stop_system_blocking()
