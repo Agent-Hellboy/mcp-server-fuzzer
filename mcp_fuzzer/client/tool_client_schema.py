@@ -6,6 +6,11 @@ import logging
 from typing import Any
 
 from .. import spec_guard
+from ..diagnostics.tool_discovery import (
+    ToolDiscoveryFailure,
+    ToolDiscoveryReport,
+    classify_tool_discovery_error,
+)
 
 
 class ToolClientSchemaMixin:
@@ -20,6 +25,11 @@ class ToolClientSchemaMixin:
         try:
             tools = await self._rpc.get_tools()
             if not tools:
+                if self._rpc.last_tool_discovery.failure is ToolDiscoveryFailure.NONE:
+                    self._rpc.last_tool_discovery = ToolDiscoveryReport.failed(
+                        ToolDiscoveryFailure.EMPTY_TOOLS_LIST,
+                        "Server returned an empty list of tools.",
+                    )
                 self._logger.warning("Server returned an empty list of tools.")
                 return []
             self._logger.info("Found %d tools to fuzz", len(tools))
@@ -33,7 +43,12 @@ class ToolClientSchemaMixin:
             return tools
         except Exception as e:
             self._logger.error("Failed to get tools from server: %s", e)
+            self._rpc.last_tool_discovery = classify_tool_discovery_error(e)
             return []
+
+    @property
+    def tool_discovery(self) -> ToolDiscoveryReport:
+        return self._rpc.last_tool_discovery
 
     def _attach_schema_checks(self, tool_name: str, entry: dict[str, Any]) -> None:
         if tool_name not in self._tool_schema_checks:

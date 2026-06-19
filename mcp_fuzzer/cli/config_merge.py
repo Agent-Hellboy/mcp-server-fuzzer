@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from typing import Any
 
 from ..exceptions import ConfigFileError
@@ -90,6 +91,24 @@ def _transfer_config_to_args(args: argparse.Namespace) -> None:
             setattr(args, args_key, config_value)
 
 
+def _apply_container_ci_defaults(args: argparse.Namespace) -> None:
+    """Enable strict CI semantics in Docker without integrators adding flags."""
+    if not (os.getenv("MCP_FUZZER_CI") or os.getenv("MCP_FUZZER_IN_DOCKER")):
+        return
+    mode = getattr(args, "mode", "tools")
+    if mode not in ("tools", "all"):
+        return
+    if getattr(args, "allow_empty_tools", False):
+        return
+    if getattr(args, "fail_if_no_tools", False):
+        return
+    args.fail_if_no_tools = True
+    logging.info(
+        "Enabled --fail-if-no-tools automatically "
+        "(MCP_FUZZER_CI / MCP_FUZZER_IN_DOCKER)"
+    )
+
+
 def build_cli_config(args: argparse.Namespace) -> CliConfig:
     """Merge CLI args, config files, and resolved auth."""
     if args.config:
@@ -109,6 +128,7 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
             )
 
     _transfer_config_to_args(args)
+    _apply_container_ci_defaults(args)
     auth_manager = resolve_auth_port(args)
 
     merged: dict[str, Any] = {
@@ -171,6 +191,7 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         "output_session_id": getattr(args, "output_session_id", None),
         "enable_aiomonitor": getattr(args, "enable_aiomonitor", False),
         "fail_if_no_tools": getattr(args, "fail_if_no_tools", False),
+        "allow_empty_tools": getattr(args, "allow_empty_tools", False),
         "auth_audit": getattr(args, "auth_audit", False),
         "auth_audit_intrusive": getattr(args, "auth_audit_intrusive", False),
         "security_audit": getattr(args, "security_audit", False),

@@ -77,11 +77,16 @@ async def run_session(
         )
     except Exception as exc:  # pragma: no cover - analysis is best-effort
         logging.warning("Failed to analyze/record findings: %s", exc)
+    tool_client = getattr(context.client, "tool_client", None)
+    tool_discovery = (
+        getattr(tool_client, "tool_discovery", None) if tool_client is not None else None
+    )
     return SessionResult(
         tool_results=tool_results,
         protocol_results=protocol_results,
         findings=findings,
         findings_summary=findings_summary,
+        tool_discovery=tool_discovery,
     )
 
 

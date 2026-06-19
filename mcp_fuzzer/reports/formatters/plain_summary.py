@@ -16,7 +16,7 @@ def _tool_outcome_buckets(runs: list[dict[str, Any]]) -> dict[str, int]:
     return {
         "server_rejected": buckets["server_rejected"],
         "accepted_malformed": buckets["accepted_malformed"],
-        "anomaly": buckets["anomaly"] + buckets["exceptions"],
+        "anomaly": buckets["anomaly"],
         "crashed": buckets["crashed"],
     }
 
@@ -50,6 +50,7 @@ def write_stdout_summary(
     protocol_results: dict[str, Any] | None,
     blocked: bool = False,
     findings_summary: dict[str, int] | None = None,
+    tool_discovery: dict[str, Any] | None = None,
     audit_footnotes: list[str] | None = None,
 ) -> None:
     """Write a plain-text fuzzing summary to stdout (always, not only on TTY).
@@ -62,10 +63,13 @@ def write_stdout_summary(
 
     tools_mode = mode in {"tools", "all"}
     if blocked:
-        lines.append(
-            "Status: BLOCKED — no tools available "
-            "(auth required, endpoint unreachable, or no tools exposed)"
-        )
+        reason = "unknown"
+        detail = "auth required, endpoint unreachable, or no tools exposed"
+        if tool_discovery:
+            reason = str(tool_discovery.get("failure", reason))
+            detail = str(tool_discovery.get("detail", detail))
+        lines.append(f"Status: BLOCKED — {reason}")
+        lines.append(f"Detail: {detail}")
     elif tools_mode:
         tool_count = len(tool_results) if isinstance(tool_results, dict) else 0
         lines.append(f"Status: completed — {tool_count} tool(s) fuzzed")

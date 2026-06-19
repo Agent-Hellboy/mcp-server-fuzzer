@@ -21,6 +21,7 @@ def build_run_summary(
     protocol_results: dict[str, Any] | None,
     blocked: bool,
     findings_summary: dict[str, int] | None = None,
+    tool_discovery: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a small JSON summary intended for CI post-run checks."""
     tool_entries: dict[str, Any] = {}
@@ -55,7 +56,7 @@ def build_run_summary(
         }
 
     status = "blocked" if blocked else "completed"
-    return {
+    summary: dict[str, Any] = {
         "mode": mode,
         "status": status,
         "tools": {
@@ -73,6 +74,13 @@ def build_run_summary(
             "by_category": findings_summary or {},
         },
     }
+    if blocked and tool_discovery:
+        summary["blocked_reason"] = tool_discovery.get("failure", "unknown")
+        summary["blocked_detail"] = tool_discovery.get("detail", "")
+        summary["tool_discovery"] = tool_discovery
+    elif tool_discovery:
+        summary["tool_discovery"] = tool_discovery
+    return summary
 
 
 def write_run_summary(output_dir: str | Path, summary: dict[str, Any]) -> Path:

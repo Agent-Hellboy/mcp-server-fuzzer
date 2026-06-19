@@ -76,7 +76,17 @@ def add_audit_arguments(parser: argparse.ArgumentParser) -> None:
             "Exit non-zero (code 2) when no tools could be fuzzed (e.g. the "
             "server returned no tools, auth was required, or the endpoint was "
             "unreachable). Useful in CI/registry sweeps where exit 0 with "
-            "'no tools available' is easy to misread as success."
+            "'no tools available' is easy to misread as success. Enabled "
+            "automatically when MCP_FUZZER_CI or MCP_FUZZER_IN_DOCKER is set."
+        ),
+    )
+    parser.add_argument(
+        "--allow-empty-tools",
+        action="store_true",
+        help=(
+            "Do not auto-enable --fail-if-no-tools in Docker/CI even when no "
+            "tools are discovered. For hub sweeps that may legitimately expose "
+            "zero tools on a fixture."
         ),
     )
     parser.add_argument(

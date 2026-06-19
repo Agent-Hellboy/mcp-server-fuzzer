@@ -69,12 +69,17 @@ class PostRunPresenter:
 
         tr = tool_results if isinstance(tool_results, dict) else None
         pr = protocol_results if isinstance(protocol_results, dict) else None
+        discovery = getattr(result, "tool_discovery", None)
+        discovery_dict = (
+            discovery.to_dict() if hasattr(discovery, "to_dict") else discovery
+        )
         run_summary = build_run_summary(
             mode=mode,
             tool_results=tr,
             protocol_results=pr,
             blocked=no_tools_available,
             findings_summary=findings_summary,
+            tool_discovery=discovery_dict,
         )
         try:
             summary_path = write_run_summary(
@@ -92,6 +97,7 @@ class PostRunPresenter:
                 protocol_results=pr,
                 blocked=no_tools_available,
                 findings_summary=findings_summary,
+                tool_discovery=discovery_dict,
                 audit_footnotes=(
                     audit_summary_footnotes(findings_summary)
                     if findings_summary
@@ -130,9 +136,15 @@ class PostRunPresenter:
                 logging.exception("Export error details:")
 
         if no_tools_available and self._settings.fail_if_no_tools:
+            detail = ""
+            if isinstance(discovery_dict, dict):
+                detail = discovery_dict.get("detail") or discovery_dict.get(
+                    "failure", ""
+                )
             logging.warning(
                 "No tools were available to fuzz; exiting non-zero due to "
-                "--fail-if-no-tools"
+                "--fail-if-no-tools%s",
+                f" ({detail})" if detail else "",
             )
             return 2
 

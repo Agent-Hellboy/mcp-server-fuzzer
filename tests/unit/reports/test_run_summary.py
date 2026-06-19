@@ -41,6 +41,25 @@ def test_build_run_summary_counts_tools_protocols_and_findings():
     assert summary["findings"]["total"] == 1
 
 
+def test_build_run_summary_includes_blocked_diagnostics():
+    summary = build_run_summary(
+        mode="tools",
+        blocked=True,
+        tool_results={},
+        protocol_results={},
+        findings_summary={},
+        tool_discovery={
+            "failure": "connection_failed",
+            "detail": "Connection failed while contacting server",
+            "tool_count": 0,
+        },
+    )
+
+    assert summary["status"] == "blocked"
+    assert summary["blocked_reason"] == "connection_failed"
+    assert "Connection failed" in summary["blocked_detail"]
+
+
 def test_write_run_summary_creates_root_json(tmp_path):
     path = write_run_summary(tmp_path, {"status": "blocked"})
 

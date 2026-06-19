@@ -187,6 +187,22 @@ class TestStdioDriver:
             mock_update.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_receive_message_skips_non_json_stdout_lines(self):
+        """Log lines on stdout must not break JSON-RPC reads."""
+        self.transport._initialized = True
+        self.transport.stdout = AsyncMock()
+        self.transport.manager.read_with_cap = AsyncMock(
+            side_effect=[
+                b"Started stdio transport\n",
+                b'{"jsonrpc": "2.0", "id": "1", "result": {}}\n',
+            ]
+        )
+        with patch.object(self.transport, "_update_activity"):
+            result = await self.transport._receive_message()
+        assert result == {"jsonrpc": "2.0", "id": "1", "result": {}}
+        assert self.transport.manager.read_with_cap.await_count == 2
+
+    @pytest.mark.asyncio
     async def test_receive_message_empty_response(self):
         """Test _receive_message when empty response is received."""
         self.transport._initialized = True

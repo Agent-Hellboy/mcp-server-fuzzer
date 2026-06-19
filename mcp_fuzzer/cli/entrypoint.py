@@ -49,6 +49,15 @@ def run_cli() -> None:
             or getattr(args, "validate_config", None) is not None
         )
         if not is_utility_command:
+            from .preflight import verify_output_paths
+
+            write_failure = verify_output_paths(
+                config.get("output_dir") or "reports",
+                config.get("fs_root"),
+            )
+            if write_failure is not None:
+                raise ArgumentValidationError(write_failure.detail)
+
             print_startup_info(args, config)
 
         validator.validate_transport(args)
