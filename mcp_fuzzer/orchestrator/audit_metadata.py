@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..reports.evidence_fields import PAPER_ARXIV_ID
+from ..evidence_fields import PAPER_ARXIV_ID
 
 
 def build_findings_audit_sections(findings: list[Any]) -> dict[str, Any]:

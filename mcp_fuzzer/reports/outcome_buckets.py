@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import evidence_fields as ev
+from .. import evidence_fields as ev
 
 # Mirror ``client.outcomes.FuzzOutcome`` string values without importing client.
 SERVER_REJECTED = "server_rejected"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from mcp_fuzzer.diagnostics.classify import _dedupe_findings, _finding_dedupe_key
 from mcp_fuzzer.diagnostics.model import Finding
-from mcp_fuzzer.reports.evidence_fields import COUNT, INPUT, RESULT, RUNS
+from mcp_fuzzer.evidence_fields import COUNT, INPUT, RESULT, RUNS
 
 
 class _Weird:

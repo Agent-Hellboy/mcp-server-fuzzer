@@ -12,7 +12,7 @@ import re
 import statistics
 from typing import Any, Iterable
 
-from ..reports import evidence_fields as ev
+from .. import evidence_fields as ev
 from ..types import extract_tool_runs
 from .model import SEVERITY_ORDER, Finding
 
