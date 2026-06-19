@@ -33,6 +33,14 @@ else:
 from ...safety_system.policy import sanitize_subprocess_env
 from ...config import DEFAULT_PROTOCOL_VERSION, PROCESS_WAIT_TIMEOUT
 from ..controller.process_supervisor import ProcessSupervisor
+from ..methods import (
+    INITIALIZE,
+    NOTIFY_INITIALIZED,
+    is_initialize_method,
+    is_initialized_notification,
+    payload_method,
+    requires_mcp_initialization,
+)
 
 # Signals that indicate the server crashed itself (not our own SIGKILL/SIGTERM
 # used for cleanup/restart between runs).
@@ -388,7 +396,7 @@ class StdioDriver(TransportDriver):
         self, method: str, params: dict[str, Any | None] | None = None
     ) -> Any:
         """Send a request and wait for response."""
-        if method != "initialize" and not self._mcp_initialized:
+        if not is_initialize_method(method) and not self._mcp_initialized:
             await self._do_initialize()
 
         request_id = str(uuid.uuid4())
@@ -432,7 +440,7 @@ class StdioDriver(TransportDriver):
                             },
                         )
                     result = response.get("result", response)
-                    if method == "initialize":
+                    if is_initialize_method(method):
                         maybe_update_spec_version_from_result(result)
                         self._mcp_initialized = True
                     return result if isinstance(result, dict) else {"result": result}
@@ -445,11 +453,8 @@ class StdioDriver(TransportDriver):
 
     async def send_raw(self, payload: dict[str, Any]) -> Any:
         """Send raw payload and wait for response."""
-        if (
-            payload.get("method") != "initialize"
-            and payload.get("method") != "notifications/initialized"
-            and not self._mcp_initialized
-        ):
+        method = payload_method(payload)
+        if requires_mcp_initialization(method) and not self._mcp_initialized:
             await self._do_initialize()
 
         async with self._get_io_lock():
@@ -479,7 +484,7 @@ class StdioDriver(TransportDriver):
                     )
 
                 result = response.get("result", response)
-                if payload.get("method") == "initialize":
+                if is_initialize_method(method):
                     maybe_update_spec_version_from_result(result)
                     self._mcp_initialized = True
                 return result if isinstance(result, dict) else {"result": result}
@@ -502,7 +507,7 @@ class StdioDriver(TransportDriver):
         # notification cannot interleave bytes on stdin.
         async with self._get_io_lock():
             await self._send_message(message)
-        if method == "notifications/initialized":
+        if is_initialized_notification(method):
             self._mcp_initialized = True
 
     async def _do_initialize(self) -> None:
@@ -511,7 +516,7 @@ class StdioDriver(TransportDriver):
             return
 
         await self.send_request(
-            "initialize",
+            INITIALIZE,
             {
                 "protocolVersion": DEFAULT_PROTOCOL_VERSION,
                 "capabilities": {
@@ -522,7 +527,7 @@ class StdioDriver(TransportDriver):
                 "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},
             },
         )
-        await self.send_notification("notifications/initialized", {})
+        await self.send_notification(NOTIFY_INITIALIZED, {})
 
     async def _stream_request(self, payload: dict[str, Any]):
         """Stream responses from the subprocess for a single JSON-RPC request."""

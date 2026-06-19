@@ -108,10 +108,7 @@ LOGGING_SPEC = {
 
 SSE_SPEC = {
     "spec_id": "MCP-SSE",
-    "spec_url": (
-        "https://modelcontextprotocol.io/specification/{version}/basic/transports#sse-"
-        "transport"
-    ),
+    "spec_url": "https://modelcontextprotocol.io/specification/{version}/basic/transports",
 }
 
 PROTOCOL_SPEC = {

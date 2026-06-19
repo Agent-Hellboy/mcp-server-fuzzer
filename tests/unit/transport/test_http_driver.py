@@ -66,6 +66,31 @@ async def test_send_request_success(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_send_request_sends_negotiated_protocol_version_after_initialize(
+    monkeypatch,
+):
+    init_response = FakeResponse({"result": {"protocolVersion": "2025-06-18"}})
+    ping_response = FakeResponse({"result": {"ok": True}})
+    client = FakeClient([init_response, ping_response])
+    driver = HttpDriver(
+        "http://localhost",
+        safety_enabled=False,
+        process_manager=MagicMock(),
+    )
+    monkeypatch.setattr(driver, "_create_http_client", lambda timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda resp: None)
+
+    await driver.send_request("initialize", {})
+    result = await driver.send_request("ping", {})
+
+    init_headers = client.post_calls[0][2]
+    ping_headers = client.post_calls[1][2]
+    assert result == {"ok": True}
+    assert "mcp-protocol-version" not in init_headers
+    assert ping_headers["mcp-protocol-version"] == "2025-06-18"
+
+
+@pytest.mark.asyncio
 async def test_send_raw_with_redirect(monkeypatch):
     first = FakeResponse(
         {"result": {"ok": True}},

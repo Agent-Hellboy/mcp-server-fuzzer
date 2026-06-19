@@ -26,6 +26,8 @@ from ...config import (
 from ...safety_system import policy as safety_policy
 from ...spec_guard.spec_version import maybe_update_spec_version_from_result
 from ...types import HTTP_REDIRECT_STATUS_CODES
+from ..methods import is_initialize_method, payload_method
+from ..protocol import ProtocolNegotiationState, negotiated_headers
 
 
 class HttpDriver(
@@ -75,6 +77,7 @@ class HttpDriver(
             "Accept": DEFAULT_HTTP_ACCEPT,
             "Content-Type": JSON_CONTENT_TYPE,
         }
+        self._negotiation = ProtocolNegotiationState()
         self.auth_headers = {
             k: v for k, v in (auth_headers or {}).items() if v is not None
         }
@@ -115,6 +118,29 @@ class HttpDriver(
                 }
             )
         return safe_headers
+
+    def _prepare_headers(self, *, method: str | None = None) -> dict[str, str]:
+        """Prepare HTTP headers for MCP requests.
+
+        The MCP protocol version header is sent after initialization, using the
+        negotiated version. It is intentionally omitted on initialize itself.
+        """
+        return negotiated_headers(
+            self.headers, method=method, state=self._negotiation
+        )
+
+    @property
+    def protocol_version(self) -> str | None:
+        return self._negotiation.protocol_version
+
+    @protocol_version.setter
+    def protocol_version(self, value: str | None) -> None:
+        self._negotiation.protocol_version = value
+
+    def _maybe_extract_protocol_version_from_result(self, result: Any) -> None:
+        updated = maybe_update_spec_version_from_result(result)
+        if updated:
+            self._negotiation.update(updated)
 
     async def _update_activity(self):
         """Update last activity timestamp."""
@@ -163,7 +189,9 @@ class HttpDriver(
         # Use shared network functionality
         if self.safety_enabled:
             self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(self.headers)
+        safe_headers = self._prepare_headers_with_auth(
+            self._prepare_headers(method=method)
+        )
 
         async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -178,8 +206,8 @@ class HttpDriver(
             # Use shared response handling
             self._handle_http_response_error(response)
             result = self._parse_http_response_json(response)
-            if method == "initialize":
-                maybe_update_spec_version_from_result(result)
+            if is_initialize_method(method):
+                self._maybe_extract_protocol_version_from_result(result)
             return result
 
     async def send_raw(self, payload: dict[str, Any]) -> Any:
@@ -211,7 +239,10 @@ class HttpDriver(
         # Use shared network functionality
         if self.safety_enabled:
             self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(self.headers)
+        method = payload_method(payload)
+        safe_headers = self._prepare_headers_with_auth(
+            self._prepare_headers(method=method)
+        )
 
         async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -226,8 +257,8 @@ class HttpDriver(
             # Use shared response handling
             self._handle_http_response_error(response)
             result = self._parse_http_response_json(response)
-            if payload.get("method") == "initialize":
-                maybe_update_spec_version_from_result(result)
+            if is_initialize_method(method):
+                self._maybe_extract_protocol_version_from_result(result)
             return result
 
     async def send_notification(
@@ -255,7 +286,9 @@ class HttpDriver(
         # Use shared network functionality
         if self.safety_enabled:
             self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(self.headers)
+        safe_headers = self._prepare_headers_with_auth(
+            self._prepare_headers(method=method)
+        )
 
         async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -296,7 +329,9 @@ class HttpDriver(
         # Use shared network functionality
         if self.safety_enabled:
             self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(self.headers)
+        safe_headers = self._prepare_headers_with_auth(
+            self._prepare_headers(method=payload_method(payload))
+        )
 
         async with self._create_http_client(self.timeout) as client:
             # First request

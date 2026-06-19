@@ -18,6 +18,7 @@ from ..interfaces.server_requests import (
 )
 from ...exceptions import TransportError
 from ...spec_guard.spec_version import maybe_update_spec_version_from_result
+from ..methods import is_initialize_method, payload_method
 
 
 class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
@@ -154,7 +155,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                     if not line.strip():
                         result = await flush_once()
                         if result is not None:
-                            if payload.get("method") == "initialize":
+                            if is_initialize_method(payload_method(payload)):
                                 maybe_update_spec_version_from_result(result)
                             return result
                         continue
@@ -163,7 +164,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                 # Flush remaining buffer
                 result = await flush_once()
                 if result is not None:
-                    if payload.get("method") == "initialize":
+                    if is_initialize_method(payload_method(payload)):
                         maybe_update_spec_version_from_result(result)
                     return result
 
@@ -173,7 +174,7 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                     try:
                         data = json.loads(raw_text)
                         result = self._extract_result_from_response(data)
-                        if payload.get("method") == "initialize":
+                        if is_initialize_method(payload_method(payload)):
                             maybe_update_spec_version_from_result(result)
                         return result
                     except json.JSONDecodeError:

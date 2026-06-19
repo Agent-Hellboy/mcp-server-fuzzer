@@ -5,9 +5,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+from typing import Callable
 
 from ..exceptions import TransportRegistrationError
 from ..transport.catalog import build_driver as base_build_driver
+from ..transport.protocol import current_protocol_version, supports_streamable_http
 from ..transport.retrying import RetryingTransport, RetryPolicy
 from ..types import AuthManagerProtocol
 
@@ -31,25 +33,55 @@ class TransportBuildRequest:
     safety_enabled: bool = True
 
 
+def _resolve_protocol_for_spec(protocol: str) -> str:
+    normalized = protocol.strip().lower()
+    if normalized not in ("http", "https"):
+        return normalized
+    if supports_streamable_http(current_protocol_version()):
+        return "streamablehttp"
+    return normalized
+
+
+def _seed_streamable_protocol_version(transport, protocol: str) -> None:
+    if protocol == "streamablehttp" and hasattr(transport, "protocol_version"):
+        transport.protocol_version = current_protocol_version()
+
+
+def _auth_header_provider(
+    auth_manager: AuthManagerProtocol | None,
+) -> Callable[[], dict[str, str]] | None:
+    if auth_manager is None:
+        return None
+
+    def provider() -> dict[str, str]:
+        auth_headers = auth_manager.get_default_auth_headers()
+        if not auth_headers:
+            auth_headers = auth_manager.get_auth_headers_for_tool(
+                ""
+            )  # pragma: no cover
+        return auth_headers
+
+    logger.debug("Auth manager found for transport")
+    return provider
+
+
 def build_driver_with_auth(request: TransportBuildRequest):
     """Create a transport with authentication headers when available."""
-    resolved = request
+    resolved_protocol = _resolve_protocol_for_spec(request.protocol)
+    resolved = TransportBuildRequest(
+        protocol=resolved_protocol,
+        endpoint=request.endpoint,
+        timeout=request.timeout,
+        transport_retries=request.transport_retries,
+        transport_retry_delay=request.transport_retry_delay,
+        transport_retry_backoff=request.transport_retry_backoff,
+        transport_retry_max_delay=request.transport_retry_max_delay,
+        transport_retry_jitter=request.transport_retry_jitter,
+        auth_manager=request.auth_manager,
+        safety_enabled=request.safety_enabled,
+    )
     try:
-        auth_header_provider = None
-        auth_manager = resolved.auth_manager
-
-        if auth_manager:
-
-            def auth_header_provider() -> dict[str, str]:
-                auth_headers = auth_manager.get_default_auth_headers()
-                if not auth_headers:
-                    auth_headers = auth_manager.get_auth_headers_for_tool(
-                        ""
-                    )  # pragma: no cover
-                return auth_headers
-
-            logger.debug("Auth manager found for transport")
-
+        auth_header_provider = _auth_header_provider(resolved.auth_manager)
         factory_kwargs = {"timeout": resolved.timeout}
         safety_enabled = resolved.safety_enabled
 
@@ -71,6 +103,7 @@ def build_driver_with_auth(request: TransportBuildRequest):
             resolved.endpoint,
             **factory_kwargs,
         )
+        _seed_streamable_protocol_version(transport, resolved.protocol)
         retry_attempts = resolved.transport_retries
         try:
             retry_attempts = int(retry_attempts)
@@ -98,4 +131,8 @@ def build_driver_with_auth(request: TransportBuildRequest):
         ) from transport_error
 
 
-__all__ = ["AUTH_PROTOCOLS", "TransportBuildRequest", "build_driver_with_auth"]
+__all__ = [
+    "AUTH_PROTOCOLS",
+    "TransportBuildRequest",
+    "build_driver_with_auth",
+]

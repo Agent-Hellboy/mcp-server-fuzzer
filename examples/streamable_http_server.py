@@ -21,6 +21,11 @@ import mcp.types as types
 import anyio
 import uvicorn
 
+MIN_INTERVAL_SECONDS = 0.0
+MAX_INTERVAL_SECONDS = 1.0
+MIN_EVENT_COUNT = 1
+MAX_EVENT_COUNT = 10
+
 
 def build_app(json_response: bool = False) -> Starlette:
     app = Server("mcp-fuzzer-streamablehttp-example")
@@ -34,8 +39,18 @@ def build_app(json_response: bool = False) -> Starlette:
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "interval": {"type": "number", "default": 0.25},
-                        "count": {"type": "integer", "default": 5},
+                        "interval": {
+                            "type": "number",
+                            "default": 0.25,
+                            "minimum": MIN_INTERVAL_SECONDS,
+                            "maximum": MAX_INTERVAL_SECONDS,
+                        },
+                        "count": {
+                            "type": "integer",
+                            "default": 5,
+                            "minimum": MIN_EVENT_COUNT,
+                            "maximum": MAX_EVENT_COUNT,
+                        },
                         "caller": {"type": "string", "default": "fuzzer"},
                     },
                 },
@@ -45,8 +60,14 @@ def build_app(json_response: bool = False) -> Starlette:
     @app.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         ctx = app.request_context
-        interval = float(arguments.get("interval", 0.25))
-        count = int(arguments.get("count", 5))
+        interval = max(
+            MIN_INTERVAL_SECONDS,
+            min(MAX_INTERVAL_SECONDS, float(arguments.get("interval", 0.25))),
+        )
+        count = max(
+            MIN_EVENT_COUNT,
+            min(MAX_EVENT_COUNT, int(arguments.get("count", 5))),
+        )
         caller = str(arguments.get("caller", "fuzzer"))
 
         for i in range(count):

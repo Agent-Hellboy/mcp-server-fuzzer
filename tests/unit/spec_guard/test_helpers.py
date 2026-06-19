@@ -47,3 +47,14 @@ def test_spec_variant_preserves_experimental():
     assert variant["spec_id"] == "S-2"
     assert variant["spec_url"].startswith("https://spec/")
     assert variant["experimental"] is False
+
+
+def test_sse_spec_uses_active_version_transport_page(monkeypatch):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
+
+    record = helpers.warn("sse-no-data", "notice", helpers.SSE_SPEC)
+
+    assert (
+        record["spec_url"]
+        == "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports"
+    )
