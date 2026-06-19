@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..types import extract_tool_runs
+from ..types import ExtractedToolRuns, extract_tool_runs
 from .formatters.common import (
     result_has_failure,
     summarize_tool_outcomes,
@@ -26,7 +26,8 @@ def build_run_summary(
     tool_entries: dict[str, Any] = {}
     total_tool_runs = 0
     for tool_name, entry in (tool_results or {}).items():
-        runs, _ = extract_tool_runs(entry)
+        extracted: ExtractedToolRuns = extract_tool_runs(entry)
+        runs = extracted.runs
         stats = summarize_tool_runs(runs)
         buckets = summarize_tool_outcomes(runs)
         total_tool_runs += int(stats["total_runs"])

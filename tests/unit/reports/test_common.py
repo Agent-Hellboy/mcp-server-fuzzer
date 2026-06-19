@@ -135,6 +135,8 @@ def test_summarize_tool_outcomes_exposes_diagnostic_buckets():
             {"outcome": "server_rejected"},
             {"outcome": "accepted_malformed"},
             {"outcome": "transport_error"},
+            {"outcome": "mutation_failed", "error": "tool_mutation_failed"},
+            {"outcome": "oversized_response", "error": "oversized_response"},
             {"outcome": "crashed"},
             {"exception": "boom"},
             {"error": "boom"},
@@ -147,7 +149,7 @@ def test_summarize_tool_outcomes_exposes_diagnostic_buckets():
     assert outcomes == {
         "server_rejected": 1,
         "accepted_malformed": 1,
-        "anomaly": 4,
+        "anomaly": 6,
         "crashed": 1,
         "exceptions": 1,
         "safety_blocked": 1,

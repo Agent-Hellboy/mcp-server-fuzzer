@@ -4,6 +4,17 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Literal, Protocol
 
+from ..evidence_fields import (
+    ACCEPTED_MALFORMED,
+    ERROR,
+    EXCEPTION,
+    OUTCOME,
+    SAFETY_BLOCKED,
+    SERVER_ERROR,
+    SUCCESS,
+)
+from ..outcome_buckets import summarize_tool_outcomes
+
 
 class SupportsToDict(Protocol):
     def to_dict(self) -> dict[str, Any]: ...
@@ -36,9 +47,9 @@ def tool_run_has_exception(result: dict[str, Any] | None) -> bool:
     """Return True when a tool result has a non-safety exception."""
     if not isinstance(result, dict):
         return False
-    if result.get("safety_blocked", False):
+    if result.get(SAFETY_BLOCKED, False):
         return False
-    return bool(result.get("exception"))
+    return bool(result.get(EXCEPTION))
 
 
 def tool_run_has_failure(result: dict[str, Any] | None) -> bool:
@@ -53,29 +64,34 @@ def tool_run_has_failure(result: dict[str, Any] | None) -> bool:
     """
     if not isinstance(result, dict):
         return True
-    outcome = result.get("outcome")
+    outcome = result.get(OUTCOME)
     if outcome == "server_rejected":
         return False
-    if outcome == "accepted_malformed" or result.get("accepted_malformed"):
+    if outcome == "accepted_malformed" or result.get(ACCEPTED_MALFORMED):
         return True
-    if result.get("safety_blocked", False):
+    if result.get(SAFETY_BLOCKED, False):
         return True
     return bool(
         tool_run_has_exception(result)
-        or not result.get("success", True)
-        or result.get("error")
-        or result.get("server_error")
+        or not result.get(SUCCESS, True)
+        or result.get(ERROR)
+        or result.get(SERVER_ERROR)
     )
 
 
 def summarize_tool_runs(runs: list[dict[str, Any]]) -> dict[str, int | float]:
-    """Return non-overlapping summary counters for tool run reporting."""
+    """Return non-overlapping summary counters for tool run reporting.
+
+    ``success_rate`` is the processing-success rate: runs the fuzzer completed
+    without transport/safety/accepted-malformed failures. It does not measure
+    whether the upstream server accepted attack payloads.
+    """
     total_runs = len(runs)
     exceptions = sum(1 for run in runs if tool_run_has_exception(run))
     safety_blocked = sum(
         1
         for run in runs
-        if isinstance(run, dict) and run.get("safety_blocked", False)
+        if isinstance(run, dict) and run.get(SAFETY_BLOCKED, False)
     )
     failures = sum(1 for run in runs if tool_run_has_failure(run))
     successful = max(total_runs - failures, 0)
@@ -90,45 +106,6 @@ def summarize_tool_runs(runs: list[dict[str, Any]]) -> dict[str, int | float]:
     }
 
 
-def summarize_tool_outcomes(runs: list[dict[str, Any]]) -> dict[str, int]:
-    """Group tool runs by observable fuzzer outcome.
-
-    These buckets intentionally avoid interpreting the upstream tool's business
-    result. They only say how the MCP call behaved from the fuzzer's point of
-    view.
-    """
-    buckets = {
-        "server_rejected": 0,
-        "accepted_malformed": 0,
-        "anomaly": 0,
-        "crashed": 0,
-        "exceptions": 0,
-        "safety_blocked": 0,
-    }
-    for run in runs:
-        if not isinstance(run, dict):
-            buckets["anomaly"] += 1
-            continue
-        outcome = run.get("outcome")
-        if run.get("safety_blocked", False) or outcome == "safety_blocked":
-            buckets["safety_blocked"] += 1
-        elif outcome == "crashed" or run.get("error") == "server_crashed":
-            buckets["crashed"] += 1
-        elif outcome == "server_rejected":
-            buckets["server_rejected"] += 1
-        elif outcome == "accepted_malformed" or run.get("accepted_malformed"):
-            buckets["accepted_malformed"] += 1
-        elif tool_run_has_exception(run):
-            buckets["exceptions"] += 1
-        elif (
-            run.get("error")
-            or run.get("server_error")
-            or outcome in {"transport_error", "timeout", "phase_failed"}
-        ):
-            buckets["anomaly"] += 1
-    return buckets
-
-
 def calculate_protocol_success_rate(total_runs: int, errors: int) -> float:
     """Calculate success rate for protocol-style results."""
     if total_runs <= 0:
@@ -141,22 +118,22 @@ def result_has_failure(result: dict[str, Any] | None) -> bool:
     """Return True if a protocol result represents an error condition."""
     if not isinstance(result, dict):
         return True
-    outcome = result.get("outcome")
+    outcome = result.get(OUTCOME)
     if outcome == "server_rejected":
         return False
-    if outcome == "accepted_malformed" or result.get("accepted_malformed"):
+    if outcome == "accepted_malformed" or result.get(ACCEPTED_MALFORMED):
         return True
     nested_error = None
     result_payload = result.get("result")
     if isinstance(result_payload, dict):
         response = result_payload.get("response")
         if isinstance(response, dict):
-            nested_error = response.get("error")
+            nested_error = response.get(ERROR)
     return bool(
-        result.get("exception")
-        or not result.get("success", True)
-        or result.get("error")
-        or result.get("server_error")
+        result.get(EXCEPTION)
+        or not result.get(SUCCESS, True)
+        or result.get(ERROR)
+        or result.get(SERVER_ERROR)
         or nested_error
     )
 

@@ -52,6 +52,28 @@ def test_hang_and_oversized_and_accepted_malformed():
     assert {"hang", "oversized_response", "accepted_malformed"} <= cats
 
 
+def test_other_categories_are_not_deduplicated():
+    results = {
+        "t": {
+            "runs": [
+                {
+                    "outcome": "valid_response",
+                    "args": {},
+                    "result": {"response": {"error": {"code": -32603, "m": "x"}}},
+                },
+                {
+                    "outcome": "valid_response",
+                    "args": {},
+                    "result": {"response": {"error": {"code": -32603, "m": "x"}}},
+                },
+            ]
+        }
+    }
+    findings = classify_fuzz_runs(results, None)
+    internal = [f for f in findings if f.category == "internal_error"]
+    assert len(internal) == 2
+
+
 def test_accepted_malformed_deduplicates_and_includes_result():
     results = {
         "t": {

@@ -629,6 +629,14 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 continue
             yield payload
 
+    def _apply_sse_event_metadata(self, event: dict[str, Any]) -> None:
+        event_id = event.get("id")
+        if isinstance(event_id, str) and event_id:
+            self.last_event_id = event_id
+        retry = event.get("retry")
+        if isinstance(retry, int):
+            self.retry_delay_ms = retry
+
     async def _iter_sse_payloads(
         self, response: httpx.Response
     ) -> AsyncIterator[dict[str, Any]]:
@@ -636,12 +644,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         event: dict[str, Any] = {"event": "message", "data": []}
         async for line in response.aiter_lines():
             if line == "":
-                event_id = event.get("id")
-                if isinstance(event_id, str) and event_id:
-                    self.last_event_id = event_id
-                retry = event.get("retry")
-                if isinstance(retry, int):
-                    self.retry_delay_ms = retry
+                self._apply_sse_event_metadata(event)
                 data_text = "\n".join(event.get("data", []))
                 event = {"event": "message", "data": []}
                 if not data_text:
@@ -678,6 +681,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         event: dict[str, Any] = {"event": "message", "data": []}
         for line in text.splitlines():
             if line == "":
+                self._apply_sse_event_metadata(event)
                 data_text = "\n".join(event.get("data", []))
                 event = {"event": "message", "data": []}
                 if not data_text:
@@ -709,6 +713,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         data_text = "\n".join(event.get("data", []))
         if data_text:
+            self._apply_sse_event_metadata(event)
             try:
                 payload = json.loads(data_text)
             except json.JSONDecodeError:

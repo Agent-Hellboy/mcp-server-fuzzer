@@ -12,6 +12,7 @@ import re
 import statistics
 from typing import Any, Iterable
 
+from ..reports import evidence_fields as ev
 from ..types import extract_tool_runs
 from .model import SEVERITY_ORDER, Finding
 
@@ -332,43 +333,57 @@ def classify_fuzz_runs(
                 )
             )
 
-    deduped = _dedupe_findings(findings)
+    accepted_malformed = [
+        finding for finding in findings if finding.category == "accepted_malformed"
+    ]
+    other_findings = [
+        finding for finding in findings if finding.category != "accepted_malformed"
+    ]
+    deduped = _dedupe_findings(accepted_malformed) + other_findings
     deduped.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 9), f.category))
     return deduped
+
+
+def _serialize_dedupe_key(payload: dict[str, Any]) -> str:
+    """Build a stable dedupe key; non-JSON values are stringified explicitly."""
+    return json.dumps(payload, sort_keys=True, default=str)
+
+
+def _finding_dedupe_key(finding: Finding) -> str:
+    evidence = dict(finding.evidence or {})
+    input_value = evidence.pop(ev.INPUT, None)
+    result_value = evidence.pop(ev.RESULT, None)
+    return _serialize_dedupe_key(
+        {
+            "category": finding.category,
+            "kind": finding.kind,
+            "target": finding.target,
+            "detail": finding.detail,
+            ev.INPUT: input_value,
+            ev.RESULT: result_value,
+            "evidence": evidence,
+        }
+    )
+
+
+def _merge_duplicate_finding(existing: Finding, incoming: Finding) -> None:
+    existing_runs = existing.evidence.setdefault(ev.RUNS, [])
+    if existing.run is not None and existing.run not in existing_runs:
+        existing_runs.append(existing.run)
+    if incoming.run is not None and incoming.run not in existing_runs:
+        existing_runs.append(incoming.run)
+    existing.evidence[ev.COUNT] = int(existing.evidence.get(ev.COUNT, 1)) + 1
+    existing.run = None
 
 
 def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
     grouped: dict[str, Finding] = {}
     for finding in findings:
-        evidence = dict(finding.evidence or {})
-        input_value = evidence.pop("input", None)
-        result_value = evidence.pop("result", None)
-        try:
-            key_payload = {
-                "category": finding.category,
-                "kind": finding.kind,
-                "target": finding.target,
-                "detail": finding.detail,
-                "input": input_value,
-                "result": result_value,
-                "evidence": evidence,
-            }
-            key = json.dumps(key_payload, sort_keys=True, default=str)
-        except (TypeError, ValueError):
-            key = repr((finding.category, finding.kind, finding.target, finding.detail))
-
+        key = _finding_dedupe_key(finding)
         if key not in grouped:
             grouped[key] = finding
             continue
-
-        existing = grouped[key]
-        existing_runs = existing.evidence.setdefault("runs", [])
-        if existing.run is not None and existing.run not in existing_runs:
-            existing_runs.append(existing.run)
-        if finding.run is not None and finding.run not in existing_runs:
-            existing_runs.append(finding.run)
-        existing.evidence["count"] = int(existing.evidence.get("count", 1)) + 1
-        existing.run = None
+        _merge_duplicate_finding(grouped[key], finding)
 
     return list(grouped.values())
 

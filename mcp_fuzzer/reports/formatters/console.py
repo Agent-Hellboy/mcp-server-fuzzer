@@ -83,7 +83,7 @@ class ConsoleFormatter:
             total_safety_blocked += int(stats["safety_blocked"])
             total_rejected += outcomes["server_rejected"]
             total_accepted_malformed += outcomes["accepted_malformed"]
-            total_anomalies += outcomes["anomaly"] + outcomes["exceptions"]
+            total_anomalies += outcomes["anomaly"]
             total_crashes += outcomes["crashed"]
             findings = (
                 outcomes["accepted_malformed"]

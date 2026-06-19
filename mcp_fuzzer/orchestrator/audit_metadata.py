@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..reports.evidence_fields import PAPER_ARXIV_ID
+
 
 def build_findings_audit_sections(findings: list[Any]) -> dict[str, Any]:
     """Build optional audit metadata blocks for ``findings.json``."""
@@ -28,9 +30,11 @@ def build_findings_audit_sections(findings: list[Any]) -> dict[str, Any]:
     if server_findings:
         paper_ids = sorted(
             {
-                f.evidence.get("paper_arxiv_id")
-                for f in server_findings
-                if isinstance(f.evidence.get("paper_arxiv_id"), str)
+                paper_id
+                for finding in server_findings
+                if isinstance(
+                    (paper_id := finding.evidence.get(PAPER_ARXIV_ID)), str
+                )
             }
         )
         metadata = (

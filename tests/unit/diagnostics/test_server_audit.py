@@ -92,6 +92,8 @@ def test_insecure_transport_https_clean():
 def test_insecure_transport_local_http_clean():
     assert audit_insecure_transport("http://localhost:8000/mcp") == []
     assert audit_insecure_transport("http://127.0.0.1:8000/mcp") == []
+    assert audit_insecure_transport("http://127.0.0.2:8000/mcp") == []
+    assert audit_insecure_transport("http://[::1]:8000/mcp") == []
     assert audit_insecure_transport("http://host.docker.internal:8000/mcp") == []
 
 
