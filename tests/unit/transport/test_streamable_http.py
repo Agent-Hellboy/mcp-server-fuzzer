@@ -232,3 +232,27 @@ async def test_streamable_http_wraps_connect_errors(monkeypatch):
     assert excinfo.value.context["error_type"] == "ConnectError"
     assert excinfo.value.context["method"] == "custom.call"
     assert excinfo.value.context["attempts"] == 1
+    assert excinfo.value.context["timeout"] == 1
+
+
+@pytest.mark.anyio("asyncio")
+async def test_streamable_http_reports_read_timeout_context(monkeypatch):
+    import httpx
+
+    req = httpx.Request("POST", "http://test/mcp")
+    timeout_exc = httpx.ReadTimeout("slow response", request=req)
+    fake = _FakeAsyncClient([timeout_exc])
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
+
+    transport = StreamHttpDriver("http://test/mcp", timeout=2)
+    transport._initialized = True
+
+    with pytest.raises(TransportError) as excinfo:
+        await transport.send_raw(
+            {"jsonrpc": "2.0", "id": "1", "method": "tools/call", "params": {}}
+        )
+
+    assert str(excinfo.value) == "Request timed out while waiting for server response"
+    assert excinfo.value.context["error_type"] == "ReadTimeout"
+    assert excinfo.value.context["method"] == "tools/call"
+    assert excinfo.value.context["timeout"] == 2

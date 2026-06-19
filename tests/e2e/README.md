@@ -38,6 +38,16 @@ The e2e tests automatically:
 - **Duration**: ~30 seconds
 - **Environment**: Local Python SDK server
 
+### `test_streamable_http_example.sh`
+
+- **Server**: Bundled Streamable HTTP example server
+- **Test Type**: Tool fuzzing through generic `--protocol http`
+- **Expected**: Current MCP spec versions resolve `http` to Streamable HTTP,
+  initialize successfully, discover `start-notification-stream`, and fuzz it
+- **Duration**: ~10 seconds
+- **Environment**: Local Python SDK server; skips when optional `mcp`,
+  `uvicorn`, or `starlette` dependencies are missing
+
 ## Usage
 
 ### Run Individual Tests
@@ -51,6 +61,9 @@ The e2e tests automatically:
 
 # Test authenticated tool fuzzing
 ./tests/e2e/test_auth_server.sh
+
+# Test generic HTTP resolving to Streamable HTTP
+./tests/e2e/test_streamable_http_example.sh
 ```
 
 ### Run All E2E Tests
@@ -78,6 +91,8 @@ These tests are designed to run in CI environments. They include:
 - **Auth MCP Server**: Should reject unauthenticated `secure_tool` calls and
   generate fuzzing output when `secure_tool` is fuzzed with OAuth client
   credentials auth configured
+- **Streamable HTTP example**: Should discover and fuzz
+  `start-notification-stream` using generic `--protocol http`
 
 ### Output
 

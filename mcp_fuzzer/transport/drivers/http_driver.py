@@ -22,6 +22,7 @@ else:
 from ...config import (
     JSON_CONTENT_TYPE,
     DEFAULT_HTTP_ACCEPT,
+    MCP_PROTOCOL_VERSION_HEADER,
 )
 from ...safety_system import policy as safety_policy
 from ...spec_guard.spec_version import maybe_update_spec_version_from_result
@@ -75,6 +76,7 @@ class HttpDriver(
             "Accept": DEFAULT_HTTP_ACCEPT,
             "Content-Type": JSON_CONTENT_TYPE,
         }
+        self.protocol_version: str | None = None
         self.auth_headers = {
             k: v for k, v in (auth_headers or {}).items() if v is not None
         }
@@ -115,6 +117,22 @@ class HttpDriver(
                 }
             )
         return safe_headers
+
+    def _prepare_headers(self, *, method: str | None = None) -> dict[str, str]:
+        """Prepare HTTP headers for MCP requests.
+
+        The MCP protocol version header is sent after initialization, using the
+        negotiated version. It is intentionally omitted on initialize itself.
+        """
+        headers = dict(self.headers)
+        if method != "initialize" and self.protocol_version:
+            headers[MCP_PROTOCOL_VERSION_HEADER] = self.protocol_version
+        return headers
+
+    def _maybe_extract_protocol_version_from_result(self, result: Any) -> None:
+        updated = maybe_update_spec_version_from_result(result)
+        if updated:
+            self.protocol_version = updated
 
     async def _update_activity(self):
         """Update last activity timestamp."""
@@ -163,7 +181,9 @@ class HttpDriver(
         # Use shared network functionality
         if self.safety_enabled:
             self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(self.headers)
+        safe_headers = self._prepare_headers_with_auth(
+            self._prepare_headers(method=method)
+        )
 
         async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -179,7 +199,7 @@ class HttpDriver(
             self._handle_http_response_error(response)
             result = self._parse_http_response_json(response)
             if method == "initialize":
-                maybe_update_spec_version_from_result(result)
+                self._maybe_extract_protocol_version_from_result(result)
             return result
 
     async def send_raw(self, payload: dict[str, Any]) -> Any:
@@ -211,7 +231,10 @@ class HttpDriver(
         # Use shared network functionality
         if self.safety_enabled:
             self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(self.headers)
+        method = payload.get("method")
+        safe_headers = self._prepare_headers_with_auth(
+            self._prepare_headers(method=method)
+        )
 
         async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -226,8 +249,8 @@ class HttpDriver(
             # Use shared response handling
             self._handle_http_response_error(response)
             result = self._parse_http_response_json(response)
-            if payload.get("method") == "initialize":
-                maybe_update_spec_version_from_result(result)
+            if method == "initialize":
+                self._maybe_extract_protocol_version_from_result(result)
             return result
 
     async def send_notification(
@@ -255,7 +278,9 @@ class HttpDriver(
         # Use shared network functionality
         if self.safety_enabled:
             self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(self.headers)
+        safe_headers = self._prepare_headers_with_auth(
+            self._prepare_headers(method=method)
+        )
 
         async with self._create_http_client(self.timeout) as client:
             response = await client.post(self.url, json=payload, headers=safe_headers)
@@ -296,7 +321,9 @@ class HttpDriver(
         # Use shared network functionality
         if self.safety_enabled:
             self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(self.headers)
+        safe_headers = self._prepare_headers_with_auth(
+            self._prepare_headers(method=payload.get("method"))
+        )
 
         async with self._create_http_client(self.timeout) as client:
             # First request

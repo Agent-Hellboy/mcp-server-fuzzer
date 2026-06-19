@@ -125,6 +125,17 @@ def test_prepare_headers_with_session():
     assert headers["mcp-protocol-version"] == "2025-06-18"
 
 
+def test_prepare_headers_omits_session_state_on_initialize():
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    driver.session_id = "sid"
+    driver.protocol_version = "2025-06-18"
+
+    headers = driver._prepare_headers(method="initialize")
+
+    assert "mcp-session-id" not in headers
+    assert "mcp-protocol-version" not in headers
+
+
 def test_extract_session_headers():
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
     response = FakeResponse(

@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 import logging
+import os
 
 from ..exceptions import TransportRegistrationError
 from ..transport.catalog import build_driver as base_build_driver
@@ -13,6 +15,7 @@ from ..types import AuthManagerProtocol
 
 logger = logging.getLogger(__name__)
 AUTH_PROTOCOLS = ("http", "https", "streamablehttp", "sse")
+STREAMABLE_HTTP_PROTOCOL_VERSION = "2025-03-26"
 
 
 @dataclass(frozen=True)
@@ -31,9 +34,43 @@ class TransportBuildRequest:
     safety_enabled: bool = True
 
 
+def _spec_version_for_transport() -> str:
+    return os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-11-25")
+
+
+def _uses_streamable_http(version: str) -> bool:
+    try:
+        return date.fromisoformat(version) >= date.fromisoformat(
+            STREAMABLE_HTTP_PROTOCOL_VERSION
+        )
+    except ValueError:
+        return False
+
+
+def _resolve_protocol_for_spec(protocol: str) -> str:
+    normalized = protocol.strip().lower()
+    if normalized not in ("http", "https"):
+        return normalized
+    if _uses_streamable_http(_spec_version_for_transport()):
+        return "streamablehttp"
+    return normalized
+
+
 def build_driver_with_auth(request: TransportBuildRequest):
     """Create a transport with authentication headers when available."""
-    resolved = request
+    resolved_protocol = _resolve_protocol_for_spec(request.protocol)
+    resolved = TransportBuildRequest(
+        protocol=resolved_protocol,
+        endpoint=request.endpoint,
+        timeout=request.timeout,
+        transport_retries=request.transport_retries,
+        transport_retry_delay=request.transport_retry_delay,
+        transport_retry_backoff=request.transport_retry_backoff,
+        transport_retry_max_delay=request.transport_retry_max_delay,
+        transport_retry_jitter=request.transport_retry_jitter,
+        auth_manager=request.auth_manager,
+        safety_enabled=request.safety_enabled,
+    )
     try:
         auth_header_provider = None
         auth_manager = resolved.auth_manager
@@ -98,4 +135,8 @@ def build_driver_with_auth(request: TransportBuildRequest):
         ) from transport_error
 
 
-__all__ = ["AUTH_PROTOCOLS", "TransportBuildRequest", "build_driver_with_auth"]
+__all__ = [
+    "AUTH_PROTOCOLS",
+    "TransportBuildRequest",
+    "build_driver_with_auth",
+]

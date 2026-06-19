@@ -50,11 +50,17 @@ mcp-fuzzer [OPTIONS] --mode {tools|protocol|resources|prompts|all} --protocol {h
 
 Notes:
 
+- Generic `--protocol http` and `--protocol https` are resolved against the
+  active MCP spec version. For `2025-03-26` and newer they open the
+  Streamable HTTP transport; for `2024-11-05` they keep the legacy HTTP path.
 - When using `--protocol streamablehttp` the client:
 
   - Performs an automatic MCP initialize handshake before the first request.
   - Propagates `mcp-session-id` and `mcp-protocol-version` headers after negotiation.
   - Follows 307/308 redirects (e.g., adds a trailing slash `/mcp/`).
+- HTTP-based transports omit `mcp-protocol-version` on `initialize`, then send
+  the negotiated MCP version on subsequent requests when a server returns
+  `protocolVersion`.
 
 ### Fuzzing Options
 

@@ -49,6 +49,7 @@ from ...exceptions import TransportError
 from ...safety_system.policy import resolve_redirect_safely
 from ...spec_guard.spec_version import maybe_update_spec_version
 
+
 class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
     """Streamable HTTP transport with MCP session management.
 
@@ -129,7 +130,15 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             )
         return safe_headers
 
-    def _prepare_headers(self) -> dict[str, str]:
+    @staticmethod
+    def _payload_method(payload: Any) -> str | None:
+        try:
+            method = payload.get("method")
+        except AttributeError:
+            return None
+        return method if isinstance(method, str) else None
+
+    def _prepare_headers(self, *, method: str | None = None) -> dict[str, str]:
         """Prepare headers with session information.
 
         Returns:
@@ -139,11 +148,19 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         headers.update(self.extra_headers)
         if self.origin and "Origin" not in headers:
             headers["Origin"] = self.origin
+        if method == "initialize":
+            return headers
         if self.session_id:
             headers[MCP_SESSION_ID_HEADER] = self.session_id
         if self.protocol_version:
             headers[MCP_PROTOCOL_VERSION_HEADER] = self.protocol_version
         return headers
+
+    def _prepare_request_headers(self, *, method: str | None = None) -> dict[str, str]:
+        headers = self._prepare_headers(method=method)
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
+        return self._prepare_headers_with_auth(headers)
 
     def _prepare_listen_headers(self) -> dict[str, str]:
         """Prepare headers for GET-based SSE listening."""
@@ -328,11 +345,9 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
     async def _send_client_response(self, payload: dict[str, Any]) -> None:
         """Send a JSON-RPC response back to the server."""
-        headers = self._prepare_headers()
-
-        if self.safety_enabled:
-            self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(headers)
+        safe_headers = self._prepare_request_headers(
+            method=self._payload_method(payload)
+        )
 
         async with self._create_http_client(self.timeout) as client:
             response = await self._post_with_retries(
@@ -399,11 +414,17 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                         "url": url,
                         "error_type": type(e).__name__,
                         "attempts": attempt + 1,
+                        "timeout": self.timeout,
                     }
                     if method:
                         context["method"] = method
+                    message = (
+                        "Request timed out while waiting for server response"
+                        if isinstance(e, httpx.ReadTimeout)
+                        else "Connection failed while contacting server"
+                    )
                     raise TransportError(
-                        "Connection failed while contacting server", context=context
+                        message, context=context
                     ) from e
                 self._logger.debug(
                     "POST retry %d for %s due to %s",
@@ -476,10 +497,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             TransportError: If request fails
         """
         # Ensure MCP initialization handshake once per session
-        try:
-            method = payload.get("method")
-        except AttributeError:
-            method = None
+        method = self._payload_method(payload)
         if not self._initialized and method != "initialize":
             async with self._init_lock:
                 if not self._initialized and not self._initializing:
@@ -489,12 +507,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                     finally:
                         self._initializing = False
 
-        headers = self._prepare_headers()
-
-        # Use shared network functionality
-        if self.safety_enabled:
-            self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(headers)
+        safe_headers = self._prepare_request_headers(method=method)
 
         async with self._create_http_client(self.timeout) as client:
             response = await self._post_with_retries(
@@ -569,12 +582,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             params: Optional parameters
         """
         payload = self._create_jsonrpc_notification(method, params)
-        headers = self._prepare_headers()
-
-        # Use shared network functionality
-        if self.safety_enabled:
-            self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(headers)
+        safe_headers = self._prepare_request_headers(method=method)
 
         async with self._create_http_client(self.timeout) as client:
             response = await self._post_with_retries(
@@ -638,12 +646,9 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Yields:
             Parsed JSON objects from stream
         """
-        headers = self._prepare_headers()
-
-        # Use shared network functionality
-        if self.safety_enabled:
-            self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(headers)
+        safe_headers = self._prepare_request_headers(
+            method=self._payload_method(payload)
+        )
 
         async with self._create_http_client(self.timeout) as client:
             async with client.stream(
