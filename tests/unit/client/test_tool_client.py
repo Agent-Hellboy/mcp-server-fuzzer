@@ -11,6 +11,21 @@ import pytest
 from mcp_fuzzer.client.tool_client import ToolClient
 
 
+def _make_client():
+    """Build a ToolClient with permissive safety (no skip, identity sanitize)."""
+    safety = MagicMock()
+    safety.should_skip_tool_call.return_value = False
+    safety.sanitize_tool_arguments.side_effect = lambda _name, args: args
+    client = ToolClient(
+        MagicMock(),
+        auth_manager=MagicMock(),
+        safety_system=safety,
+    )
+    client.auth_manager.get_auth_params_for_tool.return_value = {}
+    client._rpc = MagicMock()
+    return client, safety
+
+
 @pytest.mark.asyncio
 async def test_get_tools_from_server_records_schema_checks():
     mock_transport = MagicMock()
@@ -250,3 +265,255 @@ async def test_fuzz_tool_applies_per_call_timeout():
     assert results[0]["error"] == "tool_timeout"
     assert results[0]["timeout_scope"] == "call"
     assert "timed out" in results[0]["exception"]
+
+
+@pytest.mark.asyncio
+async def test_get_tools_empty_list():
+    client, _ = _make_client()
+    client._rpc.get_tools = AsyncMock(return_value=[])
+
+    result = await client._get_tools_from_server()
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_tools_exception():
+    client, _ = _make_client()
+    client._rpc.get_tools = AsyncMock(side_effect=Exception("connection failed"))
+
+    result = await client._get_tools_from_server()
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_safety_sanitized():
+    client, safety = _make_client()
+    safety.sanitize_tool_arguments.side_effect = None
+    safety.sanitize_tool_arguments.return_value = {"cmd": "safe_value"}
+
+    tool = {"name": "test_tool"}
+    client.tool_mutator.mutate = AsyncMock(return_value={"cmd": "dangerous_value"})
+    client._rpc.call_tool = AsyncMock(return_value={"content": []})
+
+    results = await client.fuzz_tool(tool, runs=1)
+
+    assert len(results) == 1
+    assert results[0]["safety_sanitized"] is True
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_call_exception():
+    client, _ = _make_client()
+    tool = {"name": "test_tool"}
+    client.tool_mutator.mutate = AsyncMock(return_value={})
+    client._rpc.call_tool = AsyncMock(side_effect=Exception("call failed"))
+
+    results = await client.fuzz_tool(tool, runs=1)
+
+    assert len(results) == 1
+    assert results[0]["success"] is False
+    assert "call failed" in results[0]["exception"]
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_mutator_exception():
+    client, _ = _make_client()
+    tool = {"name": "test_tool"}
+    client.tool_mutator.mutate = AsyncMock(side_effect=Exception("mutator failed"))
+
+    results = await client.fuzz_tool(tool, runs=1)
+
+    assert len(results) == 1
+    assert results[0]["success"] is False
+    assert "mutator failed" in results[0]["exception"]
+
+
+@pytest.mark.asyncio
+async def test_fuzz_all_tools_empty():
+    client, _ = _make_client()
+    client._get_tools_from_server = AsyncMock(return_value=[])
+
+    results = await client.fuzz_all_tools()
+    assert results == {}
+
+
+@pytest.mark.asyncio
+async def test_fuzz_all_tools_timeout_protection():
+    client, _ = _make_client()
+    client._get_tools_from_server = AsyncMock(return_value=[{"name": "tool1"}])
+
+    # Simulate slow fuzzing (0.1s does not trip the early-stop branch)
+    async def slow_fuzz(*args, **kwargs):
+        await asyncio.sleep(0.1)
+        return [{"success": True}]
+
+    client._fuzz_single_tool_with_timeout = slow_fuzz
+
+    # This should complete without hanging
+    results = await client.fuzz_all_tools(runs_per_tool=1)
+    assert "tool1" in results
+
+
+@pytest.mark.asyncio
+async def test_fuzz_with_timeout_exception():
+    client, _ = _make_client()
+    tool = {"name": "failing_tool"}
+    client.fuzz_tool = AsyncMock(side_effect=Exception("unexpected error"))
+
+    results = await client._fuzz_single_tool_with_timeout(tool, 1)
+
+    assert len(results) == 1
+    assert results[0]["error"] == "phase_execution_failed"
+    assert "unexpected error" in results[0]["exception"]
+
+
+@pytest.mark.asyncio
+async def test_both_phases_exception():
+    """A per-run mutator error becomes a per-run failure entry, not a
+    phase abort."""
+    client, _ = _make_client()
+    tool = {"name": "test_tool"}
+    client.tool_mutator.mutate = AsyncMock(side_effect=Exception("mutator error"))
+
+    results = await client.fuzz_tool_both_phases(tool, runs_per_phase=1)
+
+    assert set(results) == {"realistic", "aggressive"}
+    for phase in ("realistic", "aggressive"):
+        assert len(results[phase]) == 1
+        run = results[phase][0]
+        assert run["error"] == "phase_execution_failed"
+        assert "mutator error" in run["exception"]
+
+
+@pytest.mark.asyncio
+async def test_process_results_call_exception():
+    client, _ = _make_client()
+    client._rpc.call_tool = AsyncMock(side_effect=Exception("call failed"))
+
+    fuzz_results = [{"args": {}}]
+
+    results = await client._process_fuzz_results("test_tool", fuzz_results)
+
+    assert len(results) == 1
+    assert results[0]["success"] is False
+    assert "call failed" in results[0]["exception"]
+
+
+@pytest.mark.asyncio
+async def test_fuzz_all_both_phases_success():
+    client, _ = _make_client()
+    client._get_tools_from_server = AsyncMock(return_value=[{"name": "tool1"}])
+    client._fuzz_single_tool_both_phases = AsyncMock(
+        return_value={"realistic": [], "aggressive": []}
+    )
+
+    results = await client.fuzz_all_tools_both_phases(runs_per_phase=1)
+
+    assert "tool1" in results
+
+
+@pytest.mark.asyncio
+async def test_fuzz_all_both_phases_no_tools():
+    client, _ = _make_client()
+    client._get_tools_from_server = AsyncMock(return_value=[])
+
+    results = await client.fuzz_all_tools_both_phases()
+
+    assert results == {}
+
+
+@pytest.mark.asyncio
+async def test_fuzz_all_both_phases_exception():
+    client, _ = _make_client()
+    client._get_tools_from_server = AsyncMock(side_effect=Exception("error"))
+
+    results = await client.fuzz_all_tools_both_phases()
+
+    assert results == {}
+
+
+@pytest.mark.asyncio
+async def test_single_tool_both_phases_success():
+    client, _ = _make_client()
+    tool = {"name": "test_tool"}
+    client.fuzz_tool_both_phases = AsyncMock(
+        return_value={"realistic": [], "aggressive": []}
+    )
+
+    result = await client._fuzz_single_tool_both_phases(tool, 2)
+
+    assert "realistic" in result
+    assert "aggressive" in result
+
+
+@pytest.mark.asyncio
+async def test_single_tool_both_phases_error_result():
+    client, _ = _make_client()
+    tool = {"name": "test_tool"}
+    client.fuzz_tool_both_phases = AsyncMock(return_value={"error": "some error"})
+
+    result = await client._fuzz_single_tool_both_phases(tool, 2)
+
+    assert "error" in result
+    assert result["error"] == "some error"
+
+
+@pytest.mark.asyncio
+async def test_single_tool_both_phases_exception():
+    client, _ = _make_client()
+    tool = {"name": "test_tool"}
+    client.fuzz_tool_both_phases = AsyncMock(side_effect=Exception("boom"))
+
+    result = await client._fuzz_single_tool_both_phases(tool, 2)
+
+    assert "error" in result
+    assert "boom" in result["error"]
+    assert result["runs"][0]["exception"] == "boom"
+
+
+@pytest.mark.asyncio
+async def test_fuzz_tool_with_safety_disabled():
+    transport = MagicMock()
+    transport.send_request = AsyncMock(return_value={"result": "ok"})
+    client = ToolClient(
+        transport=transport,
+        safety_system=None,
+        enable_safety=False,
+    )
+
+    tool = {"name": "test_tool"}
+    client.tool_mutator.mutate = AsyncMock(return_value={})
+    client._rpc.call_tool = AsyncMock(return_value={"content": []})
+
+    results = await client.fuzz_tool(tool, runs=1)
+
+    assert len(results) == 1
+    assert results[0]["safety_blocked"] is False
+    assert results[0]["safety_sanitized"] is False
+
+
+def test_print_phase_report_no_reporter():
+    client, _ = _make_client()
+    # Should not raise
+    client._print_phase_report("test_tool", "realistic", [])
+
+
+def test_print_phase_report_with_reporter():
+    client, _ = _make_client()
+    from mcp_fuzzer.reports import FuzzerReporter
+
+    mock_reporter = MagicMock(spec=FuzzerReporter)
+    mock_reporter.console = MagicMock()
+    client.reporter = mock_reporter
+
+    results = [{"success": True}, {"success": False}]
+    client._print_phase_report("test_tool", "realistic", results)
+
+    mock_reporter.console.print.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_shutdown():
+    client, _ = _make_client()
+    await client.shutdown()
+    # Should complete without error

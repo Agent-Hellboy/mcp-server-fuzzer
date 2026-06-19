@@ -3,6 +3,7 @@ Unit tests for schema_helpers.py module.
 """
 
 import pytest
+from mcp_fuzzer.fuzz_engine.mutators.strategies import schema_helpers
 from mcp_fuzzer.fuzz_engine.mutators.strategies.schema_helpers import (
     apply_schema_edge_cases,
     apply_semantic_combos,
@@ -462,3 +463,90 @@ class TestApplySemanticCombos:
         patched = {"operation": "divide", "second": 5}
         apply_semantic_combos(patched)
         assert patched["second"] == 0
+
+
+def test_edge_string_pattern_and_semantics():
+    string_schema = {
+        "type": "string",
+        "minLength": 5,
+        "maxLength": 10,
+        "pattern": "^[a-zA-Z0-9]+$",
+    }
+    value = schema_helpers._edge_string(string_schema, key="identifier")
+    assert 5 <= len(value) <= 10
+    # Pattern matching uses lowercase alphanumeric fill
+    assert value.islower() or value.isalnum()
+    assert value[:3] == "aaa"
+
+    uri_schema = {"type": "string"}
+    uri = schema_helpers._edge_string(uri_schema, key="resourceURI")
+    assert uri.startswith("file:///tmp")
+
+    fuzzy_schema = {"type": "string", "minLength": 1, "maxLength": 1}
+    short = schema_helpers._edge_string(fuzzy_schema, key="tone")
+    assert len(short) >= 1
+
+
+def test_edge_number_handles_minimum_and_exclusive_minimum():
+    schema = {
+        "type": "number",
+        "minimum": -5,
+        "exclusiveMinimum": True,
+    }
+    value = schema_helpers._edge_number(schema, integer=False)
+    # In aggressive mode, _edge_number may generate values that violate bounds
+    # The value should be near the boundary (either valid or off-by-one)
+    assert -6 < value < 0  # Near the boundary
+
+    schema["maximum"] = 2
+    schema["exclusiveMaximum"] = True
+    value = schema_helpers._edge_number(schema, integer=False)
+    # Value should be near the maximum boundary
+    assert -6 < value < 3
+
+
+def test_edge_array_extra_properties_respected():
+    schema = {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 2,
+        "maxItems": 4,
+    }
+    arr = schema_helpers._edge_array([], schema, phase="aggressive", key="tags")
+    assert len(arr) >= 2
+    assert all(isinstance(item, str) for item in arr)
+
+    schema["items"] = [{"type": "string"}, {"type": "integer"}]
+    arr = schema_helpers._edge_array([], schema, phase="aggressive", key="mixed")
+    assert 2 <= len(arr) <= 4
+    assert isinstance(arr[1], int)
+
+
+def test_edge_object_additional_properties_when_empty():
+    schema = {
+        "type": "object",
+        "properties": {},
+    }
+    obj = schema_helpers._edge_object({}, schema, phase="aggressive", key="payload")
+    assert "extra_field_0" in obj
+    assert "extra_field_1" in obj
+
+    schema["additionalProperties"] = {"type": "string", "format": "uri"}
+    obj = schema_helpers._edge_object({}, schema, phase="aggressive", key="payload")
+    assert "extra_field_0" in obj
+    assert obj["extra_field_0"].startswith("file:///")
+
+
+def test_apply_schema_edge_cases_integer_exclusive_maximum_and_multiple_of():
+    """Aggressive integer with exclusiveMaximum + multipleOf floors to a valid
+    multiple under the bound (schema_helpers:310)."""
+    schema = {
+        "type": "integer",
+        "maximum": 10,
+        "exclusiveMaximum": True,
+        "multipleOf": 2,
+    }
+    result = schema_helpers.apply_schema_edge_cases(None, schema, phase="aggressive")
+    assert isinstance(result, int)
+    assert result < 10
+    assert result % 2 == 0

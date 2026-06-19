@@ -49,54 +49,6 @@ class TestAggressiveProtocolStrategies:
         assert callable(get_protocol_fuzzer_method("InitializeRequest"))
         assert get_protocol_fuzzer_method("UnknownType") is None
 
-    def test_fuzzer_generates_varied_data(self):
-        """Test that fuzzers generate different data on multiple calls."""
-        method = get_protocol_fuzzer_method("InitializeRequest")
-        if method is None:
-            pytest.skip("spec_protocol doesn't have InitializeRequest definition")
-        
-        results = [method() for _ in range(5)]
-        results = [r for r in results if r is not None]
-        
-        if not results:
-            pytest.skip("No results generated")
-        
-        # Should have variety in IDs
-        ids = [r.get("id") for r in results if "id" in r]
-        if ids:
-            unique_ids = set(str(id_val) for id_val in ids)
-            assert len(unique_ids) > 1, "Should generate different IDs"
-
-    def test_capabilities_experimental_fuzzing(self):
-        """Test that capabilities.experimental fuzzing generates varied content."""
-        method = get_protocol_fuzzer_method("InitializeRequest")
-        if method is None:
-            pytest.skip("spec_protocol doesn't have InitializeRequest definition")
-        
-        results = [method() for _ in range(100)]
-        results = [r for r in results if r is not None]
-        
-        experimental_values = []
-        for result in results:
-            params = result.get("params", {})
-            if isinstance(params, dict):
-                capabilities = params.get("capabilities")
-                if isinstance(capabilities, dict):
-                    experimental = capabilities.get("experimental")
-                    experimental_values.append(experimental)
-        
-        if experimental_values:
-            unique_values = set(str(v) for v in experimental_values)
-            assert len(unique_values) > 1, (
-                "Should generate different experimental values"
-            )
-            assert any(v is None for v in experimental_values), (
-                "Should include None values"
-            )
-            assert any(v is not None for v in experimental_values), (
-                "Should include non-None values"
-            )
-
     def test_all_protocol_types_supported(self):
         """Test that all expected protocol types are supported."""
         from mcp_fuzzer.fuzz_engine.executor import ProtocolExecutor

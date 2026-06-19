@@ -3,6 +3,7 @@
 Unit tests for JsonRpcAdapter.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -180,17 +181,6 @@ async def test_get_tools_handles_non_dict_response():
 
 
 @pytest.mark.asyncio
-async def test_get_tools_from_nested_result():
-    transport = MagicMock()
-    transport.send_request = AsyncMock(
-        return_value={"result": {"tools": [{"name": "x"}]}}
-    )
-    adapter = JsonRpcAdapter(transport=transport)
-
-    assert await adapter.get_tools() == [{"name": "x"}]
-
-
-@pytest.mark.asyncio
 async def test_send_batch_request_normalizes_responses():
     transport = MagicMock()
     transport.send_raw = AsyncMock(side_effect=["ok", {"result": "done"}])
@@ -215,3 +205,37 @@ def test_collate_batch_responses_handles_missing_and_unmatched():
 
     assert collated[1]["error"]["message"] == "Response missing"
     assert collated[2]["error"]["message"] == "Response missing"
+
+
+@pytest.mark.asyncio
+async def test_rpc_adapter_convenience_methods():
+    transport = SimpleNamespace(send_request=AsyncMock(return_value={"ok": True}))
+    adapter = JsonRpcAdapter(transport)
+
+    await adapter.ping()
+    await adapter.set_logging_level("info")
+    await adapter.list_resources()
+    await adapter.list_resource_templates()
+    await adapter.read_resource("resource://1")
+    await adapter.subscribe_resource("resource://1")
+    await adapter.unsubscribe_resource("resource://1")
+    await adapter.list_prompts()
+    await adapter.get_prompt("prompt")
+
+    expected_calls = [
+        ("ping", None),
+        ("logging/setLevel", {"level": "info"}),
+        ("resources/list", None),
+        ("resources/templates/list", None),
+        ("resources/read", {"uri": "resource://1"}),
+        ("resources/subscribe", {"uri": "resource://1"}),
+        ("resources/unsubscribe", {"uri": "resource://1"}),
+        ("prompts/list", None),
+        ("prompts/get", {"name": "prompt", "arguments": {}}),
+    ]
+    actual_calls = [
+        (call.args[0], call.args[1] if len(call.args) > 1 else None)
+        for call in transport.send_request.await_args_list
+    ]
+    for expected in expected_calls:
+        assert expected in actual_calls

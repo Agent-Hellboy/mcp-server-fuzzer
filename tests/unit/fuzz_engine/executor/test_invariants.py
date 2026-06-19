@@ -40,6 +40,10 @@ class TestInvariants(unittest.TestCase):
         response = {"jsonrpc": "2.0", "method": "notify", "params": {}}
         self.assertTrue(check_response_validity(response))
 
+    def test_check_response_validity_bare_envelope(self):
+        """A bare {"jsonrpc": "2.0"} envelope falls through all branches as valid."""
+        self.assertTrue(check_response_validity({"jsonrpc": "2.0"}))
+
     def test_check_response_validity_none(self):
         """Test that None response raises an exception."""
         with self.assertRaises(InvariantViolation):
@@ -217,43 +221,6 @@ class TestInvariants(unittest.TestCase):
             mock_validity.assert_called_once_with(response)
             mock_error.assert_called_once_with(response["error"], expected_error_codes)
 
-    @pytest.mark.asyncio
-    async def test_verify_batch_responses_all_valid(self):
-        """Test that all responses in a batch are validated."""
-        responses = [
-            {"jsonrpc": "2.0", "id": 1, "result": "success"},
-            {"jsonrpc": "2.0", "id": 2, "result": "success"},
-        ]
-
-        with patch(
-            "mcp_fuzzer.fuzz_engine.executor.invariants.verify_response_invariants"
-        ) as mock_verify:
-            mock_verify.return_value = True
-
-            results = await verify_batch_responses(responses)
-            self.assertEqual(len(results), 2)
-            self.assertTrue(all(results.values()))
-            self.assertEqual(mock_verify.call_count, 2)
-
-    @pytest.mark.asyncio
-    async def test_verify_batch_responses_some_invalid(self):
-        """Test that invalid responses in a batch are reported."""
-        responses = [
-            {"jsonrpc": "2.0", "id": 1, "result": "success"},
-            {"jsonrpc": "1.0", "id": 2, "result": "success"},
-        ]
-
-        with patch(
-            "mcp_fuzzer.fuzz_engine.executor.invariants.verify_response_invariants"
-        ) as mock_verify:
-            mock_verify.side_effect = [True, InvariantViolation("Invalid version")]
-
-            results = await verify_batch_responses(responses)
-            self.assertEqual(len(results), 2)
-            self.assertTrue(results[0])
-            self.assertEqual(results[1], "Invalid version")
-            self.assertEqual(mock_verify.call_count, 2)
-
     def test_check_state_consistency_valid(self):
         """Test that consistent states pass validation."""
         before_state = {"a": 1, "b": 2, "c": 3}
@@ -285,6 +252,47 @@ class TestInvariants(unittest.TestCase):
         after_state = {"a": 1, "b": 5, "c": 3}
         with self.assertRaises(InvariantViolation):
             check_state_consistency(before_state, after_state)
+
+
+# Batch verification is async; defined at module level so pytest-asyncio (auto
+# mode) actually awaits them — async methods on a unittest.TestCase are not.
+@pytest.mark.asyncio
+async def test_verify_batch_responses_all_valid():
+    """Test that all responses in a batch are validated."""
+    responses = [
+        {"jsonrpc": "2.0", "id": 1, "result": "success"},
+        {"jsonrpc": "2.0", "id": 2, "result": "success"},
+    ]
+
+    with patch(
+        "mcp_fuzzer.fuzz_engine.executor.invariants.verify_response_invariants"
+    ) as mock_verify:
+        mock_verify.return_value = True
+
+        results = await verify_batch_responses(responses)
+        assert len(results) == 2
+        assert all(results.values())
+        assert mock_verify.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_verify_batch_responses_some_invalid():
+    """Test that invalid responses in a batch are reported."""
+    responses = [
+        {"jsonrpc": "2.0", "id": 1, "result": "success"},
+        {"jsonrpc": "1.0", "id": 2, "result": "success"},
+    ]
+
+    with patch(
+        "mcp_fuzzer.fuzz_engine.executor.invariants.verify_response_invariants"
+    ) as mock_verify:
+        mock_verify.side_effect = [True, InvariantViolation("Invalid version")]
+
+        results = await verify_batch_responses(responses)
+        assert len(results) == 2
+        assert results[0] is True
+        assert results[1] == "Invalid version"
+        assert mock_verify.call_count == 2
 
 
 if __name__ == "__main__":
