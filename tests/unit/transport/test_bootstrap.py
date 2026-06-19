@@ -122,6 +122,22 @@ def test_build_driver_http_uses_streamable_for_default_spec(monkeypatch):
     assert result is mock_transport
 
 
+def test_build_driver_invalid_spec_env_falls_back_to_default(monkeypatch):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "latest")
+    mock_transport = _FakeStreamableTransport()
+    req = TransportBuildRequest(protocol="http", endpoint="http://localhost:8080/mcp")
+
+    with patch(
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
+        return_value=mock_transport,
+    ) as mock_build:
+        build_driver_with_auth(req)
+
+    args, _kwargs = mock_build.call_args
+    assert args[:2] == ("streamablehttp", "http://localhost:8080/mcp")
+    assert mock_transport.protocol_version == "2025-11-25"
+
+
 def test_build_driver_http_uses_streamable_for_supported_modern_spec(monkeypatch):
     monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
     mock_transport = _FakeStreamableTransport()

@@ -47,6 +47,14 @@ from ...types import (
 from ...exceptions import TransportError
 from ...safety_system.policy import resolve_redirect_safely
 from ...spec_guard.spec_version import maybe_update_spec_version
+from ..methods import (
+    INITIALIZE,
+    NOTIFY_INITIALIZED,
+    is_initialize_method,
+    is_retry_safe_method,
+    payload_method,
+)
+from ..protocol import ProtocolNegotiationState, negotiated_headers
 
 
 class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
@@ -95,7 +103,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         self.auth_header_provider = auth_header_provider
 
         self.session_id: str | None = None
-        self.protocol_version: str | None = None
+        self._negotiation = ProtocolNegotiationState()
         self.extra_headers: dict[str, str] = {}
         self.origin: str | None = None
         self.last_event_id: str | None = None
@@ -131,11 +139,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
     @staticmethod
     def _payload_method(payload: Any) -> str | None:
-        try:
-            method = payload.get("method")
-        except AttributeError:
-            return None
-        return method if isinstance(method, str) else None
+        return payload_method(payload)
 
     def _prepare_headers(self, *, method: str | None = None) -> dict[str, str]:
         """Prepare headers with session information.
@@ -143,17 +147,25 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Returns:
             Headers dict with session information
         """
-        headers = dict(self.headers)
+        headers = negotiated_headers(
+            self.headers, method=method, state=self._negotiation
+        )
         headers.update(self.extra_headers)
         if self.origin and "Origin" not in headers:
             headers["Origin"] = self.origin
-        if method == "initialize":
+        if is_initialize_method(method):
             return headers
         if self.session_id:
             headers[MCP_SESSION_ID_HEADER] = self.session_id
-        if self.protocol_version:
-            headers[MCP_PROTOCOL_VERSION_HEADER] = self.protocol_version
         return headers
+
+    @property
+    def protocol_version(self) -> str | None:
+        return self._negotiation.protocol_version
+
+    @protocol_version.setter
+    def protocol_version(self, value: str | None) -> None:
+        self._negotiation.protocol_version = value
 
     def _prepare_request_headers(self, *, method: str | None = None) -> dict[str, str]:
         headers = self._prepare_headers(method=method)
@@ -183,7 +195,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         protocol_header = response.headers.get(MCP_PROTOCOL_VERSION_HEADER)
         if protocol_header:
-            self.protocol_version = protocol_header
+            self._negotiation.update(protocol_header)
             self._logger.debug("Received protocol version header: %s", protocol_header)
             maybe_update_spec_version(protocol_header)
 
@@ -197,7 +209,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             if isinstance(result, dict) and "protocolVersion" in result:
                 pv = result.get("protocolVersion")
                 if pv is not None:
-                    self.protocol_version = str(pv)
+                    self._negotiation.update(str(pv))
                     self._logger.debug("Negotiated protocol version: %s", pv)
                     maybe_update_spec_version(pv)
         except Exception:
@@ -342,20 +354,8 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 httpx.WriteTimeout,
                 httpx.PoolTimeout,
             ) as e:
-                # Only retry for safe, idempotent, or initialization-like methods
-                method = None
-                try:
-                    method = payload.get("method")
-                except Exception:
-                    pass
-                safe = method in (
-                    "initialize",
-                    "notifications/initialized",
-                    "tools/list",
-                    "prompts/list",
-                    "resources/list",
-                )
-                if attempt >= retries or not safe:
+                method = payload_method(payload)
+                if attempt >= retries or not is_retry_safe_method(method):
                     context = {
                         "url": url,
                         "error_type": type(e).__name__,
@@ -444,7 +444,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         """
         # Ensure MCP initialization handshake once per session
         method = self._payload_method(payload)
-        if not self._initialized and method != "initialize":
+        if not self._initialized and not is_initialize_method(method):
             async with self._init_lock:
                 if not self._initialized and not self._initializing:
                     self._initializing = True
@@ -500,14 +500,14 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 data = self._parse_http_response_json(response, fallback_to_sse=False)
 
                 self._maybe_extract_protocol_version_from_result(data)
-                if method == "initialize":
+                if is_initialize_method(method):
                     self._initialized = True
 
                 return data if isinstance(data, dict) else {"result": data}
 
             if ct.startswith(SSE_CONTENT_TYPE):
                 parsed = await self._parse_sse_response_for_result(response)
-                if method == "initialize":
+                if is_initialize_method(method):
                     self._initialized = True
                 if parsed is None:
                     return {}
@@ -549,7 +549,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         init_payload = {
             "jsonrpc": "2.0",
             "id": str(asyncio.get_running_loop().time()),
-            "method": "initialize",
+            "method": INITIALIZE,
             "params": {
                 "protocolVersion": self.protocol_version or DEFAULT_PROTOCOL_VERSION,
                 "capabilities": {
@@ -574,7 +574,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             self._initialized = True
             # Send initialized notification (best-effort)
             try:
-                await self.send_notification("notifications/initialized", {})
+                await self.send_notification(NOTIFY_INITIALIZED, {})
             except Exception:
                 pass
         except Exception:

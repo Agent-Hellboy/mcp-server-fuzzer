@@ -139,19 +139,21 @@ def test_prepare_headers_omits_session_state_on_initialize():
 def test_extract_session_headers():
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
     response = FakeResponse(
-        headers={"mcp-session-id": "sid", "mcp-protocol-version": "v"}
+        headers={"mcp-session-id": "sid", "mcp-protocol-version": "2025-03-26"}
     )
 
     driver._maybe_extract_session_headers(response)
 
     assert driver.session_id == "sid"
-    assert driver.protocol_version == "v"
+    assert driver.protocol_version == "2025-03-26"
 
 
 def test_extract_protocol_version_from_result():
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
-    driver._maybe_extract_protocol_version_from_result({"protocolVersion": "v"})
-    assert driver.protocol_version == "v"
+    driver._maybe_extract_protocol_version_from_result(
+        {"protocolVersion": "2025-03-26"}
+    )
+    assert driver.protocol_version == "2025-03-26"
 
 
 def test_resolve_redirect(monkeypatch):
@@ -220,12 +222,14 @@ def test_resolve_redirect_missing_location_with_trailing_slash():
 @pytest.mark.asyncio
 async def test_parse_sse_response_for_result():
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
-    response = FakeResponse(lines=['data: {"result": {"protocolVersion": "v"}}', ""])
+    response = FakeResponse(
+        lines=['data: {"result": {"protocolVersion": "2025-03-26"}}', ""]
+    )
 
     result = await driver._parse_sse_response_for_result(response)
 
-    assert result == {"protocolVersion": "v"}
-    assert driver.protocol_version == "v"
+    assert result == {"protocolVersion": "2025-03-26"}
+    assert driver.protocol_version == "2025-03-26"
 
 
 @pytest.mark.asyncio
@@ -620,7 +624,7 @@ async def test_send_raw_json_sets_initialized_and_protocol_version(monkeypatch):
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
     response = FakeJsonResponse(
         headers={"content-type": "application/json"},
-        json_data={"result": {"protocolVersion": "v1"}},
+        json_data={"result": {"protocolVersion": "2025-06-18"}},
     )
     client = MagicMock()
     client.post = AsyncMock(return_value=response)
@@ -633,8 +637,8 @@ async def test_send_raw_json_sets_initialized_and_protocol_version(monkeypatch):
 
     result = await driver.send_raw({"method": "initialize"})
 
-    assert result == {"protocolVersion": "v1"}
-    assert driver.protocol_version == "v1"
+    assert result == {"protocolVersion": "2025-06-18"}
+    assert driver.protocol_version == "2025-06-18"
     assert driver._initialized is True
 
 
