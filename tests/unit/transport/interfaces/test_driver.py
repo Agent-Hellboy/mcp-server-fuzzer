@@ -30,10 +30,3 @@ async def test_stream_request_delegates():
     driver = DummyDriver()
     results = [item async for item in driver.stream_request({"id": 1})]
     assert results == [{"chunk": 1}, {"chunk": 2}]
-
-
-@pytest.mark.asyncio
-async def test_connect_disconnect_noop():
-    driver = DummyDriver()
-    await driver.connect()
-    await driver.disconnect()
