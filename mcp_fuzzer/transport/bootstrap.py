@@ -56,6 +56,11 @@ def _resolve_protocol_for_spec(protocol: str) -> str:
     return normalized
 
 
+def _seed_streamable_protocol_version(transport, protocol: str) -> None:
+    if protocol == "streamablehttp" and hasattr(transport, "protocol_version"):
+        transport.protocol_version = _spec_version_for_transport()
+
+
 def build_driver_with_auth(request: TransportBuildRequest):
     """Create a transport with authentication headers when available."""
     resolved_protocol = _resolve_protocol_for_spec(request.protocol)
@@ -108,6 +113,7 @@ def build_driver_with_auth(request: TransportBuildRequest):
             resolved.endpoint,
             **factory_kwargs,
         )
+        _seed_streamable_protocol_version(transport, resolved.protocol)
         retry_attempts = resolved.transport_retries
         try:
             retry_attempts = int(retry_attempts)

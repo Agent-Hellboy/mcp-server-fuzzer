@@ -42,6 +42,10 @@ def _fake_transport():
     return MagicMock()
 
 
+class _FakeStreamableTransport:
+    protocol_version = None
+
+
 def test_build_driver_no_auth_non_http():
     """stdio transport: no auth headers, no safety_enabled kwarg."""
     mock_transport = _fake_transport()
@@ -120,7 +124,7 @@ def test_build_driver_http_uses_streamable_for_default_spec(monkeypatch):
 
 def test_build_driver_http_uses_streamable_for_supported_modern_spec(monkeypatch):
     monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2025-06-18")
-    mock_transport = _fake_transport()
+    mock_transport = _FakeStreamableTransport()
     req = TransportBuildRequest(protocol="https", endpoint="https://example.test/mcp")
 
     with patch(
@@ -131,6 +135,24 @@ def test_build_driver_http_uses_streamable_for_supported_modern_spec(monkeypatch
 
     args, _kwargs = mock_build.call_args
     assert args[:2] == ("streamablehttp", "https://example.test/mcp")
+    assert mock_transport.protocol_version == "2025-06-18"
+
+
+def test_build_driver_explicit_streamable_uses_selected_spec_version(monkeypatch):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2025-03-26")
+    mock_transport = _FakeStreamableTransport()
+    req = TransportBuildRequest(
+        protocol="streamablehttp",
+        endpoint="https://example.test/mcp",
+    )
+
+    with patch(
+        "mcp_fuzzer.transport.bootstrap.base_build_driver",
+        return_value=mock_transport,
+    ):
+        build_driver_with_auth(req)
+
+    assert mock_transport.protocol_version == "2025-03-26"
 
 
 def test_build_driver_http_keeps_legacy_transport_for_2024_spec(monkeypatch):
