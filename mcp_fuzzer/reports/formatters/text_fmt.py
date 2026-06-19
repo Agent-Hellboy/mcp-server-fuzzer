@@ -8,6 +8,7 @@ from ...types import extract_tool_runs
 from .common import (
     calculate_protocol_success_rate,
     normalize_report_data,
+    summarize_tool_outcomes,
     summarize_tool_runs,
 )
 
@@ -108,14 +109,30 @@ class TextFormatter:
                 for tool_name, results in data["tool_results"].items():
                     runs, _ = extract_tool_runs(results)
                     stats = summarize_tool_runs(runs)
+                    outcomes = summarize_tool_outcomes(runs)
                     f.write(f"\nTool: {tool_name}\n")
                     f.write(f"  Total Runs: {stats['total_runs']}\n")
+                    f.write(f"  Server Rejected: {outcomes['server_rejected']}\n")
+                    f.write(
+                        (
+                            "  Accepted Malformed Findings: "
+                            f"{outcomes['accepted_malformed']}\n"
+                        )
+                    )
+                    f.write(
+                        (
+                            "  Transport/Protocol Anomalies: "
+                            f"{outcomes['anomaly']}\n"
+                        )
+                    )
+                    f.write(f"  Crashes: {outcomes['crashed']}\n")
                     f.write(f"  Exceptions: {stats['exceptions']}\n")
                     f.write(f"  Safety Blocked: {stats['safety_blocked']}\n")
 
                     if runs:
                         f.write(
-                            f"  Success Rate: {float(stats['success_rate']):.1f}%\n"
+                            "  Handled-Correctly Rate: "
+                            f"{float(stats['success_rate']):.1f}%\n"
                         )
 
             if "protocol_results" in data and mode not in {"tools"}:

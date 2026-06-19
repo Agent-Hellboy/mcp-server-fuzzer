@@ -13,6 +13,7 @@ def build_findings_audit_sections(findings: list[Any]) -> dict[str, Any]:
     )
     from ..diagnostics.server import (
         is_server_audit_finding,
+        server_audit_paper_evidence,
         server_audit_report_metadata,
     )
 
@@ -25,10 +26,26 @@ def build_findings_audit_sections(findings: list[Any]) -> dict[str, Any]:
         }
     server_findings = [f for f in findings if is_server_audit_finding(f)]
     if server_findings:
+        paper_ids = sorted(
+            {
+                f.evidence.get("paper_arxiv_id")
+                for f in server_findings
+                if isinstance(f.evidence.get("paper_arxiv_id"), str)
+            }
+        )
+        metadata = (
+            server_audit_paper_evidence(paper_ids[0])
+            if len(paper_ids) == 1
+            else server_audit_report_metadata()
+        )
         sections["server_audit"] = {
-            **server_audit_report_metadata(),
+            **metadata,
             "finding_count": len(server_findings),
         }
+        if len(paper_ids) > 1:
+            sections["server_audit"]["papers"] = [
+                server_audit_paper_evidence(paper_id) for paper_id in paper_ids
+            ]
     return sections
 
 

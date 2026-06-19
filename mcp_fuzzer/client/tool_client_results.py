@@ -65,6 +65,7 @@ def build_phase_error(tool_name: str, message: str) -> dict[str, Any]:
                 safety_sanitized=False,
                 error=ErrorType.PHASE_EXECUTION_FAILED,
                 exception=message,
+                outcome=FuzzOutcome.PHASE_FAILED,
             )
         ],
         "error": message,

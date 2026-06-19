@@ -26,17 +26,25 @@ def persist_session_findings(
             len(crash_files),
             crash_files[0].parent,
         )
+    report_path = write_findings_report(
+        out_dir,
+        findings,
+        audit_sections=build_findings_audit_sections(findings),
+    )
     if findings:
-        report_path = write_findings_report(
-            out_dir,
-            findings,
-            audit_sections=build_findings_audit_sections(findings),
+        examples = ", ".join(
+            (
+                f"{getattr(finding, 'target', 'unknown')}:"
+                f"{getattr(finding, 'category', 'finding')}"
+            )
+            for finding in findings[:5]
         )
         logging.warning(
-            "Recorded %d finding(s) across %d categor(y/ies) in %s",
+            "Recorded %d finding(s) across %d categor(y/ies) in %s%s",
             len(findings),
             len(findings_summary),
             report_path,
+            f" ({examples})" if examples else "",
         )
 
 

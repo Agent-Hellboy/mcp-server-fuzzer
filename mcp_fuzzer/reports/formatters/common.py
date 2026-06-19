@@ -90,6 +90,45 @@ def summarize_tool_runs(runs: list[dict[str, Any]]) -> dict[str, int | float]:
     }
 
 
+def summarize_tool_outcomes(runs: list[dict[str, Any]]) -> dict[str, int]:
+    """Group tool runs by observable fuzzer outcome.
+
+    These buckets intentionally avoid interpreting the upstream tool's business
+    result. They only say how the MCP call behaved from the fuzzer's point of
+    view.
+    """
+    buckets = {
+        "server_rejected": 0,
+        "accepted_malformed": 0,
+        "anomaly": 0,
+        "crashed": 0,
+        "exceptions": 0,
+        "safety_blocked": 0,
+    }
+    for run in runs:
+        if not isinstance(run, dict):
+            buckets["anomaly"] += 1
+            continue
+        outcome = run.get("outcome")
+        if run.get("safety_blocked", False) or outcome == "safety_blocked":
+            buckets["safety_blocked"] += 1
+        elif outcome == "crashed" or run.get("error") == "server_crashed":
+            buckets["crashed"] += 1
+        elif outcome == "server_rejected":
+            buckets["server_rejected"] += 1
+        elif outcome == "accepted_malformed" or run.get("accepted_malformed"):
+            buckets["accepted_malformed"] += 1
+        elif tool_run_has_exception(run):
+            buckets["exceptions"] += 1
+        elif (
+            run.get("error")
+            or run.get("server_error")
+            or outcome in {"transport_error", "timeout", "phase_failed"}
+        ):
+            buckets["anomaly"] += 1
+    return buckets
+
+
 def calculate_protocol_success_rate(total_runs: int, errors: int) -> float:
     """Calculate success rate for protocol-style results."""
     if total_runs <= 0:
@@ -186,6 +225,7 @@ __all__ = [
     "normalize_report_data",
     "result_has_failure",
     "summarize_protocol_items",
+    "summarize_tool_outcomes",
     "summarize_tool_runs",
     "tool_run_has_exception",
     "tool_run_has_failure",

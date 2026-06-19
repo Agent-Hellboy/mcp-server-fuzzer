@@ -11,6 +11,7 @@ from mcp_fuzzer.reports.formatters.common import (
     collect_labeled_protocol_items,
     normalize_report_data,
     result_has_failure,
+    summarize_tool_outcomes,
     summarize_protocol_items,
     summarize_tool_runs,
     tool_run_has_exception,
@@ -126,3 +127,28 @@ def test_summarize_tool_runs_handles_non_dict_safety_blocked_entries():
 
     assert summary["safety_blocked"] == 0
     assert summary["failures"] == 1
+
+
+def test_summarize_tool_outcomes_exposes_diagnostic_buckets():
+    outcomes = summarize_tool_outcomes(
+        [
+            {"outcome": "server_rejected"},
+            {"outcome": "accepted_malformed"},
+            {"outcome": "transport_error"},
+            {"outcome": "crashed"},
+            {"exception": "boom"},
+            {"error": "boom"},
+            {"server_error": "boom"},
+            {"safety_blocked": True},
+            "legacy-run",  # type: ignore[list-item]
+        ]
+    )
+
+    assert outcomes == {
+        "server_rejected": 1,
+        "accepted_malformed": 1,
+        "anomaly": 4,
+        "crashed": 1,
+        "exceptions": 1,
+        "safety_blocked": 1,
+    }

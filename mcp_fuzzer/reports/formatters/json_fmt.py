@@ -10,6 +10,7 @@ from .common import (
     collect_and_summarize_protocol_items,
     normalize_report_data,
     result_has_failure,
+    summarize_tool_outcomes,
     summarize_tool_runs,
 )
 from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
@@ -58,6 +59,7 @@ class JSONFormatter:
                 "total_runs": stats["total_runs"],
                 "exceptions": stats["exceptions"],
                 "safety_blocked": stats["safety_blocked"],
+                "outcomes": summarize_tool_outcomes(runs),
                 "success_rate": round(float(stats["success_rate"]), 2),
             }
 

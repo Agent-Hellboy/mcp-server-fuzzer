@@ -10,6 +10,7 @@ from ..orchestrator.audit_metadata import audit_summary_footnotes
 from ..orchestrator.models import SessionResult
 from ..reports import FuzzerReporter
 from ..reports.formatters.plain_summary import write_stdout_summary
+from ..reports.run_summary import build_run_summary, write_run_summary
 from ..reports.report_presenter import FuzzReportPresenter
 from .session_settings import SessionSettings
 
@@ -68,6 +69,21 @@ class PostRunPresenter:
 
         tr = tool_results if isinstance(tool_results, dict) else None
         pr = protocol_results if isinstance(protocol_results, dict) else None
+        run_summary = build_run_summary(
+            mode=mode,
+            tool_results=tr,
+            protocol_results=pr,
+            blocked=no_tools_available,
+            findings_summary=findings_summary,
+        )
+        try:
+            summary_path = write_run_summary(
+                self._settings.config.get("output_dir") or "reports",
+                run_summary,
+            )
+            logging.info("Wrote run summary to %s", summary_path)
+        except Exception as exc:  # pragma: no cover
+            logging.warning("Failed to write run summary: %s", exc)
 
         try:
             write_stdout_summary(

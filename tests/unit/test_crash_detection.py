@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from mcp_fuzzer.exceptions import ServerCrashError, TransportError
@@ -203,10 +205,12 @@ def test_write_findings_report(tmp_path):
     findings = classify_fuzz_runs(
         {"t": {"runs": [{"outcome": "timeout", "args": {"x": 1}}]}}, None
     )
-    assert write_findings_report(tmp_path, []) is None
+    empty_path = write_findings_report(tmp_path, [])
+    assert empty_path is not None
+    empty_data = json.loads(empty_path.read_text())
+    assert empty_data == {"findings": [], "count": 0}
     path = write_findings_report(tmp_path, findings)
     assert path is not None and path.name == "findings.json"
-    import json
 
     data = json.loads(path.read_text())
     assert data["count"] == len(findings)

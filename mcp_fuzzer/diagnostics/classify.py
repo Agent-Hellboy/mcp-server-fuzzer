@@ -51,6 +51,7 @@ _PERF_MIN_SECONDS = 0.5
 _MEM_MIN_SAMPLES = 8
 _MEM_GROWTH_FACTOR = 2.0
 _MEM_MIN_DELTA_BYTES = 20 * 1024 * 1024  # 20 MB
+_EVIDENCE_RESPONSE_LIMIT = 1200
 
 
 def _iter_runs(
@@ -89,6 +90,26 @@ def _response_text(run: dict[str, Any]) -> str:
     if isinstance(crash, dict) and crash.get("stderr_tail"):
         parts.append("\n".join(str(line) for line in crash["stderr_tail"]))
     return "\n".join(parts)
+
+
+def _jsonable(value: Any) -> Any:
+    try:
+        json.dumps(value)
+        return value
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _truncated_response(result: Any) -> Any:
+    if result is None:
+        return None
+    try:
+        text = json.dumps(result, default=str)
+    except (TypeError, ValueError):
+        text = str(result)
+    if len(text) <= _EVIDENCE_RESPONSE_LIMIT:
+        return _jsonable(result)
+    return text[:_EVIDENCE_RESPONSE_LIMIT] + "...[truncated]"
 
 
 def _jsonrpc_code(run: dict[str, Any]) -> int | None:
@@ -165,8 +186,12 @@ def classify_fuzz_runs(
                     kind,
                     target,
                     run_no,
-                    "Server accepted clearly-malformed input without an error.",
-                    {"input": _run_input(kind, run)},
+                    "Server returned a non-error response to an attack-pattern "
+                    "or schema-invalid fuzz input.",
+                    {
+                        "input": _run_input(kind, run),
+                        "result": _truncated_response(run.get("result")),
+                    },
                 )
             )
 
@@ -307,8 +332,45 @@ def classify_fuzz_runs(
                 )
             )
 
-    findings.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 9), f.category))
-    return findings
+    deduped = _dedupe_findings(findings)
+    deduped.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 9), f.category))
+    return deduped
+
+
+def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
+    grouped: dict[str, Finding] = {}
+    for finding in findings:
+        evidence = dict(finding.evidence or {})
+        input_value = evidence.pop("input", None)
+        result_value = evidence.pop("result", None)
+        try:
+            key_payload = {
+                "category": finding.category,
+                "kind": finding.kind,
+                "target": finding.target,
+                "detail": finding.detail,
+                "input": input_value,
+                "result": result_value,
+                "evidence": evidence,
+            }
+            key = json.dumps(key_payload, sort_keys=True, default=str)
+        except (TypeError, ValueError):
+            key = repr((finding.category, finding.kind, finding.target, finding.detail))
+
+        if key not in grouped:
+            grouped[key] = finding
+            continue
+
+        existing = grouped[key]
+        existing_runs = existing.evidence.setdefault("runs", [])
+        if existing.run is not None and existing.run not in existing_runs:
+            existing_runs.append(existing.run)
+        if finding.run is not None and finding.run not in existing_runs:
+            existing_runs.append(finding.run)
+        existing.evidence["count"] = int(existing.evidence.get("count", 1)) + 1
+        existing.run = None
+
+    return list(grouped.values())
 
 
 def summarize_findings(findings: list[Finding]) -> dict[str, int]:

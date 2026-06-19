@@ -302,8 +302,14 @@ class HttpClientBehavior(DriverBaseBehavior):
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
-            error_msg = f"HTTP {e.response.status_code}: {e.response.text}"
-            self._logger.error(error_msg)
+            status_code = e.response.status_code
+            error_msg = f"HTTP {status_code}: {e.response.text}"
+            log = (
+                self._logger.warning
+                if status_code in {401, 403}
+                else self._logger.error
+            )
+            log(error_msg)
             raise NetworkError(error_msg)
 
     def _parse_http_response_json(

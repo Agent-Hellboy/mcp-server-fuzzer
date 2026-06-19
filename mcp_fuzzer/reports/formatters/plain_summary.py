@@ -6,31 +6,19 @@ import sys
 from typing import Any
 
 from ...types import extract_tool_runs
-from .common import summarize_tool_runs
+from .common import summarize_tool_outcomes, summarize_tool_runs
 
 
 def _tool_outcome_buckets(runs: list[dict[str, Any]]) -> dict[str, int]:
     """Group tool runs by outcome so a server *rejecting* malformed input is not
     conflated with a transport/protocol anomaly or a real crash."""
-    buckets = {
-        "server_rejected": 0,
-        "accepted_malformed": 0,
-        "anomaly": 0,
-        "crashed": 0,
+    buckets = summarize_tool_outcomes(runs)
+    return {
+        "server_rejected": buckets["server_rejected"],
+        "accepted_malformed": buckets["accepted_malformed"],
+        "anomaly": buckets["anomaly"] + buckets["exceptions"],
+        "crashed": buckets["crashed"],
     }
-    for run in runs:
-        if not isinstance(run, dict):
-            continue
-        outcome = run.get("outcome")
-        if outcome == "crashed" or run.get("error") == "server_crashed":
-            buckets["crashed"] += 1
-        elif outcome == "server_rejected":
-            buckets["server_rejected"] += 1
-        elif outcome == "accepted_malformed" or run.get("accepted_malformed"):
-            buckets["accepted_malformed"] += 1
-        elif outcome in {"transport_error", "timeout", "phase_failed"}:
-            buckets["anomaly"] += 1
-    return buckets
 
 
 def _count_crashes(
