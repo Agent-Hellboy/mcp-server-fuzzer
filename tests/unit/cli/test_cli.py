@@ -438,7 +438,7 @@ def test_run_with_retry_on_interrupt_retry_path():
     args = MagicMock(enable_safety_system=False, retry_with_safety_on_interrupt=True)
     calls = {"n": 0}
 
-    def fake_execute(_args, _main, _argv):
+    def fake_execute(_args, _main, _argv, **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             raise KeyboardInterrupt()
@@ -452,7 +452,8 @@ def test_run_with_retry_on_interrupt_retry_path():
         patch("mcp_fuzzer.cli.runtime.retry.start_system_blocking") as mock_start,
         patch("mcp_fuzzer.cli.runtime.retry.stop_system_blocking") as mock_stop,
     ):
-        run_with_retry_on_interrupt(args, lambda: None, ["prog"])
+        exit_code = run_with_retry_on_interrupt(args, lambda: None, ["prog"])
+        assert exit_code == 0
         assert calls["n"] == 2
         mock_start.assert_called_once()
         mock_stop.assert_called_once()
@@ -728,6 +729,7 @@ def test_cli_fail_if_no_tools_blocked_exits_two(tmp_path):
         env={**os.environ, "PYTHONPATH": str(root)},
         capture_output=True,
         text=True,
+        timeout=60,
     )
     assert proc.returncode == 2
     assert (out / "run_summary.json").exists()

@@ -13,6 +13,7 @@ from ..reports.formatters.plain_summary import write_stdout_summary
 from ..reports.run_summary import build_run_summary, write_run_summary
 from ..reports.report_presenter import FuzzReportPresenter
 from .session_settings import SessionSettings
+from .exit_codes import NO_TOOLS_AVAILABLE, SUCCESS
 
 
 def _requested_export_targets(config: dict[str, Any]) -> dict[str, str]:
@@ -146,9 +147,9 @@ class PostRunPresenter:
                 "--fail-if-no-tools%s",
                 f" ({detail})" if detail else "",
             )
-            return 2
+            return NO_TOOLS_AVAILABLE
 
-        return 0
+        return SUCCESS
 
 
 __all__ = ["PostRunPresenter"]

@@ -72,6 +72,7 @@ def run_cli() -> None:
             args,
             lambda: run_fuzz_app(session_settings),
             argv,
+            safety=safety,
         )
         sys.exit(exit_code)
     except KeyboardInterrupt:

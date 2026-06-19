@@ -196,16 +196,14 @@ def test_handle_cancellation_sets_exit(capsys):
     assert "Fuzzing interrupted" in capsys.readouterr().out
 
 
-def test_final_cleanup_restores_argv_and_exit():
+def test_final_cleanup_restores_argv():
     args = SimpleNamespace()
     runner = AsyncRunner(args, safety=SimpleNamespace())
     runner.loop = DummyLoop()
     runner.old_argv = ["old"]
     sys.argv = ["new"]
-    runner.should_exit = True
 
-    with pytest.raises(SystemExit):
-        runner._final_cleanup()
+    runner._final_cleanup()
 
     assert sys.argv == ["old"]
 
@@ -227,9 +225,7 @@ def test_run_handles_cancelled_error(monkeypatch):
     )
     monkeypatch.setattr(runner, "_cleanup_pending_tasks", lambda: None)
 
-    with pytest.raises(SystemExit):
-        runner.run(lambda: None, ["mcp-fuzzer"])
-
+    assert runner.run(lambda: None, ["mcp-fuzzer"]) == 130
     assert runner.should_exit is True
 
 
@@ -264,6 +260,7 @@ def test_execute_inner_client_handles_cancel(monkeypatch):
         enable_aiomonitor=False,
     )
     loop = asyncio.new_event_loop()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
     def _run_until_complete(_):
         raise asyncio.CancelledError()
@@ -275,14 +272,10 @@ def test_execute_inner_client_handles_cancel(monkeypatch):
         patch.object(loop, "add_signal_handler"),
         patch.object(loop, "run_until_complete", side_effect=_run_until_complete),
     ):
-        try:
+        async def dummy():
+            return None
 
-            async def dummy():
-                return None
-
-            execute_inner_client(args, dummy, ["prog"])
-        except SystemExit as exc:
-            assert exc.code == 130
+        assert execute_inner_client(args, dummy, ["prog"]) == 130
     loop.close()
 
 
@@ -323,7 +316,5 @@ def test_run_with_retry_on_interrupt_exits_when_no_retry(monkeypatch):
         ),
         patch("mcp_fuzzer.cli.runtime.retry.Console") as mock_console,
     ):
-        with pytest.raises(SystemExit) as exc:
-            run_with_retry_on_interrupt(args, lambda: None, ["prog"])
-        assert exc.value.code == 130
+        assert run_with_retry_on_interrupt(args, lambda: None, ["prog"]) == 130
     mock_console.return_value.print.assert_called_once()

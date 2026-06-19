@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import signal
 import sys
@@ -13,15 +14,23 @@ from typing import Any, Awaitable, Callable, TypeVar
 from rich.console import Console
 
 from ...client.safety import SafetyController
+from ..exit_codes import INTERRUPTED, SUCCESS
 
 _T = TypeVar("_T")
+logger = logging.getLogger(__name__)
 
 
 def _coerce_exit_code(result: object | None) -> int:
     """Normalize coroutine return values into a process exit code."""
     if isinstance(result, int):
         return result
-    return 0
+    if result is not None:
+        logger.warning(
+            "Expected coroutine to return int exit code, got %r; using %s",
+            result,
+            SUCCESS,
+        )
+    return SUCCESS
 
 
 class AsyncRunner:
@@ -40,7 +49,7 @@ class AsyncRunner:
     ) -> int:
         """Main execution method that orchestrates the entire async runtime."""
         self._setup_environment(argv)
-        exit_code = 0
+        exit_code = SUCCESS
 
         try:
             if self._is_pytest_environment():
@@ -57,6 +66,7 @@ class AsyncRunner:
                 )
             except asyncio.CancelledError:
                 self._handle_cancellation()
+                exit_code = INTERRUPTED
             finally:
                 self._cleanup_pending_tasks()
 
@@ -180,14 +190,18 @@ class AsyncRunner:
         if self.loop:
             self.loop.close()
         sys.argv = self.old_argv
-        if self.should_exit:
-            raise SystemExit(130)
 
 
-def execute_inner_client(args: Any, unified_client_main, argv: list[str]) -> int:
-    """Simple wrapper that creates a runner and executes."""
-    safety = SafetyController()
-    runner = AsyncRunner(args, safety)
+def execute_inner_client(
+    args: Any,
+    unified_client_main,
+    argv: list[str],
+    *,
+    safety: SafetyController | None = None,
+) -> int:
+    """Run the inner client coroutine and return its process exit code."""
+    controller = safety if safety is not None else SafetyController()
+    runner = AsyncRunner(args, controller)
     return runner.run(unified_client_main, argv)
 
 
