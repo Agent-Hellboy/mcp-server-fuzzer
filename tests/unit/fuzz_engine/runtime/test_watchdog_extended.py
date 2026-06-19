@@ -385,6 +385,7 @@ class TestProcessWatchdog:
         result = await watchdog.scan_once(processes)
         assert 123 in result["hung"]
         assert 123 in result["killed"]
+        mock_registry.update_status.assert_awaited_once_with(123, "stopped")
 
     @pytest.mark.asyncio
     async def test_scan_once_cleans_up_missing_pids(
@@ -449,6 +450,23 @@ class TestProcessWatchdog:
         stats = await watchdog.get_stats()
         assert "system_metrics" in stats
         assert stats["system_metrics"]["cpu"] == 50
+
+    @pytest.mark.asyncio
+    async def test_get_stats_metrics_sampler_error_is_swallowed(
+        self, mock_registry, mock_dispatcher, watchdog_config
+    ):
+        """A raising metrics sampler is logged and omitted, not propagated."""
+        mock_registry.snapshot = AsyncMock(return_value={})
+
+        watchdog = ProcessWatchdog(
+            registry=mock_registry,
+            signal_dispatcher=mock_dispatcher,
+            config=watchdog_config,
+            metrics_sampler=lambda: 1 / 0,
+        )
+
+        stats = await watchdog.get_stats()
+        assert "system_metrics" not in stats
 
     @pytest.mark.asyncio
     async def test_context_manager(
