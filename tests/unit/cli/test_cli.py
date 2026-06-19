@@ -389,7 +389,8 @@ def test_prepare_inner_argv_roundtrip():
     assert "--spec-prompt-args" in argv
 
 
-def test_transport_factory_applies_auth_headers():
+def test_transport_factory_applies_auth_headers(monkeypatch):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2024-11-05")
     request = TransportBuildRequest(
         protocol="http",
         endpoint="http://example.com",
