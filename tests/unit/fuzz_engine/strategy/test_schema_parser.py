@@ -654,3 +654,156 @@ def test_number_type_multiple_of(monkeypatch):
 def test_generate_default_value():
     result = schema_parser._generate_default_value("realistic")
     assert result in ["default_value", 123, True, [], {}]
+
+
+def test_merge_allOf_min_constraints():
+    """Test _merge_allOf takes max of min constraints."""
+    schemas = [
+        {"minLength": 5, "minimum": 10, "minItems": 2},
+        {"minLength": 8, "minimum": 15, "minItems": 1},
+    ]
+    result = schema_parser._merge_allOf(schemas)
+    assert result["minLength"] == 8
+    assert result["minimum"] == 15
+    assert result["minItems"] == 2
+
+
+def test_merge_allOf_max_constraints():
+    """Test _merge_allOf takes min of max constraints."""
+    schemas = [
+        {"maxLength": 20, "maximum": 100, "maxItems": 10},
+        {"maxLength": 15, "maximum": 50, "maxItems": 8},
+    ]
+    result = schema_parser._merge_allOf(schemas)
+    assert result["maxLength"] == 15
+    assert result["maximum"] == 50
+    assert result["maxItems"] == 8
+
+
+def test_merge_allOf_exclusive_constraints():
+    """Test _merge_allOf with exclusive min/max."""
+    schemas = [
+        {"exclusiveMinimum": 10, "exclusiveMaximum": 100},
+        {"exclusiveMinimum": 20, "exclusiveMaximum": 80},
+    ]
+    result = schema_parser._merge_allOf(schemas)
+    assert result["exclusiveMinimum"] == 20
+    assert result["exclusiveMaximum"] == 80
+
+
+def test_merge_allOf_other_fields():
+    """Test _merge_allOf preserves other fields."""
+    schemas = [
+        {"type": "string", "format": "email"},
+        {"minLength": 5, "pattern": "^test"},
+    ]
+    result = schema_parser._merge_allOf(schemas)
+    assert result["format"] == "email"
+    assert result["pattern"] == "^test"
+
+
+def test_string_format_datetime():
+    """Test string generation with date-time format."""
+    schema = {"type": "string", "format": "date-time"}
+    result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    assert isinstance(result, str)
+    assert "T" in result
+
+
+def test_string_format_date():
+    """Test string generation with date format."""
+    schema = {"type": "string", "format": "date"}
+    result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    assert isinstance(result, str)
+    # Date format should produce a string (format may vary)
+    assert len(result) > 0
+
+
+def test_object_without_properties():
+    """Test object generation without properties definition."""
+    schema = {"type": "object", "minProperties": 2, "maxProperties": 5}
+    result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    assert isinstance(result, dict)
+    assert len(result) >= 2
+    assert len(result) <= 5
+
+
+def test_deep_recursion_limit():
+    """Test that deep recursion is limited."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "nested": {
+                "type": "object",
+                "properties": {
+                    "nested": {
+                        "type": "object",
+                        "properties": {
+                            "nested": {
+                                "type": "object",
+                                "properties": {
+                                    "nested": {"type": "object"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+    result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    assert isinstance(result, dict)
+
+
+def test_number_with_exclusive_minimum():
+    """Numeric exclusiveMinimum nudges the lower bound up (schema_parser:669)."""
+    schema = {"type": "number", "exclusiveMinimum": 10.0, "maximum": 20.0}
+    result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    assert isinstance(result, (int, float))
+    assert result > 10.0
+    assert result <= 20.0
+
+
+def test_number_with_exclusive_maximum():
+    """Numeric exclusiveMaximum nudges the upper bound down (schema_parser:673)."""
+    schema = {"type": "number", "minimum": 10.0, "exclusiveMaximum": 20.0}
+    result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    assert isinstance(result, (int, float))
+    assert result >= 10.0
+    assert result < 20.0
+
+
+def test_number_with_multiple_of():
+    """multipleOf picks a valid multiple within range (schema_parser:603-604)."""
+    schema = {"type": "number", "multipleOf": 5, "minimum": 10, "maximum": 50}
+    result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    assert isinstance(result, (int, float))
+    assert result % 5 == 0
+
+
+def test_integer_with_multiple_of():
+    """multipleOf for integers picks a valid multiple within range."""
+    schema = {"type": "integer", "multipleOf": 3, "minimum": 10, "maximum": 30}
+    result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    assert isinstance(result, int)
+    assert result % 3 == 0
+
+
+def test_string_with_pattern():
+    """A pattern with no simple handler falls through to the random fallback
+    (schema_parser:556-557)."""
+    schema = {"type": "string", "pattern": "^[a-z]+$"}
+    result = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
+    assert isinstance(result, str)
+
+
+def test_aggressive_string_pads_to_min_length(monkeypatch):
+    """An aggressive payload shorter than minLength is padded via
+    _enforce_length (schema_parser:427). The realistic path never pads."""
+    # Force the first strategy ("sql"), whose payload is far shorter than 200.
+    monkeypatch.setattr(schema_parser.random, "choice", lambda seq: seq[0])
+    result = schema_parser._handle_string_type(
+        {"type": "string", "minLength": 200, "maxLength": 500}, "aggressive"
+    )
+    assert isinstance(result, str)
+    assert len(result) >= 200

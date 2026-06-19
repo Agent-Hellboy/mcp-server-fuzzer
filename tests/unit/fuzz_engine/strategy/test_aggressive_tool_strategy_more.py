@@ -173,6 +173,19 @@ def test_fallback_array_normalizes_bounds(monkeypatch):
     assert len(args["items"]) == 2
 
 
+def test_generate_aggressive_integer_negative_in_range(monkeypatch):
+    """The 'negative' strategy returns a random value in [min_value, -1] when
+    that sub-range is valid (aggressive_tool_strategy:333)."""
+    def choice(seq):
+        if isinstance(seq, list) and "off_by_one" in seq and "overflow" in seq:
+            return "negative"
+        return seq[0]
+
+    monkeypatch.setattr(tool_strategy.random, "choice", choice)
+    value = tool_strategy._generate_aggressive_integer(min_value=-100, max_value=100)
+    assert -100 <= value <= -1
+
+
 def test_generate_aggressive_integer_off_by_one_minimum(monkeypatch):
     def choice(seq):
         if isinstance(seq, list) and "off_by_one" in seq and "overflow" in seq:
@@ -351,3 +364,213 @@ def test_fallback_array_handles_invalid_bounds(monkeypatch):
     args = tool_strategy.fuzz_tool_arguments_aggressive(tool)
     assert len(args["items"]) == 0
     assert len(args["large"]) == 6
+
+
+# ---------------------------------------------------------------------------
+# generate_aggressive_text branch coverage (folded from test_tool_strategy.py)
+# ---------------------------------------------------------------------------
+
+
+def test_generate_aggressive_text_broken_uuid(monkeypatch):
+    _force_strategy(monkeypatch, "broken_uuid")
+    value = tool_strategy.generate_aggressive_text(min_size=1, max_size=100)
+    assert value in ("not-a-uuid-at-all", "1234", "zzzz-zzzz-zzzz-zzzz")
+
+
+def test_generate_aggressive_text_special_chars(monkeypatch):
+    _force_strategy(monkeypatch, "special_chars")
+    value = tool_strategy.generate_aggressive_text(min_size=3, max_size=3)
+    assert len(value) == 3
+    assert all(c in tool_strategy.SPECIAL_CHARS for c in value)
+
+
+def test_generate_aggressive_text_broken_timestamp(monkeypatch):
+    _force_strategy(monkeypatch, "broken_timestamp")
+    value = tool_strategy.generate_aggressive_text(min_size=1, max_size=100)
+    assert value in ("not-a-timestamp", "2024-13-40T25:70:99Z")
+
+
+def test_generate_aggressive_text_escape_chars(monkeypatch):
+    _force_strategy(monkeypatch, "escape_chars")
+    value = tool_strategy.generate_aggressive_text(min_size=2, max_size=2)
+    assert len(value) == 2
+
+
+def test_generate_aggressive_text_html_entities(monkeypatch):
+    _force_strategy(monkeypatch, "html_entities")
+    value = tool_strategy.generate_aggressive_text(min_size=2, max_size=100)
+    # randint -> min (2); each pick -> HTML_ENTITIES[0] == "&lt;"
+    assert value == "&lt;&lt;"
+
+
+def test_generate_aggressive_text_sql_injection(monkeypatch):
+    _force_strategy(monkeypatch, "sql_injection")
+    value = tool_strategy.generate_aggressive_text(min_size=1, max_size=100)
+    assert value == tool_strategy.SQL_INJECTION[0]
+
+
+def test_generate_aggressive_text_xss(monkeypatch):
+    _force_strategy(monkeypatch, "xss")
+    value = tool_strategy.generate_aggressive_text(min_size=1, max_size=100)
+    assert value == tool_strategy.XSS_PAYLOADS[0]
+
+
+def test_generate_aggressive_text_path_traversal(monkeypatch):
+    _force_strategy(monkeypatch, "path_traversal")
+    value = tool_strategy.generate_aggressive_text(min_size=1, max_size=100)
+    assert value == tool_strategy.PATH_TRAVERSAL[0]
+
+
+def test_generate_aggressive_text_mixed(monkeypatch):
+    _force_strategy(monkeypatch, "mixed")
+    value = tool_strategy.generate_aggressive_text(min_size=3, max_size=3)
+    assert len(value) == 3
+
+
+def test_generate_aggressive_text_extreme(monkeypatch):
+    _force_strategy(monkeypatch, "extreme")
+    value = tool_strategy.generate_aggressive_text(min_size=1, max_size=5)
+    # Extreme can return empty string or other extreme values
+    assert isinstance(value, str)
+
+
+def test_generate_aggressive_text_unknown_fallback(monkeypatch):
+    _force_strategy(monkeypatch, "unknown_strategy")
+    value = tool_strategy.generate_aggressive_text(min_size=3, max_size=3)
+    assert len(value) == 3
+
+
+# ---------------------------------------------------------------------------
+# _generate_aggressive_integer branch coverage (folded from test_tool_strategy.py)
+# ---------------------------------------------------------------------------
+
+
+def _force_int_strategy(monkeypatch, strategy: str) -> None:
+    def choice(seq):
+        if isinstance(seq, list) and "off_by_one" in seq and "special" in seq:
+            return strategy
+        return seq[0]
+
+    monkeypatch.setattr(tool_strategy.random, "choice", choice)
+
+
+def test_generate_aggressive_integer_extreme(monkeypatch):
+    _force_int_strategy(monkeypatch, "extreme")
+    value = tool_strategy._generate_aggressive_integer()
+    assert value in [
+        -2147483648,
+        2147483647,
+        -9223372036854775808,
+        9223372036854775807,
+        0,
+        -1,
+        1,
+    ]
+
+
+def test_generate_aggressive_integer_zero(monkeypatch):
+    _force_int_strategy(monkeypatch, "zero")
+    value = tool_strategy._generate_aggressive_integer()
+    assert value == 0
+
+
+def test_generate_aggressive_integer_special(monkeypatch):
+    _force_int_strategy(monkeypatch, "special")
+    value = tool_strategy._generate_aggressive_integer()
+    assert value in [42, 69, 420, 1337, 8080, 65535]
+
+
+def test_generate_aggressive_integer_normal_fallback(monkeypatch):
+    _force_int_strategy(monkeypatch, "normal")
+    monkeypatch.setattr(tool_strategy.random, "randint", lambda a, b: 100)
+    value = tool_strategy._generate_aggressive_integer(min_value=0, max_value=1000)
+    assert value == 100
+
+
+# ---------------------------------------------------------------------------
+# _generate_aggressive_float branch coverage (folded from test_tool_strategy.py)
+# ---------------------------------------------------------------------------
+
+
+def _force_float_strategy(monkeypatch, strategy: str) -> None:
+    def choice(seq):
+        if isinstance(seq, list) and "off_by_one" in seq and "infinity" in seq:
+            return strategy
+        return seq[0]
+
+    monkeypatch.setattr(tool_strategy.random, "choice", choice)
+
+
+def test_generate_aggressive_float_infinity(monkeypatch):
+    _force_float_strategy(monkeypatch, "infinity")
+    value = tool_strategy._generate_aggressive_float()
+    assert value in (float("inf"), float("-inf"))
+
+
+def test_generate_aggressive_float_extreme(monkeypatch):
+    _force_float_strategy(monkeypatch, "extreme")
+    value = tool_strategy._generate_aggressive_float()
+    assert value in [0.0, -0.0, 1.0, -1.0, 3.14159, -3.14159]
+
+
+def test_generate_aggressive_float_zero(monkeypatch):
+    _force_float_strategy(monkeypatch, "zero")
+    value = tool_strategy._generate_aggressive_float()
+    assert value == 0.0
+
+
+def test_generate_aggressive_float_tiny(monkeypatch):
+    _force_float_strategy(monkeypatch, "tiny")
+    monkeypatch.setattr(tool_strategy.random, "uniform", lambda a, b: 1e-8)
+    value = tool_strategy._generate_aggressive_float()
+    assert 1e-10 <= value <= 1e-5
+
+
+def test_generate_aggressive_float_huge(monkeypatch):
+    _force_float_strategy(monkeypatch, "huge")
+    monkeypatch.setattr(tool_strategy.random, "uniform", lambda a, b: 1e12)
+    value = tool_strategy._generate_aggressive_float()
+    assert 1e10 <= value <= 1e15
+
+
+def test_generate_aggressive_float_normal_fallback(monkeypatch):
+    _force_float_strategy(monkeypatch, "normal")
+    monkeypatch.setattr(tool_strategy.random, "uniform", lambda a, b: 3.14)
+    value = tool_strategy._generate_aggressive_float()
+    assert isinstance(value, float)
+
+
+def test_fuzz_tool_arguments_aggressive_string_schema_fallback(monkeypatch):
+    from mcp_fuzzer.fuzz_engine.mutators.strategies import schema_parser
+
+    monkeypatch.setattr(
+        schema_parser,
+        "make_fuzz_strategy_from_jsonschema",
+        lambda schema, phase=None: "not-a-dict",
+    )
+    monkeypatch.setattr(
+        tool_strategy, "generate_aggressive_text", lambda *a, **k: "text"
+    )
+    monkeypatch.setattr(
+        tool_strategy, "_generate_aggressive_integer", lambda *a, **k: 7
+    )
+    monkeypatch.setattr(
+        tool_strategy, "_generate_aggressive_float", lambda *a, **k: 3.14
+    )
+
+    random_values = iter([0.1, 0.1] + [0.9] * 5)
+    monkeypatch.setattr(tool_strategy.random, "random", lambda: next(random_values))
+
+    tool = {
+        "inputSchema": {
+            "properties": {"a": {"type": "string"}, "b": {"type": "integer"}},
+            "required": ["c"],
+        }
+    }
+
+    args = tool_strategy.fuzz_tool_arguments_aggressive(tool)
+
+    assert args["a"] == "text"
+    assert args["b"] == 7
+    assert args["c"] == "text"
+    assert set(args.keys()).issubset({"a", "b", "c"})

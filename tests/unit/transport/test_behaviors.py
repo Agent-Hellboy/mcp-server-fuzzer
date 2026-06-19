@@ -138,12 +138,6 @@ def test_parse_sse_event_and_streaming():
     assert list(parser.parse_streaming_response(lines)) == [{"a": 1}, {"b": 2}]
 
 
-def test_parse_streaming_response_bad_json():
-    parser = DummyParser()
-    lines = ["data: {bad}", ""]
-    assert list(parser.parse_streaming_response(lines)) == []
-
-
 def test_lifecycle_state_changes(monkeypatch):
     lifecycle = DummyLifecycle()
 
@@ -271,24 +265,6 @@ def test_parse_http_response_json_no_fallback_extra():
         driver._parse_http_response_json(FakeResponse(), fallback_to_sse=False)
 
 
-def test_parse_sse_event_logs_warnings(monkeypatch):
-    parser = DummyParser()
-    monkeypatch.setitem(
-        parser.parse_sse_event.__globals__,
-        "spec_guard",
-        SimpleNamespace(
-            check_sse_event_text=lambda _text: [{"id": "w", "message": "x"}],
-        ),
-    )
-    assert parser.parse_sse_event('data: {"a": 1}') == {"a": 1}
-
-
-def test_parse_streaming_response_buffer_overflow():
-    parser = DummyParser()
-    lines = ["data: {\"a\": 1}", "data: {\"b\": 2}", ""]
-    assert list(parser.parse_streaming_response(lines, buffer_size=1)) == []
-
-
 def test_parse_streaming_response_flushes_remaining():
     parser = DummyParser()
     lines = ['data: {"a": 1}']
@@ -327,3 +303,127 @@ async def test_lifecycle_error_state_and_callback_warning(monkeypatch):
     lifecycle.register_activity_callback(bad_callback)
     await lifecycle._lifecycle_error(RuntimeError("fail"))
     assert lifecycle.connection_state == DriverState.ERROR
+
+
+def test_validate_jsonrpc_payload_errors():
+    driver = DummyDriver()
+
+    with pytest.raises(PayloadValidationError):
+        driver._validate_jsonrpc_payload("not-a-dict")
+    with pytest.raises(PayloadValidationError):
+        driver._validate_jsonrpc_payload({"jsonrpc": "1.0"})
+    with pytest.raises(PayloadValidationError):
+        driver._validate_jsonrpc_payload(
+            {"jsonrpc": "2.0", "method": "ping"}, strict=True
+        )
+    with pytest.raises(PayloadValidationError):
+        driver._validate_jsonrpc_payload({"jsonrpc": "2.0", "result": 1, "error": {}})
+    with pytest.raises(PayloadValidationError):
+        driver._validate_jsonrpc_payload({"jsonrpc": "2.0", "result": 1})
+    with pytest.raises(PayloadValidationError):
+        driver._validate_jsonrpc_payload(
+            {"jsonrpc": "2.0", "id": 1, "error": {"code": "x"}}
+        )
+    with pytest.raises(PayloadValidationError):
+        driver._validate_jsonrpc_payload(
+            {"jsonrpc": "2.0", "id": 1, "error": {"code": 1, "message": 2}}
+        )
+
+
+def test_create_jsonrpc_request_with_id():
+    driver = DummyDriver()
+
+    payload = driver._create_jsonrpc_request("ping", {"ok": True}, request_id=1)
+
+    assert payload["id"] == 1
+
+
+def test_validate_jsonrpc_payload_error_fields_ok():
+    driver = DummyDriver()
+
+    driver._validate_jsonrpc_payload(
+        {"jsonrpc": "2.0", "id": 1, "error": {"code": 1, "message": "bad"}}
+    )
+
+
+def test_log_error_and_raise_without_data():
+    driver = DummyDriver()
+
+    with pytest.raises(TransportError):
+        driver._log_error_and_raise("boom")
+
+
+def test_parse_sse_event_warns(monkeypatch):
+    parser = DummyParser()
+    warnings = []
+
+    def _warn(*args, **_kwargs):
+        warnings.append(args)
+
+    parser._logger = SimpleNamespace(warning=_warn)
+    monkeypatch.setitem(
+        parser.parse_sse_event.__globals__,
+        "spec_guard",
+        SimpleNamespace(
+            check_sse_event_text=lambda _text: [{"id": "warn", "message": "bad"}]
+        ),
+    )
+
+    parsed = parser.parse_sse_event('data: {"ok": true}')
+
+    assert parsed == {"ok": True}
+    assert warnings
+
+
+def test_parse_sse_event_without_data():
+    parser = DummyParser()
+
+    assert parser.parse_sse_event("event: ping") is None
+
+
+def test_parse_streaming_response_buffer_reset():
+    parser = DummyParser()
+    parser._logger = MagicMock()
+
+    lines = ["data: {\"ok\": 1}", "data: {\"ok\": 2}", ""]
+    results = list(parser.parse_streaming_response(lines, buffer_size=1))
+
+    assert results == []
+    parser._logger.warning.assert_called()
+
+
+def test_parse_streaming_response_logs_bad_json():
+    parser = DummyParser()
+    parser._logger = MagicMock()
+
+    lines = ["data: {bad}", ""]
+
+    assert list(parser.parse_streaming_response(lines)) == []
+    parser._logger.error.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_state_transitions_and_callbacks():
+    lifecycle = DummyLifecycle()
+    lifecycle._logger = MagicMock()
+
+    def _bad_callback(_ts):
+        raise RuntimeError("boom")
+
+    lifecycle.register_activity_callback(_bad_callback)
+    lifecycle._touch_activity()
+
+    assert lifecycle.connection_duration is None
+    await lifecycle._lifecycle_connect()
+    await lifecycle._lifecycle_connected()
+    assert lifecycle.is_connected() is True
+    await lifecycle._lifecycle_disconnect()
+    await lifecycle._lifecycle_closed()
+    assert lifecycle.is_closed() is True
+    await lifecycle._lifecycle_error(RuntimeError("fail"))
+
+
+def test_time_since_last_activity():
+    lifecycle = DummyLifecycle()
+
+    assert lifecycle.time_since_last_activity() >= 0
