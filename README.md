@@ -37,7 +37,8 @@ command blocking, and network restrictions for safer local testing.
 
 Beyond protocol/transport errors, runs are classified into categorized findings
 (written to `<output-dir>/findings.json`, with per-crash repros under
-`<output-dir>/crashes/`, and summarized on stdout):
+`<output-dir>/crashes/`, a compact CI summary at
+`<output-dir>/run_summary.json`, and summarized on stdout):
 
 - `crash` — server process terminated abnormally (segfault/abort/panic or
   non-zero exit); captures the signal and a stderr tail
@@ -49,8 +50,16 @@ Beyond protocol/transport errors, runs are classified into categorized findings
 - `error_leakage` — stack trace / panic leaked in output
 - `memory_growth` — server RSS grew multi-fold across runs (stdio targets)
 - `non_determinism` — identical input produced differing outcomes
-- `accepted_malformed` — server accepted clearly-invalid input without error
+- `accepted_malformed` — server returned a non-error response to an
+  attack-pattern or schema-invalid fuzz input; repeated identical evidence is
+  collapsed into one finding with run counts and a response sample
 - `performance_outlier` — response time far above the per-target median
+
+`findings.json` is always written for completed sessions, even when no findings
+are present (`{"findings": [], "count": 0}`), so CI jobs can assert that report
+generation succeeded separately from whether issues were discovered.
+`run_summary.json` records whether the run completed or was blocked, plus
+tool/protocol counts and run totals for simple CI assertions.
 
 Tip: for compiled-language servers (Go/C/C++/Rust), run the target under a
 sanitizer or race build so memory bugs surface as observable crashes.

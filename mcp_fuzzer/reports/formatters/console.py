@@ -12,6 +12,7 @@ from .common import (
     calculate_protocol_success_rate,
     collect_and_summarize_protocol_items,
     result_has_failure,
+    summarize_tool_outcomes,
     summarize_tool_runs,
 )
 from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
@@ -31,21 +32,26 @@ class ConsoleFormatter:
 
         table = Table(title="MCP Tool Fuzzing Summary")
         table.add_column("Tool", style="cyan", no_wrap=True)
-        table.add_column("Total Runs", style="green")
+        table.add_column("Runs", style="green")
+        table.add_column("Rejected", style="green")
+        table.add_column("Accepted Bad", style="red")
+        table.add_column("Anomalies", style="red")
         table.add_column("Exceptions", style="red")
-        table.add_column("Safety Blocked", style="yellow")
-        table.add_column("Success Rate", style="blue")
+        table.add_column("Safety", style="yellow")
 
         for tool_name, tool_results in results.items():
             runs, _ = extract_tool_runs(tool_results)
             stats = summarize_tool_runs(runs)
+            outcomes = summarize_tool_outcomes(runs)
 
             table.add_row(
                 tool_name,
                 str(stats["total_runs"]),
+                str(outcomes["server_rejected"]),
+                str(outcomes["accepted_malformed"]),
+                str(outcomes["anomaly"] + outcomes["crashed"]),
                 str(stats["exceptions"]),
                 str(stats["safety_blocked"]),
-                f"{stats['success_rate']:.1f}%",
             )
 
         self.console.print(table)
@@ -61,31 +67,49 @@ class ConsoleFormatter:
         total_successful = 0
         total_exceptions = 0
         total_safety_blocked = 0
+        total_rejected = 0
+        total_accepted_malformed = 0
+        total_anomalies = 0
+        total_crashes = 0
         vulnerable_tools: list[tuple[str, int, int]] = []
 
         for tool_name, tool_results in results.items():
             runs, _ = extract_tool_runs(tool_results)
             stats = summarize_tool_runs(runs)
+            outcomes = summarize_tool_outcomes(runs)
             total_runs += int(stats["total_runs"])
             total_successful += int(stats["successful"])
             total_exceptions += int(stats["exceptions"])
             total_safety_blocked += int(stats["safety_blocked"])
-            server_failures = max(
-                0, int(stats["failures"]) - int(stats["safety_blocked"])
+            total_rejected += outcomes["server_rejected"]
+            total_accepted_malformed += outcomes["accepted_malformed"]
+            total_anomalies += outcomes["anomaly"]
+            total_crashes += outcomes["crashed"]
+            findings = (
+                outcomes["accepted_malformed"]
+                + outcomes["anomaly"]
+                + outcomes["exceptions"]
+                + outcomes["crashed"]
             )
-            if server_failures > 0:
+            if findings > 0:
                 vulnerable_tools.append(
-                    (tool_name, server_failures, int(stats["total_runs"]))
+                    (tool_name, findings, int(stats["total_runs"]))
                 )
 
-        success_rate = (total_successful / total_runs * 100) if total_runs > 0 else 0
+        handled_rate = (total_successful / total_runs * 100) if total_runs > 0 else 0
 
         self.console.print("\n[bold]Tool Execution Statistics[/bold]")
         self.console.print(f"Total Tools Tested: {total_tools}")
         self.console.print(f"Total Fuzzing Runs: {total_runs}")
+        self.console.print(f"Total Server-Rejected Inputs: {total_rejected}")
+        self.console.print(
+            f"Total Accepted-Malformed Findings: {total_accepted_malformed}"
+        )
+        self.console.print(f"Total Transport/Protocol Anomalies: {total_anomalies}")
+        self.console.print(f"Total Crashes: {total_crashes}")
         self.console.print(f"Total Exceptions: {total_exceptions}")
         self.console.print(f"Total Safety Blocked: {total_safety_blocked}")
-        self.console.print(f"Overall Success Rate: {success_rate:.1f}%")
+        self.console.print(f"Overall Handled-Correctly Rate: {handled_rate:.1f}%")
 
         if vulnerable_tools:
             self.console.print(

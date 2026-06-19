@@ -52,6 +52,54 @@ def test_hang_and_oversized_and_accepted_malformed():
     assert {"hang", "oversized_response", "accepted_malformed"} <= cats
 
 
+def test_other_categories_are_not_deduplicated():
+    results = {
+        "t": {
+            "runs": [
+                {
+                    "outcome": "valid_response",
+                    "args": {},
+                    "result": {"response": {"error": {"code": -32603, "m": "x"}}},
+                },
+                {
+                    "outcome": "valid_response",
+                    "args": {},
+                    "result": {"response": {"error": {"code": -32603, "m": "x"}}},
+                },
+            ]
+        }
+    }
+    findings = classify_fuzz_runs(results, None)
+    internal = [f for f in findings if f.category == "internal_error"]
+    assert len(internal) == 2
+
+
+def test_accepted_malformed_deduplicates_and_includes_result():
+    results = {
+        "t": {
+            "runs": [
+                {
+                    "outcome": "accepted_malformed",
+                    "args": {"x": "' OR '1'='1"},
+                    "result": {"content": [{"type": "text", "text": "ok"}]},
+                },
+                {
+                    "outcome": "accepted_malformed",
+                    "args": {"x": "' OR '1'='1"},
+                    "result": {"content": [{"type": "text", "text": "ok"}]},
+                },
+            ]
+        }
+    }
+    findings = classify_fuzz_runs(results, None)
+    assert len(findings) == 1
+    assert findings[0].category == "accepted_malformed"
+    assert findings[0].run is None
+    assert findings[0].evidence["count"] == 2
+    assert findings[0].evidence["runs"] == [1, 2]
+    assert findings[0].evidence["result"]["content"][0]["text"] == "ok"
+
+
 def test_internal_error_from_jsonrpc_code():
     results = {
         "t": {

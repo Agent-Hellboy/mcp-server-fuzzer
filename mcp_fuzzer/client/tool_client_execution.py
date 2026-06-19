@@ -47,6 +47,7 @@ class ToolClientExecutionMixin:
                 safety_blocked=True,
                 safety_sanitized=False,
                 error=ErrorType.SAFETY_BLOCKED,
+                outcome=FuzzOutcome.SAFETY_BLOCKED,
             )
 
         sanitized_args = args
@@ -105,6 +106,7 @@ class ToolClientExecutionMixin:
                 error=ErrorType.TOOL_TIMEOUT,
                 exception=exception,
                 timeout_scope=TimeoutScope.CALL,
+                outcome=FuzzOutcome.TIMEOUT,
             )
         except Exception as e:
             self._logger.warning("Exception calling tool %s: %s", tool_name, e)

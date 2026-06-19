@@ -282,7 +282,13 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Returns:
             First parsed result from SSE stream
         """
-        async for payload in self._iter_sse_payloads(response):
+        response_text = getattr(response, "text", "")
+        if response_text:
+            payloads = self._parse_sse_payloads_from_text(response_text)
+        else:
+            payloads = [payload async for payload in self._iter_sse_payloads(response)]
+
+        for payload in payloads:
             if await self._handle_server_request(payload):
                 continue
             if "error" in payload:
@@ -623,6 +629,14 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 continue
             yield payload
 
+    def _apply_sse_event_metadata(self, event: dict[str, Any]) -> None:
+        event_id = event.get("id")
+        if isinstance(event_id, str) and event_id:
+            self.last_event_id = event_id
+        retry = event.get("retry")
+        if isinstance(retry, int):
+            self.retry_delay_ms = retry
+
     async def _iter_sse_payloads(
         self, response: httpx.Response
     ) -> AsyncIterator[dict[str, Any]]:
@@ -630,12 +644,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         event: dict[str, Any] = {"event": "message", "data": []}
         async for line in response.aiter_lines():
             if line == "":
-                event_id = event.get("id")
-                if isinstance(event_id, str) and event_id:
-                    self.last_event_id = event_id
-                retry = event.get("retry")
-                if isinstance(retry, int):
-                    self.retry_delay_ms = retry
+                self._apply_sse_event_metadata(event)
                 data_text = "\n".join(event.get("data", []))
                 event = {"event": "message", "data": []}
                 if not data_text:
@@ -665,6 +674,53 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 continue
             if line.startswith("data:"):
                 event.setdefault("data", []).append(line[len("data:") :].lstrip())
+
+    def _parse_sse_payloads_from_text(self, text: str) -> list[dict[str, Any]]:
+        """Parse a buffered SSE response body into JSON object payloads."""
+        payloads: list[dict[str, Any]] = []
+        event: dict[str, Any] = {"event": "message", "data": []}
+        for line in text.splitlines():
+            if line == "":
+                self._apply_sse_event_metadata(event)
+                data_text = "\n".join(event.get("data", []))
+                event = {"event": "message", "data": []}
+                if not data_text:
+                    continue
+                try:
+                    payload = json.loads(data_text)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(payload, dict):
+                    payloads.append(payload)
+                continue
+            if line.startswith(":"):
+                continue
+            if line.startswith("event:"):
+                event["event"] = line[len("event:") :].strip()
+                continue
+            if line.startswith("id:"):
+                event["id"] = line[len("id:") :].strip()
+                continue
+            if line.startswith("retry:"):
+                retry_text = line[len("retry:") :].strip()
+                try:
+                    event["retry"] = int(retry_text)
+                except ValueError:
+                    pass
+                continue
+            if line.startswith("data:"):
+                event.setdefault("data", []).append(line[len("data:") :].lstrip())
+
+        data_text = "\n".join(event.get("data", []))
+        if data_text:
+            self._apply_sse_event_metadata(event)
+            try:
+                payload = json.loads(data_text)
+            except json.JSONDecodeError:
+                return payloads
+            if isinstance(payload, dict):
+                payloads.append(payload)
+        return payloads
 
     async def listen(self) -> AsyncIterator[dict[str, Any]]:
         """Open a GET-based SSE stream for polling or resumption."""

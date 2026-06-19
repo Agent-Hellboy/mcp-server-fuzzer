@@ -106,8 +106,6 @@ def write_findings_report(
     audit_sections: dict[str, Any] | None = None,
 ) -> Path | None:
     """Write all analyzed findings to ``<output_dir>/findings.json``."""
-    if not findings:
-        return None
     out = Path(output_dir)
     path = out / "findings.json"
     payload = [

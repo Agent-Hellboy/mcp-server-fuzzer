@@ -18,6 +18,7 @@ from ..types import extract_tool_runs
 from .formatters.common import (
     calculate_protocol_success_rate,
     result_has_failure,
+    summarize_tool_outcomes,
     summarize_tool_runs,
     tool_run_has_exception,
 )
@@ -258,6 +259,7 @@ class OutputProtocol:
         for tool_name, results in tool_results.items():
             runs, _ = extract_tool_runs(results)
             stats = summarize_tool_runs(runs)
+            outcomes = summarize_tool_outcomes(runs)
             formatted.append(
                 {
                     "name": tool_name,
@@ -265,6 +267,7 @@ class OutputProtocol:
                     "successful": stats["successful"],
                     "exceptions": stats["exceptions"],
                     "safety_blocked": stats["safety_blocked"],
+                    "outcomes": outcomes,
                     "success_rate": stats["success_rate"],
                     "exception_details": [
                         {

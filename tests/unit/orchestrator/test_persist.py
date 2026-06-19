@@ -50,7 +50,7 @@ def test_persist_session_findings_writes_crash_and_findings(caplog, tmp_path):
     assert "Recorded 1 finding" in caplog.text
 
 
-def test_persist_session_findings_skips_empty_findings():
+def test_persist_session_findings_writes_empty_findings_report():
     with (
         patch(
             "mcp_fuzzer.orchestrator.persist.write_crash_repros",
@@ -63,7 +63,7 @@ def test_persist_session_findings_skips_empty_findings():
         persist_session_findings({}, [], {}, tool_results=None, protocol_results=None)
 
     mock_crash.assert_called_once()
-    mock_findings.assert_not_called()
+    mock_findings.assert_called_once()
 
 
 def test_build_findings_audit_sections_includes_auth_metadata():
@@ -83,3 +83,14 @@ def test_build_findings_audit_sections_includes_auth_metadata():
     sections = build_findings_audit_sections(auth_findings)
     assert sections["auth_audit"]["finding_count"] == len(auth_findings)
     assert "paper_url" in sections["auth_audit"]
+
+
+def test_build_findings_audit_sections_uses_single_server_audit_paper():
+    from mcp_fuzzer.diagnostics.server_transport import audit_insecure_transport
+    from mcp_fuzzer.orchestrator.audit_metadata import build_findings_audit_sections
+
+    findings = audit_insecure_transport("http://mcp.example/mcp")
+    sections = build_findings_audit_sections(findings)
+
+    assert sections["server_audit"]["paper_arxiv_id"] == "2508.13220"
+    assert sections["server_audit"]["finding_count"] == 1

@@ -19,11 +19,12 @@ def test_requested_export_targets_collects_configured_formats():
 
 
 @pytest.mark.asyncio
-async def test_post_run_returns_two_when_no_tools_and_flag_set():
+async def test_post_run_returns_two_when_no_tools_and_flag_set(tmp_path):
     settings = SessionSettings(
         {
             "mode": "tools",
             "fail_if_no_tools": True,
+            "output_dir": str(tmp_path),
             "export_csv": None,
             "export_xml": None,
             "export_html": None,
@@ -46,3 +47,4 @@ async def test_post_run_returns_two_when_no_tools_and_flag_set():
         exit_code = await presenter.present(result)
 
     assert exit_code == 2
+    assert (tmp_path / "run_summary.json").exists()

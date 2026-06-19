@@ -184,7 +184,7 @@ class TestConsoleFormatter:
             str(call.args[0]) for call in console_formatter.console.print.call_args_list
         ]
         assert any("Total Safety Blocked: 1" in item for item in printed)
-        assert any("Overall Success Rate: 0.0%" in item for item in printed)
+        assert any("Overall Handled-Correctly Rate: 0.0%" in item for item in printed)
         assert any("Vulnerabilities Found: 1" in item for item in printed)
         assert any("broken_tool" in item for item in printed)
         assert not any("safe_tool: 1/1 failed runs" in item for item in printed)
@@ -545,7 +545,7 @@ class TestTextFormatter:
             with open(temp_filename, "r") as f:
                 content = f.read()
 
-            assert "Success Rate: 100.0%" in content
+            assert "Handled-Correctly Rate: 100.0%" in content
 
         finally:
             import os
@@ -635,11 +635,11 @@ class TestTextFormatter:
             assert "Total Runs: 3" in content
             assert "Exceptions: 1" in content
             assert "Safety Blocked: 1" in content
-            assert "Success Rate: 33.3%" in content
+            assert "Handled-Correctly Rate: 33.3%" in content
 
             assert "Tool: tool2" in content
             assert "Total Runs: 1" in content
-            assert "Success Rate: 100.0%" in content
+            assert "Handled-Correctly Rate: 100.0%" in content
 
         finally:
             import os

@@ -12,6 +12,12 @@ from typing import Any, TYPE_CHECKING
 
 from ...exceptions import TransportError
 from ..interfaces.behaviors import NetworkError
+from ...diagnostics.tool_discovery import (
+    ToolDiscoveryFailure,
+    ToolDiscoveryReport,
+    classify_tool_discovery_error,
+    classify_tools_list_response,
+)
 
 if TYPE_CHECKING:
     from .driver import TransportDriver
@@ -34,6 +40,7 @@ class JsonRpcAdapter:
         """
         self._transport = transport
         self._logger = logging.getLogger(__name__)
+        self.last_tool_discovery = ToolDiscoveryReport()
 
     def set_transport(self, transport: TransportDriver) -> None:
         """Set or update the transport used for requests.
@@ -68,6 +75,10 @@ class JsonRpcAdapter:
                     "Server response is not a dictionary. Got type: %s",
                     type(response),
                 )
+                self.last_tool_discovery = ToolDiscoveryReport.failed(
+                    ToolDiscoveryFailure.SERVER_ERROR,
+                    f"tools/list returned {type(response).__name__}, expected object",
+                )
                 return []
 
             if "tools" in response:
@@ -81,20 +92,43 @@ class JsonRpcAdapter:
                         "Server returned error for tools/list: %s",
                         response.get("error"),
                     )
+                    self.last_tool_discovery = (
+                        classify_tools_list_response(response)
+                        or ToolDiscoveryReport.failed(
+                            ToolDiscoveryFailure.SERVER_ERROR,
+                            str(response.get("error")),
+                        )
+                    )
                     return []
                 else:
                     self._logger.warning(
                         "Server response missing 'tools' key. Keys present: %s",
                         list(response.keys()),
                     )
+                    self.last_tool_discovery = ToolDiscoveryReport.failed(
+                        ToolDiscoveryFailure.SERVER_ERROR,
+                        "tools/list response missing tools "
+                        f"(keys: {list(response.keys())})",
+                    )
                     return []
+
+            if not tools:
+                self.last_tool_discovery = ToolDiscoveryReport.failed(
+                    ToolDiscoveryFailure.EMPTY_TOOLS_LIST,
+                    "Server returned an empty tools list",
+                )
+                return []
+
+            self.last_tool_discovery = ToolDiscoveryReport.success(len(tools))
             self._logger.info("Found %d tools from server", len(tools))
             return tools
         except (TransportError, NetworkError) as exc:
             self._logger.warning("Failed to fetch tools from server: %s", exc)
+            self.last_tool_discovery = classify_tool_discovery_error(exc)
             return []
         except Exception as e:
             self._logger.exception("Failed to fetch tools from server: %s", e)
+            self.last_tool_discovery = classify_tool_discovery_error(e)
             return []
 
     async def call_tool(

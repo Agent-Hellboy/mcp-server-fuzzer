@@ -102,6 +102,38 @@ def test_handle_http_response_error():
         driver._handle_http_response_error(response)
 
 
+def test_handle_http_response_error_logs_auth_denials_as_warning():
+    driver = DummyHttp()
+    driver._logger = MagicMock()
+    response = httpx.Response(
+        401,
+        text="auth required",
+        request=httpx.Request("GET", "http://example.com"),
+    )
+
+    with pytest.raises(NetworkError):
+        driver._handle_http_response_error(response)
+
+    driver._logger.warning.assert_called_once_with("HTTP 401: auth required")
+    driver._logger.error.assert_not_called()
+
+
+def test_handle_http_response_error_logs_server_errors_as_error():
+    driver = DummyHttp()
+    driver._logger = MagicMock()
+    response = httpx.Response(
+        500,
+        text="boom",
+        request=httpx.Request("GET", "http://example.com"),
+    )
+
+    with pytest.raises(NetworkError):
+        driver._handle_http_response_error(response)
+
+    driver._logger.error.assert_called_once_with("HTTP 500: boom")
+    driver._logger.warning.assert_not_called()
+
+
 def test_parse_http_response_json_fallback_sse():
     driver = DummyHttp()
 

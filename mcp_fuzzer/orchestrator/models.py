@@ -36,6 +36,7 @@ class SessionResult:
     protocol_results: Any
     findings: list[Any]
     findings_summary: dict[str, int]
+    tool_discovery: Any | None = None
 
 
 __all__ = ["SessionContext", "SessionResult"]

@@ -12,6 +12,7 @@ import re
 import statistics
 from typing import Any, Iterable
 
+from .. import evidence_fields as ev
 from ..types import extract_tool_runs
 from .model import SEVERITY_ORDER, Finding
 
@@ -51,6 +52,7 @@ _PERF_MIN_SECONDS = 0.5
 _MEM_MIN_SAMPLES = 8
 _MEM_GROWTH_FACTOR = 2.0
 _MEM_MIN_DELTA_BYTES = 20 * 1024 * 1024  # 20 MB
+_EVIDENCE_RESPONSE_LIMIT = 1200
 
 
 def _iter_runs(
@@ -89,6 +91,26 @@ def _response_text(run: dict[str, Any]) -> str:
     if isinstance(crash, dict) and crash.get("stderr_tail"):
         parts.append("\n".join(str(line) for line in crash["stderr_tail"]))
     return "\n".join(parts)
+
+
+def _jsonable(value: Any) -> Any:
+    try:
+        json.dumps(value)
+        return value
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _truncated_response(result: Any) -> Any:
+    if result is None:
+        return None
+    try:
+        text = json.dumps(result, default=str)
+    except (TypeError, ValueError):
+        text = str(result)
+    if len(text) <= _EVIDENCE_RESPONSE_LIMIT:
+        return _jsonable(result)
+    return text[:_EVIDENCE_RESPONSE_LIMIT] + "...[truncated]"
 
 
 def _jsonrpc_code(run: dict[str, Any]) -> int | None:
@@ -165,8 +187,12 @@ def classify_fuzz_runs(
                     kind,
                     target,
                     run_no,
-                    "Server accepted clearly-malformed input without an error.",
-                    {"input": _run_input(kind, run)},
+                    "Server returned a non-error response to an attack-pattern "
+                    "or schema-invalid fuzz input.",
+                    {
+                        "input": _run_input(kind, run),
+                        "result": _truncated_response(run.get("result")),
+                    },
                 )
             )
 
@@ -307,8 +333,59 @@ def classify_fuzz_runs(
                 )
             )
 
-    findings.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 9), f.category))
-    return findings
+    accepted_malformed = [
+        finding for finding in findings if finding.category == "accepted_malformed"
+    ]
+    other_findings = [
+        finding for finding in findings if finding.category != "accepted_malformed"
+    ]
+    deduped = _dedupe_findings(accepted_malformed) + other_findings
+    deduped.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 9), f.category))
+    return deduped
+
+
+def _serialize_dedupe_key(payload: dict[str, Any]) -> str:
+    """Build a stable dedupe key; non-JSON values are stringified explicitly."""
+    return json.dumps(payload, sort_keys=True, default=str)
+
+
+def _finding_dedupe_key(finding: Finding) -> str:
+    evidence = dict(finding.evidence or {})
+    input_value = evidence.pop(ev.INPUT, None)
+    result_value = evidence.pop(ev.RESULT, None)
+    return _serialize_dedupe_key(
+        {
+            "category": finding.category,
+            "kind": finding.kind,
+            "target": finding.target,
+            "detail": finding.detail,
+            ev.INPUT: input_value,
+            ev.RESULT: result_value,
+            "evidence": evidence,
+        }
+    )
+
+
+def _merge_duplicate_finding(existing: Finding, incoming: Finding) -> None:
+    existing_runs = existing.evidence.setdefault(ev.RUNS, [])
+    if existing.run is not None and existing.run not in existing_runs:
+        existing_runs.append(existing.run)
+    if incoming.run is not None and incoming.run not in existing_runs:
+        existing_runs.append(incoming.run)
+    existing.evidence[ev.COUNT] = int(existing.evidence.get(ev.COUNT, 1)) + 1
+    existing.run = None
+
+
+def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
+    grouped: dict[str, Finding] = {}
+    for finding in findings:
+        key = _finding_dedupe_key(finding)
+        if key not in grouped:
+            grouped[key] = finding
+            continue
+        _merge_duplicate_finding(grouped[key], finding)
+
+    return list(grouped.values())
 
 
 def summarize_findings(findings: list[Finding]) -> dict[str, int]:

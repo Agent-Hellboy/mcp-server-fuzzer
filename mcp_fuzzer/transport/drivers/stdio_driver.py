@@ -371,17 +371,41 @@ class StdioDriver(TransportDriver):
             await self._ensure_connection()
 
         try:
-            line = await self._readline_with_cap()
-            if not line:
-                return None
+            for _ in range(100):
+                line = await self._readline_with_cap()
+                if not line:
+                    return None
 
-            await self._update_activity()
-            decoded = line.decode().strip()
-            self.manager.state.record_stdout_tail(decoded[-200:])
-            message = json.loads(decoded)
-            return message
+                await self._update_activity()
+                decoded = line.decode().strip()
+                if not decoded:
+                    continue
+                if not decoded.startswith("{"):
+                    logging.debug("Skipping non-JSON stdio line: %s", decoded[:200])
+                    self.manager.state.record_stdout_tail(decoded[-200:])
+                    continue
+
+                self.manager.state.record_stdout_tail(decoded[-200:])
+                message = json.loads(decoded)
+                return message
+            raise TransportError(
+                "Failed to receive message from stdio transport",
+                context={
+                    "command": self.command,
+                    "detail": "Too many consecutive non-JSON stdout lines",
+                },
+            )
         except ServerCrashError:
             raise
+        except json.JSONDecodeError as e:
+            logging.error("Failed to receive message from stdio transport: %s", e)
+            self._initialized = False
+            self.manager.state.record_error(str(e))
+            await self._raise_if_crashed(e)
+            raise TransportError(
+                "Failed to receive message from stdio transport",
+                context={"command": self.command, "detail": str(e)},
+            ) from e
         except Exception as e:
             logging.error(f"Failed to receive message from stdio transport: {e}")
             self._initialized = False

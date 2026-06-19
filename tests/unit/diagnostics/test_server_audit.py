@@ -89,6 +89,14 @@ def test_insecure_transport_https_clean():
     assert audit_insecure_transport("https://mcp.example/mcp") == []
 
 
+def test_insecure_transport_local_http_clean():
+    assert audit_insecure_transport("http://localhost:8000/mcp") == []
+    assert audit_insecure_transport("http://127.0.0.1:8000/mcp") == []
+    assert audit_insecure_transport("http://127.0.0.2:8000/mcp") == []
+    assert audit_insecure_transport("http://[::1]:8000/mcp") == []
+    assert audit_insecure_transport("http://host.docker.internal:8000/mcp") == []
+
+
 def test_command_injection_oracle():
     tool_results = {
         "shell": {
@@ -180,7 +188,7 @@ def test_run_server_audit_orchestrator():
         tool_results=None,
     )
     cats = _cats(findings)
-    assert "insecure_transport" in cats
+    assert "insecure_transport" not in cats
     assert "tool_poisoning" not in cats
 
 

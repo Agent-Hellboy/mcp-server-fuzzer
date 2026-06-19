@@ -14,6 +14,9 @@ from ..config.constants import (
 )
 from ..types import ErrorType, TimeoutScope
 
+from ..reports.outcome_buckets import summarize_tool_outcomes
+
+from .outcomes import FuzzOutcome
 from .tool_client_results import build_phase_error, build_tool_run_result
 
 
@@ -65,6 +68,7 @@ class ToolClientFuzzingMixin:
                     safety_sanitized=False,
                     error=ErrorType.TOOL_MUTATION_FAILED,
                     exception=str(e),
+                    outcome=FuzzOutcome.MUTATION_FAILED,
                 )
 
         return await self._run_bounded(runs, _one_run)
@@ -109,6 +113,7 @@ class ToolClientFuzzingMixin:
                         error=ErrorType.TOOL_TIMEOUT,
                         exception="Tool fuzzing timed out",
                         timeout_scope=TimeoutScope.SESSION,
+                        outcome=FuzzOutcome.TIMEOUT,
                     )
                 ]
         except Exception as e:
@@ -122,6 +127,7 @@ class ToolClientFuzzingMixin:
                     safety_sanitized=False,
                     error=ErrorType.PHASE_EXECUTION_FAILED,
                     exception=str(e),
+                    outcome=FuzzOutcome.PHASE_FAILED,
                 )
             ]
 
@@ -174,12 +180,21 @@ class ToolClientFuzzingMixin:
             self._attach_schema_checks(tool_name, tool_entry)
             all_results[tool_name] = tool_entry
 
-            exceptions = [r for r in results if "exception" in r]
+            outcomes = summarize_tool_outcomes(results)
             self._logger.info(
-                "Completed fuzzing %s: %d exceptions out of %d runs",
+                (
+                    "Completed fuzzing %s: %d runs "
+                    "(server_rejected=%d, accepted_malformed=%d, anomalies=%d, "
+                    "crashes=%d, exceptions=%d, safety_blocked=%d)"
+                ),
                 tool_name,
-                len(exceptions),
-                runs_per_tool,
+                len(results),
+                outcomes["server_rejected"],
+                outcomes["accepted_malformed"],
+                outcomes["anomaly"],
+                outcomes["crashed"],
+                outcomes["exceptions"],
+                outcomes["safety_blocked"],
             )
 
         return all_results
@@ -239,6 +254,7 @@ class ToolClientFuzzingMixin:
                     safety_sanitized=False,
                     error=ErrorType.PHASE_EXECUTION_FAILED,
                     exception=str(e),
+                    outcome=FuzzOutcome.PHASE_FAILED,
                 )
 
         return await self._run_bounded(runs, _one_run)

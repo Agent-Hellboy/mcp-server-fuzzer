@@ -1049,6 +1049,22 @@ async def test_listen_uses_get_sse_and_tracks_event_metadata(monkeypatch):
     assert client.stream_calls[0]["args"][0] == "GET"
 
 
+def test_parse_sse_payloads_from_text_tracks_event_metadata():
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    text = (
+        "id: evt-2\n"
+        "retry: 2500\n"
+        'data: {"jsonrpc": "2.0", "id": "1", "result": {"ok": true}}\n'
+        "\n"
+    )
+
+    payloads = driver._parse_sse_payloads_from_text(text)
+
+    assert payloads == [{"jsonrpc": "2.0", "id": "1", "result": {"ok": True}}]
+    assert driver.last_event_id == "evt-2"
+    assert driver.retry_delay_ms == 2500
+
+
 @pytest.mark.asyncio
 async def test_listen_follows_redirect_and_tracks_redirected_session(monkeypatch):
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)

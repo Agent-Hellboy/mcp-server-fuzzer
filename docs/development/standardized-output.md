@@ -236,6 +236,7 @@ output:
 
 ```
 reports/
+├── run_summary.json
 ├── sessions/
 │   └── {session_id}/
 │       ├── 20240101_000000_fuzzing_results.json
@@ -246,10 +247,18 @@ reports/
 ### Naming Conventions
 
 - **Session-based**: `sessions/{session_id}/{timestamp}_{output_type}.json`
+- **Run summary**: `run_summary.json` at the output root for CI checks.
 
 Example filenames:
+- `run_summary.json`
 - `sessions/550e8400-e29b-41d4-a716-446655440000/20240101_000000_fuzzing_results.json`
 - `sessions/550e8400-e29b-41d4-a716-446655440000/20240101_000001_error_report.json`
+
+`run_summary.json` is intentionally compact: it records `status`
+(`completed` or `blocked`), tool/protocol counts, run totals, per-target
+summary counters, and finding counts. Use it for CI assertions such as
+"at least one tool was fuzzed"; use the session JSON files for detailed
+per-run analysis.
 
 ## Schema Validation
 
