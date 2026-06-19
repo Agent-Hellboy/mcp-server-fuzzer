@@ -401,11 +401,10 @@ def test_execute_inner_client_pytest_branch(monkeypatch):
     monkeypatch.setenv("PYTEST_CURRENT_TEST", "1")
 
     async def dummy_main():
-        return None
+        return 2
 
-    with patch("mcp_fuzzer.cli.runtime.async_runner.asyncio.run") as mock_run:
-        execute_inner_client(argparse.Namespace(), dummy_main, ["prog"])
-        mock_run.assert_called_once()
+    with patch("mcp_fuzzer.cli.runtime.async_runner.asyncio.run", return_value=2):
+        assert execute_inner_client(argparse.Namespace(), dummy_main, ["prog"]) == 2
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
 
@@ -443,6 +442,7 @@ def test_run_with_retry_on_interrupt_retry_path():
         calls["n"] += 1
         if calls["n"] == 1:
             raise KeyboardInterrupt()
+        return 0
 
     with (
         patch(
@@ -499,13 +499,33 @@ def test_run_cli_happy_path():
         patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
         patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
         patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
-        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt"),
+        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt", return_value=0),
         patch("mcp_fuzzer.cli.entrypoint.SessionSettings"),
     ):
         mock_validator = mock_vm_cls.return_value
         mock_validator.validate_arguments.return_value = None
         mock_validator.validate_transport.return_value = None
-        run_cli()
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 0
+
+
+def test_run_cli_propagates_fuzz_exit_code():
+    args = _base_args()
+    with (
+        patch("mcp_fuzzer.cli.entrypoint.parse_arguments", return_value=args),
+        patch("mcp_fuzzer.cli.entrypoint.setup_logging"),
+        patch("mcp_fuzzer.cli.entrypoint.print_startup_info"),
+        patch("mcp_fuzzer.cli.entrypoint.ValidationManager") as mock_vm_cls,
+        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt", return_value=2),
+        patch("mcp_fuzzer.cli.entrypoint.SessionSettings"),
+    ):
+        mock_validator = mock_vm_cls.return_value
+        mock_validator.validate_arguments.return_value = None
+        mock_validator.validate_transport.return_value = None
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 2
 
 
 def test_run_cli_orchestration_invokes_runner():
@@ -521,13 +541,18 @@ def test_run_cli_orchestration_invokes_runner():
         patch("mcp_fuzzer.cli.entrypoint.prepare_inner_argv", return_value=["prog"]),
         patch("mcp_fuzzer.cli.entrypoint.SessionSettings") as mock_settings_cls,
         patch("mcp_fuzzer.cli.entrypoint.SafetyController") as mock_safety_cls,
-        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt") as mock_runner,
+        patch(
+            "mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt",
+            return_value=0,
+        ) as mock_runner,
     ):
         mock_validator = mock_vm_cls.return_value
         mock_validator.validate_arguments.return_value = None
         mock_validator.validate_transport.return_value = None
         mock_safety = mock_safety_cls.return_value
-        run_cli()
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 0
         mock_settings_cls.assert_called_once_with(merged)
         mock_safety.start_if_enabled.assert_called_once_with(True)
         mock_runner.assert_called_once()
@@ -555,7 +580,7 @@ def test_run_cli_uses_endpoint_loaded_from_config():
         patch("mcp_fuzzer.cli.entrypoint.prepare_inner_argv", return_value=["prog"]),
         patch("mcp_fuzzer.cli.entrypoint.SessionSettings"),
         patch("mcp_fuzzer.cli.entrypoint.SafetyController"),
-        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt"),
+        patch("mcp_fuzzer.cli.entrypoint.run_with_retry_on_interrupt", return_value=0),
     ):
         mock_validator = mock_vm_cls.return_value
 
@@ -564,7 +589,9 @@ def test_run_cli_uses_endpoint_loaded_from_config():
 
         mock_validator.validate_arguments.side_effect = _validate_arguments
         mock_validator.validate_transport.return_value = None
-        run_cli()
+        with pytest.raises(SystemExit) as exc:
+            run_cli()
+        assert exc.value.code == 0
 
 
 def test_run_cli_transport_error_exit(monkeypatch):
@@ -666,6 +693,44 @@ def test_run_cli_unexpected_error_debug(monkeypatch, caplog):
         with pytest.raises(SystemExit) as exc:
             run_cli()
         assert exc.value.code == 1
+
+
+def test_cli_fail_if_no_tools_blocked_exits_two(tmp_path):
+    import os
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    out = tmp_path / "out"
+    out.mkdir()
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mcp_fuzzer",
+            "--mode",
+            "tools",
+            "--protocol",
+            "stdio",
+            "--endpoint",
+            "false",
+            "--runs",
+            "1",
+            "--timeout",
+            "5",
+            "--output-dir",
+            str(out),
+            "--fs-root",
+            str(out / ".mcp_fuzzer"),
+            "--fail-if-no-tools",
+        ],
+        cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root)},
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 2
+    assert (out / "run_summary.json").exists()
 
 
 def test_build_cli_config_uses_config_file(monkeypatch):

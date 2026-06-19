@@ -68,11 +68,12 @@ def run_cli() -> None:
 
         argv = prepare_inner_argv(args)
 
-        run_with_retry_on_interrupt(
+        exit_code = run_with_retry_on_interrupt(
             args,
             lambda: run_fuzz_app(session_settings),
             argv,
         )
+        sys.exit(exit_code)
     except KeyboardInterrupt:
         console = Console()
         console.print("\n[yellow]Fuzzing interrupted by user[/yellow]")

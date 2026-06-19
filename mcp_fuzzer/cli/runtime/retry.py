@@ -13,9 +13,9 @@ from .async_runner import execute_inner_client
 
 def run_with_retry_on_interrupt(
     args: Any, unified_client_main: Callable, argv: list[str]
-) -> None:
+) -> int:
     try:
-        execute_inner_client(args, unified_client_main, argv)
+        return execute_inner_client(args, unified_client_main, argv)
     except KeyboardInterrupt:
         console = Console()
         if (not getattr(args, "enable_safety_system", False)) and getattr(
@@ -32,7 +32,7 @@ def run_with_retry_on_interrupt(
             except Exception:  # pragma: no cover
                 pass
             try:
-                execute_inner_client(args, unified_client_main, argv)
+                return execute_inner_client(args, unified_client_main, argv)
             finally:
                 if started:
                     stop_system_blocking()
