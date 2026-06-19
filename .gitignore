@@ -20,6 +20,9 @@ doc_ref/
 # Project exploration directory
 explore/
 
+# Outreach / traction working dir (contains PII: maintainer emails, SMTP creds)
+traction/
+
 # Graphify knowledge graph (local generated cache — do not commit)
 graphify-out/
 **/graphify-out/
