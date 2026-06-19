@@ -387,6 +387,43 @@ def test_prepare_headers_with_auth_safety_disabled():
     assert result["Authorization"] == "Bearer token"
 
 
+def test_prepare_headers_with_auth_provider_filters_none_values():
+    driver = StreamHttpDriver(
+        "http://localhost",
+        safety_enabled=False,
+        auth_headers={"X-Static": "yes", "X-Empty": None},
+        auth_header_provider=lambda: {"Authorization": "Bearer token", "X-None": None},
+    )
+
+    result = driver._prepare_headers_with_auth({})
+
+    assert result["X-Static"] == "yes"
+    assert result["Authorization"] == "Bearer token"
+    assert "X-Empty" not in result
+    assert "X-None" not in result
+
+
+def test_init_accepts_server_request_handler_and_factory():
+    handler = MagicMock()
+    driver = StreamHttpDriver(
+        "http://localhost",
+        safety_enabled=False,
+        server_request_handler=handler,
+    )
+    assert driver._server_request_handler is handler
+
+    factory_handler = MagicMock()
+    factory = MagicMock(return_value=factory_handler)
+    driver = StreamHttpDriver(
+        "http://localhost",
+        safety_enabled=False,
+        server_request_handler_factory=factory,
+    )
+
+    assert driver._server_request_handler is factory_handler
+    factory.assert_called_once_with()
+
+
 def test_prepare_headers_without_session():
     """Test _prepare_headers without session information."""
     driver = StreamHttpDriver("http://localhost", safety_enabled=False)
@@ -473,6 +510,28 @@ async def test_parse_sse_response_unknown_field():
     result = await driver._parse_sse_response_for_result(response)
 
     assert result == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_iter_sse_payloads_skips_empty_invalid_and_non_object_events():
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    response = FakeResponse(
+        lines=[
+            "",
+            "retry: not-a-number",
+            "data: [1, 2, 3]",
+            "",
+            "data: {bad}",
+            "",
+            'data: {"ok": true}',
+            "",
+        ]
+    )
+
+    items = [item async for item in driver._iter_sse_payloads(response)]
+
+    assert items == [{"ok": True}]
+    assert driver.retry_delay_ms is None
 
 
 @pytest.mark.asyncio
@@ -987,6 +1046,51 @@ async def test_listen_uses_get_sse_and_tracks_event_metadata(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_listen_follows_redirect_and_tracks_redirected_session(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    first = FakeResponse(status_code=307, headers={"location": "http://redirect"})
+    second = FakeResponse(
+        status_code=200,
+        headers={"mcp-session-id": "sess-redirect"},
+        lines=['data: {"ok": true}', ""],
+    )
+    client = FakeClient([first, second])
+    monkeypatch.setattr(driver, "_create_http_client", lambda _timeout: client)
+    monkeypatch.setattr(driver, "_handle_http_response_error", lambda _resp: None)
+    monkeypatch.setitem(
+        driver._resolve_redirect.__globals__,
+        "resolve_redirect_safely",
+        lambda _base, location: location,
+    )
+
+    items = [item async for item in driver.listen()]
+
+    assert items == [{"ok": True}]
+    assert driver.session_id == "sess-redirect"
+    assert client.stream_calls[1]["args"][1] == "http://redirect"
+
+
+@pytest.mark.asyncio
+async def test_listen_wraps_http_errors(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+
+    class FailingClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def stream(self, *_args, **_kwargs):
+            raise httpx.HTTPError("boom")
+
+    monkeypatch.setattr(driver, "_create_http_client", lambda _timeout: FailingClient())
+
+    with pytest.raises(TransportError):
+        [item async for item in driver.listen()]
+
+
+@pytest.mark.asyncio
 async def test_probe_auth_discovery_prefers_header_metadata(monkeypatch):
     driver = StreamHttpDriver(
         "https://mcp.example.com/public/mcp", safety_enabled=False
@@ -1052,6 +1156,40 @@ async def test_terminate_session_sends_delete_and_clears_state(monkeypatch):
     assert client.delete_calls[0]["headers"]["mcp-session-id"] == "sess-1"
     assert driver.session_id is None
     assert driver.last_event_id is None
+
+
+@pytest.mark.asyncio
+async def test_terminate_session_noops_without_session(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    create_client = MagicMock()
+    monkeypatch.setattr(driver, "_create_http_client", create_client)
+
+    await driver.terminate_session()
+
+    create_client.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_terminate_session_follows_redirect(monkeypatch):
+    driver = StreamHttpDriver("http://localhost", safety_enabled=False)
+    driver.session_id = "sess-3"
+    first = FakeResponse(status_code=307, headers={"location": "http://redirect"})
+    second = FakeResponse(status_code=404, headers={})
+    client = FakeClient([first, second])
+    monkeypatch.setattr(driver, "_create_http_client", lambda _timeout: client)
+    monkeypatch.setitem(
+        driver._resolve_redirect.__globals__,
+        "resolve_redirect_safely",
+        lambda _base, location: location,
+    )
+
+    await driver.terminate_session()
+
+    assert [call["url"] for call in client.delete_calls] == [
+        "http://localhost",
+        "http://redirect",
+    ]
+    assert driver.session_id is None
 
 
 @pytest.mark.asyncio

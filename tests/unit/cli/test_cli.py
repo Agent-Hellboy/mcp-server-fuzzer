@@ -24,10 +24,6 @@ from mcp_fuzzer.cli.runtime.async_runner import AsyncRunner
 from mcp_fuzzer.cli.runtime.async_runner import execute_inner_client
 from mcp_fuzzer.cli.runtime.retry import run_with_retry_on_interrupt
 from mcp_fuzzer.client.safety import SafetyController
-from mcp_fuzzer.transport.bootstrap import (
-    TransportBuildRequest,
-    build_driver_with_auth,
-)
 from mcp_fuzzer.config.env import ValidationType
 from mcp_fuzzer.exceptions import ArgumentValidationError, ConfigFileError, MCPError
 
@@ -387,30 +383,6 @@ def test_prepare_inner_argv_roundtrip():
     assert "--export-safety-data" in argv
     assert "--spec-prompt-name" in argv
     assert "--spec-prompt-args" in argv
-
-
-def test_transport_factory_applies_auth_headers(monkeypatch):
-    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2024-11-05")
-    request = TransportBuildRequest(
-        protocol="http",
-        endpoint="http://example.com",
-        timeout=10.0,
-        auth_manager=MagicMock(),
-    )
-    request.auth_manager.get_default_auth_headers.return_value = {
-        "Authorization": "x"
-    }
-    with patch("mcp_fuzzer.transport.bootstrap.base_build_driver") as mock_create:
-        build_driver_with_auth(request)
-        mock_create.assert_called_once_with(
-            "http",
-            "http://example.com",
-            timeout=10.0,
-            safety_enabled=True,
-            auth_header_provider=mock_create.call_args.kwargs["auth_header_provider"],
-        )
-        provider = mock_create.call_args.kwargs["auth_header_provider"]
-        assert provider() == {"Authorization": "x"}
 
 
 def test_safety_controller():

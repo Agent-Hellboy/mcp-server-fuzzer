@@ -22,7 +22,6 @@ from ..interfaces.behaviors import (
 from ..interfaces.server_requests import (
     ServerRequestHandler,
     ServerRequestHandlerProtocol,
-    is_server_request,
 )
 from ...auth.discovery import (
     build_protected_resource_metadata_urls,
@@ -271,68 +270,15 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Returns:
             First parsed result from SSE stream
         """
-        # Basic SSE parser: accumulate fields until blank line
-        event: dict[str, Any] = {"event": "message", "data": []}
-        async for line in response.aiter_lines():
-            if line == "":
-                # dispatch event
-                event_id = event.get("id")
-                if isinstance(event_id, str) and event_id:
-                    self.last_event_id = event_id
-                retry = event.get("retry")
-                if isinstance(retry, int):
-                    self.retry_delay_ms = retry
-                data_text = "\n".join(event.get("data", []))
-                try:
-                    payload = json.loads(data_text) if data_text else None
-                except json.JSONDecodeError:
-                    payload = None
-
-                if isinstance(payload, dict):
-                    if is_server_request(payload):
-                        handled = await self._handle_server_request(payload)
-                        if handled:
-                            event = {"event": "message", "data": []}
-                            continue
-                    elif self._server_request_handler.handle_notification(payload):
-                        event = {"event": "message", "data": []}
-                        continue
-                    # JSON-RPC error passthrough
-                    if "error" in payload:
-                        return payload
-                    # JSON-RPC response with result
-                    if "result" in payload:
-                        result = payload["result"]
-                        # For initialize, extract protocolVersion if present
-                        self._maybe_extract_protocol_version_from_result(result)
-                        return result
-                # reset event
-                event = {"event": "message", "data": []}
+        async for payload in self._iter_sse_payloads(response):
+            if await self._handle_server_request(payload):
                 continue
-
-            if line.startswith(":"):
-                # Comment, ignore
-                continue
-            if line.startswith("event:"):
-                event["event"] = line[len("event:") :].strip()
-                continue
-            if line.startswith("id:"):
-                event["id"] = line[len("id:") :].strip()
-                continue
-            if line.startswith("retry:"):
-                retry_text = line[len("retry:") :].strip()
-                try:
-                    event["retry"] = int(retry_text)
-                except ValueError:
-                    pass
-                continue
-            if line.startswith("data:"):
-                event.setdefault("data", []).append(line[len("data:") :].lstrip())
-                continue
-            # Unknown field: ignore per SSE spec
-            continue
-
-        # If we exit loop without a response, return None
+            if "error" in payload:
+                return payload
+            if "result" in payload:
+                result = payload["result"]
+                self._maybe_extract_protocol_version_from_result(result)
+                return result
         return None
 
     async def _handle_server_request(self, payload: dict[str, Any]) -> bool:
@@ -672,6 +618,15 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         self, response: httpx.Response
     ) -> AsyncIterator[dict[str, Any]]:
         """Yield parsed SSE events while tracking resumability fields."""
+        async for payload in self._iter_sse_payloads(response):
+            if await self._handle_server_request(payload):
+                continue
+            yield payload
+
+    async def _iter_sse_payloads(
+        self, response: httpx.Response
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Parse SSE lines into JSON object payloads."""
         event: dict[str, Any] = {"event": "message", "data": []}
         async for line in response.aiter_lines():
             if line == "":
@@ -690,8 +645,6 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 except json.JSONDecodeError:
                     continue
                 if isinstance(payload, dict):
-                    if await self._handle_server_request(payload):
-                        continue
                     yield payload
                 continue
 
