@@ -776,11 +776,19 @@ def test_stdout_summary_blocked_status(capsys):
     from mcp_fuzzer.reports.formatters.plain_summary import write_stdout_summary
 
     write_stdout_summary(
-        mode="tools", tool_results={}, protocol_results=None, blocked=True
+        mode="tools",
+        tool_results={},
+        protocol_results=None,
+        blocked=True,
+        tool_discovery={
+            "failure": "connection_failed",
+            "detail": "Connection failed while contacting server",
+        },
     )
     out = capsys.readouterr().out
     assert "BLOCKED" in out
-    assert "no tools available" in out
+    assert "connection_failed" in out
+    assert "Connection failed while contacting server" in out
 
 
 def test_stdout_summary_completed_with_outcome_buckets(capsys):
