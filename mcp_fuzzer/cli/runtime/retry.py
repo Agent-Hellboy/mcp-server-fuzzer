@@ -7,15 +7,24 @@ from typing import Any, Callable
 
 from rich.console import Console
 
+from ...client.safety import SafetyController
 from ...safety_system import start_system_blocking, stop_system_blocking
+from ..exit_codes import INTERRUPTED
 from .async_runner import execute_inner_client
 
 
 def run_with_retry_on_interrupt(
-    args: Any, unified_client_main: Callable, argv: list[str]
-) -> None:
+    args: Any,
+    unified_client_main: Callable,
+    argv: list[str],
+    *,
+    safety: SafetyController | None = None,
+) -> int:
+    """Execute the client, retrying once with safety after interrupt when configured."""
     try:
-        execute_inner_client(args, unified_client_main, argv)
+        return execute_inner_client(
+            args, unified_client_main, argv, safety=safety
+        )
     except KeyboardInterrupt:
         console = Console()
         if (not getattr(args, "enable_safety_system", False)) and getattr(
@@ -32,13 +41,21 @@ def run_with_retry_on_interrupt(
             except Exception:  # pragma: no cover
                 pass
             try:
-                execute_inner_client(args, unified_client_main, argv)
+                try:
+                    return execute_inner_client(
+                        args, unified_client_main, argv, safety=safety
+                    )
+                except KeyboardInterrupt:
+                    console.print(
+                        "\n[yellow]Fuzzing interrupted by user[/yellow]"
+                    )
+                    return INTERRUPTED
             finally:
                 if started:
                     stop_system_blocking()
         else:
             console.print("\n[yellow]Fuzzing interrupted by user[/yellow]")
-            raise SystemExit(130)
+            return INTERRUPTED
 
 
 __all__ = ["run_with_retry_on_interrupt"]

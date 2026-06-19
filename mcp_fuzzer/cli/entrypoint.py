@@ -18,6 +18,7 @@ from .validators import ValidationManager
 from ..logging import setup_logging
 from .parser import parse_arguments
 from .startup_info import print_startup_info
+from .exit_codes import INTERRUPTED
 
 
 def _print_mcp_error(error: MCPError) -> None:
@@ -68,15 +69,17 @@ def run_cli() -> None:
 
         argv = prepare_inner_argv(args)
 
-        run_with_retry_on_interrupt(
+        exit_code = run_with_retry_on_interrupt(
             args,
             lambda: run_fuzz_app(session_settings),
             argv,
+            safety=safety,
         )
+        sys.exit(exit_code)
     except KeyboardInterrupt:
         console = Console()
         console.print("\n[yellow]Fuzzing interrupted by user[/yellow]")
-        sys.exit(0)
+        sys.exit(INTERRUPTED)
     except MCPError as err:
         _print_mcp_error(err)
         sys.exit(1)

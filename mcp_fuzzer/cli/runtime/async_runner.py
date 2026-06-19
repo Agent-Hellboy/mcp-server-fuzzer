@@ -4,16 +4,34 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import signal
 import sys
-from typing import Any, Awaitable, Callable
-
 import importlib.util
+from typing import Any, Awaitable, Callable, TypeVar
 
 from rich.console import Console
 
 from ...client.safety import SafetyController
+from ..exit_codes import GENERAL_ERROR, INTERRUPTED, SUCCESS
+
+_T = TypeVar("_T")
+logger = logging.getLogger(__name__)
+
+
+def _coerce_exit_code(result: object | None) -> int:
+    """Normalize coroutine return values into a process exit code."""
+    if isinstance(result, int):
+        return result
+    if result is not None:
+        logger.warning(
+            "Expected coroutine to return int exit code, got %r; using %s",
+            result,
+            GENERAL_ERROR,
+        )
+        return GENERAL_ERROR
+    return SUCCESS
 
 
 class AsyncRunner:
@@ -27,14 +45,16 @@ class AsyncRunner:
         self._signal_notice_printed = False
         self.safety = safety
 
-    def run(self, main_coro: Callable[[], Awaitable[object]], argv: list[str]) -> None:
+    def run(
+        self, main_coro: Callable[[], Awaitable[_T]], argv: list[str]
+    ) -> int:
         """Main execution method that orchestrates the entire async runtime."""
         self._setup_environment(argv)
+        exit_code = SUCCESS
 
         try:
             if self._is_pytest_environment():
-                asyncio.run(main_coro())
-                return
+                return _coerce_exit_code(asyncio.run(main_coro()))
 
             self._setup_event_loop()
             self._setup_aiomonitor()
@@ -42,14 +62,19 @@ class AsyncRunner:
 
             try:
                 self._configure_network_policy()
-                self._execute_main_coroutine(main_coro)
+                exit_code = _coerce_exit_code(
+                    self._execute_main_coroutine(main_coro)
+                )
             except asyncio.CancelledError:
                 self._handle_cancellation()
+                exit_code = INTERRUPTED
             finally:
                 self._cleanup_pending_tasks()
 
         finally:
             self._final_cleanup()
+
+        return exit_code
 
     def _setup_environment(self, argv: list[str]) -> None:
         """Setup environment variables and argv."""
@@ -121,8 +146,8 @@ class AsyncRunner:
         )
 
     def _execute_main_coroutine(
-        self, main_coro: Callable[[], Awaitable[object]]
-    ) -> None:
+        self, main_coro: Callable[[], Awaitable[_T]]
+    ) -> _T | None:
         """Execute the main coroutine with optional monitoring."""
         enable_aiomonitor = getattr(self.args, "enable_aiomonitor", False)
 
@@ -134,9 +159,8 @@ class AsyncRunner:
                 console_enabled=True,
                 locals=True,
             ):
-                self.loop.run_until_complete(main_coro())
-        else:
-            self.loop.run_until_complete(main_coro())
+                return self.loop.run_until_complete(main_coro())
+        return self.loop.run_until_complete(main_coro())
 
     def _handle_cancellation(self) -> None:
         """Handle cancellation from signal interruption."""
@@ -167,15 +191,19 @@ class AsyncRunner:
         if self.loop:
             self.loop.close()
         sys.argv = self.old_argv
-        if self.should_exit:
-            raise SystemExit(130)
 
 
-def execute_inner_client(args: Any, unified_client_main, argv: list[str]) -> None:
-    """Simple wrapper that creates a runner and executes."""
-    safety = SafetyController()
-    runner = AsyncRunner(args, safety)
-    runner.run(unified_client_main, argv)
+def execute_inner_client(
+    args: Any,
+    unified_client_main,
+    argv: list[str],
+    *,
+    safety: SafetyController | None = None,
+) -> int:
+    """Run the inner client coroutine and return its process exit code."""
+    controller = safety if safety is not None else SafetyController()
+    runner = AsyncRunner(args, controller)
+    return runner.run(unified_client_main, argv)
 
 
 __all__ = ["AsyncRunner", "execute_inner_client"]
