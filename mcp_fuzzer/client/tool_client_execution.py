@@ -64,6 +64,9 @@ class ToolClientExecutionMixin:
         if auth_params:
             args_for_call.update(auth_params)
 
+        from ..runtime_probe import PROBE
+
+        probe_call_id = PROBE.begin(tool_name) if PROBE.enabled() else None
         try:
             result = await self._call_tool(
                 tool_name, args_for_call, tool_timeout=tool_timeout
@@ -138,6 +141,9 @@ class ToolClientExecutionMixin:
                 outcome=outcome,
                 crash=crash,
             )
+        finally:
+            if probe_call_id is not None:
+                PROBE.end(probe_call_id, tool_name)
 
         rss = self._sample_server_memory()
         if rss is not None:

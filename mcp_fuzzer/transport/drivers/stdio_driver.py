@@ -219,6 +219,16 @@ class StdioDriver(TransportDriver):
                         self._get_activity_timestamp,
                     )
 
+                # Scope the optional runtime probe to the server's process group.
+                try:
+                    from ...runtime_probe import PROBE
+
+                    if PROBE.enabled():
+                        PROBE.ensure_started()
+                        PROBE.set_scope(self.process.pid)
+                except Exception as exc:  # never let the probe break a run
+                    logging.warning("runtime probe scope hook failed: %s", exc)
+
                 self._initialized = True
                 self._mcp_initialized = False
                 await self._update_activity()
