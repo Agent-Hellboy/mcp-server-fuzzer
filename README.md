@@ -158,6 +158,37 @@ mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" \
 More runnable example flows are documented in
 [`examples/README.md`](examples/README.md).
 
+## Runtime monitoring (optional)
+
+Pair the fuzzer with [**mcpfz-probe**](https://github.com/Agent-Hellboy/mcpfz-probe),
+a runtime sidecar that watches what a tool call actually does at the kernel level
+(process exec, network connect/send, file open/delete, chmod, ptrace) and reports
+anything suspicious as findings attributed to the exact tool call.
+
+Fetch the released Linux binary from mcpfz-probe and point the fuzzer at it:
+
+```bash
+# Latest eBPF-enabled Linux build (built and published by mcpfz-probe CI)
+curl -L -o mcpfz-probe \
+  https://github.com/Agent-Hellboy/mcpfz-probe/releases/latest/download/mcpfz-probe-x86_64-linux-ebpf
+chmod +x mcpfz-probe
+
+pip install mcpfz-probe   # the Python monitor package (or install from source)
+
+export MCP_FUZZER_RUNTIME_PROBE=1
+export MCPFZ_PROBE_BIN="$PWD/mcpfz-probe"
+export MCPFZ_PROBE_BACKEND=ebpf          # Linux + root/CAP_BPF; use "fake" elsewhere
+sudo -E mcp-fuzzer --mode tools --protocol stdio \
+  --endpoint "python my_server.py" --runs 3 --max-concurrency 1
+```
+
+Runtime findings (`runtime.exec`, `runtime.net_connect`, `runtime.sensitive_read`,
+`runtime.fs_write`, `runtime.fs_delete`, `runtime.fs_chmod`, `runtime.ptrace`) are
+merged into the normal report. The hooks are no-ops unless
+`MCP_FUZZER_RUNTIME_PROBE` is set, so default behavior is unchanged. See the
+[mcpfz-probe README](https://github.com/Agent-Hellboy/mcpfz-probe#readme) for the
+backend/build details.
+
 ## Documentation
 
 Keep the README for the basics. Use the docs for everything else:
