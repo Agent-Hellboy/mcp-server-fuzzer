@@ -58,7 +58,7 @@ class _RuntimeProbe:
             try:
                 from mcpfz_probe import RuntimePolicy, SidecarRuntimeMonitor
             except Exception as exc:  # package not installed
-                log.warning("runtime probe disabled: cannot import mcpfz_probe: %s", exc)
+                log.warning("runtime probe: mcpfz_probe import failed: %s", exc)
                 self._enabled = False
                 return
 
