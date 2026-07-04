@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-07-05
+
+### Added
+
+- `mcpfz-probe` optional-dependency extra: `pip install "mcp-fuzzer[mcpfz-probe]"`
+  installs the runtime monitor package.
+
 ## [0.4.2] - 2026-07-04
 
 ### Added
