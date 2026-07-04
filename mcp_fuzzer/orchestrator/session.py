@@ -68,6 +68,18 @@ async def run_session(
             protocol_results=pr,
             build_transport_request=build_transport_request,
         )
+        # Merge runtime-probe findings (kernel-observed exec/net/fs during calls).
+        try:
+            from ..runtime_probe import PROBE
+
+            if PROBE.enabled():
+                runtime_findings = PROBE.drain_findings()
+                if runtime_findings:
+                    findings.extend(runtime_findings)
+                    findings_summary = summarize_findings(findings)
+                PROBE.stop()
+        except Exception as exc:
+            logging.warning("runtime probe finding merge failed: %s", exc)
         persist_session_findings(
             config,
             findings,
