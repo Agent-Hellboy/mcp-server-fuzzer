@@ -173,7 +173,7 @@ curl -L -o mcpfz-probe \
   https://github.com/Agent-Hellboy/mcpfz-probe/releases/latest/download/mcpfz-probe-x86_64-linux-ebpf
 chmod +x mcpfz-probe
 
-pip install mcpfz-probe   # the Python monitor package (or install from source)
+pip install "mcp-fuzzer[mcpfz-probe]"   # pulls in the Python monitor package
 
 export MCP_FUZZER_RUNTIME_PROBE=1
 export MCPFZ_PROBE_BIN="$PWD/mcpfz-probe"
