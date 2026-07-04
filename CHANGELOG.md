@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-04
+
+### Added
+
+- Opt-in runtime-probe integration with
+  [mcpfz-probe](https://github.com/Agent-Hellboy/mcpfz-probe): scope the sidecar
+  to the stdio server's process group, mark begin/end around each tool call, and
+  merge kernel-observed runtime findings (`runtime.exec`, `runtime.net_connect`,
+  `runtime.sensitive_read`, `runtime.fs_write`, `runtime.fs_delete`,
+  `runtime.fs_chmod`, `runtime.ptrace`) into the report. Enabled via
+  `MCP_FUZZER_RUNTIME_PROBE`; a no-op when unset. See the README
+  "Runtime monitoring" section.
+
 ## [0.4.0] - 2026-06-18
 
 ### Added
