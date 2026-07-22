@@ -417,6 +417,22 @@ rather than reported as clean.
 > error. See the [CLI Reference](../development/reference.md#authentication-security-audit-options)
 > for the full flag list and severity notes.
 
+### MCP Server Security Audit
+
+Use `--security-audit` to add MCP tool-surface checks after the fuzz run:
+
+```bash
+mcp-fuzzer --mode tools --protocol streamablehttp \
+  --endpoint https://host/mcp --security-audit --runs 10
+```
+
+The audit inspects `tools/list` metadata and fuzz-run outputs for MCP-specific
+risks: tool and schema poisoning, hidden or encoded instructions, duplicate tool
+names, local-read plus network-egress capability combinations, cleartext remote
+transport, command/path/SQL injection evidence, and prompt-injection markers in
+tool output. Findings are written to `<output_dir>/findings.json` with a
+`check_id` and citation metadata.
+
 ## Safety System
 
 ### Basic Safety Features

@@ -113,8 +113,9 @@ def add_audit_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help=(
             "Run MCP tool-security audit checks (arXiv 2503.23278 / 2509.06572): "
-            "tool/schema poisoning markers, tool shadowing, dangerous capability "
-            "combos, cleartext transport, and active injection oracles on fuzz "
-            "outputs (command/path/SQL/output prompt injection)."
+            "tool/schema poisoning markers, hidden or encoded instructions, "
+            "tool shadowing, dangerous capability combos, cleartext transport, "
+            "and active injection oracles on fuzz outputs (command/path/SQL/"
+            "output prompt injection)."
         ),
     )

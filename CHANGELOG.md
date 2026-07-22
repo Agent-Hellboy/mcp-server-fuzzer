@@ -2,9 +2,35 @@
 
 All notable changes to this project are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+### Added
+
+- MCP `2026-07-28` release-candidate support behind the existing
+  `--spec-schema-version` / `spec_schema_version` / `MCP_SPEC_SCHEMA_VERSION`
+  configuration path:
+  - `2026-07-28` resolves to the vendored draft schema until the final schema
+    directory exists.
+  - Streamable HTTP requests for `2026-07-28` include per-request
+    `io.modelcontextprotocol/*` `_meta` fields and routing headers
+    (`MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` where applicable).
+  - Spec guard uses `server/discover` for stateless MCP revisions instead of the
+    older `initialize` / `notifications/initialized` handshake.
+- Additional server security-audit checks for hidden prompt-injection content in
+  MCP tool metadata and schemas, including invisible Unicode controls, hidden
+  HTML/block/fenced instruction payloads, and base64-encoded poisoning payloads.
+
+### Changed
+
+- Updated the vendored MCP spec submodule so `schema/draft` contains the current
+  public `2026-07-28` RC schema.
+- Expanded tool-poisoning detection patterns and dangerous capability-combination
+  evidence reported by `--security-audit`.
+- Documented `2026-07-28` as a supported protocol/schema version override in CLI
+  help and configuration docs.
 
 ## [0.4.3] - 2026-07-05
 

@@ -54,7 +54,7 @@ spec_guard: true
 spec_resource_uri: "file:///tmp/resource.txt"
 spec_prompt_name: "example_prompt"
 spec_prompt_args: '{"name":"value"}'
-# Optional: override MCP schema version used in initialize/spec guard
+# Optional: override the MCP protocol/schema version used for this server
 spec_schema_version: "2025-11-25"
 
 # Timeouts and logging
@@ -164,7 +164,7 @@ The following environment variables are currently read at startup:
 - `MCP_FUZZER_SSE_TIMEOUT`
 - `MCP_FUZZER_STDIO_TIMEOUT`
 - `MCP_FUZZER_ICON_THEME` (ascii | unicode | emoji; defaults to ascii)
-- `MCP_SPEC_SCHEMA_VERSION` (e.g., 2025-11-25)
+- `MCP_SPEC_SCHEMA_VERSION` (e.g., 2025-11-25 or 2026-07-28)
 
 ## Migration From Pre-Redesign Configs (<=3d61ee4)
 

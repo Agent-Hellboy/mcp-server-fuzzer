@@ -90,7 +90,7 @@ Notes:
 | `--spec-resource-uri` | String | - | Resource URI used for spec guard resources/read checks |
 | `--spec-prompt-name` | String | - | Prompt name used for spec guard prompts/get checks |
 | `--spec-prompt-args` | String | - | JSON string of prompt arguments for spec guard prompts/get checks |
-| `--spec-schema-version` | String | - | Override MCP schema version used for initialize/spec guard (e.g., 2025-11-25) |
+| `--spec-schema-version` | String | - | Override MCP protocol/schema version for the target server (e.g., 2025-11-25 or 2026-07-28) |
 
 ### Safety Options
 
@@ -163,6 +163,38 @@ Notes:
 - See [Authentication Security Audit](../getting-started/getting-started.md#authentication-security-audit)
   for worked examples.
 
+### MCP Server Security Audit Options
+
+These flags audit the MCP server/tool surface itself. The checks run after
+fuzzing and write `Finding` records to `findings.json` with a `check_id`,
+severity, target tool, and source citation metadata.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--security-audit` | Flag | False | Run MCP server security checks: tool/schema poisoning markers, hidden or encoded instructions, duplicate tool names, dangerous local-read plus network-egress capability combinations, cleartext remote transport, and fuzz-output oracles for command/path/SQL injection and output prompt injection |
+
+Read-only checks inspect `tools/list` and endpoint configuration. Active oracle
+findings are only reported when normal fuzz runs already produced matching
+exploit evidence, such as `uid=`/`gid=` command output or `/etc/passwd`-like
+content.
+
+Server audit categories currently include:
+
+- `tool_poisoning`: visible tool name, title, annotations, or description contain
+  instruction override, secrecy, or credential-access markers.
+- `schema_poisoning`: `inputSchema` strings contain prompt-injection or
+  secret-access markers.
+- `hidden_instruction`: metadata or schema contains invisible Unicode controls,
+  hidden comments, fenced hidden instructions, or base64-encoded poisoning
+  payloads.
+- `tool_shadowing`: duplicate tool names are advertised by the same server.
+- `dangerous_capability_combo`: the server advertises both local-read and
+  network-egress style tools.
+- `insecure_transport`: a non-local HTTP endpoint is used instead of HTTPS.
+- `command_injection`, `path_traversal`, `sql_injection`,
+  `output_prompt_injection`: fuzz-run outputs show concrete exploitation or
+  injected-instruction evidence.
+
 ### Reporting Options
 
 | Option | Type | Default | Description |
@@ -226,7 +258,7 @@ Notes:
 | `MCP_FUZZER_SSE_TIMEOUT` | 30.0 | SSE transport timeout |
 | `MCP_FUZZER_STDIO_TIMEOUT` | 30.0 | Stdio transport timeout |
 | `MCP_FUZZER_ICON_THEME` | ascii | Icon theme (ascii, unicode, emoji) |
-| `MCP_SPEC_SCHEMA_VERSION` | 2025-11-25 | MCP schema version used in initialize/spec guard |
+| `MCP_SPEC_SCHEMA_VERSION` | 2025-11-25 | MCP protocol/schema version used by transports, schema-driven fuzzing, and spec guard |
 
 ### Authentication Environment Variables
 

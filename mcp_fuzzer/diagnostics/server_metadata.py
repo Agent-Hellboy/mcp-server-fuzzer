@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import base64
+import binascii
 from collections import Counter
 from typing import Any
 
@@ -20,8 +22,12 @@ _POISONING_PATTERNS = [
         r"ignore\s+(all\s+)?previous\s+instructions?",
         r"do\s+not\s+tell\s+the\s+user",
         r"disregard\s+(prior|previous)",
+        r"override\s+(the\s+)?(system|developer|user)\s+(prompt|message)",
+        r"reveal\s+(the\s+)?(system|developer)\s+(prompt|message)",
         r"hidden\s+parameter",
         r"secretly\s+(call|use|invoke|run)",
+        r"\b(exfiltrate|steal|leak)\b",
+        r"(send|upload|post)\s+.*\b(secret|credential|token|private\s+key|api\s+key)\b",
     )
 ]
 
@@ -33,8 +39,26 @@ _SECRET_PATH_PATTERNS = [
         r"\.ssh/",
         r"id_rsa",
         r"/etc/passwd",
+        r"private\s+key",
+        r"bearer\s+token",
     )
 ]
+
+_INVISIBLE_TEXT_PATTERNS = [
+    re.compile(r, re.IGNORECASE | re.DOTALL)
+    for r in (
+        r"<!--.*?(ignore\s+(all\s+)?previous|do\s+not\s+tell|secretly\s+call).*?-->",
+        r"/\*.*?(ignore\s+(all\s+)?previous|do\s+not\s+tell|secretly\s+call).*?\*/",
+        r"```.*?(ignore\s+(all\s+)?previous|do\s+not\s+tell|secretly\s+call).*?```",
+    )
+]
+
+_UNICODE_CONTROL_PATTERN = re.compile(
+    "[\u200b\u200c\u200d\u2060\ufeff\u202a-\u202e\u2066-\u2069]"
+)
+_BASE64_CANDIDATE_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9+/=])(?:[A-Za-z0-9+/]{24,}={0,2})(?![A-Za-z0-9+/=])"
+)
 
 _LOCAL_READ_PATTERN = re.compile(
     r"\b(read|file|fs|cat|open|load|path|directory|glob|scan|filesystem)\b",
@@ -51,6 +75,11 @@ def _tool_text(tool: dict[str, Any]) -> str:
     parts = [str(tool.get("name") or "")]
     if tool.get("description"):
         parts.append(str(tool["description"]))
+    if tool.get("title"):
+        parts.append(str(tool["title"]))
+    annotations = tool.get("annotations")
+    if isinstance(annotations, dict):
+        parts.append(_collect_schema_text(annotations))
     return "\n".join(parts)
 
 
@@ -83,6 +112,47 @@ def _scan_poisoning(text: str) -> list[str]:
     return hits
 
 
+def _decode_base64_candidate(candidate: str) -> str | None:
+    padded = candidate + ("=" * (-len(candidate) % 4))
+    try:
+        decoded = base64.b64decode(padded, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    if not decoded:
+        return None
+    try:
+        text = decoded.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    printable = sum(ch.isprintable() or ch.isspace() for ch in text)
+    if printable / max(len(text), 1) < 0.85:
+        return None
+    return text
+
+
+def _scan_hidden_instruction_carriers(text: str) -> list[dict[str, Any]]:
+    hits: list[dict[str, Any]] = []
+    if _UNICODE_CONTROL_PATTERN.search(text):
+        hits.append({"kind": "unicode_control"})
+    for pattern in _INVISIBLE_TEXT_PATTERNS:
+        if pattern.search(text):
+            hits.append({"kind": "hidden_comment", "pattern": pattern.pattern})
+    for match in _BASE64_CANDIDATE_PATTERN.finditer(text):
+        decoded = _decode_base64_candidate(match.group(0))
+        if not decoded:
+            continue
+        decoded_hits = _scan_poisoning(decoded)
+        if decoded_hits:
+            hits.append(
+                {
+                    "kind": "encoded_payload",
+                    "encoding": "base64",
+                    "markers": decoded_hits[:10],
+                }
+            )
+    return hits
+
+
 def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
     """Scan ``tools/list`` definitions for poisoning, shadowing, and exfil chains."""
     findings: list[Finding] = []
@@ -90,8 +160,8 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
         return findings
 
     names: list[str] = []
-    has_local_read = False
-    has_network_egress = False
+    local_read_tools: set[str] = set()
+    network_egress_tools: set[str] = set()
 
     for tool in tools:
         if not isinstance(tool, dict):
@@ -102,9 +172,11 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
 
         visible = _tool_text(tool)
         if _LOCAL_READ_PATTERN.search(visible):
-            has_local_read = True
+            if name:
+                local_read_tools.add(str(name))
         if _NETWORK_EGRESS_PATTERN.search(visible):
-            has_network_egress = True
+            if name:
+                network_egress_tools.add(str(name))
 
         poison_hits = _scan_poisoning(visible)
         if poison_hits and name:
@@ -117,6 +189,20 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                     "Tool name or description contains injection/poisoning "
                     "markers (hidden instructions or secret-path references).",
                     evidence={"markers": poison_hits[:10]},
+                )
+            )
+        hidden_hits = _scan_hidden_instruction_carriers(visible)
+        if hidden_hits and name:
+            findings.append(
+                server_finding(
+                    "HI1",
+                    "hidden_instruction",
+                    "high",
+                    str(name),
+                    "Tool metadata contains hidden or encoded instruction "
+                    "carriers (invisible Unicode, hidden comments, or encoded "
+                    "prompt-injection payloads).",
+                    evidence={"carriers": hidden_hits[:10]},
                 )
             )
 
@@ -136,8 +222,22 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                         evidence={"markers": schema_hits[:10]},
                     )
                 )
+            hidden_schema_hits = _scan_hidden_instruction_carriers(schema_text)
+            if hidden_schema_hits and name:
+                findings.append(
+                    server_finding(
+                        "HI2",
+                        "hidden_instruction",
+                        "high",
+                        str(name),
+                        "Tool inputSchema contains hidden or encoded instruction "
+                        "carriers.",
+                        evidence={"carriers": hidden_schema_hits[:10]},
+                    )
+                )
 
-    dupes = [n for n, count in Counter(names).items() if count > 1]
+    name_counts = Counter(names)
+    dupes = [n for n, count in name_counts.items() if count > 1]
     for dupe in dupes:
         findings.append(
             server_finding(
@@ -145,13 +245,13 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                 "tool_shadowing",
                 "medium",
                 dupe,
-                f"Duplicate tool name '{dupe}' appears {Counter(names)[dupe]} times "
+                f"Duplicate tool name '{dupe}' appears {name_counts[dupe]} times "
                 "(tool shadowing / name collision within this server).",
-                evidence={"occurrences": Counter(names)[dupe]},
+                evidence={"occurrences": name_counts[dupe]},
             )
         )
 
-    if has_local_read and has_network_egress:
+    if local_read_tools and network_egress_tools:
         findings.append(
             server_finding(
                 "CC1",
@@ -161,7 +261,10 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                 "Server exposes both local-read and network-egress style tools "
                 "(parasitic toolchain / data-exfiltration chain risk).",
                 arxiv_id=CAPABILITY_COMBO_PAPER_ARXIV_ID,
-                evidence={"local_read": True, "network_egress": True},
+                evidence={
+                    "local_read_tools": sorted(local_read_tools),
+                    "network_egress_tools": sorted(network_egress_tools),
+                },
             )
         )
 

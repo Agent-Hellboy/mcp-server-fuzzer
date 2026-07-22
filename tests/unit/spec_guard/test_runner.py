@@ -10,8 +10,10 @@ class DummyTransport:
     def __init__(self, responses: dict[str, object]):
         self.responses = responses
         self.notifications: list[str] = []
+        self.requests: list[tuple[str, object | None]] = []
 
     async def send_request(self, method: str, params: object | None = None) -> object:
+        self.requests.append((method, params))
         if method not in self.responses:
             raise AssertionError(f"Unexpected request: {method}")
         response = self.responses[method]
@@ -118,6 +120,31 @@ async def test_run_spec_suite_success_flow(monkeypatch):
     assert any(entry.startswith("validate:") for entry in events)
     assert "InitializeResult" in checks
     assert transport.notifications == ["notifications/initialized"]
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_uses_server_discover_for_stateless_rc(monkeypatch):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2026-07-28")
+    monkeypatch.setattr(runner, "validate_definition", lambda name, result, **_: [])
+
+    responses = {
+        "server/discover": {
+            "supportedVersions": ["2026-07-28"],
+            "capabilities": {"tools": True},
+            "serverInfo": {"name": "server", "version": "1.0"},
+            "cacheScope": "private",
+            "ttlMs": 1000,
+        },
+        "ping": {},
+        "tools/list": {"tools": []},
+    }
+    transport = DummyTransport(responses)
+
+    await runner.run_spec_suite(transport)
+
+    assert transport.requests[0] == ("server/discover", {})
+    assert all(method != "initialize" for method, _ in transport.requests)
+    assert transport.notifications == []
 
 
 @pytest.mark.asyncio

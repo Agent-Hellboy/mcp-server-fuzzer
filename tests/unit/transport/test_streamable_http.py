@@ -127,6 +127,41 @@ async def test_streamable_http_json_initialize(monkeypatch):
 
 
 @pytest.mark.anyio("asyncio")
+async def test_streamable_http_stateless_rc_request_metadata(monkeypatch):
+    resp = _DummyResponse(
+        json_body={"jsonrpc": "2.0", "id": "1", "result": {"tools": []}},
+        content_type="application/json",
+    )
+    fake = _FakeAsyncClient([resp])
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
+
+    transport = StreamHttpDriver("http://test/mcp", timeout=1)
+    transport.protocol_version = "2026-07-28"
+
+    result = await transport.send_request("tools/list", {})
+
+    assert result == {"tools": []}
+    assert len(fake.calls) == 1
+    sent = fake.calls[0]
+    assert sent["headers"]["mcp-protocol-version"] == "2026-07-28"
+    assert sent["headers"]["Mcp-Method"] == "tools/list"
+    assert "mcp-session-id" not in sent["headers"]
+    meta = sent["json"]["params"]["_meta"]
+    assert meta["io.modelcontextprotocol/protocolVersion"] == "2026-07-28"
+    assert meta["io.modelcontextprotocol/clientInfo"]["name"] == "mcp-fuzzer"
+    assert meta["io.modelcontextprotocol/clientCapabilities"] == {
+        "elicitation": {"form": {}, "url": {}},
+        "experimental": {},
+        "roots": {},
+        "sampling": {"context": {}, "tools": {}},
+        "extensions": {},
+    }
+
+
+@pytest.mark.anyio("asyncio")
 async def test_streamable_http_sse_response(monkeypatch):
     # Arrange: SSE data with one JSON-RPC response containing result
     sse_lines = [

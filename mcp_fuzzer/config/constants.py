@@ -13,6 +13,8 @@ DEFAULT_HTTP_ACCEPT: str = f"{JSON_CONTENT_TYPE}, {SSE_CONTENT_TYPE}"
 # MCP headers
 MCP_SESSION_ID_HEADER: str = "mcp-session-id"
 MCP_PROTOCOL_VERSION_HEADER: str = "mcp-protocol-version"
+MCP_METHOD_HEADER: str = "Mcp-Method"
+MCP_NAME_HEADER: str = "Mcp-Name"
 
 # Watchdog tuning defaults used by transports when constructing WatchdogConfig
 WATCHDOG_DEFAULT_CHECK_INTERVAL: float = 1.0
