@@ -4,6 +4,8 @@ import json
 import pytest
 
 from mcp_fuzzer.spec_guard import runner
+from mcp_fuzzer.config import CONTENT_TYPE_HEADER
+from mcp_fuzzer.transport.drivers.stream_http_driver import StreamHttpDriver
 
 
 class DummyTransport:
@@ -30,6 +32,37 @@ class DummyTransport:
         if isinstance(response, Exception):
             raise response
         self.notifications.append(method)
+
+
+class DummyHttpResponse:
+    def __init__(self, result: dict[str, object]):
+        self.status_code = 200
+        self.headers = {CONTENT_TYPE_HEADER: "application/json"}
+        self._json = {"jsonrpc": "2.0", "id": "1", "result": result}
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self) -> dict[str, object]:
+        return self._json
+
+
+class RecordingHttpClient:
+    def __init__(self, responses: list[DummyHttpResponse]):
+        self.responses = responses
+        self.calls: list[dict[str, object]] = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def post(self, url, json, headers):
+        self.calls.append({"url": url, "json": json, "headers": headers})
+        if not self.responses:
+            raise AssertionError("No more fake responses queued")
+        return self.responses.pop(0)
 
 
 def test_parse_prompt_args_success_and_errors():
@@ -147,6 +180,39 @@ async def test_run_spec_suite_uses_server_discover_for_stateless_rc(monkeypatch)
     assert all(method != "initialize" for method, _ in transport.requests)
     assert all(method != "ping" for method, _ in transport.requests)
     assert transport.notifications == []
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_seeds_uninitialized_streamable_http_for_discover(
+    monkeypatch,
+):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2026-07-28")
+    monkeypatch.setattr(runner, "validate_definition", lambda name, result, **_: [])
+
+    fake = RecordingHttpClient(
+        [
+            DummyHttpResponse(
+                {
+                    "supportedVersions": ["2026-07-28"],
+                    "capabilities": {"tools": True},
+                    "cacheScope": "private",
+                    "ttlMs": 1000,
+                }
+            ),
+            DummyHttpResponse({"tools": []}),
+        ]
+    )
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
+    transport = StreamHttpDriver("http://test/mcp", timeout=1)
+
+    await runner.run_spec_suite(transport)
+
+    assert fake.calls[0]["json"]["method"] == "server/discover"
+    assert fake.calls[0]["headers"]["mcp-protocol-version"] == "2026-07-28"
+    assert fake.calls[0]["headers"]["Mcp-Method"] == "server/discover"
 
 
 @pytest.mark.asyncio

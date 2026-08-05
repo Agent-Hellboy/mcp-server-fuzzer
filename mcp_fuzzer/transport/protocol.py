@@ -26,7 +26,7 @@ CLIENT_CAPABILITIES_META_KEY = "io.modelcontextprotocol/clientCapabilities"
 PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion"
 MCP_PARAM_HEADER_PREFIX = "Mcp-Param-"
 _SPEC_VERSION_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_HEADER_NAME_RE = re.compile(r"^[!-9;-~]+$")
+_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 _BASE64_SENTINEL_PREFIX = "=?base64?"
 _BASE64_SENTINEL_SUFFIX = "?="
 
