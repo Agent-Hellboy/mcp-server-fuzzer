@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ....protocol_registry import EXECUTABLE_PROTOCOL_METHODS
+from ....spec_guard.spec_version import schema_path_for_version
 from .schema_helpers import apply_schema_edge_cases, apply_semantic_combos
 from .schema_parser import make_fuzz_strategy_from_jsonschema
 
@@ -102,6 +103,8 @@ def _schema_path(version: str | None) -> Path:
     )
     if not chosen:
         return root / "schema.json"
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", chosen):
+        return schema_path_for_version(chosen)
     return root / chosen / "schema.json"
 
 

@@ -37,7 +37,7 @@ if ! "$PYTHON_BIN" -c "import mcp_fuzzer" >/dev/null 2>&1; then
     "$PYTHON_BIN" -m pip install -e "$PROJECT_ROOT"
 fi
 if ! "$PYTHON_BIN" -c "import mcp, uvicorn" >/dev/null 2>&1; then
-    "$PYTHON_BIN" -m pip install "mcp[cli]" uvicorn
+    "$PYTHON_BIN" -m pip install "mcp[cli]<2" uvicorn
 fi
 
 echo "Starting authenticated MCP server on ${BASE_URL}"
@@ -50,7 +50,7 @@ echo "Starting authenticated MCP server on ${BASE_URL}"
     >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
-"$PYTHON_BIN" - "$BASE_URL" <<'PY'
+if ! "$PYTHON_BIN" - "$BASE_URL" <<'PY'
 import sys
 import time
 import urllib.request
@@ -65,6 +65,11 @@ for _ in range(50):
         time.sleep(0.2)
 raise SystemExit("auth e2e server did not become healthy")
 PY
+then
+    echo "Auth e2e server log:"
+    cat "$SERVER_LOG"
+    exit 1
+fi
 
 echo "Verifying secure_tool rejects unauthenticated calls"
 "$PYTHON_BIN" - "$BASE_URL" <<'PY'

@@ -6,6 +6,7 @@ from typing import Any
 
 # Requests
 INITIALIZE = "initialize"
+SERVER_DISCOVER = "server/discover"
 TOOLS_LIST = "tools/list"
 PROMPTS_LIST = "prompts/list"
 RESOURCES_LIST = "resources/list"

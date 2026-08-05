@@ -26,6 +26,7 @@ SERVER_AUDIT_FLAW_CATEGORIES = frozenset(
     {
         "tool_poisoning",
         "schema_poisoning",
+        "hidden_instruction",
         "tool_shadowing",
         "dangerous_capability_combo",
         "insecure_transport",

@@ -3,11 +3,17 @@
 import pytest
 
 from mcp_fuzzer.transport.protocol import (
+    CLIENT_CAPABILITIES_META_KEY,
+    CLIENT_INFO_META_KEY,
+    PROTOCOL_VERSION_META_KEY,
     ProtocolNegotiationState,
     current_protocol_version,
+    is_stateless_protocol_version,
     negotiated_headers,
     normalize_protocol_version,
     supports_streamable_http,
+    tool_call_param_headers,
+    with_stateless_request_metadata,
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.transport]
@@ -34,6 +40,12 @@ def test_streamable_http_cutoff_rule():
     assert supports_streamable_http("invalid") is False
 
 
+def test_stateless_protocol_cutoff_rule():
+    assert is_stateless_protocol_version("2026-07-28") is True
+    assert is_stateless_protocol_version("2025-11-25") is False
+    assert is_stateless_protocol_version("invalid") is False
+
+
 def test_negotiated_headers_omit_protocol_version_on_initialize():
     state = ProtocolNegotiationState("2025-06-18")
 
@@ -46,6 +58,97 @@ def test_negotiated_headers_omit_protocol_version_on_initialize():
         ]
         == "2025-06-18"
     )
+
+
+def test_negotiated_headers_include_stateless_routing_metadata():
+    state = ProtocolNegotiationState("2026-07-28")
+
+    headers = negotiated_headers(
+        {"Accept": "application/json"},
+        method="tools/call",
+        params={"name": "search"},
+        state=state,
+    )
+
+    assert headers["mcp-protocol-version"] == "2026-07-28"
+    assert headers["Mcp-Method"] == "tools/call"
+    assert headers["Mcp-Name"] == "search"
+
+
+def test_tool_call_param_headers_mirror_schema_annotations():
+    headers = tool_call_param_headers(
+        {"name": "search", "arguments": {"region": "us-east", "debug": True}},
+        {
+            "name": "search",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "region": {"type": "string", "x-mcp-header": "Region"},
+                    "debug": {"type": "boolean", "x-mcp-header": "Debug"},
+                    "payload": {"type": "object", "x-mcp-header": "Payload"},
+                },
+            },
+        },
+    )
+
+    assert headers == {
+        "Mcp-Param-Region": "us-east",
+        "Mcp-Param-Debug": "true",
+    }
+
+
+def test_tool_call_param_headers_skip_invalid_duplicate_annotations():
+    headers = tool_call_param_headers(
+        {"name": "search", "arguments": {"a": "one", "b": "two"}},
+        {
+            "name": "search",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "a": {"type": "string", "x-mcp-header": "Region"},
+                    "b": {"type": "string", "x-mcp-header": "region"},
+                },
+            },
+        },
+    )
+
+    assert headers == {}
+
+
+def test_negotiated_headers_encode_unsafe_name_values():
+    state = ProtocolNegotiationState("2026-07-28")
+
+    headers = negotiated_headers(
+        {"Accept": "application/json"},
+        method="resources/read",
+        params={"uri": " file://hello/world "},
+        state=state,
+    )
+
+    assert headers["Mcp-Name"].startswith("=?base64?")
+    assert headers["Mcp-Name"].endswith("?=")
+
+
+def test_with_stateless_request_metadata_adds_required_meta():
+    payload = {
+        "jsonrpc": "2.0",
+        "id": "1",
+        "method": "tools/list",
+        "params": {},
+    }
+
+    enriched = with_stateless_request_metadata(
+        payload,
+        protocol_version="2026-07-28",
+        client_capabilities={},
+        client_info={"name": "mcp-fuzzer", "version": "0.1"},
+    )
+
+    meta = enriched["params"]["_meta"]
+    assert meta[PROTOCOL_VERSION_META_KEY] == "2026-07-28"
+    assert meta[CLIENT_CAPABILITIES_META_KEY] == {}
+    assert meta[CLIENT_INFO_META_KEY]["name"] == "mcp-fuzzer"
+    assert "_meta" not in payload["params"]
 
 
 def test_negotiation_state_rejects_invalid_versions():

@@ -54,7 +54,13 @@ from ..methods import (
     is_retry_safe_method,
     payload_method,
 )
-from ..protocol import ProtocolNegotiationState, negotiated_headers
+from ..protocol import (
+    ProtocolNegotiationState,
+    is_stateless_protocol_version,
+    negotiated_headers,
+    tool_call_param_headers,
+    with_stateless_request_metadata,
+)
 
 
 class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
@@ -104,6 +110,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
         self.session_id: str | None = None
         self._negotiation = ProtocolNegotiationState()
+        self._tools_by_name: dict[str, dict[str, Any]] = {}
         self.extra_headers: dict[str, str] = {}
         self.origin: str | None = None
         self.last_event_id: str | None = None
@@ -147,17 +154,49 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Returns:
             Headers dict with session information
         """
+        params = None
         headers = negotiated_headers(
-            self.headers, method=method, state=self._negotiation
+            self.headers, method=method, params=params, state=self._negotiation
         )
         headers.update(self.extra_headers)
         if self.origin and "Origin" not in headers:
             headers["Origin"] = self.origin
         if is_initialize_method(method):
             return headers
-        if self.session_id:
+        if (
+            self.session_id
+            and not is_stateless_protocol_version(self._active_protocol_version())
+        ):
             headers[MCP_SESSION_ID_HEADER] = self.session_id
         return headers
+
+    @staticmethod
+    def _client_capabilities() -> dict[str, Any]:
+        return {
+            "elicitation": {"form": {}, "url": {}},
+            "experimental": {},
+            "roots": {},
+            "sampling": {"context": {}, "tools": {}},
+            "extensions": {},
+        }
+
+    @staticmethod
+    def _client_info() -> dict[str, str]:
+        return {"name": "mcp-fuzzer", "version": "0.1"}
+
+    def _active_protocol_version(self) -> str:
+        return self.protocol_version or DEFAULT_PROTOCOL_VERSION
+
+    def _prepare_payload_for_send(self, payload: Any) -> Any:
+        version = self._active_protocol_version()
+        if not is_stateless_protocol_version(version) or not isinstance(payload, dict):
+            return payload
+        return with_stateless_request_metadata(
+            payload,
+            protocol_version=version,
+            client_capabilities=self._client_capabilities(),
+            client_info=self._client_info(),
+        )
 
     @property
     def protocol_version(self) -> str | None:
@@ -167,8 +206,31 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
     def protocol_version(self, value: str | None) -> None:
         self._negotiation.protocol_version = value
 
-    def _prepare_request_headers(self, *, method: str | None = None) -> dict[str, str]:
-        headers = self._prepare_headers(method=method)
+    def _prepare_request_headers(
+        self,
+        *,
+        method: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, str]:
+        headers = negotiated_headers(
+            self.headers, method=method, params=params, state=self._negotiation
+        )
+        headers.update(self.extra_headers)
+        if self.origin and "Origin" not in headers:
+            headers["Origin"] = self.origin
+        if method == "tools/call":
+            headers.update(
+                tool_call_param_headers(
+                    params,
+                    self._tool_definition_for_params(params),
+                )
+            )
+        if (
+            not is_initialize_method(method)
+            and self.session_id
+            and not is_stateless_protocol_version(self._active_protocol_version())
+        ):
+            headers[MCP_SESSION_ID_HEADER] = self.session_id
         if self.safety_enabled:
             self._validate_network_request(self.url)
         return self._prepare_headers_with_auth(headers)
@@ -198,6 +260,29 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             self._negotiation.update(protocol_header)
             self._logger.debug("Received protocol version header: %s", protocol_header)
             maybe_update_spec_version(protocol_header)
+
+    def _tool_definition_for_params(
+        self, params: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        if not isinstance(params, dict):
+            return None
+        name = params.get("name")
+        if not isinstance(name, str):
+            return None
+        return self._tools_by_name.get(name)
+
+    def _maybe_cache_tools(self, method: str | None, result: Any) -> None:
+        if method != "tools/list" or not isinstance(result, dict):
+            return
+        tools = result.get("tools")
+        if not isinstance(tools, list):
+            return
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            name = tool.get("name")
+            if isinstance(name, str) and name:
+                self._tools_by_name[name] = tool
 
     def _maybe_extract_protocol_version_from_result(self, result: Any) -> None:
         """Extract protocol version from result.
@@ -450,7 +535,9 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         """
         # Ensure MCP initialization handshake once per session
         method = self._payload_method(payload)
-        if not self._initialized and not is_initialize_method(method):
+        if is_stateless_protocol_version(self._active_protocol_version()):
+            self._initialized = True
+        elif not self._initialized and not is_initialize_method(method):
             async with self._init_lock:
                 if not self._initialized and not self._initializing:
                     self._initializing = True
@@ -459,7 +546,10 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                     finally:
                         self._initializing = False
 
-        safe_headers = self._prepare_request_headers(method=method)
+        payload = self._prepare_payload_for_send(payload)
+        params = payload.get("params") if isinstance(payload, dict) else None
+        params = params if isinstance(params, dict) else None
+        safe_headers = self._prepare_request_headers(method=method, params=params)
 
         async with self._create_http_client(self.timeout) as client:
             response = await self._post_with_retries(
@@ -506,6 +596,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 data = self._parse_http_response_json(response, fallback_to_sse=False)
 
                 self._maybe_extract_protocol_version_from_result(data)
+                self._maybe_cache_tools(method, data)
                 if is_initialize_method(method):
                     self._initialized = True
 
@@ -517,7 +608,9 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                     self._initialized = True
                 if parsed is None:
                     return {}
-                return self._extract_result_from_response(parsed)
+                result = self._extract_result_from_response(parsed)
+                self._maybe_cache_tools(method, result)
+                return result
 
             raise TransportError(
                 f"Unexpected content type: {ct}",
@@ -534,7 +627,12 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             params: Optional parameters
         """
         payload = self._create_jsonrpc_notification(method, params)
-        safe_headers = self._prepare_request_headers(method=method)
+        payload = self._prepare_payload_for_send(payload)
+        payload_params = payload.get("params")
+        payload_params = payload_params if isinstance(payload_params, dict) else None
+        safe_headers = self._prepare_request_headers(
+            method=method, params=payload_params
+        )
 
         async with self._create_http_client(self.timeout) as client:
             response = await self._post_with_retries(
@@ -598,9 +696,11 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         Yields:
             Parsed JSON objects from stream
         """
-        safe_headers = self._prepare_request_headers(
-            method=self._payload_method(payload)
-        )
+        payload = self._prepare_payload_for_send(payload)
+        method = self._payload_method(payload)
+        params = payload.get("params")
+        params = params if isinstance(params, dict) else None
+        safe_headers = self._prepare_request_headers(method=method, params=params)
 
         async with self._create_http_client(self.timeout) as client:
             async with client.stream(
