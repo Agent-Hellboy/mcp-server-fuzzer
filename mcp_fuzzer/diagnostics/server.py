@@ -27,7 +27,9 @@ SERVER_AUDIT_FLAW_CATEGORIES = frozenset(
         "tool_poisoning",
         "schema_poisoning",
         "hidden_instruction",
+        "tool_conditioning",
         "tool_shadowing",
+        "tool_definition_drift",
         "dangerous_capability_combo",
         "insecure_transport",
         "command_injection",
@@ -36,6 +38,40 @@ SERVER_AUDIT_FLAW_CATEGORIES = frozenset(
         "output_prompt_injection",
     }
 )
+
+_OWASP_MCP_CATEGORY_IDS = {
+    "tool_poisoning": "MCP03:2025",
+    "schema_poisoning": "MCP03:2025",
+    "hidden_instruction": "MCP03:2025",
+    "tool_conditioning": "MCP03:2025",
+    "tool_shadowing": "MCP03:2025",
+    "tool_definition_drift": "MCP03:2025",
+    "dangerous_capability_combo": "MCP02:2025",
+    "insecure_transport": "MCP08:2025",
+    "command_injection": "MCP05:2025",
+    "path_traversal": "MCP02:2025",
+    "sql_injection": "MCP06:2025",
+    "output_prompt_injection": "MCP06:2025",
+}
+_OWASP_MCP_URLS = {
+    "MCP02:2025": (
+        "https://owasp.org/www-project-mcp-top-10/2025/"
+        "MCP02-2025%E2%80%93Privilege-Escalation-via-Scope-Creep"
+    ),
+    "MCP03:2025": (
+        "https://owasp.org/www-project-mcp-top-10/2025/"
+        "MCP03-2025%E2%80%93Tool-Poisoning"
+    ),
+    "MCP05:2025": (
+        "https://owasp.org/www-project-mcp-top-10/2025/"
+        "MCP05-2025%E2%80%93Command-Injection%26Execution"
+    ),
+    "MCP06:2025": (
+        "https://owasp.org/www-project-mcp-top-10/2025/"
+        "MCP06-2025%E2%80%93Intent-Flow-Subversion"
+    ),
+    "MCP08:2025": "https://owasp.org/www-project-mcp-top-10/",
+}
 
 _PAPER_TITLES = {
     TOOL_POISONING_PAPER_ARXIV_ID: TOOL_POISONING_PAPER_TITLE,
@@ -78,6 +114,10 @@ def server_finding(
     evidence: dict[str, Any] | None = None,
 ) -> Finding:
     ev = {"check_id": check_id, **server_audit_paper_evidence(arxiv_id)}
+    if category in _OWASP_MCP_CATEGORY_IDS:
+        owasp_id = _OWASP_MCP_CATEGORY_IDS[category]
+        ev["owasp_mcp_top_10"] = owasp_id
+        ev["owasp_mcp_url"] = _OWASP_MCP_URLS[owasp_id]
     if evidence:
         ev.update(evidence)
     return Finding(category, severity, "tool", target, run, detail, ev)

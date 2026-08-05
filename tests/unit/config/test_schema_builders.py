@@ -12,6 +12,7 @@ from mcp_fuzzer.config.schema_builders import (
     build_fuzzing_schema,
     build_network_schema,
     build_output_schema,
+    build_runtime_probe_schema,
     build_safety_schema,
     build_timeout_schema,
 )
@@ -58,6 +59,21 @@ def test_build_network_schema():
     assert "allow_hosts" in schema
     assert schema["no_network"]["type"] == "boolean"
     assert schema["allow_hosts"]["type"] == "array"
+
+
+def test_build_runtime_probe_schema():
+    """Test that runtime probe schema includes all runtime-probe fields."""
+    schema = build_runtime_probe_schema()
+    assert "runtime_probe" in schema
+    assert "runtime_probe_backend" in schema
+    assert "runtime_probe_bin" in schema
+    assert "runtime_probe_workspace" in schema
+    assert "runtime_probe_tmpdir" in schema
+    assert "runtime_probe_allow_exec" in schema
+    assert "runtime_probe_allow_host" in schema
+    assert schema["runtime_probe"]["type"] == "boolean"
+    assert schema["runtime_probe_backend"]["enum"] == ["ebpf", "fake", "auto"]
+    assert schema["runtime_probe_allow_host"]["type"] == "array"
 
 
 def test_build_auth_schema():

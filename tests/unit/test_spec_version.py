@@ -31,12 +31,12 @@ def test_maybe_update_spec_version_from_result(monkeypatch):
     assert updated == "2025-11-25"
 
 
-def test_2026_rc_uses_draft_schema_alias():
+def test_2026_rc_prefers_dated_schema_when_available():
     versions = spec_version.supported_protocol_versions()
 
     assert "2026-07-28" in versions
     assert spec_version.is_supported_protocol_version("2026-07-28")
     assert spec_version.schema_path_for_version("2026-07-28").parts[-2:] == (
-        "draft",
+        "2026-07-28",
         "schema.json",
     )

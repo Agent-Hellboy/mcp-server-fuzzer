@@ -7,6 +7,21 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- First-class runtime-probe CLI and config options for enabling
+  `mcpfz-probe`, selecting the backend/binary, setting workspace/tmp policy
+  roots, and allowlisting expected exec or network destinations. Environment
+  variables remain supported as fallbacks, and the runtime probe remains
+  disabled by default.
+- Runtime-probe capability preflight for `ebpf`/`auto`, warnings for non-stdio
+  transports, expanded runtime finding categories from `mcpfz-probe`, and OWASP
+  MCP Top 10 IDs/URLs on runtime findings.
+- Additional MCP server-audit checks for ANSI terminal escape sequences,
+  trigger/conversation-history conditioned tool metadata, divergent duplicate
+  tool definitions, and canonical tool-definition hashes plus OWASP MCP
+  IDs/URLs in evidence.
+
 ## [0.5.0] - 2026-07-22
 
 ### Added
@@ -14,8 +29,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - MCP `2026-07-28` release-candidate support behind the existing
   `--spec-schema-version` / `spec_schema_version` / `MCP_SPEC_SCHEMA_VERSION`
   configuration path:
-  - `2026-07-28` resolves to the vendored draft schema until the final schema
-    directory exists.
+  - `2026-07-28` resolves to the concrete vendored schema when present, with a
+    draft-schema fallback for older checkouts.
   - Streamable HTTP requests for `2026-07-28` include per-request
     `io.modelcontextprotocol/*` `_meta` fields and routing headers
     (`MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` where applicable).
@@ -27,8 +42,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Updated the vendored MCP spec submodule so `schema/draft` contains the current
-  public `2026-07-28` RC schema.
+- Updated the vendored MCP spec submodule so concrete dated schemas are bundled
+  through `2026-07-28`.
 - Expanded tool-poisoning detection patterns and dangerous capability-combination
   evidence reported by `--security-audit`.
 - Documented `2026-07-28` as a supported protocol/schema version override in CLI

@@ -52,6 +52,13 @@ def _base_args(**overrides):
         fs_root=None,
         no_safety=False,
         enable_safety_system=False,
+        runtime_probe=None,
+        runtime_probe_backend=None,
+        runtime_probe_bin=None,
+        runtime_probe_workspace=None,
+        runtime_probe_tmpdir=None,
+        runtime_probe_allow_exec=None,
+        runtime_probe_allow_host=None,
         safety_report=False,
         export_safety_data=None,
         output_dir="reports",
@@ -109,6 +116,42 @@ def test_create_argument_parser_and_defaults():
     assert args.mode == "tools"
     assert args.protocol == "http"
     assert args.timeout == 30.0
+    assert args.runtime_probe is None
+
+
+def test_create_argument_parser_runtime_probe_flags():
+    parser = create_argument_parser()
+    args = parser.parse_args(
+        [
+            "--mode",
+            "tools",
+            "--protocol",
+            "stdio",
+            "--endpoint",
+            "python server.py",
+            "--runtime-probe",
+            "--runtime-probe-backend",
+            "fake",
+            "--runtime-probe-bin",
+            "/tmp/mcpfz-probe",
+            "--runtime-probe-workspace",
+            "/work",
+            "--runtime-probe-tmpdir",
+            "/scratch",
+            "--runtime-probe-allow-exec",
+            "/usr/bin/date",
+            "--runtime-probe-allow-host",
+            "api.example.com",
+        ]
+    )
+
+    assert args.runtime_probe is True
+    assert args.runtime_probe_backend == "fake"
+    assert args.runtime_probe_bin == "/tmp/mcpfz-probe"
+    assert args.runtime_probe_workspace == "/work"
+    assert args.runtime_probe_tmpdir == "/scratch"
+    assert args.runtime_probe_allow_exec == ["/usr/bin/date"]
+    assert args.runtime_probe_allow_host == ["api.example.com"]
 
 
 def test_parse_arguments(monkeypatch):
@@ -336,12 +379,51 @@ def test_print_startup_info():
         assert mock_console.return_value.print.call_count >= 1
 
 
+def test_print_startup_info_ignores_runtime_probe_config_errors(monkeypatch):
+    args = argparse.Namespace(mode="tools", protocol="http", endpoint="http://x")
+
+    def fail_from_mapping(config):
+        raise ValueError("bad runtime probe config")
+
+    monkeypatch.setattr(
+        "mcp_fuzzer.runtime_probe.RuntimeProbeConfig.from_mapping",
+        fail_from_mapping,
+    )
+    with patch("mcp_fuzzer.cli.startup_info.Console") as mock_console:
+        mock_console.return_value = MagicMock()
+        print_startup_info(args, {"runtime_probe": True})
+        assert mock_console.return_value.print.call_count >= 1
+
+
 def test_build_cli_config_merges_and_returns_cli_config():
     args = _base_args()
     cli_config = build_cli_config(args)
     assert isinstance(cli_config, CliConfig)
     assert cli_config.merged["endpoint"] == "http://localhost"
     assert cli_config.merged["safety_enabled"] is True
+    assert cli_config.merged["runtime_probe"] is None
+
+
+def test_build_cli_config_merges_runtime_probe_flags():
+    args = _base_args(
+        runtime_probe=True,
+        runtime_probe_backend="fake",
+        runtime_probe_bin="/tmp/mcpfz-probe",
+        runtime_probe_workspace="/work",
+        runtime_probe_tmpdir="/scratch",
+        runtime_probe_allow_exec=["/usr/bin/date"],
+        runtime_probe_allow_host=["api.example.com"],
+    )
+
+    cli_config = build_cli_config(args)
+
+    assert cli_config.merged["runtime_probe"] is True
+    assert cli_config.merged["runtime_probe_backend"] == "fake"
+    assert cli_config.merged["runtime_probe_bin"] == "/tmp/mcpfz-probe"
+    assert cli_config.merged["runtime_probe_workspace"] == "/work"
+    assert cli_config.merged["runtime_probe_tmpdir"] == "/scratch"
+    assert cli_config.merged["runtime_probe_allow_exec"] == ["/usr/bin/date"]
+    assert cli_config.merged["runtime_probe_allow_host"] == ["api.example.com"]
 
 
 def test_handle_validate_config(monkeypatch):
@@ -376,6 +458,13 @@ def test_prepare_inner_argv_roundtrip():
         export_safety_data="",
         spec_prompt_name="example_prompt",
         spec_prompt_args='{"query": "probe"}',
+        runtime_probe=True,
+        runtime_probe_backend="fake",
+        runtime_probe_bin="/tmp/mcpfz-probe",
+        runtime_probe_workspace="/work",
+        runtime_probe_tmpdir="/scratch",
+        runtime_probe_allow_exec=["/usr/bin/date"],
+        runtime_probe_allow_host=["api.example.com"],
     )
     argv = prepare_inner_argv(args)
     assert "--mode" in argv and "--endpoint" in argv
@@ -383,6 +472,21 @@ def test_prepare_inner_argv_roundtrip():
     assert "--export-safety-data" in argv
     assert "--spec-prompt-name" in argv
     assert "--spec-prompt-args" in argv
+    assert "--runtime-probe" in argv
+    assert "--runtime-probe-backend" in argv
+    assert "fake" in argv
+    assert "--runtime-probe-allow-exec" in argv
+    assert "/usr/bin/date" in argv
+    assert "--runtime-probe-allow-host" in argv
+    assert "api.example.com" in argv
+
+
+def test_prepare_inner_argv_preserves_disabled_runtime_probe_flag():
+    args = _base_args(runtime_probe=False)
+
+    argv = prepare_inner_argv(args)
+
+    assert "--no-runtime-probe" in argv
 
 
 def test_safety_controller():
@@ -760,12 +864,18 @@ def test_build_cli_config_uses_config_file(monkeypatch):
             "endpoint": "http://conf",
             "runs": 42,
             "allow_hosts": ["a.local"],
+            "runtime_probe": True,
+            "runtime_probe_backend": "fake",
+            "runtime_probe_allow_host": ["api.example.com"],
         },
     ):
         cli_config = build_cli_config(args)
     assert cli_config.merged["endpoint"] == "http://conf"
     assert cli_config.merged["runs"] == 42
     assert cli_config.merged["allow_hosts"] == ["a.local"]
+    assert cli_config.merged["runtime_probe"] is True
+    assert cli_config.merged["runtime_probe_backend"] == "fake"
+    assert cli_config.merged["runtime_probe_allow_host"] == ["api.example.com"]
 
 
 def test_build_cli_config_handles_apply_config_error(caplog):

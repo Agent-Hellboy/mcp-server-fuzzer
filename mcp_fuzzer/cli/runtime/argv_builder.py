@@ -74,6 +74,11 @@ def prepare_inner_argv(args: Any) -> list[str]:
     _add_bool("--enable-aiomonitor", "enable_aiomonitor")
     _add_bool("--output-compress", "output_compress")
     _add_bool("--enable-safety-system", "enable_safety_system")
+    runtime_probe = _get_attr("runtime_probe", None)
+    if runtime_probe is True:
+        argv.append("--runtime-probe")
+    elif runtime_probe is False:
+        argv.append("--no-runtime-probe")
     _add_bool("--no-safety", "no_safety")
     _add_bool("--safety-report", "safety_report")
     _add_bool("--retry-with-safety-on-interrupt", "retry_with_safety_on_interrupt")
@@ -83,6 +88,18 @@ def prepare_inner_argv(args: Any) -> list[str]:
         argv.append("--no-spec-guard")
 
     _add_list("--allow-host", _get_attr("allow_hosts", None))
+    _add_value("--runtime-probe-backend", _get_attr("runtime_probe_backend", None))
+    _add_value("--runtime-probe-bin", _get_attr("runtime_probe_bin", None))
+    _add_value("--runtime-probe-workspace", _get_attr("runtime_probe_workspace", None))
+    _add_value("--runtime-probe-tmpdir", _get_attr("runtime_probe_tmpdir", None))
+    _add_list(
+        "--runtime-probe-allow-exec",
+        _get_attr("runtime_probe_allow_exec", None),
+    )
+    _add_list(
+        "--runtime-probe-allow-host",
+        _get_attr("runtime_probe_allow_host", None),
+    )
 
     return argv
 
