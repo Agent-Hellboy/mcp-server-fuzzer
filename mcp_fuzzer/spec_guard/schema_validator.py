@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .helpers import SpecCheck, _spec_version
+from .spec_version import schema_path_for_version
 
 try:
     from jsonschema import Draft202012Validator, validators
@@ -44,7 +45,7 @@ def _load_schema(version: str) -> dict[str, Any]:
     if version in _SCHEMA_CACHE:
         return _SCHEMA_CACHE[version]
 
-    schema_path = SCHEMA_BASE_PATH / version / "schema.json"
+    schema_path = schema_path_for_version(version)
     data = json.loads(schema_path.read_text(encoding="utf-8"))
     _SCHEMA_CACHE[version] = data
     return data

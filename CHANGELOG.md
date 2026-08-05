@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-22
+
 ### Added
 
 - MCP `2026-07-28` release-candidate support behind the existing

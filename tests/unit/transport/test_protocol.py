@@ -12,6 +12,7 @@ from mcp_fuzzer.transport.protocol import (
     negotiated_headers,
     normalize_protocol_version,
     supports_streamable_http,
+    tool_call_param_headers,
     with_stateless_request_metadata,
 )
 
@@ -72,6 +73,46 @@ def test_negotiated_headers_include_stateless_routing_metadata():
     assert headers["mcp-protocol-version"] == "2026-07-28"
     assert headers["Mcp-Method"] == "tools/call"
     assert headers["Mcp-Name"] == "search"
+
+
+def test_tool_call_param_headers_mirror_schema_annotations():
+    headers = tool_call_param_headers(
+        {"name": "search", "arguments": {"region": "us-east", "debug": True}},
+        {
+            "name": "search",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "region": {"type": "string", "x-mcp-header": "Region"},
+                    "debug": {"type": "boolean", "x-mcp-header": "Debug"},
+                    "payload": {"type": "object", "x-mcp-header": "Payload"},
+                },
+            },
+        },
+    )
+
+    assert headers == {
+        "Mcp-Param-Region": "us-east",
+        "Mcp-Param-Debug": "true",
+    }
+
+
+def test_tool_call_param_headers_skip_invalid_duplicate_annotations():
+    headers = tool_call_param_headers(
+        {"name": "search", "arguments": {"a": "one", "b": "two"}},
+        {
+            "name": "search",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "a": {"type": "string", "x-mcp-header": "Region"},
+                    "b": {"type": "string", "x-mcp-header": "region"},
+                },
+            },
+        },
+    )
+
+    assert headers == {}
 
 
 def test_negotiated_headers_encode_unsafe_name_values():

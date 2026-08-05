@@ -53,7 +53,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e .
-        pip install "mcp[cli]" uvicorn
+        pip install "mcp[cli]<2" uvicorn
 
 
     - name: Create test output directory

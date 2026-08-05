@@ -140,6 +140,7 @@ async def test_streamable_http_stateless_rc_request_metadata(monkeypatch):
 
     transport = StreamHttpDriver("http://test/mcp", timeout=1)
     transport.protocol_version = "2026-07-28"
+    transport.session_id = "sess-existing"
 
     result = await transport.send_request("tools/list", {})
 
@@ -159,6 +160,54 @@ async def test_streamable_http_stateless_rc_request_metadata(monkeypatch):
         "sampling": {"context": {}, "tools": {}},
         "extensions": {},
     }
+
+
+@pytest.mark.anyio("asyncio")
+async def test_streamable_http_stateless_mirrors_x_mcp_header_params(monkeypatch):
+    list_resp = _DummyResponse(
+        json_body={
+            "jsonrpc": "2.0",
+            "id": "1",
+            "result": {
+                "tools": [
+                    {
+                        "name": "search",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "region": {
+                                    "type": "string",
+                                    "x-mcp-header": "Region",
+                                }
+                            },
+                        },
+                    }
+                ]
+            },
+        },
+        content_type="application/json",
+    )
+    call_resp = _DummyResponse(
+        json_body={"jsonrpc": "2.0", "id": "2", "result": {"content": []}},
+        content_type="application/json",
+    )
+    fake = _FakeAsyncClient([list_resp, call_resp])
+
+    import httpx
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: fake)
+
+    transport = StreamHttpDriver("http://test/mcp", timeout=1)
+    transport.protocol_version = "2026-07-28"
+
+    await transport.send_request("tools/list", {})
+    result = await transport.send_request(
+        "tools/call",
+        {"name": "search", "arguments": {"region": "us-east"}},
+    )
+
+    assert result == {"content": []}
+    assert fake.calls[-1]["headers"]["Mcp-Param-Region"] == "us-east"
 
 
 @pytest.mark.anyio("asyncio")

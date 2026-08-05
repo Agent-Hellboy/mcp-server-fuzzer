@@ -147,6 +147,65 @@ async def _discover_stateless_server(
     return checks, capabilities, None
 
 
+async def _initialize_legacy_server(
+    transport: Any,
+    protocol_version: str,
+) -> tuple[list[SpecCheck], dict[str, Any], str | None]:
+    checks: list[SpecCheck] = []
+    capabilities: dict[str, Any] = {}
+    version_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    try:
+        result = await transport.send_request(
+            "initialize",
+            {
+                "protocolVersion": protocol_version,
+                "capabilities": _client_capabilities(),
+                "clientInfo": {"name": "mcp-fuzzer", "version": "0.1.0"},
+            },
+        )
+        if not isinstance(result, dict):
+            checks.append(
+                _fail(
+                    "protocol-version",
+                    "Initialize response missing protocolVersion",
+                    _SCHEMA_SPEC,
+                )
+            )
+            return checks, capabilities, None
+        capabilities = result.get("capabilities") or {}
+        server_version = result.get("protocolVersion")
+        if not isinstance(server_version, str) or not server_version:
+            checks.append(
+                _fail(
+                    "protocol-version",
+                    "Server did not return protocolVersion in initialize response",
+                    _SCHEMA_SPEC,
+                )
+            )
+            return checks, capabilities, None
+        schema_path = schema_path_for_version(server_version)
+        if not version_pattern.match(server_version) or not (
+            is_supported_protocol_version(server_version) and schema_path.exists()
+        ):
+            checks.append(
+                _fail(
+                    "protocol-version",
+                    "Server returned invalid or unsupported protocolVersion: "
+                    f"{server_version}",
+                    _SCHEMA_SPEC,
+                )
+            )
+            return checks, capabilities, None
+        checks.extend(
+            validate_definition("InitializeResult", result, version=server_version)
+        )
+        await transport.send_notification("notifications/initialized")
+        return checks, capabilities, server_version
+    except Exception as exc:
+        checks.append(_fail("initialize", f"initialize failed: {exc}", _SCHEMA_SPEC))
+        return checks, capabilities, None
+
+
 async def run_spec_suite(
     transport: Any,
     resource_uri: str | None = None,
@@ -157,7 +216,6 @@ async def run_spec_suite(
     checks: list[SpecCheck] = []
     capabilities: dict[str, Any] = {}
     protocol_version = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-11-25")
-    version_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
     task_id: str | None = None
     task_origin_method: str | None = None
 
@@ -171,64 +229,26 @@ async def run_spec_suite(
         if discovered_version is None:
             return checks
         protocol_version = discovered_version
-    else:
         try:
-            result = await transport.send_request(
-                "initialize",
-                {
-                    "protocolVersion": protocol_version,
-                    "capabilities": _client_capabilities(),
-                    "clientInfo": {"name": "mcp-fuzzer", "version": "0.1.0"},
-                },
+            transport.protocol_version = discovered_version
+        except AttributeError:
+            pass
+        if not is_stateless_protocol_version(protocol_version):
+            legacy_checks, capabilities, initialized_version = (
+                await _initialize_legacy_server(transport, protocol_version)
             )
-            if isinstance(result, dict):
-                capabilities = result.get("capabilities") or {}
-                server_version = result.get("protocolVersion")
-                if not isinstance(server_version, str) or not server_version:
-                    checks.append(
-                        _fail(
-                            "protocol-version",
-                            "Server did not return protocolVersion in "
-                            "initialize response",
-                            _SCHEMA_SPEC,
-                        )
-                    )
-                    return checks
-                schema_path = schema_path_for_version(server_version)
-                if not version_pattern.match(server_version) or not (
-                    is_supported_protocol_version(server_version)
-                    and schema_path.exists()
-                ):
-                    checks.append(
-                        _fail(
-                            "protocol-version",
-                            "Server returned invalid or unsupported protocolVersion: "
-                            f"{server_version}",
-                            _SCHEMA_SPEC,
-                        )
-                    )
-                    return checks
-                protocol_version = server_version
-            else:
-                checks.append(
-                    _fail(
-                        "protocol-version",
-                        "Initialize response missing protocolVersion",
-                        _SCHEMA_SPEC,
-                    )
-                )
+            checks.extend(legacy_checks)
+            if initialized_version is None:
                 return checks
-            checks.extend(
-                validate_definition(
-                    "InitializeResult", result, version=protocol_version
-                )
-            )
-            await transport.send_notification("notifications/initialized")
-        except Exception as exc:
-            checks.append(
-                _fail("initialize", f"initialize failed: {exc}", _SCHEMA_SPEC)
-            )
+            protocol_version = initialized_version
+    else:
+        legacy_checks, capabilities, initialized_version = (
+            await _initialize_legacy_server(transport, protocol_version)
+        )
+        checks.extend(legacy_checks)
+        if initialized_version is None:
             return checks
+        protocol_version = initialized_version
 
     # Discover all testable schemas based on server capabilities
     testable_schemas = discover_testable_schemas(
@@ -238,14 +258,15 @@ async def run_spec_suite(
     # Track which methods we've already tested to avoid duplicates
     tested_methods: set[str] = set()
 
-    try:
-        result = await transport.send_request("ping")
-        checks.extend(
-            validate_definition("EmptyResult", result, version=protocol_version)
-        )
-        tested_methods.add("ping")
-    except Exception as exc:
-        checks.append(_fail("ping", f"ping failed: {exc}", _SCHEMA_SPEC))
+    if not is_stateless_protocol_version(protocol_version):
+        try:
+            result = await transport.send_request("ping")
+            checks.extend(
+                validate_definition("EmptyResult", result, version=protocol_version)
+            )
+            tested_methods.add("ping")
+        except Exception as exc:
+            checks.append(_fail("ping", f"ping failed: {exc}", _SCHEMA_SPEC))
 
     tasks_capability = (
         capabilities.get("tasks") if isinstance(capabilities, dict) else None

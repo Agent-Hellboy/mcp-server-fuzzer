@@ -143,8 +143,38 @@ async def test_run_spec_suite_uses_server_discover_for_stateless_rc(monkeypatch)
     await runner.run_spec_suite(transport)
 
     assert transport.requests[0] == ("server/discover", {})
+    assert transport.protocol_version == "2026-07-28"
     assert all(method != "initialize" for method, _ in transport.requests)
+    assert all(method != "ping" for method, _ in transport.requests)
     assert transport.notifications == []
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_downgrades_stateless_discovery_to_legacy(monkeypatch):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2026-07-28")
+    monkeypatch.setattr(runner, "validate_definition", lambda name, result, **_: [])
+
+    responses = {
+        "server/discover": {
+            "supportedVersions": ["2025-11-25"],
+            "capabilities": {"tools": True},
+        },
+        "initialize": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {"tools": True},
+        },
+        "notifications/initialized": None,
+        "ping": {},
+        "tools/list": {"tools": []},
+    }
+    transport = DummyTransport(responses)
+
+    await runner.run_spec_suite(transport)
+
+    assert transport.protocol_version == "2025-11-25"
+    assert any(method == "initialize" for method, _ in transport.requests)
+    assert ("ping", None) in transport.requests
+    assert transport.notifications == ["notifications/initialized"]
 
 
 @pytest.mark.asyncio

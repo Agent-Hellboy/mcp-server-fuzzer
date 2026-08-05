@@ -59,6 +59,11 @@ _UNICODE_CONTROL_PATTERN = re.compile(
 _BASE64_CANDIDATE_PATTERN = re.compile(
     r"(?<![A-Za-z0-9+/=])(?:[A-Za-z0-9+/]{24,}={0,2})(?![A-Za-z0-9+/=])"
 )
+_MAX_HIDDEN_CARRIER_TEXT_CHARS = 20_000
+_MAX_SCHEMA_TEXT_NODES = 10_000
+_MAX_SCHEMA_TEXT_DEPTH = 100
+_MAX_BASE64_CANDIDATES = 32
+_MAX_BASE64_CANDIDATE_CHARS = 8_192
 
 _LOCAL_READ_PATTERN = re.compile(
     r"\b(read|file|fs|cat|open|load|path|directory|glob|scan|filesystem)\b",
@@ -71,34 +76,79 @@ _NETWORK_EGRESS_PATTERN = re.compile(
 )
 
 
-def _tool_text(tool: dict[str, Any]) -> str:
-    parts = [str(tool.get("name") or "")]
+def _tool_text(
+    tool: dict[str, Any], *, max_chars: int | None = None
+) -> str:
+    parts: list[str] = []
+    remaining = max_chars
+
+    def append_text(text: str) -> None:
+        nonlocal remaining
+        if remaining is None:
+            parts.append(text)
+            return
+        if remaining <= 0:
+            return
+        chunk = text[:remaining]
+        parts.append(chunk)
+        remaining -= len(chunk)
+
+    append_text(str(tool.get("name") or ""))
     if tool.get("description"):
-        parts.append(str(tool["description"]))
+        append_text(str(tool["description"]))
     if tool.get("title"):
-        parts.append(str(tool["title"]))
+        append_text(str(tool["title"]))
     annotations = tool.get("annotations")
     if isinstance(annotations, dict):
-        parts.append(_collect_schema_text(annotations))
+        parts.append(_collect_schema_text(annotations, max_chars=remaining))
     return "\n".join(parts)
 
 
-def _collect_schema_text(value: Any) -> str:
+def _collect_schema_text(
+    value: Any, *, max_chars: int | None = None
+) -> str:
     parts: list[str] = []
+    remaining = max_chars
+    visited_nodes = 0
 
-    def walk(obj: Any) -> None:
+    def append_text(text: str) -> None:
+        nonlocal remaining
+        if remaining is None:
+            parts.append(text)
+            return
+        if remaining <= 0:
+            return
+        chunk = text[:remaining]
+        parts.append(chunk)
+        remaining -= len(chunk)
+
+    stack: list[tuple[Any, int]] = [(value, 0)]
+    while stack:
+        if visited_nodes >= _MAX_SCHEMA_TEXT_NODES:
+            break
+        if remaining is not None and remaining <= 0:
+            break
+
+        obj, depth = stack.pop()
+        visited_nodes += 1
+        if depth > _MAX_SCHEMA_TEXT_DEPTH:
+            continue
+
         if isinstance(obj, dict):
             for key, val in obj.items():
+                if visited_nodes + len(stack) >= _MAX_SCHEMA_TEXT_NODES:
+                    break
+                stack.append((val, depth + 1))
                 if isinstance(key, str):
-                    parts.append(key)
-                walk(val)
+                    stack.append((key, depth + 1))
         elif isinstance(obj, list):
             for item in obj:
-                walk(item)
+                if visited_nodes + len(stack) >= _MAX_SCHEMA_TEXT_NODES:
+                    break
+                stack.append((item, depth + 1))
         elif isinstance(obj, str):
-            parts.append(obj)
+            append_text(obj)
 
-    walk(value)
     return "\n".join(parts)
 
 
@@ -131,14 +181,18 @@ def _decode_base64_candidate(candidate: str) -> str | None:
 
 
 def _scan_hidden_instruction_carriers(text: str) -> list[dict[str, Any]]:
+    text = text[:_MAX_HIDDEN_CARRIER_TEXT_CHARS]
     hits: list[dict[str, Any]] = []
     if _UNICODE_CONTROL_PATTERN.search(text):
         hits.append({"kind": "unicode_control"})
     for pattern in _INVISIBLE_TEXT_PATTERNS:
         if pattern.search(text):
             hits.append({"kind": "hidden_comment", "pattern": pattern.pattern})
-    for match in _BASE64_CANDIDATE_PATTERN.finditer(text):
-        decoded = _decode_base64_candidate(match.group(0))
+    for candidate_count, match in enumerate(_BASE64_CANDIDATE_PATTERN.finditer(text)):
+        if candidate_count >= _MAX_BASE64_CANDIDATES:
+            break
+        candidate = match.group(0)[:_MAX_BASE64_CANDIDATE_CHARS]
+        decoded = _decode_base64_candidate(candidate)
         if not decoded:
             continue
         decoded_hits = _scan_poisoning(decoded)
@@ -170,7 +224,7 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
         if isinstance(name, str) and name:
             names.append(name)
 
-        visible = _tool_text(tool)
+        visible = _tool_text(tool, max_chars=_MAX_HIDDEN_CARRIER_TEXT_CHARS)
         if _LOCAL_READ_PATTERN.search(visible):
             if name:
                 local_read_tools.add(str(name))
@@ -208,7 +262,9 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
 
         schema = tool.get("inputSchema")
         if isinstance(schema, dict):
-            schema_text = _collect_schema_text(schema)
+            schema_text = _collect_schema_text(
+                schema, max_chars=_MAX_HIDDEN_CARRIER_TEXT_CHARS
+            )
             schema_hits = _scan_poisoning(schema_text)
             if schema_hits and name:
                 findings.append(

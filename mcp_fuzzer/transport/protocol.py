@@ -24,7 +24,9 @@ STATELESS_PROTOCOL_VERSION = "2026-07-28"
 CLIENT_INFO_META_KEY = "io.modelcontextprotocol/clientInfo"
 CLIENT_CAPABILITIES_META_KEY = "io.modelcontextprotocol/clientCapabilities"
 PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion"
+MCP_PARAM_HEADER_PREFIX = "Mcp-Param-"
 _SPEC_VERSION_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_HEADER_NAME_RE = re.compile(r"^[!-9;-~]+$")
 _BASE64_SENTINEL_PREFIX = "=?base64?"
 _BASE64_SENTINEL_SUFFIX = "?="
 
@@ -108,6 +110,63 @@ def negotiated_headers(
     elif not is_initialize_method(method) and state.protocol_version:
         headers[MCP_PROTOCOL_VERSION_HEADER] = state.protocol_version
     return headers
+
+
+def tool_call_param_headers(
+    params: Mapping[str, Any] | None,
+    tool_definition: Mapping[str, Any] | None,
+) -> dict[str, str]:
+    """Return SEP-2243 ``Mcp-Param-*`` headers for a ``tools/call`` payload."""
+    if not isinstance(params, Mapping) or not isinstance(tool_definition, Mapping):
+        return {}
+    arguments = params.get("arguments")
+    if not isinstance(arguments, Mapping):
+        return {}
+    input_schema = tool_definition.get("inputSchema")
+    if not isinstance(input_schema, Mapping):
+        return {}
+    properties = input_schema.get("properties")
+    if not isinstance(properties, Mapping):
+        return {}
+
+    headers: dict[str, str] = {}
+    seen: set[str] = set()
+    for parameter, schema in properties.items():
+        if not isinstance(parameter, str) or not isinstance(schema, Mapping):
+            continue
+        header_name = schema.get("x-mcp-header")
+        if not _valid_param_header_name(header_name):
+            continue
+        normalized_header_name = str(header_name).lower()
+        if normalized_header_name in seen:
+            return {}
+        seen.add(normalized_header_name)
+        if schema.get("type") not in {"string", "number", "integer", "boolean"}:
+            continue
+        if parameter not in arguments:
+            continue
+        encoded = _encode_param_header_value(arguments[parameter])
+        if encoded is not None:
+            headers[f"{MCP_PARAM_HEADER_PREFIX}{header_name}"] = encoded
+    return headers
+
+
+def _valid_param_header_name(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and bool(_HEADER_NAME_RE.fullmatch(value))
+    )
+
+
+def _encode_param_header_value(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return _encode_header_value("true" if value else "false")
+    if isinstance(value, (int, float, str)):
+        return _encode_header_value(str(value))
+    return None
 
 
 def _request_name_header_value(
