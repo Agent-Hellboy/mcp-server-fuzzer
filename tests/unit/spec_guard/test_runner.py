@@ -34,6 +34,34 @@ class DummyTransport:
         self.notifications.append(method)
 
 
+class NoProtocolVersionTransport:
+    __slots__ = ("responses", "notifications", "requests")
+
+    def __init__(self, responses: dict[str, object]):
+        self.responses = responses
+        self.notifications: list[str] = []
+        self.requests: list[tuple[str, object | None]] = []
+
+    async def send_request(self, method: str, params: object | None = None) -> object:
+        self.requests.append((method, params))
+        if method not in self.responses:
+            raise AssertionError(f"Unexpected request: {method}")
+        response = self.responses[method]
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    async def send_notification(
+        self, method: str, params: object | None = None
+    ) -> None:
+        if method not in self.responses:
+            raise AssertionError(f"Unexpected notification: {method}")
+        response = self.responses[method]
+        if isinstance(response, Exception):
+            raise response
+        self.notifications.append(method)
+
+
 class DummyHttpResponse:
     def __init__(self, result: dict[str, object]):
         self.status_code = 200
@@ -179,6 +207,34 @@ async def test_run_spec_suite_uses_server_discover_for_stateless_rc(monkeypatch)
     assert transport.protocol_version == "2026-07-28"
     assert all(method != "initialize" for method, _ in transport.requests)
     assert all(method != "ping" for method, _ in transport.requests)
+    assert transport.notifications == []
+
+
+@pytest.mark.asyncio
+async def test_run_spec_suite_tolerates_transport_without_protocol_version(
+    monkeypatch,
+):
+    monkeypatch.setenv("MCP_SPEC_SCHEMA_VERSION", "2026-07-28")
+    monkeypatch.setattr(runner, "validate_definition", lambda name, result, **_: [])
+
+    responses = {
+        "server/discover": {
+            "supportedVersions": ["2026-07-28"],
+            "capabilities": {"tools": True},
+            "serverInfo": {"name": "server", "version": "1.0"},
+            "cacheScope": "private",
+            "ttlMs": 1000,
+        },
+        "tools/list": {"tools": []},
+    }
+    transport = NoProtocolVersionTransport(responses)
+
+    await runner.run_spec_suite(transport)
+
+    assert transport.requests == [
+        ("server/discover", {}),
+        ("tools/list", None),
+    ]
     assert transport.notifications == []
 
 
