@@ -220,6 +220,10 @@ async def run_spec_suite(
     task_origin_method: str | None = None
 
     if is_stateless_protocol_version(protocol_version):
+        try:
+            transport.protocol_version = protocol_version
+        except AttributeError:
+            pass
         (
             discover_checks,
             capabilities,

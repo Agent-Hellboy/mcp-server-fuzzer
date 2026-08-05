@@ -115,6 +115,23 @@ def test_tool_call_param_headers_skip_invalid_duplicate_annotations():
     assert headers == {}
 
 
+def test_tool_call_param_headers_reject_invalid_http_token_suffix():
+    headers = tool_call_param_headers(
+        {"name": "search", "arguments": {"trace": "abc"}},
+        {
+            "name": "search",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "trace": {"type": "string", "x-mcp-header": "trace/id"},
+                },
+            },
+        },
+    )
+
+    assert headers == {}
+
+
 def test_negotiated_headers_encode_unsafe_name_values():
     state = ProtocolNegotiationState("2026-07-28")
 
