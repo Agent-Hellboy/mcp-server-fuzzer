@@ -1,6 +1,6 @@
 # Configuration Guide
 
-This guide covers how to configure MCP Server Fuzzer using YAML config files, environment variables, and CLI arguments.
+This guide covers repeatable MCP Server Fuzzer runs using YAML files, environment variables, and CLI arguments.
 
 ## Configuration Methods
 
@@ -11,6 +11,14 @@ MCP Server Fuzzer supports multiple configuration methods in order of precedence
 3. **Environment variables** (lowest precedence)
 
 Use config files when you want repeatable runs or want to avoid long CLI invocations.
+
+## Supported MCP versions
+
+The default is `2025-11-25`. Schema-driven testing supports `2024-11-05`,
+`2025-03-26`, `2025-06-18`, `2025-11-25`, and `2026-07-28`.
+Set `spec_schema_version` in YAML, `MCP_SPEC_SCHEMA_VERSION` in the environment,
+or `--spec-schema-version` on the command line. Command-line values take
+precedence.
 
 ## Configuration Files
 

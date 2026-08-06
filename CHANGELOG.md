@@ -7,6 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reorganized the README and documentation around installation, supported MCP
+  versions, fuzzing workflows, findings, safety, runtime monitoring, and CI.
+- Added release, CI, Codecov, PyPI, Docker, Python, license, and MCP support
+  badges to the README.
+- Removed implementation-focused detail from the primary user guides while
+  keeping architecture and contributor references available separately.
+
 ### Added
 
 - First-class runtime-probe CLI and config options for enabling

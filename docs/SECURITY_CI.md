@@ -1,157 +1,64 @@
-# Security Considerations for CI/CD
+# Security Testing in CI
 
-## GitHub Actions Safety Analysis
+MCP Server Fuzzer is a testing client. Run it only against MCP servers and endpoints that your CI job is authorized to test.
 
-### ✅ SAFE FOR CI/CD EXECUTION
+## Recommended workflow
 
-The e2e test script can be safely run in GitHub Actions with the following security measures:
-
-## 🔒 Security Safeguards
-
-### 1. **Safety System Integration**
-- **Command Blocking**: Prevents execution of dangerous system commands when `--enable-safety-system` is set
-- **Filesystem Sandboxing**: Constrains file paths when `--fs-root` (or `MCP_FUZZER_FS_ROOT`) is set
-- **Process Management**: Stdio servers run as managed subprocesses with watchdog timeouts when tests launch server processes
-- **Network Restrictions**: Enforced when `--no-network` is enabled, with optional host exceptions via `--allow-host`
-
-### 2. **CI Environment Protections**
-- **Ephemeral Runners**: GitHub Actions runners are destroyed after each run
-- **No Persistent State**: All data is temporary and cleaned up
-- **Resource Limits**: GitHub enforces CPU, memory, and time limits
-- **Artifact Isolation**: Test results are isolated and controlled
-
-### 3. **Flag-Driven Safety Features**
-
-#### Command Blocking (When Enabled)
-```bash
-# Blocked commands include:
-xdg-open, open, start, firefox, chrome, chromium
-google-chrome, safari, edge, opera, brave
-```
-
-#### Filesystem Controls
-- File arguments are sanitized when a sandbox root is set (`--fs-root` or `MCP_FUZZER_FS_ROOT`)
-- System directories are rejected or rewritten into the sandbox
-
-#### Process Management
-- Process watchdog monitors subprocesses
-- Automatic termination of hanging processes
-
-## 🚀 CI/CD Implementation
-
-### Recommended GitHub Actions Workflow
+Keep the target isolated, set a bounded timeout, and save the machine-readable reports:
 
 ```yaml
-name: E2E Test with Safety
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+- name: Fuzz MCP server
+  run: |
+    mcp-fuzzer \
+      --mode all \
+      --protocol streamablehttp \
+      --endpoint http://127.0.0.1:8000/mcp \
+      --runs 10 \
+      --timeout 30 \
+      --security-audit \
+      --fail-if-no-tools \
+      --output-dir reports
 
-jobs:
-  e2e-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Set up Python & Node.js
-      uses: actions/setup-python@v4
-      with: python-version: '3.11'
-
-    - name: Install dependencies
-      run: |
-        pip install -e .
-
-    - name: Run e2e test
-      env:
-        MCP_FUZZER_SAFETY_ENABLED: 'true'   # argument-level safety hooks
-        MCP_FUZZER_TIMEOUT: '30'
-        MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
-      run: |
-        chmod +x tests/e2e/test_everything_server_docker.sh
-        ./tests/e2e/test_everything_server_docker.sh \
-          --enable-safety-system \
-          --fs-root /tmp/mcp_fuzzer_sandbox \
-          --no-network \
-          --allow-host localhost \
-          --allow-host 127.0.0.1 \
-          --allow-host ::1
-
-    - name: Upload results
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: reports/
+- name: Upload findings
+  uses: actions/upload-artifact@v4
+  with:
+    name: mcp-fuzzer-findings
+    path: reports/
 ```
 
-## ⚠️ Security Considerations
+Choose a failure policy for your project. The fuzzer writes findings for review; it does not automatically decide which severities should block a build.
 
-### Potential Risks (Mitigated)
+## Local stdio targets
 
-1. **File System Access**
-   - **Risk**: Could potentially access sensitive files
-   - **Mitigation**: Use `--fs-root` (or `MCP_FUZZER_FS_ROOT`) to enforce a sandbox
+Use an explicit sandbox for local servers:
 
-2. **Process Execution**
-   - **Risk**: Could spawn malicious processes
-   - **Mitigation**: Use `--enable-safety-system` to install command blockers
-
-3. **Resource Consumption**
-   - **Risk**: Could exhaust CI resources
-   - **Mitigation**: GitHub Actions timeouts + watchdog timeouts
-
-4. **Data Exposure**
-   - **Risk**: Test results could contain sensitive information
-   - **Mitigation**: Results are controlled artifacts with retention limits
-
-## 🛡️ Additional Safety Measures
-
-### Environment Variables
 ```bash
-# Recommended CI environment variables
-MCP_FUZZER_SAFETY_ENABLED=true
-MCP_FUZZER_TIMEOUT=30
-MCP_FUZZER_FS_ROOT=/tmp/mcp_fuzzer_sandbox
-MCP_FUZZER_ICON_THEME=ascii
+mcp-fuzzer \
+  --mode tools \
+  --protocol stdio \
+  --endpoint "python my_server.py" \
+  --enable-safety-system \
+  --fs-root "$PWD/ci-fuzz-sandbox" \
+  --no-network \
+  --runs 10 \
+  --security-audit \
+  --output-dir reports
 ```
 
-### Resource Limits
-- **Timeout**: 15 minutes maximum
-- **Memory**: GitHub Actions default limits
-- **Disk**: Ephemeral storage only
+Use --allow-host only for destinations required by the test. Runtime monitoring is separate and opt-in; see the [runtime monitoring guide](getting-started/getting-started.md#enable-runtime-monitoring).
 
-### Artifact Management
-- **Retention**: 30 days maximum
-- **Access**: Controlled by repository permissions
-- **Content**: Only test results and logs
+## Reviewable artifacts
 
-## ✅ Safety Verification
+At minimum, publish:
 
-### Pre-Flight Checks
-- [x] Argument-level safety enabled (default unless `--no-safety`)
-- [x] Command blocking enabled (`--enable-safety-system`)
-- [x] Filesystem sandboxing configured (`--fs-root` or `MCP_FUZZER_FS_ROOT`)
-- [x] Process watchdog active
-- [x] Network restrictions configured (`--no-network` + `--allow-host`) when needed
+- findings.json for security and reliability findings.
+- run_summary.json for completion status and counts.
+- crashes/ for available crash reproductions.
 
-### Runtime Monitoring
-- [x] Process watchdog active
-- [x] Watchdog monitoring
-- [x] Automatic cleanup on failure
-- [x] Comprehensive logging
+Do not upload reports containing credentials, tokens, private data, or server secrets to public artifacts. Redact or restrict artifacts according to your CI policy.
 
-## 🎯 Conclusion
+## Remote and intrusive checks
 
-**The e2e test script is SAFE for GitHub Actions execution when recommended safety flags are enabled**, including:
+For remote endpoints, use HTTPS and dedicated test credentials. --auth-audit-intrusive can exercise dynamic client registration and redirect validation; keep it in a separately authorized job and never point it at production.
 
-- ✅ **Flag-driven safety controls** (command blocking, sandboxing, and network policy)
-- ✅ **CI environment isolation** providing additional security layer
-- ✅ **Resource controls** preventing resource exhaustion
-- ✅ **Artifact isolation** controlling data exposure
-- ✅ **Automatic cleanup** preventing persistent state
-
-The combination of MCP fuzzer safety controls and GitHub Actions security boundaries provides multiple layers of protection, making this e2e test suitable for automated CI/CD pipelines.
+The --runtime-probe eBPF backend is intended for isolated Linux runners and stdio targets. It is disabled by default, does not scope remote HTTP/SSE processes, and fails open if the sidecar cannot start.
