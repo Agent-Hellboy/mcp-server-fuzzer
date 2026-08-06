@@ -7,12 +7,10 @@ from typing import Any
 
 from ...types import extract_tool_runs
 from .common import (
-    calculate_protocol_success_rate,
-    collect_and_summarize_protocol_items,
+    iter_protocol_type_stats,
     normalize_report_data,
-    result_has_failure,
+    protocol_item_summaries,
 )
-from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 
 class HTMLFormatter:
@@ -27,7 +25,8 @@ class HTMLFormatter:
         data = normalize_report_data(report_data)
         mode = str((data.get("metadata") or {}).get("mode", "all"))
         escaped_title = escape(title)
-        html_content = f"""
+        parts: list[str] = [
+            f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -45,40 +44,41 @@ class HTMLFormatter:
 <body>
     <h1>{escaped_title}</h1>
 """
+        ]
 
         if "metadata" in data:
-            html_content += "<h2>Metadata</h2><ul>"
+            parts.append("<h2>Metadata</h2><ul>")
             for key, value in data["metadata"].items():
-                html_content += (
+                parts.append(
                     f"<li><strong>{escape(str(key))}:</strong> "
                     f"{escape(str(value))}</li>"
                 )
-            html_content += "</ul>"
+            parts.append("</ul>")
 
         if "spec_summary" in data and mode not in {"tools"}:
             spec_summary = data.get("spec_summary") or {}
             totals = spec_summary.get("totals", {})
             if totals.get("total", 0) > 0:
-                html_content += "<h2>Spec Guard Summary</h2>"
-                html_content += "<ul>"
+                parts.append("<h2>Spec Guard Summary</h2>")
+                parts.append("<ul>")
                 total_checks = escape(str(totals.get("total", 0)))
                 failed = escape(str(totals.get("failed", 0)))
                 warned = escape(str(totals.get("warned", 0)))
                 passed = escape(str(totals.get("passed", 0)))
-                html_content += (
+                parts.append(
                     f"<li><strong>Total Checks:</strong> {total_checks}</li>"
                     f"<li><strong>Failed:</strong> {failed}</li>"
                     f"<li><strong>Warned:</strong> {warned}</li>"
                     f"<li><strong>Passed:</strong> {passed}</li>"
                 )
-                html_content += "</ul>"
-                html_content += "<table>"
-                html_content += (
+                parts.append("</ul>")
+                parts.append("<table>")
+                parts.append(
                     "<tr><th>Spec ID</th><th>Failed</th><th>Warned</th>"
                     "<th>Passed</th><th>Total</th></tr>"
                 )
                 for spec_id, details in (spec_summary.get("by_spec_id") or {}).items():
-                    html_content += (
+                    parts.append(
                         "<tr>"
                         f"<td>{escape(str(spec_id))}</td>"
                         f"<td>{escape(str(details.get('failed', 0)))}</td>"
@@ -87,11 +87,11 @@ class HTMLFormatter:
                         f"<td>{escape(str(details.get('total', 0)))}</td>"
                         "</tr>"
                     )
-                html_content += "</table>"
+                parts.append("</table>")
 
         if "tool_results" in data:
-            html_content += "<h2>Tool Results</h2><table>"
-            html_content += (
+            parts.append("<h2>Tool Results</h2><table>")
+            parts.append(
                 "<tr><th>Tool Name</th><th>Run</th><th>Success</th>"
                 "<th>Exception</th></tr>"
             )
@@ -101,28 +101,29 @@ class HTMLFormatter:
                 for i, result in enumerate(runs):
                     success = result.get("success", False)
                     success_class = "success" if success else "error"
-                    html_content += f"""
+                    parts.append(
+                        f"""
 <tr>
     <td>{escape(str(tool_name))}</td>
     <td>{i + 1}</td>
     <td class="{success_class}">{escape(str(success))}</td>
     <td>{escape(str(result.get("exception", "")))}</td>
 </tr>"""
+                    )
 
-            html_content += "</table>"
+            parts.append("</table>")
 
         if "protocol_results" in data and mode not in {"tools"}:
             protocol_results = data["protocol_results"]
-            html_content += "<h2>Protocol Results</h2><table>"
-            html_content += (
+            parts.append("<h2>Protocol Results</h2><table>")
+            parts.append(
                 "<tr><th>Protocol Type</th><th>Total Runs</th>"
                 "<th>Errors</th><th>Success Rate</th></tr>"
             )
-            for protocol_type, results in protocol_results.items():
-                total_runs = len(results)
-                errors = sum(1 for r in results if result_has_failure(r))
-                success_rate = calculate_protocol_success_rate(total_runs, errors)
-                html_content += (
+            for protocol_type, total_runs, errors, success_rate in (
+                iter_protocol_type_stats(protocol_results)
+            ):
+                parts.append(
                     "<tr>"
                     f"<td>{escape(str(protocol_type))}</td>"
                     f"<td>{escape(str(total_runs))}</td>"
@@ -130,20 +131,20 @@ class HTMLFormatter:
                     f"<td>{escape(f'{success_rate:.1f}%')}</td>"
                     "</tr>"
                 )
-            html_content += "</table>"
+            parts.append("</table>")
 
-            _, resource_items = collect_and_summarize_protocol_items(
-                protocol_results.get(READ_RESOURCE_REQUEST, []), "resource"
-            )
-            if resource_items:
-                html_content += "<h2>Resource Item Summary</h2><table>"
-                html_content += (
-                    "<tr><th>Resource</th><th>Total Runs</th>"
+            for prefix, _raw, items in protocol_item_summaries(protocol_results):
+                if not items:
+                    continue
+                label = prefix.capitalize()
+                parts.append(f"<h2>{label} Item Summary</h2><table>")
+                parts.append(
+                    f"<tr><th>{label}</th><th>Total Runs</th>"
                     "<th>Errors</th><th>Success Rate</th></tr>"
                 )
-                for name, stats in resource_items.items():
+                for name, stats in items.items():
                     success_rate = f"{stats['success_rate']:.1f}%"
-                    html_content += (
+                    parts.append(
                         "<tr>"
                         f"<td>{escape(str(name))}</td>"
                         f"<td>{escape(str(stats['total_runs']))}</td>"
@@ -151,30 +152,9 @@ class HTMLFormatter:
                         f"<td>{escape(success_rate)}</td>"
                         "</tr>"
                     )
-                html_content += "</table>"
+                parts.append("</table>")
 
-            _, prompt_items = collect_and_summarize_protocol_items(
-                protocol_results.get(GET_PROMPT_REQUEST, []), "prompt"
-            )
-            if prompt_items:
-                html_content += "<h2>Prompt Item Summary</h2><table>"
-                html_content += (
-                    "<tr><th>Prompt</th><th>Total Runs</th>"
-                    "<th>Errors</th><th>Success Rate</th></tr>"
-                )
-                for name, stats in prompt_items.items():
-                    success_rate = f"{stats['success_rate']:.1f}%"
-                    html_content += (
-                        "<tr>"
-                        f"<td>{escape(str(name))}</td>"
-                        f"<td>{escape(str(stats['total_runs']))}</td>"
-                        f"<td>{escape(str(stats['errors']))}</td>"
-                        f"<td>{escape(success_rate)}</td>"
-                        "</tr>"
-                    )
-                html_content += "</table>"
-
-        html_content += "</body></html>"
+        parts.append("</body></html>")
 
         with open(filename, "w", encoding="utf-8") as f:
-            f.write(html_content)
+            f.write("".join(parts))

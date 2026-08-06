@@ -63,6 +63,15 @@ from ..protocol import (
 )
 
 
+# Transient network failures worth retrying on retry-safe methods.
+_TRANSIENT_HTTP_ERRORS = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+)
+
+
 class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
     """Streamable HTTP transport with MCP session management.
 
@@ -126,35 +135,21 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         else:
             self._server_request_handler = ServerRequestHandler()
 
-    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
-        """Prepare headers with optional safety sanitization and auth headers."""
-        if self.safety_enabled:
-            safe_headers = self._prepare_safe_headers(headers)
-        else:
-            safe_headers = headers.copy()
-        # Add auth headers after sanitization (they are user-configured and safe)
-        safe_headers.update(self.auth_headers)
-        if self.auth_header_provider is not None:
-            safe_headers.update(
-                {
-                    k: v
-                    for k, v in self.auth_header_provider().items()
-                    if v is not None
-                }
-            )
-        return safe_headers
-
     @staticmethod
     def _payload_method(payload: Any) -> str | None:
         return payload_method(payload)
 
-    def _prepare_headers(self, *, method: str | None = None) -> dict[str, str]:
+    def _prepare_headers(
+        self,
+        *,
+        method: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, str]:
         """Prepare headers with session information.
 
         Returns:
             Headers dict with session information
         """
-        params = None
         headers = negotiated_headers(
             self.headers, method=method, params=params, state=self._negotiation
         )
@@ -212,12 +207,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         method: str | None = None,
         params: dict[str, Any] | None = None,
     ) -> dict[str, str]:
-        headers = negotiated_headers(
-            self.headers, method=method, params=params, state=self._negotiation
-        )
-        headers.update(self.extra_headers)
-        if self.origin and "Origin" not in headers:
-            headers["Origin"] = self.origin
+        headers = self._prepare_headers(method=method, params=params)
         if method == "tools/call":
             headers.update(
                 tool_call_param_headers(
@@ -225,12 +215,6 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                     self._tool_definition_for_params(params),
                 )
             )
-        if (
-            not is_initialize_method(method)
-            and self.session_id
-            and not is_stateless_protocol_version(self._active_protocol_version())
-        ):
-            headers[MCP_SESSION_ID_HEADER] = self.session_id
         if self.safety_enabled:
             self._validate_network_request(self.url)
         return self._prepare_headers_with_auth(headers)
@@ -439,12 +423,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         while True:
             try:
                 return await client.post(url, json=payload, headers=headers)
-            except (
-                httpx.ConnectError,
-                httpx.ReadTimeout,
-                httpx.WriteTimeout,
-                httpx.PoolTimeout,
-            ) as e:
+            except _TRANSIENT_HTTP_ERRORS as e:
                 method = payload_method(payload)
                 if attempt >= retries or not is_retry_safe_method(method):
                     context = {
@@ -486,12 +465,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         while True:
             try:
                 return await client.get(url, headers=headers)
-            except (
-                httpx.ConnectError,
-                httpx.ReadTimeout,
-                httpx.WriteTimeout,
-                httpx.PoolTimeout,
-            ) as e:
+            except _TRANSIENT_HTTP_ERRORS as e:
                 if attempt >= retries:
                     raise TransportError(
                         "Connection failed while listening to server",
@@ -673,17 +647,14 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},
             },
         }
+        # A failure here propagates and leaves _initialized False.
+        await self.send_raw(init_payload)
+        self._initialized = True
+        # Send initialized notification (best-effort)
         try:
-            await self.send_raw(init_payload)
-            self._initialized = True
-            # Send initialized notification (best-effort)
-            try:
-                await self.send_notification(NOTIFY_INITIALIZED, {})
-            except Exception:
-                pass
+            await self.send_notification(NOTIFY_INITIALIZED, {})
         except Exception:
-            # Surface the failure; leave _initialized False
-            raise
+            pass
 
     async def _stream_request(
         self, payload: dict[str, Any]
@@ -737,88 +708,73 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
         if isinstance(retry, int):
             self.retry_delay_ms = retry
 
+    @staticmethod
+    def _new_sse_event() -> dict[str, Any]:
+        return {"event": "message", "data": []}
+
+    @staticmethod
+    def _decode_sse_event_data(event: dict[str, Any]) -> dict[str, Any] | None:
+        """Return the JSON object carried by an event's ``data:`` lines, if any."""
+        data_text = "\n".join(event.get("data", []))
+        if not data_text:
+            return None
+        try:
+            payload = json.loads(data_text)
+        except json.JSONDecodeError:
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _feed_sse_line(
+        self, line: str, event: dict[str, Any]
+    ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        """Feed one SSE line into ``event``.
+
+        Returns the event to carry forward plus the payload completed by this
+        line (a blank line terminates an event), or None if none completed.
+        """
+        if line == "":
+            self._apply_sse_event_metadata(event)
+            return self._new_sse_event(), self._decode_sse_event_data(event)
+
+        if line.startswith("event:"):
+            event["event"] = line[len("event:") :].strip()
+        elif line.startswith("id:"):
+            event["id"] = line[len("id:") :].strip()
+        elif line.startswith("retry:"):
+            retry_text = line[len("retry:") :].strip()
+            try:
+                event["retry"] = int(retry_text)
+            except ValueError:
+                pass
+        elif line.startswith("data:"):
+            event.setdefault("data", []).append(line[len("data:") :].lstrip())
+        # Comments (":" prefix) and unknown fields are ignored.
+        return event, None
+
     async def _iter_sse_payloads(
         self, response: httpx.Response
     ) -> AsyncIterator[dict[str, Any]]:
         """Parse SSE lines into JSON object payloads."""
-        event: dict[str, Any] = {"event": "message", "data": []}
+        event = self._new_sse_event()
         async for line in response.aiter_lines():
-            if line == "":
-                self._apply_sse_event_metadata(event)
-                data_text = "\n".join(event.get("data", []))
-                event = {"event": "message", "data": []}
-                if not data_text:
-                    continue
-                try:
-                    payload = json.loads(data_text)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(payload, dict):
-                    yield payload
-                continue
-
-            if line.startswith(":"):
-                continue
-            if line.startswith("event:"):
-                event["event"] = line[len("event:") :].strip()
-                continue
-            if line.startswith("id:"):
-                event["id"] = line[len("id:") :].strip()
-                continue
-            if line.startswith("retry:"):
-                retry_text = line[len("retry:") :].strip()
-                try:
-                    event["retry"] = int(retry_text)
-                except ValueError:
-                    pass
-                continue
-            if line.startswith("data:"):
-                event.setdefault("data", []).append(line[len("data:") :].lstrip())
+            event, payload = self._feed_sse_line(line, event)
+            if payload is not None:
+                yield payload
 
     def _parse_sse_payloads_from_text(self, text: str) -> list[dict[str, Any]]:
         """Parse a buffered SSE response body into JSON object payloads."""
         payloads: list[dict[str, Any]] = []
-        event: dict[str, Any] = {"event": "message", "data": []}
+        event = self._new_sse_event()
         for line in text.splitlines():
-            if line == "":
-                self._apply_sse_event_metadata(event)
-                data_text = "\n".join(event.get("data", []))
-                event = {"event": "message", "data": []}
-                if not data_text:
-                    continue
-                try:
-                    payload = json.loads(data_text)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(payload, dict):
-                    payloads.append(payload)
-                continue
-            if line.startswith(":"):
-                continue
-            if line.startswith("event:"):
-                event["event"] = line[len("event:") :].strip()
-                continue
-            if line.startswith("id:"):
-                event["id"] = line[len("id:") :].strip()
-                continue
-            if line.startswith("retry:"):
-                retry_text = line[len("retry:") :].strip()
-                try:
-                    event["retry"] = int(retry_text)
-                except ValueError:
-                    pass
-                continue
-            if line.startswith("data:"):
-                event.setdefault("data", []).append(line[len("data:") :].lstrip())
+            event, payload = self._feed_sse_line(line, event)
+            if payload is not None:
+                payloads.append(payload)
 
-        data_text = "\n".join(event.get("data", []))
-        if data_text:
+        # A buffered body may end without the blank line that closes an event.
+        if "\n".join(event.get("data", [])):
             self._apply_sse_event_metadata(event)
-            try:
-                payload = json.loads(data_text)
-            except json.JSONDecodeError:
-                return payloads
-            if isinstance(payload, dict):
+            payload = self._decode_sse_event_data(event)
+            if payload is not None:
                 payloads.append(payload)
         return payloads
 

@@ -64,14 +64,6 @@ def is_auth_audit_finding(finding: Finding) -> bool:
     return bool(evidence.get("flaw_id") or evidence.get("paper_finding"))
 
 
-def _finding(flaw_id: str, category: str, severity: str, detail: str,
-             evidence: dict[str, Any] | None = None) -> Finding:
-    ev = {"flaw_id": flaw_id, **auth_audit_paper_evidence()}
-    if evidence:
-        ev.update(evidence)
-    return Finding(category, severity, "auth", "authorization_server", None, detail, ev)
-
-
 def run_post_authorization_audit(
     as_metadata: Any, *,
     http: httpx.Client,

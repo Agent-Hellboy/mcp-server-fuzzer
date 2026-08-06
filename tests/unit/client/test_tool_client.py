@@ -492,26 +492,6 @@ async def test_fuzz_tool_with_safety_disabled():
     assert results[0]["safety_sanitized"] is False
 
 
-def test_print_phase_report_no_reporter():
-    client, _ = _make_client()
-    # Should not raise
-    client._print_phase_report("test_tool", "realistic", [])
-
-
-def test_print_phase_report_with_reporter():
-    client, _ = _make_client()
-    from mcp_fuzzer.reports import FuzzerReporter
-
-    mock_reporter = MagicMock(spec=FuzzerReporter)
-    mock_reporter.console = MagicMock()
-    client.reporter = mock_reporter
-
-    results = [{"success": True}, {"success": False}]
-    client._print_phase_report("test_tool", "realistic", results)
-
-    mock_reporter.console.print.assert_called()
-
-
 @pytest.mark.asyncio
 async def test_shutdown():
     client, _ = _make_client()

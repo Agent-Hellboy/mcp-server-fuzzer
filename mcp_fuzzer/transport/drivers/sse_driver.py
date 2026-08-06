@@ -71,24 +71,6 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
         else:
             self._server_request_handler = ServerRequestHandler()
 
-    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
-        """Prepare headers with optional safety sanitization and auth headers."""
-        if self.safety_enabled:
-            safe_headers = self._prepare_safe_headers(headers)
-        else:
-            safe_headers = headers.copy()
-        # Add auth headers after sanitization (they are user-configured and safe)
-        safe_headers.update(self.auth_headers)
-        if self.auth_header_provider is not None:
-            safe_headers.update(
-                {
-                    k: v
-                    for k, v in self.auth_header_provider().items()
-                    if v is not None
-                }
-            )
-        return safe_headers
-
     async def send_request(
         self, method: str, params: dict[str, Any | None] | None = None
     ) -> dict[str, Any]:
@@ -237,87 +219,54 @@ class SseDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavior):
                 self._handle_http_response_error(response)
 
                 chunks = response.aiter_text()
-                buffer = []  # Buffer to accumulate SSE event data
+                buffer: list[str] = []  # Buffer to accumulate SSE event data
 
                 # Support both async and sync iterables (tests may provide a list)
                 if hasattr(chunks, "__aiter__"):
                     async for chunk in chunks:  # type: ignore[func-returns-value]
-                        if not chunk:
-                            continue
-
-                        # Process each line in the chunk
-                        for line in chunk.splitlines():
-                            if line.strip():
-                                # Non-empty line: add to current event buffer
-                                buffer.append(line)
-                            else:
-                                # Empty line: marks end of an event, process the buffer
-                                if buffer:
-                                    try:
-                                        event_text = "\n".join(buffer)
-                                        parsed = self.parse_sse_event(event_text)
-                                        if parsed is not None:
-                                            if isinstance(parsed, dict):
-                                                handled = (
-                                                    await self._handle_server_request(
-                                                        parsed
-                                                    )
-                                                )
-                                                if handled:
-                                                    continue
-                                            yield parsed
-                                    except json.JSONDecodeError:
-                                        self._logger.error(
-                                            "Failed to parse SSE event payload as JSON"
-                                        )
-                                    finally:
-                                        buffer = []  # Clear buffer for next event
+                        async for parsed in self._events_from_chunk(chunk, buffer):
+                            yield parsed
                 else:
                     for chunk in chunks:  # type: ignore[assignment]
-                        if not chunk:
-                            continue
-
-                        # Process each line in the chunk
-                        for line in chunk.splitlines():
-                            if line.strip():
-                                # Non-empty line: add to current event buffer
-                                buffer.append(line)
-                            else:
-                                # Empty line: marks end of an event, process the buffer
-                                if buffer:
-                                    try:
-                                        event_text = "\n".join(buffer)
-                                        parsed = self.parse_sse_event(event_text)
-                                        if parsed is not None:
-                                            if isinstance(parsed, dict):
-                                                handled = (
-                                                    await self._handle_server_request(
-                                                        parsed
-                                                    )
-                                                )
-                                                if handled:
-                                                    continue
-                                            yield parsed
-                                    except json.JSONDecodeError:
-                                        self._logger.error(
-                                            "Failed to parse SSE event payload as JSON"
-                                        )
-                                    finally:
-                                        buffer = []  # Clear buffer for next event
-
-                # Process any remaining buffered data at the end of the stream
-                if buffer:
-                    try:
-                        event_text = "\n".join(buffer)
-                        parsed = self.parse_sse_event(event_text)
-                        if parsed is not None:
-                            if isinstance(parsed, dict):
-                                handled = await self._handle_server_request(parsed)
-                                if handled:
-                                    return
+                        async for parsed in self._events_from_chunk(chunk, buffer):
                             yield parsed
-                    except json.JSONDecodeError:
-                        self._logger.error("Failed to parse SSE event payload as JSON")
+
+                # Flush any event still buffered at the end of the stream: a
+                # blank line is what terminates an SSE event.
+                async for parsed in self._events_from_chunk("\n", buffer):
+                    yield parsed
+
+    async def _events_from_chunk(
+        self, chunk: str, buffer: list[str]
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Accumulate SSE lines from one chunk, yielding each completed event.
+
+        ``buffer`` carries the partial event across chunk boundaries.
+        """
+        if not chunk:
+            return
+
+        for line in chunk.splitlines():
+            if line.strip():
+                # Non-empty line: add to current event buffer
+                buffer.append(line)
+                continue
+
+            # Empty line: marks end of an event, process the buffer
+            if not buffer:
+                continue
+            event_text = "\n".join(buffer)
+            buffer.clear()  # Clear buffer for next event
+            try:
+                parsed = self.parse_sse_event(event_text)
+            except json.JSONDecodeError:
+                self._logger.error("Failed to parse SSE event payload as JSON")
+                continue
+            if parsed is None:
+                continue
+            if isinstance(parsed, dict) and await self._handle_server_request(parsed):
+                continue
+            yield parsed
 
     async def _handle_server_request(self, payload: dict[str, Any]) -> bool:
         """Handle server->client requests delivered over SSE."""

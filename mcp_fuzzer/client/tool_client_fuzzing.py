@@ -199,22 +199,6 @@ class ToolClientFuzzingMixin:
 
         return all_results
 
-    def _print_phase_report(
-        self, tool_name: str, phase: str, results: list[dict[str, Any]]
-    ):
-        from ..reports import FuzzerReporter
-
-        if not hasattr(self, "reporter") or not isinstance(
-            self.reporter, FuzzerReporter
-        ):
-            return
-
-        successful = len([r for r in results if r.get("success", False)])
-        total = len(results)
-        self.reporter.console.print(
-            f"  {phase.title()} phase: {successful}/{total} successful"
-        )
-
     async def _run_tool_phase(
         self,
         tool: dict[str, Any],
@@ -318,7 +302,6 @@ class ToolClientFuzzingMixin:
                     tool_name,
                     phase_results["error"],
                 )
-                return phase_results
 
             return phase_results
 

@@ -28,11 +28,6 @@ BOUNDARY_INTS_MEDIUM: list[int] = [
     65535, 65536,   # uint16 boundary
 ]
 
-BOUNDARY_INTS_LARGE: list[int] = [
-    2147483647,     # INT32_MAX
-    -2147483648,    # INT32_MIN
-]
-
 # Short valid strings for boundary testing
 BOUNDARY_STRINGS: list[str] = [
     "",             # empty
@@ -129,15 +124,6 @@ UNICODE_TRICKS: list[str] = [
     "\u00a0",       # Non-breaking space
 ]
 
-# Homoglyphs (visually similar characters)
-HOMOGLYPHS: dict[str, str] = {
-    "a": "а",       # Cyrillic 'a'
-    "e": "е",       # Cyrillic 'e'
-    "o": "о",       # Cyrillic 'o'
-    "c": "с",       # Cyrillic 'c'
-    "p": "р",       # Cyrillic 'p'
-}
-
 # Encoding bypass payloads
 ENCODING_BYPASS: list[str] = [
     "%00",          # URL-encoded null
@@ -183,6 +169,26 @@ SPECIAL_FLOATS: list[float] = [
 ]
 
 
+
+# ============================================================================
+# DERIVED LOOKUPS (built once at import; these are read-only)
+# ============================================================================
+
+_PAYLOADS_BY_CATEGORY: dict[str, list[str]] = {
+    "sql": SQL_INJECTION,
+    "nosql": NOSQL_INJECTION,
+    "xss": XSS_PAYLOADS,
+    "path": PATH_TRAVERSAL,
+    "command": COMMAND_INJECTION,
+    "ssrf": SSRF_PAYLOADS,
+}
+
+# Unicode tricks that survive an ASCII round-trip, preferred for injection.
+_NON_ASCII_TRICKS: list[str] = [
+    trick for trick in UNICODE_TRICKS if any(ord(ch) > 127 for ch in trick)
+]
+
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -202,17 +208,8 @@ def get_boundary_values_for_range(minimum: int, maximum: int) -> list[int]:
 
 def get_payload_within_length(max_length: int, category: str = "sql") -> str:
     """Get an attack payload that fits within the length constraint."""
-    payloads_map: dict[str, list[str]] = {
-        "sql": SQL_INJECTION,
-        "nosql": NOSQL_INJECTION,
-        "xss": XSS_PAYLOADS,
-        "path": PATH_TRAVERSAL,
-        "command": COMMAND_INJECTION,
-        "ssrf": SSRF_PAYLOADS,
-    }
-    
-    payloads = payloads_map.get(category, SQL_INJECTION)
-    
+    payloads = _PAYLOADS_BY_CATEGORY.get(category, SQL_INJECTION)
+
     # Find payload that fits
     for payload in payloads:
         if len(payload) <= max_length:
@@ -225,17 +222,14 @@ def get_payload_within_length(max_length: int, category: str = "sql") -> str:
 
 def inject_unicode_trick(value: str, max_length: int | None = None) -> str:
     """Embed a unicode trick into a value."""
-    non_ascii = [
-        trick for trick in UNICODE_TRICKS if any(ord(ch) > 127 for ch in trick)
-    ]
-    choices = non_ascii or UNICODE_TRICKS
+    choices = _NON_ASCII_TRICKS or UNICODE_TRICKS
     if not value:
         return random.choice(choices)
-    
+
     trick = random.choice(choices)
     mid = len(value) // 2
     result = value[:mid] + trick + value[mid:]
-    
+
     if max_length is not None and len(result) > max_length:
         return result[:max_length]
     return result

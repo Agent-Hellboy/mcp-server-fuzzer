@@ -16,8 +16,7 @@ from ..exceptions import ValidationError
 from .models import ReportSnapshot
 from ..types import extract_tool_runs
 from .formatters.common import (
-    calculate_protocol_success_rate,
-    result_has_failure,
+    iter_protocol_type_stats,
     summarize_tool_outcomes,
     summarize_tool_runs,
     tool_run_has_exception,
@@ -291,16 +290,14 @@ class OutputProtocol:
     ) -> list[dict[str, Any]]:
         """Format protocol results for output."""
         formatted = []
-        for protocol_type, results in protocol_results.items():
-            total_runs = len(results)
-            errors = sum(1 for r in results if result_has_failure(r))
-            successes = max(total_runs - errors, 0)
-            success_rate = calculate_protocol_success_rate(total_runs, errors)
+        for protocol_type, total_runs, errors, success_rate in (
+            iter_protocol_type_stats(protocol_results)
+        ):
             formatted.append(
                 {
                     "type": protocol_type,
                     "runs": total_runs,
-                    "successful": successes,
+                    "successful": max(total_runs - errors, 0),
                     "errors": errors,
                     "success_rate": success_rate,
                 }

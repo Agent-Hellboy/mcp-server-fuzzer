@@ -6,21 +6,16 @@ from typing import Any
 
 from .check_ids import CheckID
 from .helpers import (
-    COMPLETIONS_SPEC,
-    ELICITATION_SPEC,
-    ROOTS_SPEC,
-    SAMPLING_SPEC,
-    SSE_SPEC,
+    COMPLETIONS_SPEC as _COMPLETIONS_SPEC,
+    ELICITATION_SPEC as _ELICITATION_SPEC,
+    ROOTS_SPEC as _ROOTS_SPEC,
+    SAMPLING_SPEC as _SAMPLING_SPEC,
+    SSE_SPEC as _SSE_SPEC,
     SpecCheck,
     fail as _fail,
     warn as _warn,
 )
 
-_ROOTS_SPEC = ROOTS_SPEC
-_SAMPLING_SPEC = SAMPLING_SPEC
-_ELICITATION_SPEC = ELICITATION_SPEC
-_COMPLETIONS_SPEC = COMPLETIONS_SPEC
-_SSE_SPEC = SSE_SPEC
 
 def _spec_at_least(target: str) -> bool:
     current = os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-11-25")

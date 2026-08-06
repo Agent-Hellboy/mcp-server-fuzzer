@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 
 def _split_header_values(value: str) -> list[str]:
@@ -115,6 +115,11 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
     return deduped
 
 
+def _metadata_url(parsed: SplitResult, path: str) -> str:
+    """Build a metadata URL on the same origin, dropping query/fragment."""
+    return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
 def build_protected_resource_metadata_urls(endpoint_url: str) -> list[str]:
     """Build the candidate protected-resource metadata URLs for an MCP endpoint."""
     parsed = urlsplit(endpoint_url)
@@ -128,14 +133,8 @@ def build_protected_resource_metadata_urls(endpoint_url: str) -> list[str]:
         # RFC 9728: the well-known segment is inserted *before* the resource
         # path component.
         candidates.append(
-            urlunsplit(
-                (
-                    parsed.scheme,
-                    parsed.netloc,
-                    f"/.well-known/oauth-protected-resource/{trimmed_path}",
-                    "",
-                    "",
-                )
+            _metadata_url(
+                parsed, f"/.well-known/oauth-protected-resource/{trimmed_path}"
             )
         )
         # Path-suffix form: the well-known segment *appended* after the resource
@@ -143,27 +142,11 @@ def build_protected_resource_metadata_urls(endpoint_url: str) -> list[str]:
         # WWW-Authenticate ``resource_metadata`` URL), and mirrors the path-suffix
         # variant already produced for authorization-server metadata.
         candidates.append(
-            urlunsplit(
-                (
-                    parsed.scheme,
-                    parsed.netloc,
-                    f"{path_no_trailing}/.well-known/oauth-protected-resource",
-                    "",
-                    "",
-                )
+            _metadata_url(
+                parsed, f"{path_no_trailing}/.well-known/oauth-protected-resource"
             )
         )
-    candidates.append(
-        urlunsplit(
-            (
-                parsed.scheme,
-                parsed.netloc,
-                "/.well-known/oauth-protected-resource",
-                "",
-                "",
-            )
-        )
-    )
+    candidates.append(_metadata_url(parsed, "/.well-known/oauth-protected-resource"))
     return _dedupe_preserve_order(candidates)
 
 
@@ -173,63 +156,20 @@ def build_authorization_server_metadata_urls(issuer_url: str) -> list[str]:
     path = (parsed.path or "").rstrip("/")
     trimmed_path = path.lstrip("/")
 
-    candidates: list[str] = []
     if trimmed_path:
-        candidates.extend(
-            [
-                urlunsplit(
-                    (
-                        parsed.scheme,
-                        parsed.netloc,
-                        f"/.well-known/oauth-authorization-server/{trimmed_path}",
-                        "",
-                        "",
-                    )
-                ),
-                urlunsplit(
-                    (
-                        parsed.scheme,
-                        parsed.netloc,
-                        f"/.well-known/openid-configuration/{trimmed_path}",
-                        "",
-                        "",
-                    )
-                ),
-                urlunsplit(
-                    (
-                        parsed.scheme,
-                        parsed.netloc,
-                        f"{path}/.well-known/openid-configuration",
-                        "",
-                        "",
-                    )
-                ),
-            ]
-        )
+        paths = [
+            f"/.well-known/oauth-authorization-server/{trimmed_path}",
+            f"/.well-known/openid-configuration/{trimmed_path}",
+            f"{path}/.well-known/openid-configuration",
+        ]
     else:
-        candidates.extend(
-            [
-                urlunsplit(
-                    (
-                        parsed.scheme,
-                        parsed.netloc,
-                        "/.well-known/oauth-authorization-server",
-                        "",
-                        "",
-                    )
-                ),
-                urlunsplit(
-                    (
-                        parsed.scheme,
-                        parsed.netloc,
-                        "/.well-known/openid-configuration",
-                        "",
-                        "",
-                    )
-                ),
-            ]
-        )
-    return _dedupe_preserve_order(candidates)
+        paths = [
+            "/.well-known/oauth-authorization-server",
+            "/.well-known/openid-configuration",
+        ]
+    return _dedupe_preserve_order(
+        [_metadata_url(parsed, candidate) for candidate in paths]
+    )
 
 
 __all__ = [

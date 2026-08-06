@@ -1,11 +1,13 @@
 import json
 import logging
 import os
+from collections.abc import Callable
 from typing import Any
 
 from ..exceptions import AuthConfigError, AuthProviderError
 from .manager import AuthManager
 from .providers import (
+    AuthProvider,
     create_api_key_auth,
     create_basic_auth,
     create_oauth_auth,
@@ -14,6 +16,71 @@ from .providers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Required config keys per scheme plus the example echoed in the error message.
+_PROVIDER_SPECS: dict[str, tuple[tuple[str, ...], str]] = {
+    "api_key": (
+        ("api_key",),
+        "{'type': 'api_key', 'api_key': 'YOUR_API_KEY'}",
+    ),
+    "basic": (
+        ("username", "password"),
+        "{'type': 'basic', 'username': 'user', 'password': 'pass'}",
+    ),
+    "oauth": (
+        ("token",),
+        "{'type': 'oauth', 'token': 'YOUR_TOKEN'}",
+    ),
+    "oauth_client_credentials": (
+        ("token_url", "client_id", "client_secret"),
+        "{'type': 'oauth_client_credentials', "
+        "'token_url': 'https://auth.example.com/token', "
+        "'client_id': 'CLIENT_ID', "
+        "'client_secret': 'CLIENT_SECRET'}",
+    ),
+    "custom": (
+        ("headers",),
+        "{'type': 'custom', 'headers': {'X-Header': 'value'}}",
+    ),
+}
+
+# Construction only -- callers validate first. Shared with the YAML loader so
+# the per-scheme defaults live in exactly one place.
+_PROVIDER_BUILDERS: dict[str, Callable[[dict[str, Any]], AuthProvider]] = {
+    "api_key": lambda cfg: create_api_key_auth(
+        cfg["api_key"],
+        cfg.get("header_name", "Authorization"),
+        cfg.get("prefix", "Bearer"),
+    ),
+    "basic": lambda cfg: create_basic_auth(cfg["username"], cfg["password"]),
+    "oauth": lambda cfg: create_oauth_auth(
+        cfg["token"],
+        cfg.get("token_type", "Bearer"),
+    ),
+    "oauth_client_credentials": lambda cfg: create_oauth_client_credentials_auth(
+        cfg["token_url"],
+        cfg["client_id"],
+        cfg["client_secret"],
+        cfg.get("scope"),
+        cfg.get("token_type", "Bearer"),
+        float(cfg.get("timeout", 10.0)),
+    ),
+    "custom": lambda cfg: create_custom_header_auth(
+        {str(k): str(v) for k, v in cfg["headers"].items()}
+    ),
+}
+
+
+def build_provider(
+    provider_type: str, provider_config: dict[str, Any]
+) -> AuthProvider:
+    """Build an auth provider from an already-validated config mapping."""
+    return _PROVIDER_BUILDERS[provider_type](provider_config)
+
+
+def is_known_provider_type(provider_type: Any) -> bool:
+    """Return True when ``provider_type`` names a supported auth scheme."""
+    return isinstance(provider_type, str) and provider_type in _PROVIDER_BUILDERS
 
 
 def setup_auth_from_env() -> AuthManager:
@@ -115,6 +182,52 @@ def load_auth_from_dict(config: dict[str, Any]) -> AuthManager:
     return auth_manager
 
 
+def _missing_field_error(
+    name: str, provider_type: str, field: str
+) -> AuthProviderError:
+    _, example = _PROVIDER_SPECS[provider_type]
+    return AuthProviderError(
+        f"Provider '{name}' is type '{provider_type}' but missing "
+        f"required field '{field}'. Expected: {example}"
+    )
+
+
+def _add_configured_provider(
+    auth_manager: AuthManager, name: str, provider_config: dict[str, Any]
+) -> None:
+    provider_type = provider_config.get("type")
+    if not is_known_provider_type(provider_type):
+        raise AuthProviderError(
+            f"Unknown provider type: '{provider_type}' for provider '{name}'. "
+            "Supported types: api_key, basic, oauth, "
+            "oauth_client_credentials, custom"
+        )
+
+    required_fields, _ = _PROVIDER_SPECS[provider_type]
+    try:
+        for field in required_fields:
+            if field not in provider_config:
+                raise _missing_field_error(name, provider_type, field)
+        if provider_type == "custom":
+            headers = provider_config["headers"]
+            if not headers:
+                raise _missing_field_error(name, "custom", "headers")
+            if not isinstance(headers, dict):
+                raise AuthProviderError(
+                    f"Provider '{name}' custom headers must be a dict, "
+                    f"got {type(headers).__name__}"
+                )
+        auth_manager.add_auth_provider(
+            name, build_provider(provider_type, provider_config)
+        )
+    except AuthProviderError:
+        raise
+    except (KeyError, ValueError, TypeError) as e:
+        raise AuthProviderError(
+            f"Error configuring auth provider '{name}': {str(e)}"
+        ) from e
+
+
 def populate_auth_manager(auth_manager: AuthManager, config: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise AuthConfigError(
@@ -132,110 +245,7 @@ def populate_auth_manager(auth_manager: AuthManager, config: dict[str, Any]) -> 
                 f"Error configuring auth provider '{name}': "
                 f"expected an object, got {type(provider_config).__name__}"
             )
-        provider_type = provider_config.get("type")
-
-        try:
-            if provider_type == "api_key":
-                if "api_key" not in provider_config:
-                    raise AuthProviderError(
-                        f"Provider '{name}' is type 'api_key' but missing "
-                        "required field 'api_key'. Expected: "
-                        "{'type': 'api_key', 'api_key': 'YOUR_API_KEY'}"
-                    )
-                auth_manager.add_auth_provider(
-                    name,
-                    create_api_key_auth(
-                        provider_config["api_key"],
-                        provider_config.get("header_name", "Authorization"),
-                        provider_config.get("prefix", "Bearer"),
-                    ),
-                )
-            elif provider_type == "basic":
-                if "username" not in provider_config:
-                    raise AuthProviderError(
-                        f"Provider '{name}' is type 'basic' but missing "
-                        "required field 'username'. Expected: "
-                        "{'type': 'basic', 'username': 'user', 'password': 'pass'}"
-                    )
-                if "password" not in provider_config:
-                    raise AuthProviderError(
-                        f"Provider '{name}' is type 'basic' but missing "
-                        "required field 'password'. Expected: "
-                        "{'type': 'basic', 'username': 'user', 'password': 'pass'}"
-                    )
-                auth_manager.add_auth_provider(
-                    name,
-                    create_basic_auth(
-                        provider_config["username"], provider_config["password"]
-                    ),
-                )
-            elif provider_type == "oauth":
-                if "token" not in provider_config:
-                    raise AuthProviderError(
-                        f"Provider '{name}' is type 'oauth' but missing "
-                        "required field 'token'. Expected: "
-                        "{'type': 'oauth', 'token': 'YOUR_TOKEN'}"
-                    )
-                auth_manager.add_auth_provider(
-                    name,
-                    create_oauth_auth(
-                        provider_config["token"],
-                        provider_config.get("token_type", "Bearer"),
-                    ),
-                )
-            elif provider_type == "oauth_client_credentials":
-                for field in ("token_url", "client_id", "client_secret"):
-                    if field not in provider_config:
-                        raise AuthProviderError(
-                            f"Provider '{name}' is type 'oauth_client_credentials' "
-                            f"but missing required field '{field}'. Expected: "
-                            "{'type': 'oauth_client_credentials', "
-                            "'token_url': 'https://auth.example.com/token', "
-                            "'client_id': 'CLIENT_ID', "
-                            "'client_secret': 'CLIENT_SECRET'}"
-                        )
-                auth_manager.add_auth_provider(
-                    name,
-                    create_oauth_client_credentials_auth(
-                        provider_config["token_url"],
-                        provider_config["client_id"],
-                        provider_config["client_secret"],
-                        provider_config.get("scope"),
-                        provider_config.get("token_type", "Bearer"),
-                        float(provider_config.get("timeout", 10.0)),
-                    ),
-                )
-            elif provider_type == "custom":
-                headers = provider_config.get("headers")
-                if not headers:
-                    raise AuthProviderError(
-                        f"Provider '{name}' is type 'custom' but missing "
-                        "required field 'headers'. Expected: "
-                        "{'type': 'custom', 'headers': {'X-Header': 'value'}}"
-                    )
-                if not isinstance(headers, dict):
-                    raise AuthProviderError(
-                        f"Provider '{name}' custom headers must be a dict, "
-                        f"got {type(headers).__name__}"
-                    )
-                headers_str: dict[str, str] = {
-                    str(k): str(v) for k, v in headers.items()
-                }
-                auth_manager.add_auth_provider(
-                    name, create_custom_header_auth(headers_str)
-                )
-            else:
-                raise AuthProviderError(
-                    f"Unknown provider type: '{provider_type}' for provider '{name}'. "
-                    "Supported types: api_key, basic, oauth, "
-                    "oauth_client_credentials, custom"
-                )
-        except AuthProviderError:
-            raise
-        except (KeyError, ValueError, TypeError) as e:
-            raise AuthProviderError(
-                f"Error configuring auth provider '{name}': {str(e)}"
-            ) from e
+        _add_configured_provider(auth_manager, name, provider_config)
 
     if "tool_mappings" in config:
         raise AuthConfigError(

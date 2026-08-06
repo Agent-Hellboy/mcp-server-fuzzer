@@ -9,18 +9,6 @@ from ...types import extract_tool_runs
 from .common import summarize_tool_outcomes, summarize_tool_runs
 
 
-def _tool_outcome_buckets(runs: list[dict[str, Any]]) -> dict[str, int]:
-    """Group tool runs by outcome so a server *rejecting* malformed input is not
-    conflated with a transport/protocol anomaly or a real crash."""
-    buckets = summarize_tool_outcomes(runs)
-    return {
-        "server_rejected": buckets["server_rejected"],
-        "accepted_malformed": buckets["accepted_malformed"],
-        "anomaly": buckets["anomaly"],
-        "crashed": buckets["crashed"],
-    }
-
-
 def _count_crashes(
     tool_results: dict[str, Any] | None, protocol_results: dict[str, Any] | None
 ) -> int:
@@ -87,7 +75,9 @@ def write_stdout_summary(
         for tool_name, entry in tool_results.items():
             runs, _ = extract_tool_runs(entry)
             stats = summarize_tool_runs(runs)
-            buckets = _tool_outcome_buckets(runs)
+            # Bucketed so a server *rejecting* malformed input is not conflated
+            # with a transport/protocol anomaly or a real crash.
+            buckets = summarize_tool_outcomes(runs)
             lines.append(
                 f"  {tool_name}: {stats['total_runs']} runs, "
                 f"{stats['successful']} handled correctly, "

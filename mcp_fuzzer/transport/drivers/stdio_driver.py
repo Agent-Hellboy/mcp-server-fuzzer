@@ -50,6 +50,15 @@ _CRASH_SIGNALS = {
     if hasattr(_signal, name)
 }
 
+# signal_type -> (POSIX signal name, process fallback method). The fallback
+# method name doubles as the verb used in its log line. Signals are resolved
+# lazily because SIGKILL does not exist on Windows.
+_DIRECT_SIGNALS = {
+    "timeout": ("SIGTERM", "terminate"),
+    "force": ("SIGKILL", "kill"),
+    "interrupt": ("SIGINT", "terminate"),
+}
+
 
 class StdioDriver(TransportDriver):
     def __init__(

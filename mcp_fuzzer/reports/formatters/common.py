@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Literal, Protocol
+from typing import Any, Iterable, Iterator, Literal, Mapping, Protocol
 
 from ...evidence_fields import (
     ACCEPTED_MALFORMED,
@@ -13,6 +13,7 @@ from ...evidence_fields import (
     SERVER_ERROR,
     SUCCESS,
 )
+from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 from ..outcome_buckets import summarize_tool_outcomes
 
 
@@ -191,6 +192,44 @@ def collect_and_summarize_protocol_items(
     return items, summarize_protocol_items(items)
 
 
+# Protocol request types that carry per-item (named) results, in report order.
+_ITEM_SUMMARY_SOURCES: tuple[tuple[str, LabelPrefix], ...] = (
+    (READ_RESOURCE_REQUEST, "resource"),
+    (GET_PROMPT_REQUEST, "prompt"),
+)
+
+
+def protocol_item_summaries(
+    protocol_results: Mapping[str, Any],
+) -> list[tuple[LabelPrefix, list[dict[str, Any]], dict[str, dict[str, Any]]]]:
+    """Return ``(prefix, raw_results, summary)`` for each per-item request type.
+
+    Emitted in report order (resources, then prompts) so every exporter renders
+    the same sections from a single traversal of the protocol results.
+    """
+    summaries = []
+    for request_type, prefix in _ITEM_SUMMARY_SOURCES:
+        raw = protocol_results.get(request_type, [])
+        _, summary = collect_and_summarize_protocol_items(raw, prefix)
+        summaries.append((prefix, raw, summary))
+    return summaries
+
+
+def iter_protocol_type_stats(
+    protocol_results: Mapping[str, list[dict[str, Any]]]
+) -> Iterator[tuple[str, int, int, float]]:
+    """Yield ``(protocol_type, total_runs, errors, success_rate)`` per type."""
+    for protocol_type, results in protocol_results.items():
+        total_runs = len(results)
+        errors = sum(1 for r in results if result_has_failure(r))
+        yield (
+            protocol_type,
+            total_runs,
+            errors,
+            calculate_protocol_success_rate(total_runs, errors),
+        )
+
+
 __all__ = [
     "LABEL_PREFIXES",
     "LabelPrefix",
@@ -199,7 +238,9 @@ __all__ = [
     "calculate_tool_success_rate",
     "collect_and_summarize_protocol_items",
     "collect_labeled_protocol_items",
+    "iter_protocol_type_stats",
     "normalize_report_data",
+    "protocol_item_summaries",
     "result_has_failure",
     "summarize_protocol_items",
     "summarize_tool_outcomes",

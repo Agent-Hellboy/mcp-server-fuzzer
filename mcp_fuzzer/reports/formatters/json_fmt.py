@@ -6,14 +6,13 @@ from typing import Any
 
 from ...types import extract_tool_runs
 from .common import (
-    calculate_protocol_success_rate,
-    collect_and_summarize_protocol_items,
+    iter_protocol_type_stats,
     normalize_report_data,
+    protocol_item_summaries,
     result_has_failure,
     summarize_tool_outcomes,
     summarize_tool_runs,
 )
-from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 
 
 class JSONFormatter:
@@ -72,11 +71,9 @@ class JSONFormatter:
             return {}
 
         summary = {}
-        for protocol_type, protocol_results in results.items():
-            total_runs = len(protocol_results)
-            errors = sum(1 for r in protocol_results if result_has_failure(r))
-            success_rate = calculate_protocol_success_rate(total_runs, errors)
-
+        for protocol_type, total_runs, errors, success_rate in (
+            iter_protocol_type_stats(results)
+        ):
             summary[protocol_type] = {
                 "total_runs": total_runs,
                 "errors": errors,
@@ -91,23 +88,10 @@ class JSONFormatter:
         if not results:
             return {}
 
-        _, resources = collect_and_summarize_protocol_items(
-            results.get(READ_RESOURCE_REQUEST, []), "resource"
-        )
-        resources_failed = any(
-            result_has_failure(r) for r in results.get(READ_RESOURCE_REQUEST, [])
-        )
-        _, prompts = collect_and_summarize_protocol_items(
-            results.get(GET_PROMPT_REQUEST, []), "prompt"
-        )
-        prompts_failed = any(
-            result_has_failure(r) for r in results.get(GET_PROMPT_REQUEST, [])
-        )
         summary: dict[str, Any] = {}
-        if resources:
-            summary["resources"] = resources
-            summary["resources_failed"] = resources_failed
-        if prompts:
-            summary["prompts"] = prompts
-            summary["prompts_failed"] = prompts_failed
+        for prefix, raw, items in protocol_item_summaries(results):
+            if not items:
+                continue
+            summary[f"{prefix}s"] = items
+            summary[f"{prefix}s_failed"] = any(result_has_failure(r) for r in raw)
         return summary

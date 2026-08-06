@@ -15,17 +15,6 @@ def _spec_version() -> str:
     return os.getenv("MCP_SPEC_SCHEMA_VERSION", "2025-11-25")
 
 
-def _resolve_spec(spec: dict[str, Any]) -> dict[str, Any]:
-    spec_id = spec.get("spec_id", "")
-    spec_url = spec.get("spec_url", "")
-    if "{version}" in spec_url:
-        spec_url = spec_url.format(version=_spec_version())
-    resolved: dict[str, Any] = {"spec_id": spec_id, "spec_url": spec_url}
-    if "experimental" in spec:
-        resolved["experimental"] = spec.get("experimental")
-    return resolved
-
-
 class SpecCheck(TypedDict, total=False):
     """Minimal spec check record for reporting."""
 
@@ -140,12 +129,14 @@ def spec_variant(
     return result
 
 
-def fail(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
-    """Create a failure SpecCheck."""
-    resolved = _resolve_spec(spec)
+def _record(
+    status: str, check_id: str, message: str, spec: dict[str, str]
+) -> SpecCheck:
+    """Build a SpecCheck with the spec metadata resolved for the active version."""
+    resolved = spec_variant(spec)
     record: SpecCheck = {
         "id": check_id,
-        "status": "FAIL",
+        "status": status,
         "message": message,
         "spec_id": resolved.get("spec_id", ""),
         "spec_url": resolved.get("spec_url", ""),
@@ -153,33 +144,18 @@ def fail(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
     if "experimental" in resolved:
         record["experimental"] = resolved.get("experimental")
     return record
+
+
+def fail(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
+    """Create a failure SpecCheck."""
+    return _record("FAIL", check_id, message, spec)
 
 
 def warn(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
     """Create a warning SpecCheck."""
-    resolved = _resolve_spec(spec)
-    record: SpecCheck = {
-        "id": check_id,
-        "status": "WARN",
-        "message": message,
-        "spec_id": resolved.get("spec_id", ""),
-        "spec_url": resolved.get("spec_url", ""),
-    }
-    if "experimental" in resolved:
-        record["experimental"] = resolved.get("experimental")
-    return record
+    return _record("WARN", check_id, message, spec)
 
 
 def pass_check(check_id: str, message: str, spec: dict[str, str]) -> SpecCheck:
     """Create a passing SpecCheck."""
-    resolved = _resolve_spec(spec)
-    record: SpecCheck = {
-        "id": check_id,
-        "status": "PASS",
-        "message": message,
-        "spec_id": resolved.get("spec_id", ""),
-        "spec_url": resolved.get("spec_url", ""),
-    }
-    if "experimental" in resolved:
-        record["experimental"] = resolved.get("experimental")
-    return record
+    return _record("PASS", check_id, message, spec)

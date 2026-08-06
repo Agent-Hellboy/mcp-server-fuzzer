@@ -4,13 +4,12 @@ from typing import Any
 
 from .check_ids import CheckID
 from .helpers import (
-    RESOURCES_SPEC,
+    RESOURCES_SPEC as _RESOURCES_SPEC,
     SpecCheck,
     fail as _fail,
     warn as _warn,
 )
 
-_RESOURCES_SPEC = RESOURCES_SPEC
 
 def check_resources_list(result: Any) -> list[SpecCheck]:
     """Validate resources/list response shape."""

@@ -10,12 +10,14 @@ from rich.table import Table
 from ...types import extract_tool_runs
 from .common import (
     calculate_protocol_success_rate,
-    collect_and_summarize_protocol_items,
+    iter_protocol_type_stats,
+    protocol_item_summaries,
     result_has_failure,
     summarize_tool_outcomes,
     summarize_tool_runs,
 )
-from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
+
+_ToolRow = tuple[str, dict[str, Any], dict[str, int]]
 
 
 class ConsoleFormatter:
@@ -24,12 +26,25 @@ class ConsoleFormatter:
     def __init__(self, console: Console):
         self.console = console
 
+    @staticmethod
+    def _tool_rows(results: dict[str, Any]) -> list[_ToolRow]:
+        """Aggregate every tool's runs once into ``(name, stats, outcomes)``."""
+        rows: list[_ToolRow] = []
+        for tool_name, tool_results in results.items():
+            runs, _ = extract_tool_runs(tool_results)
+            rows.append(
+                (tool_name, summarize_tool_runs(runs), summarize_tool_outcomes(runs))
+            )
+        return rows
+
     def print_tool_summary(self, results: dict[str, Any]):
         """Print tool fuzzing summary to console."""
         if not results:
             self.console.print("[yellow]No tool results to display[/yellow]")
             return
+        self._print_tool_table(self._tool_rows(results))
 
+    def _print_tool_table(self, rows: list[_ToolRow]) -> None:
         table = Table(title="MCP Tool Fuzzing Summary")
         table.add_column("Tool", style="cyan", no_wrap=True)
         table.add_column("Runs", style="green")
@@ -39,11 +54,7 @@ class ConsoleFormatter:
         table.add_column("Exceptions", style="red")
         table.add_column("Safety", style="yellow")
 
-        for tool_name, tool_results in results.items():
-            runs, _ = extract_tool_runs(tool_results)
-            stats = summarize_tool_runs(runs)
-            outcomes = summarize_tool_outcomes(runs)
-
+        for tool_name, stats, outcomes in rows:
             table.add_row(
                 tool_name,
                 str(stats["total_runs"]),
@@ -58,9 +69,12 @@ class ConsoleFormatter:
 
     def print_tool_execution_summary(self, results: dict[str, Any]) -> None:
         """Print the detailed tool execution summary and aggregate statistics."""
-        self.print_tool_summary(results)
         if not results:
+            self.print_tool_summary(results)
             return
+
+        rows = self._tool_rows(results)
+        self._print_tool_table(rows)
 
         total_tools = len(results)
         total_runs = 0
@@ -73,10 +87,7 @@ class ConsoleFormatter:
         total_crashes = 0
         vulnerable_tools: list[tuple[str, int, int]] = []
 
-        for tool_name, tool_results in results.items():
-            runs, _ = extract_tool_runs(tool_results)
-            stats = summarize_tool_runs(runs)
-            outcomes = summarize_tool_outcomes(runs)
+        for tool_name, stats, outcomes in rows:
             total_runs += int(stats["total_runs"])
             total_successful += int(stats["successful"])
             total_exceptions += int(stats["exceptions"])
@@ -140,11 +151,9 @@ class ConsoleFormatter:
         table.add_column("Errors", style="red")
         table.add_column("Success Rate", style="blue")
 
-        for protocol_type, protocol_results in results.items():
-            total_runs = len(protocol_results)
-            errors = sum(1 for r in protocol_results if result_has_failure(r))
-            success_rate = calculate_protocol_success_rate(total_runs, errors)
-
+        for protocol_type, total_runs, errors, success_rate in (
+            iter_protocol_type_stats(results)
+        ):
             table.add_row(
                 protocol_type, str(total_runs), str(errors), f"{success_rate:.1f}%"
             )
@@ -155,20 +164,12 @@ class ConsoleFormatter:
     def _print_protocol_item_summaries(
         self, results: dict[str, list[dict[str, Any]]]
     ) -> None:
-        _, resource_summary = collect_and_summarize_protocol_items(
-            results.get(READ_RESOURCE_REQUEST, []), "resource"
-        )
-        if resource_summary:
+        for prefix, _raw, summary in protocol_item_summaries(results):
+            if not summary:
+                continue
+            label = prefix.capitalize()
             self._print_protocol_item_summary(
-                "MCP Resource Item Fuzzing Summary", "Resource", resource_summary
-            )
-
-        _, prompt_summary = collect_and_summarize_protocol_items(
-            results.get(GET_PROMPT_REQUEST, []), "prompt"
-        )
-        if prompt_summary:
-            self._print_protocol_item_summary(
-                "MCP Prompt Item Fuzzing Summary", "Prompt", prompt_summary
+                f"MCP {label} Item Fuzzing Summary", label, summary
             )
 
     def _print_protocol_item_summary(

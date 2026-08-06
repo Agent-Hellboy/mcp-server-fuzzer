@@ -4,16 +4,13 @@ from typing import Any
 
 from .check_ids import CheckID
 from .helpers import (
-    ELICITATION_SPEC,
-    LOGGING_SPEC,
-    PROTOCOL_SPEC,
+    ELICITATION_SPEC as _ELICITATION_SPEC,
+    LOGGING_SPEC as _LOGGING_SPEC,
+    PROTOCOL_SPEC as _PROTOCOL_SPEC,
     SpecCheck,
     fail as _fail,
 )
 
-_LOGGING_SPEC = LOGGING_SPEC
-_PROTOCOL_SPEC = PROTOCOL_SPEC
-_ELICITATION_SPEC = ELICITATION_SPEC
 
 def check_logging_notification(payload: dict[str, Any]) -> list[SpecCheck]:
     """Validate logging notification payload shape."""

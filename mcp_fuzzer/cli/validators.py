@@ -17,6 +17,67 @@ from ..config.env import ENVIRONMENT_VARIABLES, ValidationType
 from ..icons import CHECK, CROSS
 
 
+# Numeric bound rules: (attr, accepted types, bound, bound is exclusive, message).
+# Grouped so the checks keep firing in the same order as the surrounding
+# non-numeric checks in ``validate_arguments``.
+_NumericRule = tuple[str, tuple[type, ...], float, bool, str]
+
+_RUN_BOUND_RULES: tuple[_NumericRule, ...] = (
+    ("runs", (int,), 1, False, "--runs must be at least 1"),
+    ("runs_per_type", (int,), 1, False, "--runs-per-type must be at least 1"),
+    ("timeout", (int, float), 0, True, "--timeout must be positive"),
+)
+
+_RETRY_BOUND_RULES: tuple[_NumericRule, ...] = (
+    ("transport_retries", (int,), 1, False, "--transport-retries must be at least 1"),
+    (
+        "transport_retry_delay",
+        (int, float),
+        0,
+        False,
+        "--transport-retry-delay must be >= 0",
+    ),
+    (
+        "transport_retry_backoff",
+        (int, float),
+        1,
+        False,
+        "--transport-retry-backoff must be >= 1",
+    ),
+    (
+        "transport_retry_max_delay",
+        (int, float),
+        0,
+        False,
+        "--transport-retry-max-delay must be >= 0",
+    ),
+)
+
+_JITTER_BOUND_RULES: tuple[_NumericRule, ...] = (
+    (
+        "transport_retry_jitter",
+        (int, float),
+        0,
+        False,
+        "--transport-retry-jitter must be >= 0",
+    ),
+)
+
+
+def _check_numeric_bounds(
+    args: argparse.Namespace, rules: tuple[_NumericRule, ...]
+) -> None:
+    """Raise ``ArgumentValidationError`` for any out-of-range numeric argument."""
+    for attr, types, bound, exclusive, message in rules:
+        value = getattr(args, attr, None)
+        if value is None:
+            continue
+        if not isinstance(value, types) or (
+            value <= bound if exclusive else value < bound
+        ):
+            raise ArgumentValidationError(message)
+
+
 class ValidationManager:
     """Unified validation system for CLI arguments and environment checks."""
 
@@ -75,89 +136,22 @@ class ValidationManager:
             if not args.tool.strip():
                 raise ArgumentValidationError("--tool cannot be empty")
 
-        if hasattr(args, "runs") and args.runs is not None:
-            if not isinstance(args.runs, int) or args.runs < 1:
-                raise ArgumentValidationError("--runs must be at least 1")
-
-        if hasattr(args, "runs_per_type") and args.runs_per_type is not None:
-            if not isinstance(args.runs_per_type, int) or args.runs_per_type < 1:
-                raise ArgumentValidationError("--runs-per-type must be at least 1")
-
-        if hasattr(args, "timeout") and args.timeout is not None:
-            if not isinstance(args.timeout, (int, float)) or args.timeout <= 0:
-                raise ArgumentValidationError("--timeout must be positive")
+        _check_numeric_bounds(args, _RUN_BOUND_RULES)
 
         if hasattr(args, "endpoint") and args.endpoint is not None:
             if not args.endpoint.strip():
                 raise ArgumentValidationError("--endpoint cannot be empty")
 
-        if hasattr(args, "transport_retries") and args.transport_retries is not None:
-            if (
-                not isinstance(args.transport_retries, int)
-                or args.transport_retries < 1
-            ):
-                raise ArgumentValidationError(
-                    "--transport-retries must be at least 1"
-                )
+        _check_numeric_bounds(args, _RETRY_BOUND_RULES)
 
-        if (
-            hasattr(args, "transport_retry_delay")
-            and args.transport_retry_delay is not None
-        ):
-            if (
-                not isinstance(args.transport_retry_delay, (int, float))
-                or args.transport_retry_delay < 0
-            ):
-                raise ArgumentValidationError(
-                    "--transport-retry-delay must be >= 0"
-                )
+        max_delay = getattr(args, "transport_retry_max_delay", None)
+        delay = getattr(args, "transport_retry_delay", None)
+        if max_delay is not None and delay is not None and max_delay < delay:
+            raise ArgumentValidationError(
+                "--transport-retry-max-delay must be >= --transport-retry-delay"
+            )
 
-        if (
-            hasattr(args, "transport_retry_backoff")
-            and args.transport_retry_backoff is not None
-        ):
-            if (
-                not isinstance(args.transport_retry_backoff, (int, float))
-                or args.transport_retry_backoff < 1
-            ):
-                raise ArgumentValidationError(
-                    "--transport-retry-backoff must be >= 1"
-                )
-
-        if (
-            hasattr(args, "transport_retry_max_delay")
-            and args.transport_retry_max_delay is not None
-        ):
-            if (
-                not isinstance(args.transport_retry_max_delay, (int, float))
-                or args.transport_retry_max_delay < 0
-            ):
-                raise ArgumentValidationError(
-                    "--transport-retry-max-delay must be >= 0"
-                )
-
-        if (
-            hasattr(args, "transport_retry_max_delay")
-            and args.transport_retry_max_delay is not None
-            and hasattr(args, "transport_retry_delay")
-            and args.transport_retry_delay is not None
-        ):
-            if args.transport_retry_max_delay < args.transport_retry_delay:
-                raise ArgumentValidationError(
-                    "--transport-retry-max-delay must be >= --transport-retry-delay"
-                )
-
-        if (
-            hasattr(args, "transport_retry_jitter")
-            and args.transport_retry_jitter is not None
-        ):
-            if (
-                not isinstance(args.transport_retry_jitter, (int, float))
-                or args.transport_retry_jitter < 0
-            ):
-                raise ArgumentValidationError(
-                    "--transport-retry-jitter must be >= 0"
-                )
+        _check_numeric_bounds(args, _JITTER_BOUND_RULES)
 
     def validate_config_file(self, path: str) -> None:
         """Validate a config file and print success message."""

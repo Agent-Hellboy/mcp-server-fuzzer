@@ -330,15 +330,20 @@ class ExecutorError(FuzzingError):
     description = "Async executor encountered an error"
 
 
-def get_error_registry() -> dict[str, str]:
-    """Return a mapping of error codes to descriptions for diagnostics."""
+def _build_error_registry() -> dict[str, str]:
+    """Scan this module for MCPError subclasses, keyed by code."""
     registry: dict[str, str] = {}
     for obj in list(globals().values()):
-        if (
-            isinstance(obj, type)
-            and issubclass(obj, MCPError)
-            and hasattr(obj, "code")
-            and obj.code not in registry
-        ):
-            registry[obj.code] = getattr(obj, "description", MCPError.description)
+        if isinstance(obj, type) and issubclass(obj, MCPError):
+            # First definition wins, matching declaration order.
+            registry.setdefault(obj.code, obj.description)
     return dict(sorted(registry.items()))
+
+
+# Built once: the class set is fixed after import.
+_ERROR_REGISTRY: dict[str, str] = _build_error_registry()
+
+
+def get_error_registry() -> dict[str, str]:
+    """Return a mapping of error codes to descriptions for diagnostics."""
+    return dict(_ERROR_REGISTRY)

@@ -40,33 +40,6 @@ class JSONRPCNotification(TypedDict):
     params: NotRequired[list[Any] | dict[str, Any]]
 
 
-class JSONRPCErrorObject(TypedDict):
-    """Type definition for JSON-RPC error object."""
-
-    code: int
-    message: str
-    data: NotRequired[Any]
-
-
-class JSONRPCSuccessResponse(TypedDict):
-    """Type definition for JSON-RPC success response."""
-
-    jsonrpc: Literal["2.0"]
-    result: Any
-    id: str | int | None
-
-
-class JSONRPCErrorResponse(TypedDict):
-    """Type definition for JSON-RPC error response."""
-
-    jsonrpc: Literal["2.0"]
-    error: JSONRPCErrorObject
-    id: str | int | None
-
-
-JSONRPCResponse = JSONRPCSuccessResponse | JSONRPCErrorResponse
-
-
 class DriverBaseBehavior(ABC):
     """Base behavior providing common transport functionality."""
 
@@ -274,6 +247,24 @@ class HttpClientBehavior(DriverBaseBehavior):
             Sanitized headers safe for network transmission
         """
         return safety_policy.sanitize_headers(headers)
+
+    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
+        """Prepare headers with optional safety sanitization and auth headers."""
+        if self.safety_enabled:
+            safe_headers = self._prepare_safe_headers(headers)
+        else:
+            safe_headers = headers.copy()
+        # Add auth headers after sanitization (they are user-configured and safe)
+        safe_headers.update(self.auth_headers)
+        if self.auth_header_provider is not None:
+            safe_headers.update(
+                {
+                    k: v
+                    for k, v in self.auth_header_provider().items()
+                    if v is not None
+                }
+            )
+        return safe_headers
 
     def _create_http_client(self, timeout: float) -> httpx.AsyncClient:
         """Create configured HTTP client.
@@ -573,10 +564,3 @@ class LifecycleBehavior(DriverBaseBehavior):
         if error:
             self._logger.error(f"Connection error: {error}")
         self._touch_activity()
-
-    async def _cleanup_resources(self) -> None:
-        """Cleanup any resources held by the transport.
-
-        Subclasses should override this to implement specific cleanup logic.
-        """
-        pass
