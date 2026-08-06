@@ -7,8 +7,8 @@ from typing import Any
 from ...types import extract_tool_runs
 from .common import (
     iter_protocol_type_stats,
-    normalize_report_data,
     protocol_item_summaries,
+    redact_report_data,
 )
 from ...icons import CHECK, CROSS
 
@@ -26,7 +26,7 @@ class MarkdownFormatter:
         report_data: dict[str, Any] | Any,
         filename: str,
     ):
-        data = normalize_report_data(report_data)
+        data = redact_report_data(report_data)
         mode = str((data.get("metadata") or {}).get("mode", "all"))
         parts: list[str] = ["# MCP Fuzzer Report\n\n"]
 

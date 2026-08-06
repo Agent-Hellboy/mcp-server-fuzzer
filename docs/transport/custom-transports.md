@@ -1,4 +1,4 @@
-# Custom Transport Mechanisms
+# Custom transport mechanisms
 
 This document describes how to implement and use custom transport mechanisms in MCP Server Fuzzer, addressing [GitHub Issue #9](https://github.com/Agent-Hellboy/mcp-server-fuzzer/issues/9).
 
@@ -17,9 +17,9 @@ The custom transport system consists of:
 5. **Adapter Helpers**: Optional `JsonRpcAdapter` for shared RPC helpers across transports.
 6. **Wrapper Support**: Optional `RetryingTransport` wrapper for retry policies.
 
-## Implementing a Custom Transport
+## Implementing a custom transport
 
-### 1. Create a Transport Class
+### 1. Create a transport class
 
 Your custom transport must inherit from `TransportDriver` and implement all required abstract methods:
 
@@ -73,14 +73,14 @@ class MyCustomTransport(TransportDriver):
             yield {}
 ```
 
-### Adapter Expectations (Recommended)
+### Adapter expectations (recommended)
 
 If your transport is JSON-RPC based, you can optionally compose
 `JsonRpcAdapter` to reuse shared RPC helper methods (list tools, call tool,
 resource operations). This keeps the transport focused on I/O while
 delegating JSON-RPC conventions to the adapter.
 
-### 2. Register Your Transport
+### 2. Register your transport
 
 Add your custom transport to the configuration file:
 
@@ -104,7 +104,7 @@ Now you can use your custom transport via the CLI:
 mcp-fuzzer --protocol my-custom --config config.yaml --endpoint my-endpoint
 ```
 
-## Advanced: Self-Registration with the Catalog
+## Advanced: Self-registration with the catalog
 
 The transport catalog uses a `DriverCatalog` for built-in transports. For custom transports, you can optionally self-register in your module for even easier extension:
 
@@ -119,7 +119,7 @@ class MyCustomTransport(TransportDriver):
 register_custom_driver("my-custom", MyCustomTransport)
 ```
 
-## Optional: RetryingTransport Wrapper
+## Optional: RetryingTransport wrapper
 
 You can enable retry behavior without modifying your transport by wrapping it:
 
@@ -138,7 +138,7 @@ This makes extension simpler – no factory changes needed, and CLI usage remain
 
 Note: Self-registration is optional; config-based registration (step 2) still works and is recommended for most cases.
 
-## Example: WebSocket Transport
+## Example: WebSocket transport
 
 Here's a complete example of a WebSocket-based transport implementation:
 
@@ -250,7 +250,7 @@ class WebSocketTransport(TransportDriver):
             return
 ```
 
-## Configuration Schema
+## Configuration schema
 
 Custom transports can define their own configuration schemas for validation:
 
@@ -270,7 +270,7 @@ config_schema = {
 }
 ```
 
-## Error Handling
+## Error handling
 
 Custom transports should follow these error handling patterns:
 
@@ -279,7 +279,7 @@ Custom transports should follow these error handling patterns:
 3. **Server Errors**: Include server error details in raised exceptions
 4. **Timeouts**: Use appropriate timeout handling for operations
 
-## Testing Custom Transports
+## Testing custom transports
 
 Create unit tests for your custom transport:
 
@@ -300,7 +300,7 @@ def test_custom_transport_registration():
     assert isinstance(transport, MyCustomTransport)
 ```
 
-## Integration with MCP Fuzzer
+## Integration with MCP Server Fuzzer
 
 Custom transports integrate seamlessly with the fuzzing framework:
 
@@ -316,7 +316,7 @@ client = MCPClient(transport)
 tools = await client.list_tools()
 ```
 
-## Best Practices
+## Best practices
 
 1. **Inherit from TransportDriver**: Ensure your transport implements all required methods
 2. **Handle Connections Properly**: Implement connect/disconnect methods for resource management
@@ -328,14 +328,14 @@ tools = await client.list_tools()
 
 ## Troubleshooting
 
-### Common Issues
+### Common issues
 
 1. **Import Errors**: Ensure your transport module is on the Python path.
 2. **Registration Failures**: Check that your transport class inherits from `TransportDriver`.
 3. **Connection Issues**: Verify endpoint URLs and network connectivity.
 4. **Configuration Errors**: Validate your YAML configuration against the schema
 
-### Debug Logging
+### Debug logging
 
 Enable debug logging to troubleshoot transport issues:
 

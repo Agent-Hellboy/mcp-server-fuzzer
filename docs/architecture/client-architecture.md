@@ -1,12 +1,12 @@
-# Client Architecture
+# Client architecture
 
-The MCP Fuzzer client has been refactored into a modular package structure to improve maintainability, testability, and extensibility. This document describes the new architecture.
+The MCP Server Fuzzer client has been refactored into a modular package structure to improve maintainability, testability, and extensibility. This document describes the new architecture.
 
 ## Overview
 
 The client package is organized into several modules, each with a specific responsibility:
 
-```
+```text
 mcp_fuzzer/
 ├── client/
 │   ├── __init__.py              # Exports client APIs
@@ -24,7 +24,7 @@ mcp_fuzzer/
 
 ## Components
 
-### Base Client (`base.py`)
+### Base client (`base.py`)
 
 The `MCPFuzzerClient` class in `base.py` is the main entry point for fuzzing operations. It:
 
@@ -34,7 +34,7 @@ The `MCPFuzzerClient` class in `base.py` is the main entry point for fuzzing ope
 - Delegates specific functionality to specialized clients
 - Handles reporting and cleanup
 
-### Tool Client (`tool_client.py`)
+### Tool client (`tool_client.py`)
 
 The `ToolClient` class in `tool_client.py` handles all tool-related fuzzing operations:
 
@@ -43,7 +43,7 @@ The `ToolClient` class in `tool_client.py` handles all tool-related fuzzing oper
 - Two-phase fuzzing (realistic and aggressive)
 - Safety checks for tool arguments
 
-### Protocol Client (`protocol_client.py`)
+### Protocol client (`protocol_client.py`)
 
 The `ProtocolClient` class in `protocol_client.py` handles all protocol-related fuzzing operations:
 
@@ -52,7 +52,7 @@ The `ProtocolClient` class in `protocol_client.py` handles all protocol-related 
 - Safety checks for protocol messages
 - Sending different types of protocol requests
 
-### Unified Runner (`main.py`)
+### Unified runner (`main.py`)
 
 The unified runner wires CLI settings into the client and run plan:
 
@@ -60,7 +60,7 @@ The unified runner wires CLI settings into the client and run plan:
 - Initializes `MCPFuzzerClient` and `FuzzerReporter`
 - Executes the run plan (tools, spec guard, protocol, stateful)
 
-### Runtime Pipeline (`client/runtime/`)
+### Runtime pipeline (`client/runtime/`)
 
 The runtime package includes:
 
@@ -68,12 +68,12 @@ The runtime package includes:
 - `pipeline.py` - Execution pipeline (tools/protocol/resources/prompts/stateful)
 - `argv_builder.py` and `async_runner.py` - Inner-argv handling and execution
 
-### Settings and Adapters
+### Settings and adapters
 
 - `settings.py` encapsulates merged config into `ClientSettings`.
 - `adapters/` + `ports/` provide a Port & Adapter boundary around config access.
 
-## Benefits of the New Architecture
+## Benefits of the new architecture
 
 1. **Separation of Concerns**: Each module has a clear, focused responsibility
 2. **Reduced Complexity**: Smaller, more manageable classes and methods
@@ -99,7 +99,7 @@ import asyncio
 asyncio.run(fuzz_server())
 ```
 
-## Future Improvements
+## Future improvements
 
 1. **Plugin Architecture**: Add support for custom fuzzing strategies via plugins
 2. **Richer Report Customization**: Expand export styling and templates for HTML/Markdown

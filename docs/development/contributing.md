@@ -1,10 +1,10 @@
 # Contributing
 
-Thank you for your interest in contributing to MCP Server Fuzzer! This guide will help you get started with development and contribution.
+Thank you for your interest in contributing to MCP Server Fuzzer. This guide covers development setup and the contribution process.
 
-## How to Contribute
+## How to contribute
 
-### Types of Contributions
+### Types of contributions
 
 We welcome various types of contributions:
 
@@ -20,7 +20,7 @@ We welcome various types of contributions:
 
 - **Security** - Report security vulnerabilities
 
-### Getting Started
+### Getting started
 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally
@@ -28,7 +28,7 @@ We welcome various types of contributions:
 4. **Make your changes** with proper testing
 5. **Submit a pull request** with clear description
 
-## Development Setup
+## Development setup
 
 ### Prerequisites
 
@@ -37,7 +37,7 @@ We welcome various types of contributions:
 - Git
 - pip or conda for package management
 
-### Local Development Setup
+### Local development setup
 
 ```bash
 # Clone your fork
@@ -61,7 +61,7 @@ pre-commit install
 mcp-fuzzer --help
 ```
 
-### MCP Spec Submodule
+### MCP spec submodule
 
 This repo vendors the MCP spec as a git submodule at `schemas/mcp-spec`. The
 spec guard schema validator (`mcp_fuzzer/spec_guard/schema_validator.py`) reads
@@ -85,7 +85,7 @@ To bump the spec version:
 > `pip install -r requirements.txt` to pull in every dependency the docs and
 > examples rely on.
 
-### Interactive Code Exploration
+### Interactive code exploration
 
 Once the dependencies are installed, open an interactive session with
 `python3 -i` from the project root and paste the snippet below. It gives you a
@@ -120,7 +120,7 @@ the objects that back the CLI.
 > top-level `await`. Paste the snippet above, drop the final `asyncio.run(...)`,
 > and simply type `await explore_client()` to drive the coroutine directly.
 
-### Development Dependencies
+### Development dependencies
 
 The project includes development dependencies in `pyproject.toml`:
 
@@ -145,7 +145,7 @@ docs = [
 
 ## Testing
 
-### Running Tests
+### Running tests
 
 ```bash
 # Run all tests
@@ -168,7 +168,7 @@ pytest -v -s
 pytest -n auto
 ```
 
-### Test Safety Features
+### Test safety features
 
 End-to-end tests often spawn local MCP servers and can trigger external
 processes. Use the same safety features that the CLI exposes when running tests
@@ -182,7 +182,7 @@ manually:
   tools), run inside a disposable VM or container. There is no automatic
   environment detection, so treat these flags as the final line of defense.
 
-### Test Coverage
+### Test coverage
 
 ```bash
 # Generate coverage report
@@ -194,9 +194,9 @@ xdg-open htmlcov/index.html  # On Linux
 start htmlcov/index.html  # On Windows
 ```
 
-## Code Quality
+## Code quality
 
-### Linting and Formatting
+### Linting and formatting
 
 ```bash
 # Run linting with ruff
@@ -212,7 +212,7 @@ black mcp_fuzzer tests
 mypy mcp_fuzzer
 ```
 
-### Pre-commit Hooks
+### Pre-commit hooks
 
 The project uses pre-commit hooks to ensure code quality:
 
@@ -238,7 +238,7 @@ repos:
         additional_dependencies: [types-all]
 ```
 
-### Code Style Guidelines
+### Code style guidelines
 
 - **Python**: Follow PEP 8 style guide
 
@@ -265,7 +265,7 @@ repos:
 
 ## Documentation
 
-### Building Documentation
+### Building documentation
 
 ```bash
 # Install documentation dependencies
@@ -281,7 +281,7 @@ mkdocs serve
 mkdocs gh-deploy
 ```
 
-### Documentation Standards
+### Documentation standards
 
 - **Markdown**: Use Markdown for all documentation
 
@@ -293,9 +293,9 @@ mkdocs gh-deploy
 
 - **Links**: Use relative links within the documentation
 
-### Documentation Structure
+### Documentation structure
 
-```
+```text
 docs/
 ├── getting-started/          # Getting started guides and examples
 ├── architecture/             # System architecture documentation
@@ -307,16 +307,16 @@ docs/
 └── index.md                  # Home page
 ```
 
-## Adding New Features
+## Adding new features
 
-### Transport Protocols
+### Transport protocols
 
 To add a new transport protocol:
 
 1. **Create transport class** in `mcp_fuzzer/transport/`
 2. **Implement TransportDriver interface**
 3. **Add to transport.catalog**
-4. **Write comprehensive tests**
+4. **Write tests that cover the new behavior**
 5. **Update documentation**
 
 ```python
@@ -341,7 +341,7 @@ class CustomTransport(TransportDriver):
         pass
 ```
 
-### Fuzzing Strategies
+### Fuzzing strategies
 
 To add new fuzzing strategies:
 
@@ -359,7 +359,7 @@ class CustomToolStrategy:
         return {"custom_param": "custom_value"}
 ```
 
-### Safety Features
+### Safety features
 
 To introduce new safety capabilities:
 
@@ -369,18 +369,18 @@ To introduce new safety capabilities:
 3. **Write unit tests** covering the new patterns, shims, or sandbox behaviors.
 4. **Document the feature** so operators understand the new protections.
 
-## Working with Internal APIs
+## Working with internal APIs
 
 This section provides code examples for working with internal components of MCP Server Fuzzer. These are useful when extending the fuzzer or building custom tooling.
 
 You can save all those code snippet as test.py and run it as `python -i test.py`
 and debug objects inside the repl
 
-### Process Management
+### Process management
 
 The `ProcessManager` provides robust process lifecycle management with watchdog monitoring.
 
-#### Basic Process Management
+#### Basic process management
 
 ```python
 import asyncio
@@ -424,7 +424,7 @@ if __name__ == "__main__":
     asyncio.run(basic_process_management())
 ```
 
-#### Process with Activity Monitoring
+#### Process with activity monitoring
 
 ```python
 import time
@@ -464,7 +464,7 @@ async def process_with_activity_monitoring():
         await manager.shutdown()
 ```
 
-#### Multiple Process Management
+#### Multiple process management
 
 ```python
 async def multiple_process_management():
@@ -506,7 +506,7 @@ for the concurrency contract and examples. Contributions that change executor
 behavior should update that page and its tests rather than adding another copy
 of the API here.
 
-### Custom Transport Implementation
+### Custom transport implementation
 
 To create a custom transport protocol:
 
@@ -541,9 +541,9 @@ client = MCPFuzzerClient(
 await client.fuzz_tools(runs=10)
 ```
 
-### Report Analysis and Processing
+### Report analysis and processing
 
-#### JSON Report Processing
+#### JSON report processing
 
 ```python
 import json
@@ -585,7 +585,7 @@ analyze_fuzzing_report(
 )
 ```
 
-#### Safety Report Analysis
+#### Safety report analysis
 
 ```python
 import json
@@ -622,7 +622,7 @@ analyze_safety_report(
 )
 ```
 
-#### Programmatic Report Creation
+#### Programmatic report creation
 
 ```python
 from pathlib import Path
@@ -685,7 +685,7 @@ async def custom_report_generation():
     print("Custom reports generated in 'custom_reports' directory")
 ```
 
-#### Report Comparison
+#### Report comparison
 
 ```python
 import json
@@ -731,9 +731,9 @@ compare_reports(
 )
 ```
 
-## Bug Reports
+## Bug reports
 
-### Reporting Bugs
+### Reporting bugs
 
 When reporting bugs, please include:
 
@@ -744,7 +744,7 @@ When reporting bugs, please include:
 5. **Error messages** and stack traces
 6. **Minimal example** that demonstrates the issue
 
-### Bug Report Template
+### Bug report template
 
 ```markdown
 ## Bug Description
@@ -774,9 +774,9 @@ Any error messages or stack traces
 Any other relevant information
 ```
 
-## Feature Requests
+## Feature requests
 
-### Suggesting Features
+### Suggesting features
 
 When suggesting features, please include:
 
@@ -786,7 +786,7 @@ When suggesting features, please include:
 4. **Alternatives considered**
 5. **Impact** on existing functionality
 
-### Feature Request Template
+### Feature request template
 
 ```markdown
 ## Feature Description
@@ -807,7 +807,7 @@ How this would affect existing functionality
 
 ## Security
 
-### Security Vulnerabilities
+### Security vulnerabilities
 
 If you discover a security vulnerability:
 
@@ -817,7 +817,7 @@ If you discover a security vulnerability:
 4. **Provide steps to reproduce** if possible
 5. **Wait for response** before public disclosure
 
-### Security Best Practices
+### Security best practices
 
 - **Never commit secrets** or sensitive information
 
@@ -829,9 +829,9 @@ If you discover a security vulnerability:
 
 - **Keep dependencies updated**
 
-## Pull Requests
+## Pull requests
 
-### PR Guidelines
+### PR guidelines
 
 1. **Create feature branch** from main branch
 2. **Make focused changes** - one feature per PR
@@ -841,11 +841,11 @@ If you discover a security vulnerability:
 6. **Ensure all tests pass**
 7. **Request review** from maintainers
 
-### Commit Message Format
+### Commit message format
 
 Use conventional commit format:
 
-```
+```text
 type(scope): description
 
 [optional body]
@@ -854,14 +854,14 @@ type(scope): description
 ```
 
 Examples:
-```
+```text
 feat(transport): add WebSocket transport support
 fix(cli): resolve argument parsing issue
 docs(examples): add authentication examples
 test(fuzzer): add test coverage for edge cases
 ```
 
-### PR Template
+### PR template
 
 ```markdown
 ## Description
@@ -891,7 +891,7 @@ Brief description of changes
 - [ ] Tests added/updated
 ```
 
-## Release Process
+## Release process
 
 ### Versioning
 
@@ -903,7 +903,7 @@ The project uses semantic versioning:
 
 - **PATCH**: Bug fixes that do not change the API
 
-### Release Steps
+### Release steps
 
 1. **Update version** in `pyproject.toml`
 2. **Update changelog** with release notes
@@ -913,7 +913,7 @@ The project uses semantic versioning:
 
 ## Community
 
-### Communication Channels
+### Communication channels
 
 - **GitHub Issues**: Bug reports and feature requests
 
@@ -923,7 +923,7 @@ The project uses semantic versioning:
 
 - **Email**: Security issues (security@example.com)
 
-### Code of Conduct
+### Code of conduct
 
 We are committed to providing a welcoming and inclusive environment for all contributors. Please:
 
@@ -937,7 +937,7 @@ We are committed to providing a welcoming and inclusive environment for all cont
 
 ## Resources
 
-### Learning Resources
+### Learning resources
 
 - **MCP Specification**: [Model Context Protocol](https://github.com/modelcontextprotocol/modelcontextprotocol)
 
@@ -947,7 +947,7 @@ We are committed to providing a welcoming and inclusive environment for all cont
 
 - **Documentation**: [MkDocs documentation](https://www.mkdocs.org/)
 
-### Related Projects
+### Related projects
 
 - **MCP Python SDK**: [mcp/python-sdk](https://github.com/modelcontextprotocol/python-sdk)
 

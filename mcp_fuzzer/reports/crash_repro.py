@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ..redaction import redact
 from ..types import extract_tool_runs
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,12 @@ def collect_crashes(
     tool_results: dict[str, Any] | None,
     protocol_results: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    """Return a normalized list of crash records from tool/protocol results."""
+    """Return a normalized list of crash records from tool/protocol results.
+
+    The recorded input can contain injected auth parameters, so credential-
+    bearing values are redacted; the rest of the input is kept verbatim so the
+    crash stays reproducible.
+    """
     crashes: list[dict[str, Any]] = []
 
     for tool_name, entry in (tool_results or {}).items():
@@ -41,7 +47,7 @@ def collect_crashes(
                         "kind": "tool",
                         "target": tool_name,
                         "run": index + 1,
-                        "input": run.get("args"),
+                        "input": redact(run.get("args")),
                         "crash": run.get("crash"),
                         "exception": run.get("exception"),
                     }
@@ -57,7 +63,7 @@ def collect_crashes(
                         "kind": "protocol",
                         "target": protocol_type,
                         "run": index + 1,
-                        "input": run.get("fuzz_data"),
+                        "input": redact(run.get("fuzz_data")),
                         "crash": run.get("crash"),
                         "exception": run.get("exception"),
                     }
@@ -108,12 +114,12 @@ def write_findings_report(
     """Write all analyzed findings to ``<output_dir>/findings.json``."""
     out = Path(output_dir)
     path = out / "findings.json"
-    payload = [
-        f.to_dict() if hasattr(f, "to_dict") else f for f in findings
-    ]
+    # Finding evidence embeds request/response fragments, so redact the whole
+    # document; only values under credential-named keys change.
+    payload = redact([f.to_dict() if hasattr(f, "to_dict") else f for f in findings])
     doc: dict[str, Any] = {"findings": payload, "count": len(payload)}
     if audit_sections:
-        doc.update(audit_sections)
+        doc.update(redact(audit_sections))
     try:
         out.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:

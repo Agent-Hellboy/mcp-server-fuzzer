@@ -7,8 +7,8 @@ from typing import Any
 from ...types import extract_tool_runs
 from .common import (
     iter_protocol_type_stats,
-    normalize_report_data,
     protocol_item_summaries,
+    redact_report_data,
     result_has_failure,
     summarize_tool_outcomes,
     summarize_tool_runs,
@@ -38,10 +38,14 @@ class JSONFormatter:
         report_data: dict[str, Any] | Any,
         filename: str,
     ):
-        """Persist report data to JSON."""
+        """Persist report data to JSON.
+
+        The dump includes every run's ``args``/``result`` verbatim, so it is
+        redacted before it reaches disk.
+        """
         import json
 
-        data = normalize_report_data(report_data)
+        data = redact_report_data(report_data)
         with open(filename, "w") as handle:
             json.dump(data, handle, indent=2, default=str)
 

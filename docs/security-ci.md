@@ -48,14 +48,36 @@ engagement. Do not make raw response artifacts public by default.
 The fuzzer provides exit behavior for target usability, not a universal risk
 policy:
 
-- `--fail-if-no-tools` exits non-zero when discovery yields no usable tools,
-  including an unreachable or auth-blocked target.
+- `--fail-if-no-tools` exits non-zero (code 2) when discovery yields no usable
+  tools, including an unreachable or auth-blocked target. It is enabled
+  automatically when `MCP_FUZZER_CI` or `MCP_FUZZER_IN_DOCKER` is set.
 - `--allow-empty-tools` opts out of the automatic CI/Docker behavior when a
   zero-tool fixture is expected.
-- Findings are evidence for a project-specific policy. Define which check IDs,
-  severities, or reproducibility states require a human-approved failure.
+- Findings never fail the build on their own. There is no severity-threshold
+  flag; a findings gate is something the job implements by reading the
+  artifacts.
 - Keep a blocked assessment distinct from a completed assessment with no
   findings.
+
+Gate on the two fields the artifacts actually expose: `status` and
+`findings.by_category` in `run_summary.json`.
+
+```bash
+# Fail the job on a blocked target or on a named finding category.
+python - <<'PY'
+import json, sys
+summary = json.load(open("reports/mcp-fuzzer/run_summary.json"))
+if summary["status"] != "completed":
+    sys.exit(f"blocked assessment: {summary.get('blocked_reason', 'unknown')}")
+gated = {"accepted_malformed", "injection_reflection"}
+hits = {k: v for k, v in summary["findings"]["by_category"].items() if k in gated}
+if hits:
+    sys.exit(f"gated findings present: {hits}")
+PY
+```
+
+Read `findings.json` when the policy needs per-finding `severity` (emitted
+lowercase) or the `evidence.check_id` carried by `--security-audit` findings.
 
 Avoid a policy that fails on every server rejection. A correct rejection of a
 malformed request is generally validation evidence; accepted malformed input,
@@ -104,8 +126,9 @@ Before a human or downstream system consumes the artifact:
 - Review `findings.json` and the exact evidence behind each candidate.
 - Preserve `crashes/` only when the target owner permits the captured data.
 - Redact credentials, tokens, private paths, personal data, and server secrets.
-- Record the tool version, target revision, schema version, command, seed, and
-  configuration hash.
+- Record the target revision, schema version, command line, seed, and
+  configuration hash alongside the artifacts. The fuzzer does not write these
+  into `run_summary.json` or `findings.json`, so the job must capture them.
 - Link the artifact to the assessment scope and reviewer decision.
 
 See [Interpret evidence and findings](getting-started/results.md) for the

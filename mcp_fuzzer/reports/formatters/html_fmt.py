@@ -8,8 +8,8 @@ from typing import Any
 from ...types import extract_tool_runs
 from .common import (
     iter_protocol_type_stats,
-    normalize_report_data,
     protocol_item_summaries,
+    redact_report_data,
 )
 
 
@@ -22,7 +22,7 @@ class HTMLFormatter:
         filename: str,
         title: str = "Fuzzing Results Report",
     ):
-        data = normalize_report_data(report_data)
+        data = redact_report_data(report_data)
         mode = str((data.get("metadata") or {}).get("mode", "all"))
         escaped_title = escape(title)
         parts: list[str] = [

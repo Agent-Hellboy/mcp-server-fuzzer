@@ -14,6 +14,7 @@ from ...evidence_fields import (
     SUCCESS,
 )
 from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
+from ...redaction import redact, redact_url
 from ..outcome_buckets import summarize_tool_outcomes
 
 
@@ -31,6 +32,70 @@ def normalize_report_data(
     if hasattr(report, "to_dict"):
         return report.to_dict()  # type: ignore[return-value]
     return report
+
+
+# Sections whose values are raw per-run payloads (``args``/``result``) that a
+# target can reflect credentials into. Their top-level keys are tool names and
+# protocol type names, which are never treated as sensitive.
+_RUN_SECTIONS = ("tool_results", "protocol_results")
+
+# Sections redacted whole: every key inside them is a real payload key.
+_PAYLOAD_SECTIONS = ("runtime",)
+
+
+def _redact_safety_section(safety: dict[str, Any]) -> dict[str, Any]:
+    """Redact blocked-operation payloads inside a safety section.
+
+    Only the ``blocked_operations`` lists are walked: the sibling summaries are
+    keyed by tool name, which must not be mistaken for a credential key.
+    """
+    redacted = dict(safety)
+    for name, section in safety.items():
+        if isinstance(section, dict) and "blocked_operations" in section:
+            updated = dict(section)
+            updated["blocked_operations"] = redact(section["blocked_operations"])
+            redacted[name] = updated
+    return redacted
+
+
+def redact_report_data(
+    report: dict[str, Any] | SupportsToDict,
+) -> dict[str, Any]:
+    """Normalize report data and strip credentials from its values.
+
+    Only values change. Field names, tool names, protocol type names and the
+    overall document shape are preserved exactly, so an exporter renders the
+    same structure whether or not anything was redacted.
+    """
+    data = normalize_report_data(report)
+    if not isinstance(data, dict):
+        return data
+
+    redacted = dict(data)
+
+    metadata = redacted.get("metadata")
+    if isinstance(metadata, dict) and "endpoint" in metadata:
+        metadata = dict(metadata)
+        metadata["endpoint"] = redact_url(metadata["endpoint"])
+        redacted["metadata"] = metadata
+
+    for section in _RUN_SECTIONS:
+        entries = redacted.get(section)
+        if isinstance(entries, dict):
+            redacted[section] = {
+                name: redact(entry) for name, entry in entries.items()
+            }
+
+    for section in _PAYLOAD_SECTIONS:
+        entry = redacted.get(section)
+        if isinstance(entry, (dict, list)):
+            redacted[section] = redact(entry)
+
+    safety = redacted.get("safety")
+    if isinstance(safety, dict):
+        redacted["safety"] = _redact_safety_section(safety)
+
+    return redacted
 
 
 def calculate_tool_success_rate(
@@ -241,6 +306,7 @@ __all__ = [
     "iter_protocol_type_stats",
     "normalize_report_data",
     "protocol_item_summaries",
+    "redact_report_data",
     "result_has_failure",
     "summarize_protocol_items",
     "summarize_tool_outcomes",

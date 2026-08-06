@@ -13,6 +13,8 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
+from ..redaction import redact
+
 _AUTO_FILTER = object()
 
 
@@ -360,7 +362,12 @@ class SafetyReporter:
         self.console.print("=" * 80)
 
     def get_comprehensive_safety_data(self) -> dict[str, Any]:
-        """Get comprehensive safety data for reporting."""
+        """Get comprehensive safety data for reporting.
+
+        Blocked operations carry the full arguments of the call that was
+        stopped, so they are redacted here — at the single point every export
+        of safety data reads from.
+        """
         safety_data = {
             "timestamp": datetime.now().isoformat(),
             "system_safety": {},
@@ -374,7 +381,7 @@ class SafetyReporter:
                 safety_data["system_safety"] = {
                     "active": hasattr(self, "is_system_blocking_active")
                     and self.is_system_blocking_active(),
-                    "blocked_operations": blocked_ops,
+                    "blocked_operations": redact(blocked_ops),
                     "total_blocked": len(blocked_ops),
                 }
         except Exception as e:
@@ -387,7 +394,9 @@ class SafetyReporter:
                     "active": True,
                     "summary": self.safety_filter.get_blocked_operations_summary(),
                     "statistics": self.safety_filter.get_safety_statistics(),
-                    "blocked_operations": self.safety_filter.blocked_operations,
+                    "blocked_operations": redact(
+                        self.safety_filter.blocked_operations
+                    ),
                 }
             else:
                 safety_data["safety_system"]["active"] = False

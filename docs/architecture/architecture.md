@@ -2,7 +2,7 @@
 
 This document describes the architecture and design of the MCP Server Fuzzer system.
 
-## System Overview
+## System overview
 
 The MCP Server Fuzzer is built with a modular, layered architecture that separates concerns and provides clear interfaces between components. The system is designed to be:
 
@@ -11,9 +11,9 @@ The MCP Server Fuzzer is built with a modular, layered architecture that separat
 - **Safe**: Built-in safety mechanisms protect against dangerous operations
 - **Testable**: Each component can be tested independently
 
-## Core Components
+## Core components
 
-### High-Level Architecture
+### High-level architecture
 
 ```mermaid
 flowchart TB
@@ -94,9 +94,9 @@ flowchart TB
   R1 --> R2
 ```
 
-## Data Flow
+## Data flow
 
-### Main Execution Flow
+### Main execution flow
 
 ```mermaid
 graph TD
@@ -129,7 +129,7 @@ graph TD
     U --> V[Console/Files]
 ```
 
-### Safety System Flow
+### Safety system flow
 
 ```mermaid
 graph TD
@@ -144,7 +144,7 @@ graph TD
     end
 ```
 
-## Project Structure
+## Project structure
 
 ```text
 mcp_fuzzer/
@@ -158,7 +158,7 @@ mcp_fuzzer/
 └── auth/          # Authentication providers and manager
 ```
 
-### 1. CLI Layer
+### 1. CLI layer
 
 The CLI layer provides the user interface and handles argument parsing, validation, and execution flow.
 
@@ -176,7 +176,7 @@ The CLI layer provides the user interface and handles argument parsing, validati
 - Initialize the fuzzing client
 - Handle errors and display results
 
-### 2. Transport Layer
+### 2. Transport layer
 
 The transport layer abstracts communication with MCP servers, supporting multiple protocols with built-in safety integration.
 
@@ -205,7 +205,7 @@ class TransportDriver(ABC):
     async def _stream_request(self, payload: dict[str, Any]) -> AsyncIterator[dict[str, Any]]
 ```
 
-### 3. Fuzzing Engine
+### 3. Fuzzing engine
 
 The fuzzing engine orchestrates the testing process through three specialized modules: Mutators, Executor, and FuzzerReporter.
 
@@ -215,7 +215,7 @@ The fuzzing engine orchestrates the testing process through three specialized mo
   - `ToolMutator`: Generates fuzzed tool arguments
   - `ProtocolMutator`: Generates fuzzed protocol messages
   - `BatchMutator`: Generates batch requests
-  - `strategies/`: Comprehensive strategy system with realistic and aggressive modes
+  - `strategies/`: Strategy system with realistic and aggressive modes
 - `executor/`: Execution orchestration module
   - `ToolExecutor`: Orchestrates tool fuzzing with safety integration
   - `ProtocolExecutor`: Orchestrates protocol fuzzing with invariant validation
@@ -225,7 +225,7 @@ The fuzzing engine orchestrates the testing process through three specialized mo
 - `executor/results.py`: Executor-local result collection and normalization
   - `ResultBuilder`: Creates standardized result dictionaries
   - `ResultCollector`: Aggregates results from multiple runs
-  - `MetricsCalculator`: Calculates comprehensive metrics
+  - `MetricsCalculator`: Calculates run metrics
 - `runtime/`: Process management and monitoring
 
 **Fuzzing Process:**
@@ -238,11 +238,11 @@ The fuzzing engine orchestrates the testing process through three specialized mo
 6. **Invariant Verification**: Verify responses against property-based invariants
 7. **Result Collection**: FuzzerReporter collects and aggregates results
 8. **Metrics Calculation**: Calculate success rates, violations, and statistics
-9. **Reporting**: Generate comprehensive reports in multiple formats
+9. **Reporting**: Generate reports in multiple formats
 
 **See [Fuzz Engine Architecture](./fuzz-engine.md) for detailed documentation.**
 
-### 4. Runtime Management System
+### 4. Runtime management system
 
 The runtime management system provides robust, asynchronous subprocess lifecycle management for transports and target servers under test.
 
@@ -263,7 +263,7 @@ The runtime management system provides robust, asynchronous subprocess lifecycle
 - **Retry Mechanisms**: Configurable retry with exponential backoff
 - **Batch Operations**: Execute multiple operations concurrently with result collection
 
-### 5. Strategy System
+### 5. Strategy system
 
 The strategy system generates test data using different approaches.
 
@@ -281,7 +281,7 @@ The strategy system generates test data using different approaches.
 
 **Schema Parser:**
 
-The schema parser provides comprehensive support for parsing JSON Schema definitions and generating appropriate test data based on schema specifications. It handles:
+The schema parser parses JSON Schema definitions and generating appropriate test data based on schema specifications. It handles:
 
 - Basic types: string, number, integer, boolean, array, object, null
 - String constraints: minLength, maxLength, pattern, format
@@ -293,9 +293,9 @@ The schema parser provides comprehensive support for parsing JSON Schema definit
 
 The module supports both "realistic" and "aggressive" fuzzing strategies, where realistic mode generates valid data conforming to the schema, while aggressive mode intentionally generates edge cases and invalid data to test error handling.
 
-### 6. Invariants System
+### 6. Invariants system
 
-The invariants system provides comprehensive property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
+The invariants system provides property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
 
 **Key Components:**
 
@@ -333,7 +333,7 @@ for idx, result in results.items():
 
 These invariants serve as runtime assertions that validate the behavior of the server being tested, helping to identify potential issues that might not be caught by simple error checking.
 
-### 7. Client Architecture
+### 7. Client architecture
 
 The client architecture provides specialized MCP client implementations for different fuzzing scenarios.
 
@@ -351,7 +351,7 @@ The client architecture provides specialized MCP client implementations for diff
 - **Authentication Support**: Built-in authentication management
 - **Reporting Integration**: Automatic result collection and reporting
 
-### 8. Safety System
+### 8. Safety system
 
 The safety system provides multiple layers of protection against dangerous operations using a pluggable provider architecture.
 
@@ -374,9 +374,9 @@ The safety system provides multiple layers of protection against dangerous opera
 - **Process Management**: Safe subprocess handling with timeouts
 - **Optional Mock Responses**: Helpers to build safe JSON-RPC errors if you choose to block
 
-### 9. Authentication System
+### 9. Authentication system
 
-The authentication system provides comprehensive support for various authentication methods for MCP servers using a flexible provider-based architecture.
+The authentication system supports the available authentication methods for MCP servers using a flexible provider-based architecture.
 
 **Key Components:**
 
@@ -442,7 +442,7 @@ auth:
 - **Provider Validation**: Runtime validation of authentication configurations
 - **Error Handling**: Graceful fallback for authentication failures
 
-### 10. Configuration Management
+### 10. Configuration management
 
 The configuration system provides centralized configuration management with multiple loading strategies.
 
@@ -466,9 +466,9 @@ The configuration system provides centralized configuration management with mult
 - **Runtime Settings**: Execution and concurrency settings
 - **Reporting Settings**: Output and logging configuration
 
-### 11. Reporting System
+### 11. Reporting system
 
-The reporting system provides centralized output management and comprehensive result reporting with multiple output formats and standardized artifacts.
+The reporting system provides centralized output management and result reporting with multiple output formats and standardized artifacts.
 
 **Key Components:**
 
@@ -482,7 +482,7 @@ The reporting system provides centralized output management and comprehensive re
 - **Multi-Format Output**: Console summaries plus JSON, text, CSV, XML, HTML, and Markdown exports
 - **Standardized Artifacts**: Output protocol produces structured JSON bundles for fuzzing, safety, and error data
 - **Console Summaries**: Rich startup configuration tables and end-of-run summaries
-- **Result Aggregation**: Comprehensive statistics, success rates, and execution timing
+- **Result Aggregation**: Statistics, success rates, and execution timing
 - **Safety Reporting**: Detailed breakdown of blocked operations, risk assessments, and security events
 - **Session Tracking**: Reports carry a `session_id` plus timestamps in metadata
 
@@ -497,7 +497,7 @@ The reporting system provides centralized output management and comprehensive re
 **Report Types:**
 
 - **Fuzzing Reports**: Complete tool and protocol testing results with detailed metrics
-- **Safety Reports**: Comprehensive safety system data, blocked operations, and risk analysis
+- **Safety Reports**: Safety system data, blocked operations, and risk analysis
 - **Session Reports**: Execution metadata and timing statistics
 - **Performance Reports**: Reserved for future timing/resource metrics
 - **Error Reports**: Categorized error analysis with root cause identification
@@ -544,61 +544,24 @@ invoke the corresponding exporters on top of the standardized protocol output.
 - **CI/CD Integration**: JSON output for automated test pipelines
 - **Monitoring Integration**: Structured logging for external monitoring systems
 - **Dashboard Integration**: CSV/XML formats for business intelligence tools
-- **Audit Integration**: Comprehensive session tracking for compliance requirements
+- **Audit Integration**: Session tracking for compliance requirements
 
-## Runtime Management Details
+## Runtime management details
 
-### ProcessManager
+The runtime layer supervises local processes used by stdio transports. It
+separates process state, watchdog policy, and signal delivery so each concern
+can be tested independently:
 
-The `ProcessManager` provides fully asynchronous subprocess lifecycle management with the following capabilities:
+- `ProcessManager` starts, stops, waits for, and tracks managed subprocesses.
+- `ProcessRegistry` owns the process records shared by the manager and watchdog.
+- `ProcessWatchdog` detects stale activity and applies the termination policy.
+- `SignalDispatcher` delivers graceful, force, and interrupt signals.
 
-**Core Features:**
-
-- **Async Process Creation**: Uses `asyncio.create_subprocess_exec` for non-blocking process spawning
-- **Process Registration**: Automatically registers processes with the watchdog for monitoring
-- **Signal Handling**: Supports graceful termination (SIGTERM) and force kill (SIGKILL) with process-group signaling
-- **Status Tracking**: Maintains comprehensive process state including start time, status, and configuration
-- **Cleanup Management**: Automatic cleanup of finished processes to prevent resource leaks
-
-**Process Lifecycle:**
-
-1. **Start**: Process is created with asyncio, registered with watchdog, and tracked in manager
-2. **Monitor**: Watchdog monitors for hangs and inactivity using activity callbacks
-3. **Stop**: Graceful termination with escalation to force kill if needed
-4. **Cleanup**: Process is unregistered from watchdog and removed from tracking
-
-**Configuration Options:**
-
-- `command`: List of command and arguments
-- `cwd`: Working directory for the process
-- `env`: Environment variables (merged with current environment)
-- `timeout`: Default timeout for process operations
-- `auto_kill`: Whether to automatically kill hanging processes
-- `name`: Human-readable name for logging and identification
-- `activity_callback`: Optional callback to report process activity
-
-### ProcessWatchdog
-
-The `ProcessWatchdog` provides automated monitoring and termination of hanging processes:
-
-**Monitoring Features:**
-
-- **Activity Tracking**: Monitors process activity through callbacks or timestamps
-- **Hang Detection**: Identifies processes that haven't been active for configured timeout periods
-- **Automatic Termination**: Can automatically kill hanging processes based on policy
-- **Configurable Thresholds**: Separate thresholds for warning, timeout, and force kill
-
-**Configuration Options:**
-
-- `check_interval`: How often to check processes (default: 1.0 seconds)
-- `process_timeout`: Time before process is considered hanging (default: 30.0 seconds)
-- `extra_buffer`: Extra time before auto-kill (default: 5.0 seconds)
-- `max_hang_time`: Maximum time before force kill (default: 60.0 seconds)
-- `auto_kill`: Whether to automatically kill hanging processes (default: true)
-
-**Activity Callbacks:**
-
-Processes can register activity callbacks that return timestamps indicating when they were last active. This allows for more sophisticated hang detection based on actual process activity rather than just time elapsed.
+The canonical component model, lifecycle states, and the `ProcessConfig` and
+`WatchdogConfig` field tables with their defaults live on the
+[process management](../components/process-management.md) page. For operational
+guidance on startup, timeouts, and cleanup, see the
+[process management guide](../components/process-management-guide.md).
 
 ### AsyncFuzzExecutor
 
@@ -606,9 +569,9 @@ The fuzzing engine uses `AsyncFuzzExecutor` for bounded async/sync operation
 concurrency. See the [canonical async-executor architecture page](async-executor.md)
 for the contract and examples.
 
-## Execution Flow
+## Execution flow
 
-### Tool Fuzzing Flow
+### Tool fuzzing flow
 
 ```mermaid
 sequenceDiagram
@@ -651,7 +614,7 @@ sequenceDiagram
     Runner-->>Reporter: write reports
 ```
 
-### Protocol Fuzzing Flow
+### Protocol fuzzing flow
 
 ```mermaid
 sequenceDiagram
@@ -695,9 +658,9 @@ sequenceDiagram
     Runner-->>Reporter: write reports
 ```
 
-## Design Principles
+## Design principles
 
-### 1. Separation of Concerns
+### 1. Separation of concerns
 
 Each component has a single, well-defined responsibility:
 
@@ -707,7 +670,7 @@ Each component has a single, well-defined responsibility:
 - **Safety System**: Provides protection mechanisms
 - **AsyncFuzzExecutor**: Manages concurrency and execution
 
-### 2. Protocol Agnosticism
+### 2. Protocol agnosticism
 
 The fuzzer logic is completely independent of transport protocols:
 
@@ -723,7 +686,7 @@ The system is designed for extensibility:
 - **New fuzzing strategies** can be added to the strategy system
 - **New safety features** can be added to the safety system
 
-### 4. Safety First
+### 4. Safety first
 
 Safety is built into every layer:
 
@@ -738,12 +701,12 @@ Each component can be tested independently:
 
 - **Clear interfaces** between components
 - **Dependency injection** for external dependencies
-- **Comprehensive mocking** support
+- **Mocking** support
 - **Isolated test environments**
 
-## Configuration Management
+## Configuration management
 
-### Environment Variables
+### Environment variables
 
 The system uses environment variables for configuration:
 
@@ -762,9 +725,9 @@ export MCP_FUZZER_STDIO_TIMEOUT=30.0
 export MCP_FUZZER_FS_ROOT=~/.mcp_fuzzer
 ```
 
-## Performance Considerations
+## Performance considerations
 
-### Asynchronous Design
+### Asynchronous design
 
 The system uses async/await throughout for better performance:
 
@@ -775,7 +738,7 @@ The system uses async/await throughout for better performance:
 - **Activity monitoring through awaitables**
 - **Controlled concurrency with AsyncFuzzExecutor**
 
-### Resource Management
+### Resource management
 
 Careful resource management ensures stability:
 
@@ -794,9 +757,9 @@ The architecture supports scaling:
 - **Watchdog stats** (process counts, last scan time) to inform resource planning
 - **Standardized output artifacts** for CI/CD and fleet orchestration
 
-## Security Considerations
+## Security considerations
 
-### Input Validation
+### Input validation
 
 All input is validated and sanitized:
 
@@ -806,7 +769,7 @@ All input is validated and sanitized:
 - **Filesystem path sanitization** when the sandbox is enabled
 - **Host normalization** for network access control
 
-### Access Control
+### Access control
 
 The system implements access control:
 
@@ -814,7 +777,7 @@ The system implements access control:
 - **System command blocking** (opt-in via `--enable-safety-system`)
 - **Network policy enforcement** for redirects and outbound requests (`--no-network`, `--allow-host`)
 
-### Audit Logging
+### Audit logging
 
 Security-relevant events are logged:
 
@@ -822,9 +785,9 @@ Security-relevant events are logged:
 - **Error conditions are tracked**
 - **Transport failures and retries are logged**
 
-## Monitoring and Observability
+## Monitoring and observability
 
-### Metrics Collection
+### Metrics collection
 
 The system does not emit a continuous metrics stream by default. Available
 signals include:
@@ -835,13 +798,13 @@ signals include:
 
 ### Logging
 
-Comprehensive logging throughout:
+Logging throughout:
 
 - **Structured logging** with levels
 - **Context-aware log messages**
 - **Error stack traces**
 
-### Health Checks
+### Health checks
 
 Operational status is surfaced through:
 
@@ -850,11 +813,11 @@ Operational status is surfaced through:
 - **SafetyReporter summaries** indicating whether safety filters are active
 - **Structured logging** of transport failures and retry attempts
 
-## System Integration
+## System integration
 
-The MCP Fuzzer is designed as a modular system with clear integration points:
+MCP Server Fuzzer is designed as a modular system with clear integration points:
 
-### Component Integration
+### Component integration
 
 - **Transport Abstraction**: All communication is abstracted through the TransportDriver interface, allowing any transport to work with the system.
 - **Safety Providers**: The safety system uses a provider interface allowing customization of safety features.
@@ -862,14 +825,14 @@ The MCP Fuzzer is designed as a modular system with clear integration points:
 - **Runtime Management**: The async runtime provides subprocess management and watchdog supervision.
 - **Execution Framework**: The AsyncFuzzExecutor provides a bridge between strategies and execution.
 
-### External Integration
+### External integration
 
 - **CI/CD Integration**: The system can be integrated into CI/CD pipelines for automated testing.
 - **Logging Integration**: The logging system can output to standard formats for integration with monitoring tools.
 - **Configuration Management**: Environment variables and config files allow integration with orchestration systems.
 - **Reporting Output**: Reports can be exported in machine-readable formats (JSON) for integration with analysis tools.
 
-### Cross-Component Dependencies
+### Cross-Component dependencies
 
 ```mermaid
 graph TD

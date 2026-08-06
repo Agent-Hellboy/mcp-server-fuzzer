@@ -1,4 +1,4 @@
-# Async Executor
+# Async executor
 
 The AsyncFuzzExecutor is a core component that bridges the strategy components (test case generators) and the fuzzing engine. It provides a robust asynchronous execution framework with semaphore-based concurrency control and error handling.
 
@@ -26,7 +26,7 @@ graph TD
 
 ## Usage
 
-### Batch Execution
+### Batch execution
 
 ```python
 from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
@@ -63,7 +63,7 @@ finally:
     await executor.shutdown()
 ```
 
-### Error Handling
+### Error handling
 
 ```python
 async def operation_with_errors(value):
@@ -79,7 +79,7 @@ print(f"Successful: {len(results['results'])}")
 print(f"Failed: {len(results['errors'])}")
 ```
 
-### Mixed Async and Sync Operations
+### Mixed Async and sync operations
 
 ```python
 # Async operation
@@ -99,7 +99,7 @@ operations = [
 results = await executor.execute_batch(operations)
 ```
 
-### Hypothesis Strategy Integration
+### Hypothesis strategy integration
 
 ```python
 from hypothesis import strategies as st
@@ -109,7 +109,7 @@ int_strategy = st.integers(min_value=0, max_value=100)
 value = await executor.run_hypothesis_strategy(int_strategy)
 ```
 
-## Integration with Fuzzing Components
+## Integration with fuzzing components
 
 The AsyncFuzzExecutor is integrated with the fuzz engine executor components:
 
@@ -122,11 +122,11 @@ This modular separation of concerns allows for better maintainability, testabili
 
 See [Fuzz Engine Architecture](./fuzz-engine.md) for detailed information about the complete architecture.
 
-## Configuration Options
+## Configuration options
 
 - **max_concurrency**: Maximum number of concurrent operations (default: 5)
 
-## API Methods
+## API methods
 
 - `async execute_batch(operations) -> Dict[str, List]`: Execute a batch of operations
   - Operations format: `[(function, args, kwargs), ...]`

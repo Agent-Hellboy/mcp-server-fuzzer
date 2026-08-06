@@ -1,4 +1,4 @@
-# Fuzz Engine Architecture
+# Fuzz engine architecture
 
 This document describes the architecture of the redesigned fuzz engine, which provides a modular, extensible system for testing MCP servers.
 
@@ -16,7 +16,7 @@ Note: The CLI runtime primarily uses the `client` package (`ToolClient` /
 `ProtocolClient`) and the newer reporting pipeline. The `fuzz_engine` package
 remains available as a lower-level API for direct integration or legacy use.
 
-## Architecture Diagram
+## Architecture diagram
 
 ```mermaid
 graph TD
@@ -86,11 +86,11 @@ graph TD
     RC --> MC
 ```
 
-## Module Breakdown
+## Module breakdown
 
-### 1. Mutators Module
+### 1. Mutators module
 
-The Mutators module is responsible for generating and mutating test data. It provides three specialized mutators and a comprehensive strategy system.
+The Mutators module is responsible for generating and mutating test data. It provides three specialized mutators and a strategy system.
 
 #### Components
 
@@ -185,7 +185,7 @@ class BatchMutator(BaseMutator):
 - Supports notifications mixed with requests
 - Generates various ID formats and edge cases
 
-### 2. Executor Module
+### 2. Executor module
 
 The Executor module orchestrates fuzzing execution, managing concurrency, safety checks, and invariant validation.
 
@@ -308,7 +308,7 @@ class BatchExecutor:
 executor module. Its contract and examples are maintained on the [canonical
 async-executor page](async-executor.md).
 
-### 3. FuzzerReporter Module
+### 3. FuzzerReporter module
 
 The FuzzerReporter module handles result collection, aggregation, and metrics calculation.
 
@@ -380,7 +380,7 @@ class ResultCollector:
 
 #### MetricsCalculator
 
-Calculates comprehensive metrics from fuzzing results.
+Calculates run metrics from fuzzing results.
 
 ```python
 class MetricsCalculator:
@@ -411,9 +411,9 @@ class MetricsCalculator:
 - Protocol metrics (server rejections, invariant violations)
 - Overall metrics (aggregate statistics)
 
-## Data Flow
+## Data flow
 
-### Tool Fuzzing Flow
+### Tool fuzzing flow
 
 ```mermaid
 sequenceDiagram
@@ -452,7 +452,7 @@ sequenceDiagram
 Note: the default `SafetyFilter` does not block tool calls; the "Blocked" branch
 applies when custom safety providers enforce blocking.
 
-### Protocol Fuzzing Flow
+### Protocol fuzzing flow
 
 ```mermaid
 sequenceDiagram
@@ -491,9 +491,9 @@ sequenceDiagram
     ProtocolExecutor-->>EngineUser: results
 ```
 
-## Integration Points
+## Integration points
 
-### Client Integration (Current)
+### Client integration (current)
 
 The CLI uses `MCPFuzzerClient`, which delegates to `ToolClient` and
 `ProtocolClient` built on mutators and the `JsonRpcAdapter`:
@@ -512,12 +512,12 @@ protocol_results = await client.fuzz_all_protocol_types(
 )
 ```
 
-### Direct Engine Integration (Optional)
+### Direct engine integration (optional)
 
 `ToolExecutor`/`ProtocolExecutor` remain available for direct embedding when you
 want to drive the `fuzz_engine` module independently of the CLI.
 
-### Safety System Integration
+### Safety system integration
 
 The ToolExecutor integrates directly with the safety system:
 
@@ -540,7 +540,7 @@ if self.safety_system:
     )
 ```
 
-### Transport Integration
+### Transport integration
 
 The ProtocolExecutor optionally integrates with transport for server testing:
 
@@ -560,16 +560,16 @@ if self.transport and not generate_only:
         server_error = str(server_exception)
 ```
 
-## Design Principles
+## Design principles
 
-### 1. Separation of Concerns
+### 1. Separation of concerns
 
 Each module has a single, well-defined responsibility:
 - **Mutators**: Generate test data
 - **Executor**: Orchestrate execution
 - **FuzzerReporter**: Collect and report results
 
-### 2. Dependency Injection
+### 2. Dependency injection
 
 All executors use dependency injection for flexibility:
 - Mutators can be swapped for custom implementations
@@ -577,14 +577,14 @@ All executors use dependency injection for flexibility:
 - Result builders can be extended
 - Transport can be any implementation
 
-### 3. Asynchronous by Default
+### 3. Asynchronous by default
 
 All operations are asynchronous for performance:
 - Concurrent fuzzing runs with bounded concurrency
 - Non-blocking I/O operations
 - Efficient resource utilization
 
-### 4. Type Safety
+### 4. Type safety
 
 Strong typing throughout for reliability:
 - `FuzzDataResult` TypedDict for results
@@ -601,7 +601,7 @@ Easy to extend with new capabilities:
 
 ## Configuration
 
-### Executor Configuration
+### Executor configuration
 
 ```python
 # Configure tool executor
@@ -624,7 +624,7 @@ protocol_executor = ProtocolExecutor(
 )
 ```
 
-### Strategy Configuration
+### Strategy configuration
 
 Strategies are configured through phase selection:
 
@@ -641,7 +641,7 @@ two_phase_results = await executor.execute_both_phases(
 )
 ```
 
-## Performance Characteristics
+## Performance characteristics
 
 ### Concurrency
 
@@ -650,13 +650,13 @@ two_phase_results = await executor.execute_both_phases(
 - Lazy semaphore initialization
 - Efficient task management
 
-### Memory Usage
+### Memory usage
 
 - Results collected in memory
 - Streaming not currently supported
 - Consider result filtering for large runs
 
-### Execution Time
+### Execution time
 
 - Concurrent execution reduces total time
 - Bounded by slowest operation in batch
@@ -664,22 +664,22 @@ two_phase_results = await executor.execute_both_phases(
 
 ## Testing
 
-### Unit Test Coverage
+### Unit test coverage
 
 - **Mutators**: 83-100% coverage
 - **Executors**: 96-100% coverage
 - **FuzzerReporter**: 96-100% coverage
 
-### Test Strategy
+### Test strategy
 
 - Mock dependencies for isolation
 - Test each component independently
 - Integration tests for full workflows
 - Property-based tests for invariants
 
-## Migration Guide
+## Migration guide
 
-### From Old to New API
+### From old to new API
 
 ```python
 # Old API
@@ -708,9 +708,9 @@ protocol_executor = ProtocolExecutor(
 results = await protocol_executor.execute("InitializeRequest", runs=10)
 ```
 
-## Future Enhancements
+## Future enhancements
 
-### Planned Features
+### Planned features
 
 1. **Streaming Results**: Stream results as they're generated
 2. **Custom Strategies**: Plugin system for custom strategies
@@ -719,7 +719,7 @@ results = await protocol_executor.execute("InitializeRequest", runs=10)
 5. **Enhanced Metrics**: More sophisticated metric calculation
 6. **Coverage Tracking**: Track which code paths are exercised
 
-### Extensibility Points
+### Extensibility points
 
 - Custom mutators for domain-specific testing
 - Custom result builders for different report formats

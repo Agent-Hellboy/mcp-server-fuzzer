@@ -6,29 +6,24 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 from typing import Any, Callable, Iterable, NamedTuple
 
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
-# Markers are matched against keys stripped of every non-alphanumeric character,
-# so "api_key", "API-KEY" and "apiKey" all normalize to "apikey".
-_SENSITIVE_KEY_MARKERS = (
-    "apikey",
-    "authorization",
-    "clientsecret",
-    "cookie",
-    "credential",
-    "password",
-    "privatekey",
-    "refreshtoken",
-    "secret",
-    "token",
+from ..redaction import (
+    SENSITIVE_KEY_MARKERS,
+    is_sensitive_key,
+    redact,
+    redact_url,
 )
 
-_NON_ALPHANUMERIC = re.compile(r"[^a-z0-9]")
+# The redactor now lives in ``mcp_fuzzer.redaction`` so report exports share it.
+# These aliases keep the previous module-local names working.
+_SENSITIVE_KEY_MARKERS = SENSITIVE_KEY_MARKERS
+_is_sensitive_key = is_sensitive_key
+_redact_sensitive_values = redact
 
 _AUTH_ENV_VARS = (
     "MCP_API_KEY",
@@ -45,25 +40,6 @@ _AUTH_ENV_VARS = (
     "MCP_TOOL_AUTH_MAPPING",
     "MCP_DEFAULT_AUTH_PROVIDER",
 )
-
-
-def _is_sensitive_key(key: object) -> bool:
-    normalized = _NON_ALPHANUMERIC.sub("", str(key).lower())
-    return any(marker in normalized for marker in _SENSITIVE_KEY_MARKERS)
-
-
-def _redact_sensitive_values(value: Any, key: object | None = None) -> Any:
-    """Return a display-safe copy of a JSON-like configuration value."""
-    if key is not None and _is_sensitive_key(key):
-        return "[REDACTED]"
-    if isinstance(value, dict):
-        return {
-            item_key: _redact_sensitive_values(item_value, item_key)
-            for item_key, item_value in value.items()
-        }
-    if isinstance(value, list):
-        return [_redact_sensitive_values(item) for item in value]
-    return value
 
 
 class _ArgGroup(NamedTuple):
@@ -160,6 +136,14 @@ _CONFIG_FILE_ROWS = (
 )
 
 
+# Per-parameter rendering that overrides the owning group's default. The
+# endpoint can carry credentials (userinfo or a token query parameter), and
+# upper-casing a URL would corrupt its case-sensitive path.
+_VALUE_FORMATTERS: dict[str, Callable[[Any], str]] = {
+    "endpoint": lambda value: redact_url(str(value)),
+}
+
+
 def _label(param: str) -> str:
     return param.replace("_", " ").title()
 
@@ -214,7 +198,8 @@ def _add_arg_rows(
             value = args_dict.get(param)
             if value is None or (group.skip_false and value is False):
                 continue
-            table.add_row(group.category, _label(param), group.format_value(value))
+            format_value = _VALUE_FORMATTERS.get(param, group.format_value)
+            table.add_row(group.category, _label(param), format_value(value))
 
 
 def _add_auth_rows(
@@ -254,7 +239,8 @@ def _add_config_file_rows(
     for key, display_name in _CONFIG_FILE_ROWS:
         value = (config or {}).get(key)
         if value is not None:
-            table.add_row("Config", display_name, str(value))
+            format_value = _VALUE_FORMATTERS.get(key, str)
+            table.add_row("Config", display_name, format_value(value))
 
 
 def _add_runtime_probe_rows(table: Table, config: dict | None) -> None:

@@ -130,10 +130,15 @@ nav:
       - Async executor: architecture/async-executor.md
       - Architecture overview: architecture/architecture.md
       - Exceptions: development/exceptions.md
-      - Fuzzing strategy (proposed): FUZZING_STRATEGY.md
 
+# docs/FUZZING_STRATEGY.md is excluded by .gitignore, so it is absent from a
+# clean checkout and cannot be published. It is intentionally not in `nav`.
+# To publish it, remove the .gitignore entry and add it back here.
 validation:
   omitted_files: warn
   absolute_links: warn
   unrecognized_links: warn
   anchors: warn
+  nav:
+    not_found: warn
+    omitted_files: ignore
