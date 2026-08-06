@@ -30,7 +30,7 @@ ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 REQUIRED_AUTH_SCHEME = "Bearer"
 BIND_HOST = os.getenv("BIND_HOST", "0.0.0.0")
 BIND_PORT = int(os.getenv("BIND_PORT", "8000"))
-REQUIRED_TOKEN = os.getenv("REQUIRED_TOKEN", "secret123")
+REQUIRED_TOKEN = os.getenv("REQUIRED_TOKEN", "fixture-only-token")
 
 _CURRENT_LOG_LEVEL: str = "info"
 # Subscription tracking is intentionally a stub — the test server records

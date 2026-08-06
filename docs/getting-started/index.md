@@ -1,140 +1,71 @@
-# MCP Server Fuzzer
+# Choose an assessment path
 
-A comprehensive super aggressive CLI based fuzzing tool for MCP servers using multiple transport protocols, with support for both **tool argument fuzzing** and **protocol type fuzzing**. Features pretty output using [rich](https://github.com/Textualize/rich).
+This section is organized around an analyst's work, not around the fuzzer's
+internal modules. Pick the smallest workflow that answers your question, then
+expand the scope only when the evidence justifies it.
 
-The most important thing I'm aiming to ensure here is:
-If your server conforms to the [MCP schema](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/main/schema), this tool will be able to fuzz it effectively.
-
-[![CI](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml/badge.svg)](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml)
-[![codecov](https://codecov.io/gh/Agent-Hellboy/mcp-server-fuzzer/graph/badge.svg?token=HZKC5V28LS)](https://codecov.io/gh/Agent-Hellboy/mcp-server-fuzzer)
-[![PyPI - Version](https://img.shields.io/pypi/v/mcp-fuzzer.svg)](https://pypi.org/project/mcp-fuzzer/)
-[![PyPI Downloads](https://static.pepy.tech/badge/mcp-fuzzer)](https://pepy.tech/projects/mcp-fuzzer)
-
-## Quick Start
-
-### Installation
-
-```bash
-# Basic installation
-pip install mcp-fuzzer
-
-# From source (includes MCP spec submodule)
-git clone --recursive https://github.com/Agent-Hellboy/mcp-server-fuzzer.git
-cd mcp-server-fuzzer
-# If you already cloned without submodules, run:
-git submodule update --init --recursive
-pip install -e .
+```mermaid
+flowchart TD
+    Q{What are you assessing?}
+    Q --> R[Remote MCP endpoint]
+    Q --> L[Local stdio server]
+    Q --> C[Repeatable CI check]
+    R --> RB[Remote baseline and security audits]
+    L --> LB[Sandboxed baseline and runtime observation]
+    C --> CB[Restricted artifacts and explicit failure policy]
 ```
 
-### Basic Usage
+## Choose your next task
 
-1. **Set up your MCP server** (HTTP, SSE, Stdio, or StreamableHTTP)
-2. **Run basic fuzzing**:
-   ```bash
-   # Fuzz tools on an HTTP server
-   mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
+| Your task | Start here |
+| --- | --- |
+| Install the CLI and verify a target | [Run a first assessment](getting-started.md) |
+| Plan a defensible engagement or research session | [Follow the audit workflow](audit-workflow.md) |
+| Exercise a transport, auth path, protocol mode, or local fixture | [Use audit recipes](examples.md) |
+| Understand completion, blocked runs, and findings | [Interpret evidence and findings](results.md) |
+| Reuse a target profile across sessions | [Configure repeatable assessments](../configuration/configuration.md) |
+| Contain a local server or observe host behavior | [Safety and isolation](../components/safety.md) |
+| Preserve evidence in a pipeline | [Automate evidence collection in CI](../security-ci.md) |
+| Integrate with an internal parser or dashboard | [Standardized output](../development/standardized-output.md) |
 
-   # Fuzz protocol types on an SSE server
-   mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 5
+## Assessment vocabulary
 
-   # Fuzz a local stdio server with safety enabled
-   mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 5 --enable-safety-system
-   ```
+- **Discovery** records what the target advertises and what the fuzzer can
+  reach; it is not a security verdict.
+- **Baseline** uses bounded, realistic inputs to establish normal behavior,
+  negotiated version, and the available attack surface.
+- **Aggressive probing** introduces malformed, boundary, and attack-oriented
+  values. A server rejection is usually useful evidence of validation, not a
+  vulnerability.
+- **Security audits** inspect the MCP surface and correlate selected oracles
+  with evidence from the same run.
+- **Finding** means an observation worth analyst review. Severity and business
+  impact still require context outside the fuzzer.
+- **Blocked assessment** means the run could not establish a usable target, for
+  example because it was unreachable, protected, or exposed no tools. It is not
+  a clean result.
 
-   The repository bundles official Python HTTP, Go stdio, TypeScript stdio,
-   and StreamableHTTP example servers under `examples/`.
-3. **View results** in beautiful, colorized tables
+## Supported target surfaces
 
-## Key Features
+- Tools and tool schemas.
+- Protocol messages and learned stateful sequences.
+- Resources and prompts through deterministic spec checks.
+- HTTP, HTTPS, SSE, Streamable HTTP, and stdio transports.
+- API-key, basic, bearer-token, custom-header, and OAuth flows configured for
+  the authorized target.
+- Optional process, filesystem, network, credential, privilege, and ptrace
+  observations for local stdio targets.
 
-### Two-Phase Fuzzing Approach
+The default MCP schema version is `2025-11-25`. Select a version explicitly with
+`--spec-schema-version` when the target requires a different schema path; see
+[configuration](../configuration/configuration.md#protocol-and-schema-version).
 
-- **Phase 1: Realistic Fuzzing** - Test with valid, realistic data
-- **Phase 2: Aggressive Fuzzing** - Test security and robustness with malicious data
+## Rules before you run
 
-### Multi-Protocol Support
-
-- **HTTP/HTTPS** - Standard HTTP transport with authentication
-
-- **Server-Sent Events (SSE)** - Real-time streaming support
-
-- **Stdio** - Command-line interface for local testing
-
-- **StreamableHTTP** - HTTP with MCP session negotiation and streaming support
-
-### Safety & Security
-
-- **Safety System** - System command blocking, optional sandboxing, and safety reports
-
-- **System Command Blocking** - PATH shims stop browser/app launches
-
-- **Filesystem Sandboxing** - Confines file operations when `--fs-root` is set
-
-- **Process Management** - Safe subprocess handling with timeouts
-
-### Comprehensive Testing
-
-- **Tool Discovery** - Automatically discovers available tools
-
-- **Protocol Coverage** - Tests all major MCP protocol types
-
-- **Edge Case Generation** - Uses Hypothesis + custom strategies
-
-- **Detailed Reporting** - Rich output with exception tracking
-
-### Professional Reporting System
-
-- **Automatic Report Generation** - JSON and text reports for each session
-
-- **Comprehensive Data Collection** - Tool results, protocol results, and safety data
-
-- **Safety Transparency** - Detailed breakdown of blocked operations and risk assessments
-
-- **Multiple Output Formats** - Console, JSON, and text for different use cases
-
-- **Session Tracking** - `session_id`-based reports with timestamps in metadata
-
-## Architecture
-
-The MCP Fuzzer uses a modular architecture with clear separation of concerns:
-
-- **Transport Layer** - Protocol-agnostic communication
-
-- **Fuzzing Engine** - Tool and protocol fuzzing logic
-
-- **Strategy System** - Realistic and aggressive data generation
-
-- **Safety System** - System command blocking, optional sandboxing, and safety reports
-
-- **Reporting System** - Centralized output management and comprehensive reporting
-
-- **CLI Interface** - User-friendly command-line interface
-
-See [Architecture](../architecture/architecture.md) for detailed diagrams and flow charts.
-
-## Documentation
-
-- **[Getting Started](getting-started.md)** - Installation and basic usage
-- **[Configuration](../configuration/configuration.md)** - Configuration options and file formats (YAML)
-- **[Architecture](../architecture/architecture.md)** - System design and components
-- **[Runtime Management](../components/runtime-management.md)** - Process management, watchdog system, and async executor
-- **[Process Management Guide](../components/process-management-guide.md)** - Process management best practices and troubleshooting
-- **[Client Architecture](../architecture/client-architecture.md)** - Client package structure
-- **[Examples](examples.md)** - Working examples and configurations
-- **[Reference](../development/reference.md)** - Complete API reference
-- **[Safety Guide](../components/safety.md)** - Safety system configuration
-- **[Exceptions](../development/exceptions.md)** - Error handling and exception hierarchy
-- **[Contributing](../development/contributing.md)** - Development and contribution guide
-- **[Fuzz Results](../testing/fuzz-results.md)** - Latest fuzzing test results
-
-## Contributing
-
-We welcome contributions. Please see our [Contributing Guide](../development/contributing.md) for details.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/Agent-Hellboy/mcp-server-fuzzer/blob/main/LICENSE) file for details.
-
----
-
-**Made with love for the MCP community**
+1. Record authorization, target revision, endpoint/command, credentials, test
+   window, allowed side effects, and data-handling requirements.
+2. Start with a disposable target, low run counts, and bounded timeouts.
+3. Keep credentials out of command history where possible; prefer restricted
+   files or environment variables and dedicated test identities.
+4. Treat reports as sensitive until requests, responses, generated arguments,
+   paths, and runtime observations have been reviewed.

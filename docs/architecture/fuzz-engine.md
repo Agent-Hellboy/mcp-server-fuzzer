@@ -304,30 +304,9 @@ class BatchExecutor:
 
 #### AsyncFuzzExecutor
 
-Provides the async execution framework with concurrency control and error handling.
-
-```python
-class AsyncFuzzExecutor:
-    """Async execution framework with concurrency control."""
-
-    def __init__(self, max_concurrency: int = 5):
-        self.max_concurrency = max_concurrency
-        self._semaphore = None
-        self._tasks = set()
-
-    async def execute_batch(
-        self, operations: list[tuple]
-    ) -> dict[str, list[Any]]:
-        """Execute multiple operations concurrently with bounded concurrency."""
-```
-
-**Key Features:**
-- Lazy semaphore initialization for async contexts
-- Bounded concurrency to prevent resource exhaustion
-- Supports both sync and async operations
-- Automatic error collection
-- Graceful cancellation handling
-- Hypothesis strategy execution support
+`AsyncFuzzExecutor` provides bounded execution and error collection for the
+executor module. Its contract and examples are maintained on the [canonical
+async-executor page](async-executor.md).
 
 ### 3. FuzzerReporter Module
 

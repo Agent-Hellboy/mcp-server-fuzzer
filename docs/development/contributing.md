@@ -28,38 +28,6 @@ We welcome various types of contributions:
 4. **Make your changes** with proper testing
 5. **Submit a pull request** with clear description
 
-### Understanding the Design Patterns
-
-Before diving into code contributions, we highly recommend reviewing our [Design Pattern Review](../design-pattern-review.md) document. This comprehensive guide is especially valuable for:
-
-**Beginners:**
-- Learn how design patterns are applied in real-world projects
-- Understand the purpose of each module and its patterns
-- See practical examples of Factory, Strategy, Observer, and other patterns
-
-**Intermediate Developers:**
-- Review pattern fit scores and understand architectural decisions
-- Identify areas for improvement and contribution opportunities
-- Learn about cross-cutting concerns and modularity observations
-
-**What the document covers:**
-- Module-by-module pattern analysis with fit scores (0-10)
-- Commentary on what works well and what could be improved
-- Complete pattern map for every module in the codebase
-- Suggested next steps for refactoring and improvements
-
-**Key sections to review based on your contribution area:**
-- Contributing to CLI → Review "CLI Layer" section
-- Adding transports → Review "Transport Layer" section
-- Improving runtime → Review "Runtime & Process Management" section
-- Enhancing safety → Review "Safety System" section
-
-This understanding will help you:
-- Write code that fits the existing architecture
-- Identify the right place for new features
-- Understand why certain design decisions were made
-- Propose improvements that align with the project's goals
-
 ## Development Setup
 
 ### Prerequisites
@@ -533,112 +501,10 @@ async def multiple_process_management():
 
 ### AsyncFuzzExecutor
 
-The `AsyncFuzzExecutor` provides concurrency control for fuzzing operations.
-
-#### Basic Executor Usage
-
-```python
-from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
-
-async def basic_executor_usage():
-    executor = AsyncFuzzExecutor(max_concurrency=3)
-
-    try:
-        # Execute batch operations
-        async def sample_operation(value):
-            await asyncio.sleep(0.5)
-            return f"processed_{value}"
-
-        # Prepare operations as (function, args, kwargs) tuples
-        operations = [
-            (sample_operation, [i], {}) for i in range(10)
-        ]
-
-        # Execute batch with concurrency control
-        results = await executor.execute_batch(operations)
-
-        print(f"Successful results: {len(results['results'])}")
-        print(f"Errors: {len(results['errors'])}")
-
-        for result in results['results']:
-            print(f"Result: {result}")
-
-    finally:
-        await executor.shutdown()
-```
-
-#### Batch Operations with Error Handling
-
-```python
-async def batch_operations_example():
-    executor = AsyncFuzzExecutor(max_concurrency=5)
-
-    try:
-        # Define multiple operations (some will fail)
-        async def operation(x):
-            await asyncio.sleep(0.1)
-            if x % 3 == 0:  # Some operations fail
-                raise Exception(f"Operation {x} failed")
-            return f"result_{x}"
-
-        # Prepare operations list
-        operations = [(operation, [i], {}) for i in range(10)]
-
-        # Execute batch - automatically collects results and errors
-        results = await executor.execute_batch(operations)
-
-        print(f"Successful results: {len(results['results'])}")
-        print(f"Errors: {len(results['errors'])}")
-
-        # Process successful results
-        for result in results['results']:
-            print(f"Success: {result}")
-
-        # Handle errors
-        for error in results['errors']:
-            print(f"Error: {error}")
-
-    finally:
-        await executor.shutdown()
-```
-
-#### Custom Concurrency Configuration
-
-```python
-async def custom_executor_configuration():
-    # High concurrency for I/O-bound operations
-    io_executor = AsyncFuzzExecutor(max_concurrency=20)
-
-    # Low concurrency for CPU-bound operations
-    cpu_executor = AsyncFuzzExecutor(max_concurrency=4)
-
-    try:
-        # I/O-bound operations
-        async def io_operation():
-            await asyncio.sleep(0.1)  # Simulate I/O
-            return "io_result"
-
-        # CPU-bound operations (sync function runs in thread pool)
-        def cpu_operation():
-            # Simulate CPU work
-            return sum(range(1_000_000))
-
-        # Execute with appropriate executor
-        io_results = await io_executor.execute_batch([
-            (io_operation, [], {}) for _ in range(20)
-        ])
-
-        cpu_results = await cpu_executor.execute_batch([
-            (cpu_operation, [], {}) for _ in range(4)
-        ])
-
-        print(f"IO results: {len(io_results['results'])}")
-        print(f"CPU results: {len(cpu_results['results'])}")
-
-    finally:
-        await io_executor.shutdown()
-        await cpu_executor.shutdown()
-```
+Use the [canonical AsyncFuzzExecutor architecture page](../architecture/async-executor.md)
+for the concurrency contract and examples. Contributions that change executor
+behavior should update that page and its tests rather than adding another copy
+of the API here.
 
 ### Custom Transport Implementation
 

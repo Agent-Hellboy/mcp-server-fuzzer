@@ -1,7 +1,7 @@
 {
   "default_provider": "api_key",
   "providers": {
-    "api_key": { "type": "api_key", "api_key": "secret123", "header_name": "Authorization" }
+    "api_key": { "type": "api_key", "api_key": "fixture-only-token", "header_name": "Authorization" }
   },
   "tool_mapping": {
     "secure_tool": "api_key"

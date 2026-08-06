@@ -1,21 +1,15 @@
-# Getting Started
+# Run a first assessment
 
-This guide takes you from installation to a repeatable MCP fuzzing session.
+This guide gets a researcher from installation to a small, reproducible MCP
+assessment. Use the [audit workflow](audit-workflow.md) when the run is part of
+a formal engagement or report.
 
-## Install
-
-### PyPI
+## 1. Install the client
 
 ```bash
 python -m pip install mcp-fuzzer
+mcp-fuzzer --version
 mcp-fuzzer --help
-```
-
-### Docker
-
-```bash
-docker pull princekrroshan01/mcp-fuzzer:latest
-docker run --rm princekrroshan01/mcp-fuzzer:latest --help
 ```
 
 For a source checkout:
@@ -26,101 +20,118 @@ cd mcp-server-fuzzer
 python -m pip install -e .
 ```
 
-## Choose a target
+## 2. Identify the target boundary
 
-The endpoint format depends on the transport:
+| Target | `--protocol` | `--endpoint` |
+| --- | --- | --- |
+| HTTP or HTTPS MCP endpoint | `http` or `https` | URL, for example `https://target.example/mcp` |
+| SSE endpoint | `sse` | URL, for example `https://target.example/sse` |
+| Streamable HTTP endpoint | `streamablehttp` | URL, for example `https://target.example/mcp` |
+| Local server process | `stdio` | Command string, for example `python server.py` |
 
-| Transport | Endpoint example |
-| --- | --- |
-| HTTP or HTTPS | https://localhost:8000/mcp |
-| SSE | http://localhost:8000/sse |
-| Streamable HTTP | http://localhost:8000/mcp |
-| stdio | python my_server.py |
+Record the exact endpoint or command, target revision, transport, negotiated
+protocol version, credentials, and permitted side effects before testing.
 
-The bundled examples provide local targets for HTTP, Streamable HTTP, Go stdio, and TypeScript stdio testing.
+## 3. Run a bounded baseline
 
-## Run a first session
-
-For an HTTP or Streamable HTTP server:
+For a remote endpoint:
 
 ```bash
 mcp-fuzzer \
   --mode tools \
   --protocol streamablehttp \
-  --endpoint http://localhost:8000/mcp \
+  --endpoint https://target.example/mcp \
+  --phase realistic \
   --runs 10 \
-  --output-dir reports
+  --seed 42 \
+  --output-dir reports/baseline
 ```
 
-For a local stdio server:
+For a local stdio fixture:
 
 ```bash
+mkdir -p fuzz-sandbox
 mcp-fuzzer \
   --mode all \
   --protocol stdio \
   --endpoint "python my_server.py" \
+  --phase realistic \
   --runs 5 \
   --enable-safety-system \
   --fs-root "$PWD/fuzz-sandbox" \
-  --output-dir reports
+  --no-network \
+  --seed 42 \
+  --output-dir reports/baseline
 ```
 
-Use --phase realistic for valid-input coverage, --phase aggressive for edge and attack-oriented inputs, or --phase both for both passes. Use --mode protocol to fuzz protocol messages and --protocol-type to select one message type.
+The baseline establishes reachability, discovery, normal responses, and a
+reproducible starting point. A target that cannot be reached or exposes no
+usable tools is a blocked assessment; use `--fail-if-no-tools` when that state
+must produce a non-zero exit.
 
-## Add security checks
+## 4. Expand deliberately
 
-Tool and output security checks run after the fuzz session:
+Use one question per run while you learn the target:
+
+```bash
+# Tool argument and result handling
+mcp-fuzzer --mode tools --phase aggressive \
+  --protocol streamablehttp --endpoint https://target.example/mcp \
+  --runs 20 --seed 42 --output-dir reports/tools-aggressive
+
+# Protocol and schema behavior
+mcp-fuzzer --mode protocol --protocol-phase aggressive \
+  --protocol streamablehttp --endpoint https://target.example/mcp \
+  --runs-per-type 5 --output-dir reports/protocol
+
+# Tools, schemas, metadata, and evidence-backed security oracles
+mcp-fuzzer --mode tools --phase aggressive \
+  --protocol streamablehttp --endpoint https://target.example/mcp \
+  --security-audit --runs 20 --output-dir reports/security
+```
+
+Use `--tool NAME` to focus on one tool, `--protocol-type TYPE` to focus a
+protocol run, `--stateful` for learned sequences, and `--spec-schema-version`
+when the target needs a specific MCP schema.
+
+## 5. Add authentication intentionally
+
+Use dedicated assessment credentials and the narrowest scope available. The
+CLI supports `--auth-config`, `--auth-env`, and the MCP OAuth flow via `--oauth`.
+For the target's authentication boundary, add the read-only `--auth-audit`:
 
 ```bash
 mcp-fuzzer \
   --mode tools \
   --protocol https \
-  --endpoint https://example.test/mcp \
-  --security-audit \
+  --endpoint https://target.example/mcp \
+  --auth-env \
   --auth-audit \
+  --security-audit \
   --runs 10 \
-  --output-dir reports
+  --output-dir reports/authenticated
 ```
 
-Use --auth-audit-intrusive only against a server you are authorized to test. It may exercise dynamic registration and redirect validation.
+`--auth-audit-intrusive` can create OAuth registration state and probe redirect
+handling. Use it only when the written authorization explicitly includes those
+actions, and keep it separate from a baseline run.
 
-For CI and registry checks, use --fail-if-no-tools so an unreachable or protected target is not mistaken for a clean run.
+## 6. Review the evidence
 
-## Review the output
+Start with `run_summary.json`, then `findings.json`, then any crash or export
+artifacts. Read [Interpret evidence and findings](results.md) before assigning
+severity or sharing a report. The CLI reports what it observed; it does not
+decide exploitability or business impact for you.
 
-A completed run creates:
+## Optional: observe a local process
 
-- findings.json: security and reliability findings.
-- run_summary.json: completion status, counts, and target metadata.
-- crashes/: available crash reproductions and server output.
-- Optional exports from --export-csv, --export-xml, --export-html, and --export-markdown.
-
-Each finding includes a category, severity, target, run identifier, evidence, and source references. Findings mapped to the OWASP MCP Top 10 include a link in the evidence.
-
-## Select an MCP version
-
-The default is 2025-11-25. Available schema-driven versions are 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25, and 2026-07-28.
-
-```bash
-mcp-fuzzer \
-  --mode protocol \
-  --protocol streamablehttp \
-  --endpoint http://localhost:8000/mcp \
-  --spec-schema-version 2026-07-28 \
-  --runs-per-type 5
-```
-
-The version can also be set in YAML or with MCP_SPEC_SCHEMA_VERSION. See [Configuration](../configuration/configuration.md).
-
-## Enable runtime monitoring
-
-Runtime monitoring is an optional companion feature for stdio targets:
+Install the optional sidecar for authorized stdio assessments:
 
 ```bash
 python -m pip install "mcp-fuzzer[mcpfz-probe]"
 ```
 
-Install the sidecar binary using the [mcpfz-probe release instructions](https://github.com/Agent-Hellboy/mcpfz-probe/releases), verify its published checksum, then run:
+Then provide the sidecar path and explicit observation boundaries:
 
 ```bash
 mcp-fuzzer \
@@ -130,16 +141,24 @@ mcp-fuzzer \
   --runtime-probe \
   --runtime-probe-backend auto \
   --runtime-probe-bin /path/to/mcpfz-probe \
+  --runtime-probe-workspace "$PWD/fuzz-sandbox" \
+  --runtime-probe-tmpdir /tmp \
+  --runtime-probe-allow-exec /usr/bin/date \
+  --runtime-probe-allow-host api.example.com \
   --runs 3 \
-  --output-dir reports
+  --output-dir reports/runtime
 ```
 
-Use fake for portable tests and auto for capability-aware selection. eBPF requires Linux support and appropriate privileges. The monitor is disabled unless requested and fails open if it cannot start or observe an event.
+The `fake` backend is suitable for portable tests. The `ebpf` backend requires
+an isolated Linux environment and appropriate privileges. Runtime observation
+is disabled by default, applies to stdio processes, and fails open if the
+sidecar cannot observe an event.
 
 ## Next steps
 
-- [Examples](examples.md)
-- [Configuration](../configuration/configuration.md)
-- [Safety and isolation](../components/safety.md)
-- [CLI reference](../development/reference.md)
-- [Security CI guidance](../SECURITY_CI.md)
+- [Follow the full audit workflow](audit-workflow.md)
+- [Use maintained local example servers](examples.md)
+- [Configure repeatable assessments](../configuration/configuration.md)
+- [Contain the target](../components/safety.md)
+- [Interpret the output](results.md)
+- [Automate evidence collection](../security-ci.md)

@@ -1,1398 +1,200 @@
-# Reference
+# CLI reference for assessors
 
-This page provides a complete reference for MCP Server Fuzzer, including all command-line options, API documentation, and configuration details.
+This is the operator reference for the current `mcp-fuzzer` command. It focuses
+on flags that affect scope, inputs, authentication, safety, evidence, and
+reproduction. For a task-based walkthrough, start with
+[Run a first assessment](../getting-started/getting-started.md).
 
-## Command-Line Reference
-
-### Basic Syntax
+## Syntax
 
 ```bash
-mcp-fuzzer [OPTIONS] --mode {tools|protocol|resources|prompts|all} --protocol {http|sse|stdio|streamablehttp} --endpoint ENDPOINT
+mcp-fuzzer [OPTIONS] --mode MODE --protocol TRANSPORT --endpoint TARGET
 ```
 
-### Global Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--help` | Flag | - | Show help message and exit |
-| `--verbose` | Flag | False | Enable verbose logging |
-| `--log-level` | Choice | WARNING (INFO with `--verbose`) | Set log level (CRITICAL, ERROR, WARNING, INFO, DEBUG). Defaults to WARNING, or INFO when `--verbose` is set |
-
-### Utility Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--config` | Path | - | Path to YAML configuration file |
-| `--validate-config` | Path | - | Validate configuration file and exit |
-| `--check-env` | Flag | False | Validate environment variables and exit |
-
-### Mode Options
-
-| Option | Type | Required | Description |
-|--------|------|----------|-------------|
-| `--mode` | Choice | Yes | Fuzzing mode: `tools`, `protocol`, `resources`, `prompts`, or `all` |
-| `--protocol` | Choice | Yes | Transport protocol: `http`, `sse`, `stdio`, or `streamablehttp` |
-| `--endpoint` | String | Yes | Server endpoint (URL for http/sse, command for stdio) |
-
-### Transport Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--timeout` | Float | 30.0 | Request timeout in seconds |
-| `--transport-retries` | Integer | 1 | Total attempts for transport requests (1 disables retries) |
-| `--transport-retry-delay` | Float | 0.5 | Base delay between transport retries (seconds) |
-| `--transport-retry-backoff` | Float | 2.0 | Backoff multiplier for transport retry delay |
-| `--transport-retry-max-delay` | Float | 5.0 | Maximum delay between retries (seconds) |
-| `--transport-retry-jitter` | Float | 0.1 | Jitter factor for retry delay |
-
-> Authentication flags (`--auth-config`, `--auth-env`, `--oauth*`) are listed
-> under [Authentication Options](#authentication-options).
-
-Notes:
-
-- Generic `--protocol http` and `--protocol https` are resolved against the
-  active MCP spec version. For `2025-03-26` and newer they open the
-  Streamable HTTP transport; for `2024-11-05` they keep the legacy HTTP path.
-- When using `--protocol streamablehttp` the client:
-
-  - Performs an automatic MCP initialize handshake before the first request.
-  - Propagates `mcp-session-id` and `mcp-protocol-version` headers after negotiation.
-  - Follows 307/308 redirects (e.g., adds a trailing slash `/mcp/`).
-- HTTP-based transports omit `mcp-protocol-version` on `initialize`, then send
-  the negotiated MCP version on subsequent requests when a server returns
-  `protocolVersion`.
-
-### Fuzzing Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--phase` | Choice | aggressive | Fuzzing phase: `realistic`, `aggressive`, or `both` |
-| `--protocol-phase` | Choice | realistic | Protocol fuzzing phase: `realistic` or `aggressive` |
-| `--runs` | Integer | 10 | Number of fuzzing runs per tool (tool mode only) |
-| `--runs-per-type` | Integer | 5 | Number of runs per protocol/resource/prompt type |
-| `--tool` | String | - | Fuzz only a specific tool (tool mode only) |
-| `--protocol-type` | String | - | Fuzz only a specific protocol type (protocol mode only; required by the CLI when using `--mode protocol`) |
-| `--stateful` | Flag | False | Enable learned stateful protocol sequences (runs after protocol/resources/prompts) |
-| `--stateful-runs` | Integer | 5 | Number of learned stateful sequences to run |
-| `--corpus` / `--no-corpus` | Flag | True | Enable/disable per-target corpus save/load |
-| `--havoc` | Flag | False | Enable stacked corpus mutations (havoc mode) |
-
-Notes:
-
-- `--phase` applies to tool fuzzing. `--protocol-phase` applies to protocol,
-  resources, prompts, and stateful sequences.
-
-### Spec Guard Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--spec-guard` | Bool | True | Run deterministic spec guard checks before protocol/resources/prompts fuzzing |
-| `--spec-resource-uri` | String | - | Resource URI used for spec guard resources/read checks |
-| `--spec-prompt-name` | String | - | Prompt name used for spec guard prompts/get checks |
-| `--spec-prompt-args` | String | - | JSON string of prompt arguments for spec guard prompts/get checks |
-| `--spec-schema-version` | String | - | Override MCP protocol/schema version for the target server (e.g., 2025-11-25 or 2026-07-28) |
-
-### Safety Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--enable-safety-system` | Flag | False | Enable system-level safety features |
-| `--runtime-probe` / `--no-runtime-probe` | Flag | Env fallback | Enable optional mcpfz-probe runtime monitoring |
-| `--runtime-probe-backend` | Choice | `MCPFZ_PROBE_BACKEND` or ebpf | Runtime probe backend: `ebpf`, `fake`, or `auto` |
-| `--runtime-probe-bin` | Path | `MCPFZ_PROBE_BIN` or `mcpfz-probe` | Path to the runtime probe sidecar binary |
-| `--runtime-probe-workspace` | Path | `MCPFZ_PROBE_WORKSPACE` or cwd | Workspace root allowed for runtime file writes |
-| `--runtime-probe-tmpdir` | Path | `MCPFZ_PROBE_TMPDIR` or `/tmp` | Temporary root allowed for runtime file writes |
-| `--runtime-probe-allow-exec` | String | - | Executable path allowed without a `runtime.exec` finding (repeatable) |
-| `--runtime-probe-allow-host` | String | - | Host or host:port allowed without a `runtime.net_connect` finding (repeatable) |
-| `--no-safety` | Flag | False | Disable argument-level safety hooks |
-| `--fs-root` | Path | ~/.mcp_fuzzer | Restrict filesystem operations to specified directory |
-| `--retry-with-safety-on-interrupt` | Flag | False | Retry once with safety system enabled on Ctrl-C |
-
-### Network Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--no-network` | Flag | False | Disallow network to non-local hosts |
-| `--allow-host` | String | - | Permit additional hostnames when `--no-network` is set (repeatable) |
-
-### Authentication Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--auth-config` | Path | - | Path to a JSON authentication configuration file (static providers + tool mapping) |
-| `--auth-env` | Flag | False | Load authentication from environment variables (`MCP_API_KEY`, `MCP_USERNAME`/`MCP_PASSWORD`, `MCP_OAUTH_*`, …) |
-| `--oauth` | Flag | False | Run the MCP OAuth 2.1 authorization flow (RFC 9728/8414 discovery → client → grant) to obtain a bearer token. Requires `--endpoint` |
-| `--oauth-grant` | Choice | authorization_code | Grant to use: `authorization_code` (PKCE, browser, user-delegated) or `client_credentials` (machine-to-machine) |
-| `--oauth-client-id` | String | - | Pre-registered client id (skips dynamic registration). Falls back to `MCP_OAUTH_CLIENT_ID` |
-| `--oauth-client-secret` | String | - | Client secret for a confidential client. Falls back to `MCP_OAUTH_CLIENT_SECRET` |
-| `--oauth-scope` | String | - | OAuth scope(s) to request (space-separated). Falls back to `MCP_OAUTH_SCOPE` |
-| `--oauth-client-id-metadata-url` | String | - | HTTPS URL of a Client ID Metadata Document to use as the `client_id` |
-| `--oauth-open-browser` | Flag | False | Auto-open the browser for the authorization-code flow (off by default; the URL is printed instead) |
-| `--oauth-no-token-cache` | Flag | False | Disable the on-disk token cache (`~/.cache/mcp-fuzzer/oauth/`); re-authorize every run |
-
-Notes:
-
-- Auth source priority: `--oauth` → `--auth-config` → YAML `auth` section →
-  `--auth-env` → auto-detected env vars → none.
-- With `--oauth`, if no client id is supplied the fuzzer attempts Dynamic Client
-  Registration (RFC 7591) against the discovered authorization server, registering
-  a public PKCE-only client with the exact loopback redirect URI.
-- See [authentication examples](../getting-started/examples.md#authentication-examples) for
-  worked examples.
-
-### Authentication Security Audit Options
-
-These flags audit a remote server's OAuth deployment for the nine authentication
-flaw types catalogued in
-[*A First Measurement Study on Authentication Security in Real-World Remote MCP
-Servers*](https://arxiv.org/abs/2605.22333) (F1–F9). They run after fuzzing and
-write findings into `findings.json` alongside the regular results.
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--auth-audit` | Flag | False | Run read-only auth-security checks: RFC 9728/8414 metadata review, authorization-endpoint probes (PKCE downgrade, blind client trust, weak state, consent-page heuristics), and `unauthenticated_tools` (tools callable without credentials when auth is advertised). Requires an HTTP/SSE remote `--endpoint` |
-| `--auth-audit-intrusive` | Flag | False | Add the intrusive probes — Dynamic Client Registration with an attacker redirect URI (F1) and open-redirect tests (F7). Requires `--auth-audit`. Only run against servers you are authorized to test |
-
-Notes:
-
-- **Read-only by default.** Without `--auth-audit-intrusive`, the audit only
-  issues `GET`s to the authorization endpoint and reads published metadata — it
-  never registers clients or submits redirect URIs.
-- **Intrusive probes register state on the target.** `--auth-audit-intrusive`
-  creates an OAuth client (DCR) and probes redirect handling; use it only with
-  explicit authorization.
-- Findings are tagged with their paper `flaw_id` (F1–F9) and a citation in each
-  finding's `evidence`, plus a top-level `auth_audit` block in `findings.json`.
-- Severities reflect false-positive risk: `weak_state` is `info` (`state` is
-  optional in OAuth 2.0) and the consent-page heuristic is `low` ("verify
-  manually"); enforceable defects (PKCE downgrade, open redirect, code replay,
-  blind client trust, malicious DCR) are `high`.
-- See [security checks](../getting-started/getting-started.md#add-security-checks)
-  for the basic audit workflow.
-
-### MCP Server Security Audit Options
-
-These flags audit the MCP server/tool surface itself. The checks run after
-fuzzing and write `Finding` records to `findings.json` with a `check_id`,
-severity, target tool, and source citation metadata.
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--security-audit` | Flag | False | Run MCP server security checks: tool/schema poisoning markers, hidden or encoded instructions, ANSI terminal escapes, trigger-conditioned behavior, duplicate/divergent tool definitions, dangerous local-read plus network-egress capability combinations, cleartext remote transport, and fuzz-output oracles for command/path/SQL injection and output prompt injection |
-
-Read-only checks inspect `tools/list` and endpoint configuration. Active oracle
-findings are only reported when normal fuzz runs already produced matching
-exploit evidence, such as `uid=`/`gid=` command output or `/etc/passwd`-like
-content.
-
-Server audit categories currently include:
-
-- `tool_poisoning`: visible tool name, title, annotations, or description contain
-  instruction override, secrecy, or credential-access markers.
-- `schema_poisoning`: `inputSchema` strings contain prompt-injection or
-  secret-access markers.
-- `hidden_instruction`: metadata or schema contains invisible Unicode controls,
-  ANSI terminal escapes, hidden comments, fenced hidden instructions, or
-  base64-encoded poisoning payloads.
-- `tool_conditioning`: tool metadata conditions behavior on trigger phrases or
-  conversation history.
-- `tool_shadowing`: duplicate tool names are advertised by the same server.
-- `tool_definition_drift`: duplicate tool names have divergent canonical
-  definition hashes, which is a rug-pull/shadowing signal.
-- `dangerous_capability_combo`: the server advertises both local-read and
-  network-egress style tools.
-- `insecure_transport`: a non-local HTTP endpoint is used instead of HTTPS.
-- `command_injection`, `path_traversal`, `sql_injection`,
-  `output_prompt_injection`: fuzz-run outputs show concrete exploitation or
-  injected-instruction evidence.
-
-### Reporting Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--output-dir` | Path | reports | Directory to save reports and exports |
-| `--safety-report` | Flag | False | Show comprehensive safety report at end of fuzzing |
-| `--export-safety-data` | String | - | Export safety data to JSON file (optional filename) |
-| `--output-format` | Choice | json | Output format for standardized reports |
-| `--output-types` | List | - | Output types to generate (fuzzing_results, error_report, safety_summary; performance_metrics/configuration_dump reserved) |
-| `--output-schema` | Path | - | Path to custom output schema file |
-| `--output-compress` | Flag | False | Compress output files |
-| `--output-session-id` | String | - | Parsed session ID override (currently not applied by the output writer) |
-
-Notes:
-
-- Standardized output files are currently emitted as JSON regardless of
-  `--output-format`; other values are reserved for future formats.
-- `--output-schema` and `--output-session-id` are parsed today but not yet
-  applied by the output writer.
-
-### Export Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--export-csv` | Path | - | Export fuzzing results to CSV format |
-| `--export-xml` | Path | - | Export fuzzing results to XML format |
-| `--export-html` | Path | - | Export fuzzing results to HTML format |
-| `--export-markdown` | Path | - | Export fuzzing results to Markdown format |
-
-### Runtime Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--watchdog-check-interval` | Float | 1.0 | How often to check processes for hanging (seconds) |
-| `--watchdog-process-timeout` | Float | 30.0 | Time before a process is considered hanging (seconds) |
-| `--watchdog-extra-buffer` | Float | 5.0 | Extra time before auto-kill (seconds) |
-| `--watchdog-max-hang-time` | Float | 60.0 | Maximum time before force kill (seconds) |
-| `--process-max-concurrency` | Integer | 5 | Maximum concurrent process operations |
-| `--max-concurrency` | Integer | 5 | Maximum concurrent client operations |
-| `--process-retry-count` | Integer | 1 | Number of retries for failed operations |
-| `--process-retry-delay` | Float | 1.0 | Delay between retries (seconds) |
-
-### Advanced Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--tool-timeout` | Float | - | Per-tool call timeout in seconds (defaults to `--timeout` when unset) |
-| `--enable-aiomonitor` | Flag | False | Enable AIOMonitor for async debugging (connect with `telnet localhost 20101`) |
-
-## Configuration Reference
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MCP_FUZZER_TIMEOUT` | 30.0 | Default timeout for all operations |
-| `MCP_FUZZER_LOG_LEVEL` | INFO | Default log level |
-| `MCP_FUZZER_SAFETY_ENABLED` | false | Enable safety system by default |
-| `MCP_FUZZER_FS_ROOT` | ~/.mcp_fuzzer | Default filesystem root for safety |
-| `MCP_FUZZER_HTTP_TIMEOUT` | 30.0 | HTTP transport timeout |
-| `MCP_FUZZER_SSE_TIMEOUT` | 30.0 | SSE transport timeout |
-| `MCP_FUZZER_STDIO_TIMEOUT` | 30.0 | Stdio transport timeout |
-| `MCP_FUZZER_ICON_THEME` | ascii | Icon theme (ascii, unicode, emoji) |
-| `MCP_SPEC_SCHEMA_VERSION` | 2025-11-25 | MCP protocol/schema version used by transports, schema-driven fuzzing, and spec guard |
-
-### Authentication Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `MCP_API_KEY` | API key for authentication |
-| `MCP_HEADER_NAME` | Header name for API key (default: Authorization) |
-| `MCP_PREFIX` | Prefix for API key value (default: Bearer) |
-| `MCP_USERNAME` | Username for basic authentication |
-| `MCP_PASSWORD` | Password for basic authentication |
-| `MCP_OAUTH_TOKEN` | OAuth token for authentication |
-| `MCP_OAUTH_TOKEN_URL` | OAuth token endpoint for client credentials authentication |
-| `MCP_OAUTH_CLIENT_ID` | OAuth client ID for client credentials authentication |
-| `MCP_OAUTH_CLIENT_SECRET` | OAuth client secret for client credentials authentication |
-| `MCP_OAUTH_SCOPE` | Optional OAuth scope string for client credentials authentication |
-| `MCP_CUSTOM_HEADERS` | Custom headers as JSON string for authentication |
-| `MCP_TOOL_AUTH_MAPPING` | Map tool names to auth providers as JSON |
-
-## Authentication System Reference
-
-### Authentication Providers
-
-The authentication system supports multiple provider types with configurable options:
-
-#### API Key Authentication
-
-```json
-{
-  "type": "api_key",
-  "api_key": "YOUR_API_KEY",
-  "header_name": "Authorization",
-  "prefix": "Bearer"
-}
-```
-
-- **api_key** (required): The API key value
-- **header_name** (optional): HTTP header to place the key in (default: "Authorization")
-- **prefix** (optional): Value prefix for the header (default: "Bearer"). Set to empty string for no prefix.
-
-#### Basic Authentication
-
-```json
-{
-  "type": "basic",
-  "username": "user",
-  "password": "password"
-}
-```
-
-- **username** (required): Username for basic auth
-- **password** (required): Password for basic auth
-
-#### OAuth Token Authentication
-
-```json
-{
-  "type": "oauth",
-  "token": "YOUR_TOKEN",
-  "token_type": "Bearer"
-}
-```
-
-- **token** (required): OAuth token value
-- **token_type** (optional): Token type for Authorization header (default: "Bearer")
-
-#### OAuth Client Credentials Authentication
-
-```json
-{
-  "type": "oauth_client_credentials",
-  "token_url": "https://auth.example.com/oauth/token",
-  "client_id": "CLIENT_ID",
-  "client_secret": "CLIENT_SECRET",
-  "scope": "tools.read",
-  "token_type": "Bearer"
-}
-```
-
-- **token_url** (required): OAuth token endpoint
-- **client_id** (required): OAuth client identifier
-- **client_secret** (required): OAuth client secret sent with HTTP Basic authentication
-- **scope** (optional): Space-delimited scope string or list of scope strings
-- **token_type** (optional): Fallback token type for Authorization header (default: "Bearer")
-
-#### Custom Headers Authentication
-
-```json
-{
-  "type": "custom",
-  "headers": {
-    "X-Custom-Header": "value",
-    "X-Another-Header": "another-value"
-  }
-}
-```
-
-- **headers** (required): Dictionary of custom headers to include
-
-### Tool-to-Auth Mapping
-
-Map specific tools to authentication providers:
-
-```json
-{
-  "tool_mapping": {
-    "openai_chat": "openai_api",
-    "github_search": "github_api",
-    "default_tool": "basic_auth"
-  }
-}
-```
-
-### Error Messages
-
-The authentication system provides detailed error messages for configuration issues:
-
-- Missing required fields indicate which provider type and field is missing
-- Expected configuration format is provided in error messages
-- Type validation errors show the received vs. expected type
-
-## Runtime Management API Reference
-
-The runtime management system provides robust, asynchronous subprocess lifecycle management for transports and target servers under test.
-
-### ProcessManager
-
-The `ProcessManager` provides fully asynchronous subprocess lifecycle management with comprehensive process tracking and signal handling.
-
-#### Class Definition
-
-```python
-class ProcessManager:
-    def __init__(self, config: Optional[WatchdogConfig] = None):
-        """Initialize the async process manager."""
-```
-
-#### Configuration
-
-```python
-@dataclass
-class ProcessConfig:
-    command: List[str]                    # Command and arguments to execute
-    cwd: Optional[Union[str, Path]] = None  # Working directory
-    env: Optional[Dict[str, str]] = None     # Environment variables
-    timeout: float = 30.0                    # Default timeout for operations
-    auto_kill: bool = True                  # Whether to auto-kill hanging processes
-    name: str = "unknown"                   # Human-readable name for logging
-    activity_callback: Optional[Callable[[], float]] = None  # Activity callback
-```
-
-#### Methods
-
-- `async start_process(config: ProcessConfig) -> asyncio.subprocess.Process`
-  - Start a new process asynchronously
-  - Returns the created subprocess object
-  - Automatically registers process with watchdog
-
-- `async stop_process(pid: int, force: bool = False) -> bool`
-  - Stop a running process gracefully or forcefully
-  - Returns True if process was stopped successfully
-  - Uses SIGTERM for graceful, SIGKILL for force
-
-- `async stop_all_processes(force: bool = False) -> None`
-  - Stop all running processes
-  - Can be graceful or forceful
-  - Executes concurrently for all processes
-
-- `async get_process_status(pid: int) -> Optional[Dict[str, Any]]`
-  - Get detailed status information for a specific process
-  - Returns None if process is not managed
-  - Includes start time, status, and configuration
-
-- `async list_processes() -> List[Dict[str, Any]]`
-  - Get list of all managed processes with their status
-  - Returns comprehensive process information
-
-- `async wait(pid: int, timeout: Optional[float] = None) -> Optional[int]`
-  - Wait for a process to complete
-  - Returns exit code or None if timeout
-  - Non-blocking with configurable timeout
-
-- `async update_activity(pid: int) -> None`
-  - Update activity timestamp for a process
-  - Used for hang detection by watchdog
-
-- `async get_stats() -> Dict[str, Any]`
-  - Get overall statistics about managed processes
-  - Includes process counts by status and watchdog stats
-
-- `async cleanup_finished_processes() -> int`
-  - Remove finished processes from tracking
-  - Returns count of cleaned processes
-  - Prevents resource leaks
-
-- `async shutdown() -> None`
-  - Shutdown the process manager and stop all processes
-  - Ensures proper cleanup of all resources
-
-- `async send_timeout_signal(pid: int, signal_type: str = "timeout") -> bool`
-  - Send a timeout signal to a running process
-  - Signal types: "timeout", "force", "interrupt"
-  - Returns True if signal was sent successfully
-
-- `async register_existing_process(pid: int, process: asyncio.subprocess.Process, name: Optional[str] = None, activity_callback: Optional[Callable[[], float]] = None, *, config: Optional[ProcessConfig] = None) -> None`
-  - Register an already-started subprocess with the manager
-  - Useful for integrating with existing process management
-
-#### Usage Examples
-
-```python
-from mcp_fuzzer.fuzz_engine.runtime.manager import ProcessManager, ProcessConfig
-
-async def process_manager_example():
-    manager = ProcessManager.from_config()
-
-    # Start a process
-    config = ProcessConfig(
-        command=["python", "my_server.py"],
-        name="stdio_server",
-        timeout=60.0
-    )
-    process = await manager.start_process(config)
-
-    # Monitor process
-    status = await manager.get_process_status(process.pid)
-    print(f"Process {process.pid} status: {status['status']}")
-
-    # Update activity
-    await manager.update_activity(process.pid)
-
-    # Get statistics
-    stats = await manager.get_stats()
-    print(f"Managing {stats['total_managed']} processes")
-
-    # Stop process
-    await manager.stop_process(process.pid)
-
-    # Cleanup
-    await manager.shutdown()
-```
-
-### ProcessWatchdog
-
-The `ProcessWatchdog` provides automated monitoring and termination of hanging processes with configurable thresholds and activity tracking.
-
-#### Class Definition
-
-```python
-class ProcessWatchdog:
-    def __init__(self, config: Optional[WatchdogConfig] = None):
-        """Initialize the process watchdog."""
-```
-
-#### Configuration
-
-```python
-@dataclass
-class WatchdogConfig:
-    check_interval: float = 1.0      # How often to check processes (seconds)
-    process_timeout: float = 30.0    # Time before process is considered hanging (seconds)
-    extra_buffer: float = 5.0        # Extra time before auto-kill (seconds)
-    max_hang_time: float = 60.0      # Maximum time before force kill (seconds)
-    auto_kill: bool = True          # Whether to automatically kill hanging processes
-```
-
-#### Methods
-
-- `async start() -> None`
-  - Start the watchdog monitoring loop; creates background task for monitoring
-
-- `async stop() -> None`
-  - Stop the monitoring loop and cancel/await the background task
-
-- `async scan_once(processes: dict[int, ProcessRecord]) -> dict[str, Any]`
-  - Run one hang-detection pass against a registry snapshot
-
-- `async update_activity(pid: int) -> None`
-  - Update activity timestamp for a process pulled from the registry
-
-- `async get_stats() -> dict`
-  - Get statistics about monitored processes and the watchdog loop state
-
-Note: processes are added to the shared `ProcessRegistry` (or by
-`ProcessLifecycle.start`), and the watchdog reads that registry instead of
-maintaining its own table.
-
-#### Context Manager Support
-
-```python
-async with ProcessWatchdog(registry, dispatcher, config) as watchdog:
-    await registry.register(pid, process, ProcessConfig(command=["python"], name=name))
-    await watchdog.update_activity(pid)
-    # ... registry keeps the process table; watchdog reads it
-```
-
-#### Usage Examples
-
-```python
-import asyncio
-import logging
-from mcp_fuzzer.fuzz_engine.runtime import (
-    ProcessConfig,
-    ProcessRegistry,
-    ProcessWatchdog,
-    SignalDispatcher,
-    WatchdogConfig,
-)
-
-async def watchdog_example():
-    registry = ProcessRegistry()
-    dispatcher = SignalDispatcher(registry, logging.getLogger(__name__))
-    watchdog = ProcessWatchdog(
-        registry,
-        dispatcher,
-        WatchdogConfig(check_interval=1.0, process_timeout=30.0, auto_kill=True),
-    )
-    await watchdog.start()
-
-    # Register a process via the registry
-    process = await asyncio.create_subprocess_exec("python", "server.py")
-    await registry.register(
-        process.pid,
-        process,
-        ProcessConfig(command=["python", "server.py"], name="server"),
-    )
-
-    # Update activity periodically
-    for _ in range(10):
-        await watchdog.update_activity(process.pid)
-        await asyncio.sleep(5)
-
-    # Get statistics
-    stats = await watchdog.get_stats()
-    print(f"Monitoring {stats['total_processes']} processes")
-
-    await watchdog.stop()
-```
-
-### AsyncFuzzExecutor
-
-The `AsyncFuzzExecutor` provides controlled concurrency for fuzzing operations using semaphore-based concurrency control.
-
-#### Class Definition
-
-```python
-class AsyncFuzzExecutor:
-    def __init__(
-        self,
-        max_concurrency: int = 5,      # Maximum concurrent operations
-    ):
-```
-
-#### Methods
-
-- `async execute_batch(operations: List[Tuple[Callable, List[Any], Dict[str, Any]]]) -> Dict[str, List[Any]]`
-  - Execute a batch of operations concurrently with bounded concurrency
-  - Operations are tuples of `(callable, args, kwargs)`
-  - Returns dictionary with `'results'` and `'errors'` lists
-  - Errors are automatically collected; successful results in `'results'`
-  - Handles both async and sync operations (sync runs in thread pool)
-
-- `async run_hypothesis_strategy(strategy: st.SearchStrategy) -> Any`
-  - Run a Hypothesis strategy in thread pool to prevent asyncio deadlocks
-  - Returns generated value from the strategy
-
-- `async shutdown() -> None`
-  - Shutdown the executor and clean up thread pool resources
-  - Waits for thread pool to complete all tasks
-
-#### Usage Examples
-
-```python
-from mcp_fuzzer.fuzz_engine.executor import AsyncFuzzExecutor
-
-async def executor_example():
-    executor = AsyncFuzzExecutor(max_concurrency=3)
-
-    try:
-        # Define async operation
-        async def sample_operation(value):
-            await asyncio.sleep(0.5)
-            return f"processed_{value}"
-
-        # Prepare operations as (function, args, kwargs) tuples
-        operations = [
-            (sample_operation, [i], {}) for i in range(10)
-        ]
-
-        # Execute batch with automatic error collection
-        results = await executor.execute_batch(operations)
-
-        print(f"Results: {len(results['results'])}, Errors: {len(results['errors'])}")
-
-    finally:
-        await executor.shutdown()
-```
-
-## CLI Improvements
-
-The MCP Server Fuzzer CLI has been enhanced with better user experience features:
-
-### Progress Indicators
-
-The CLI now provides clear progress indicators during fuzzing operations:
+`--endpoint` is required for a real run. It is a URL for HTTP/SSE/Streamable
+HTTP and a command string for stdio.
+
+## Assessment selection
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--mode {tools,protocol,resources,prompts,all}` | `all` | Select the MCP surface to exercise. |
+| `--tool NAME` | none | Focus tool mode on one advertised tool. |
+| `--phase {realistic,aggressive,both}` | `aggressive` | Tool-input phase: valid-shaped, attack/edge-oriented, or both. |
+| `--protocol-phase {realistic,aggressive}` | `realistic` | Protocol/resource/prompt input phase. |
+| `--runs N` | `10` | Tool runs per tool. |
+| `--runs-per-type N` | `5` | Runs per protocol/resource/prompt type. |
+| `--protocol-type TYPE` | none | Focus protocol mode on one message type; omission exercises the supported set. |
+| `--stateful` / `--no-stateful` | off | Enable learned stateful protocol sequences. |
+| `--stateful-runs N` | `5` | Number of learned stateful sequences. |
+| `--seed N` | random | Seed payload generation for reproduction. |
+| `--corpus` / `--no-corpus` | on | Enable per-target corpus persistence. |
+| `--havoc` / `--no-havoc` | off | Enable stacked corpus mutations. |
+
+Use [audit recipes](../getting-started/examples.md) to separate baseline,
+aggressive, protocol, auth, and runtime evidence.
+
+## Transport and protocol
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--protocol {http,https,sse,stdio,streamablehttp}` | `http` | Transport driver. |
+| `--endpoint TARGET` | none | URL or stdio command. |
+| `--spec-schema-version VERSION` | negotiated/default | MCP schema version for schema-driven behavior, for example `2025-11-25` or `2026-07-28`. |
+| `--timeout SECONDS` | `30.0` | General request timeout. |
+| `--tool-timeout SECONDS` | unset | Per-tool timeout overriding `--timeout`. |
+| `--transport-retries N` | `1` | Total transport attempts; `1` disables retrying. |
+| `--transport-retry-delay SECONDS` | `0.5` | Initial retry delay. |
+| `--transport-retry-backoff MULTIPLIER` | `2.0` | Retry delay multiplier. |
+| `--transport-retry-max-delay SECONDS` | `5.0` | Retry delay ceiling. |
+| `--transport-retry-jitter FACTOR` | `0.1` | Retry delay jitter. |
+
+Generic `http`/`https` resolution depends on the selected MCP schema path. Use
+`streamablehttp` when the target explicitly exposes that transport and record
+the negotiated version in the assessment.
+
+## Spec and deterministic checks
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--spec-guard` / `--no-spec-guard` | on | Run deterministic checks before protocol/resource/prompt fuzzing. |
+| `--spec-resource-uri URI` | none | Resource URI for resource checks. |
+| `--spec-prompt-name NAME` | none | Prompt name for prompt checks. |
+| `--spec-prompt-args JSON` | none | JSON object of prompt arguments. |
+
+Supported protocol type names are listed in
+[configuration](../configuration/configuration.md#protocol-and-schema-version)
+and sourced from the runtime registry. Result schemas are validated by spec
+guard but are not `--protocol-type` values.
+
+## Security and authentication audits
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--security-audit` | off | Inspect tool/schema metadata and correlate selected security oracles with fuzz evidence. |
+| `--auth-audit` | off | Run read-only OAuth metadata, authorization behavior, and unauthenticated-tool checks where supported. |
+| `--auth-audit-intrusive` | off | Add dynamic-registration and redirect probes; only use with explicit authorization. |
+| `--fail-if-no-tools` | off, auto in CI/Docker | Exit non-zero when no usable tools are discovered. |
+| `--allow-empty-tools` | off | Opt out of automatic no-tool failure for an explicitly expected zero-tool fixture. |
+
+`--security-audit` can produce signals for tool/schema poisoning, hidden or
+encoded instructions, ANSI/control content, trigger-conditioned metadata,
+duplicate or drifting definitions, dangerous local-read/network-egress
+combinations, cleartext remote transport, and evidence-backed command/path/SQL
+or output-injection behavior.
+
+`--auth-audit` is read-only by default. The intrusive variant may create OAuth
+registration state and exercise redirect handling; keep it separate from a
+baseline and never use it against production without written authorization.
+
+## Authentication options
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--auth-config FILE` | none | JSON provider file. |
+| `--auth-env` | off | Resolve supported auth environment variables. |
+| `--oauth` | off | Run the MCP OAuth flow against the target. |
+| `--oauth-grant {authorization_code,client_credentials}` | `authorization_code` | User-delegated PKCE or machine-to-machine grant. |
+| `--oauth-client-id ID` | env/none | Pre-registered client ID. |
+| `--oauth-client-secret SECRET` | env/none | Confidential-client secret; prefer secret injection over shell history. |
+| `--oauth-scope SCOPE` | env/none | Space-separated requested scopes. |
+| `--oauth-client-id-metadata-url HTTPS_URL` | none | Client ID Metadata Document URL. |
+| `--oauth-open-browser` | off | Open the authorization-code URL automatically. |
+| `--oauth-no-token-cache` | off | Avoid the local OAuth token cache. |
+
+Authentication provider examples and secret-handling guidance live in
+[configuration](../configuration/configuration.md#authentication-without-leaking-secrets).
+
+## Safety and host boundaries
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--enable-safety-system` | off | Enable system-level command-blocking shims for the child process. |
+| `--fs-root PATH` | `~/.mcp_fuzzer` | Root used to constrain fuzzer-generated filesystem paths. |
+| `--no-safety` | off | Disable argument-level safety filtering; not recommended on an unisolated target. |
+| `--no-network` | off | Disallow non-local fuzzer network access. |
+| `--allow-host HOST` | none | Add an approved host while `--no-network` is active; repeatable. |
+| `--safety-report` | off | Print the blocked-operation summary. |
+| `--export-safety-data [FILE]` | timestamped | Save safety data as JSON. |
+| `--retry-with-safety-on-interrupt` | off | Retry once with safety enabled after Ctrl-C. |
+
+These are controls for the assessment client, not a complete OS sandbox. Use a
+container or VM for untrusted local code. See [contain the target](../components/safety.md).
+
+## Runtime observation for stdio
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--runtime-probe` / `--no-runtime-probe` | env fallback | Enable optional `mcpfz-probe`. |
+| `--runtime-probe-backend {ebpf,fake,auto}` | env/`ebpf` | Backend selection. |
+| `--runtime-probe-bin PATH` | env/`mcpfz-probe` | Sidecar path. |
+| `--runtime-probe-workspace PATH` | env/current directory | Allowed workspace root. |
+| `--runtime-probe-tmpdir PATH` | env/`/tmp` | Allowed temporary root. |
+| `--runtime-probe-allow-exec PATH` | none | Repeatable executable allowlist. |
+| `--runtime-probe-allow-host HOST` | none | Repeatable host/host:port allowlist. |
+
+The probe is opt-in, applies to local stdio process behavior, and fails open if
+it cannot observe an event. It does not monitor remote transports.
+
+## Output and diagnostics
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--output-dir DIRECTORY` | `reports` | Directory for reports and exports. |
+| `--output-format {json,yaml,csv,xml}` | `json` | Accepted standardized-output format; current writer emits JSON. |
+| `--output-types TYPE [TYPE ...]` | all applicable | Space-separated standardized output types. |
+| `--output-schema FILE` | none | Accepted custom schema path; not currently applied by the writer. |
+| `--output-compress` | off | Accepted flag; not currently applied by the standardized writer. |
+| `--output-session-id ID` | generated | Accepted override; not currently applied by the standardized writer. |
+| `--export-csv FILE` | none | Additional CSV export. |
+| `--export-xml FILE` | none | Additional XML export. |
+| `--export-html FILE` | none | Additional HTML export. |
+| `--export-markdown FILE` | none | Additional Markdown export. |
+| `--verbose` | off | Use INFO-level default logging. |
+| `--log-level LEVEL` | WARNING | `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`. |
+| `--enable-aiomonitor` | off | Enable async debugging on the configured monitor port. |
+| `--validate-config FILE` | none | Read and shape-check YAML, then exit. |
+| `--check-env` | off | Validate known environment variables, then exit. |
+
+Read [Interpret evidence and findings](../getting-started/results.md) before
+processing artifact contents. Reports can contain target data and secrets.
+
+## Process controls
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--watchdog-check-interval SECONDS` | `1.0` | Watchdog polling interval. |
+| `--watchdog-process-timeout SECONDS` | `30.0` | Stale-process threshold. |
+| `--watchdog-extra-buffer SECONDS` | `5.0` | Grace period before termination. |
+| `--watchdog-max-hang-time SECONDS` | `60.0` | Force-kill ceiling. |
+| `--process-max-concurrency N` | `5` | Concurrent process operations. |
+| `--max-concurrency N` | `5` | Concurrent client operations. |
+| `--process-retry-count N` | `1` | Process-operation retries. |
+| `--process-retry-delay SECONDS` | `1.0` | Delay between process retries. |
+
+Tune these only after a baseline. High concurrency and retries can change the
+target's behavior and make evidence harder to interpret.
+
+## Common command patterns
 
 ```bash
-# Progress indicators show current status
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 100
-# Output: [████████████████████████████████████████] 100% Complete
+# Validate a target profile without connecting
+mcp-fuzzer --validate-config assessment.yaml
+
+# Baseline with reproducible payload generation
+mcp-fuzzer --config assessment.yaml --phase realistic --seed 42 \
+  --output-dir reports/baseline
+
+# Focus one tool with aggressive inputs
+mcp-fuzzer --mode tools --tool NAME --phase aggressive \
+  --protocol streamablehttp --endpoint https://target.example/mcp \
+  --security-audit --runs 20 --seed 42 --output-dir reports/tool-NAME
+
+# CI target usability check
+mcp-fuzzer --mode all --protocol streamablehttp \
+  --endpoint http://127.0.0.1:8000/mcp --security-audit \
+  --fail-if-no-tools --output-dir reports/ci
 ```
 
-### Enhanced Error Messages
-
-Error messages now include suggested fixes and context:
-
-```bash
-# Before: "Connection failed"
-# After: "Connection failed: Unable to connect to http://localhost:8000
-#         Suggested fixes:
-#         - Check if the server is running
-#         - Verify the endpoint URL is correct
-#         - Check firewall settings"
-```
-
-### Interactive Help
-
-The CLI provides interactive help for complex configurations:
-
-```bash
-# Show help for specific mode
-mcp-fuzzer --mode tools --help
-
-# Show help for specific protocol
-mcp-fuzzer --protocol stdio --help
-```
-
-### Argument Validation
-
-The CLI now validates argument combinations and provides helpful error messages:
-
-```bash
-# Invalid combination detection
-mcp-fuzzer --mode protocol
-# Error: --protocol-type is required when --mode protocol
-
-# Missing required arguments
-mcp-fuzzer --mode tools
-# Error: --endpoint is required for fuzzing operations
-```
-
-### Verbose Output Improvements
-
-Enhanced verbose output provides more detailed information:
-
-```bash
-# Verbose mode shows detailed execution information
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --verbose
-# Output includes:
-# - Tool discovery progress
-# - Individual test execution details
-# - Safety system actions
-# - Performance metrics
-```
-
-### Error Handling and Recovery
-
-#### Graceful Error Handling
-
-The CLI handles errors gracefully with proper cleanup:
-
-```bash
-# Interrupt handling (Ctrl+C)
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 100
-# Press Ctrl+C
-# Output: "Fuzzing interrupted. Cleaning up processes..."
-#         "Use --retry-with-safety-on-interrupt to retry with safety enabled"
-```
-
-#### Retry Mechanisms
-
-Built-in retry mechanisms for transient failures:
-
-```bash
-# Automatic retry on connection failures
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
-# If connection fails, automatically retries with exponential backoff
-```
-
-#### Safety Integration
-
-Enhanced safety integration with better user feedback:
-
-```bash
-# Safety system status reporting
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --enable-safety-system
-# Output: "Safety system enabled. Monitoring for dangerous operations..."
-#         "Blocked 3 file operations outside sandbox"
-#         "Safety report: 5 operations blocked, 2 warnings issued"
-```
-
-### Output Formatting Improvements
-
-#### Rich Console Output
-
-The CLI uses Rich tables for startup configuration and summary output:
-
-```bash
-# Startup configuration table + summary tables (when available)
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
-# Output includes:
-# - Startup configuration table
-# - Tool/protocol summary tables (if results are present)
-# - Safety summary tables when --safety-report is enabled
-```
-
-#### Report Generation
-
-Improved report generation with better organization:
-
-```bash
-# Enhanced report generation
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python server.py" --runs 20 \
-    --safety-report \
-    --export-safety-data \
-    --output-dir "detailed_reports"
-# Generates:
-# - fuzzing_report_<session_id>.json (full structured report)
-# - fuzzing_report_<session_id>.txt (human-readable summary)
-# - safety_report_<session_id>.json (if --export-safety-data is enabled)
-# - Standardized JSON outputs under detailed_reports/sessions/<session_id>/...
-```
-
-### Configuration Validation
-
-#### Environment Variable Validation
-
-Environment variables are validated only when `--check-env` is provided. The
-validation set is defined in `mcp_fuzzer/env.py`.
-
-```bash
-# Validate known environment variables
-mcp-fuzzer --check-env
-```
-
-#### Configuration File Validation
-
-`--validate-config` checks YAML parseability and that the top-level value is a
-mapping/object. It does not perform schema validation.
-
-```bash
-# Configuration file validation
-mcp-fuzzer --validate-config config.yaml
-```
-
-### Performance Monitoring
-
-There is no built-in real-time performance metrics stream today. Use external
-tools (e.g., `top`, `ps`, or `psutil` in a wrapper) if you need CPU/memory
-reporting.
-
-### Debugging and Troubleshooting
-
-#### Enhanced Debug Output
-
-Debug logging provides deeper visibility into runtime behavior:
-
-```bash
-# Debug mode with detailed information
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --log-level DEBUG
-# Output includes:
-# - Detailed request/response logging
-# - Safety system decision logging
-# - Transport retries and process management events
-```
-
-#### Diagnostic Information
-
-## Additional Export Formats
-
-The MCP Server Fuzzer supports multiple export formats for reports:
-
-### CSV Export
-
-Export fuzzing results to CSV format for analysis in spreadsheet applications:
-
-```bash
-# Export to CSV format
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-csv results.csv
-```
-
-CSV output includes:
-- Tool name
-- Run number
-- Success status
-- Response time
-- Exception message (if any)
-- Arguments used
-- Timestamp
-
-### XML Export
-
-Export fuzzing results to XML format for integration with XML-based tools:
-
-```bash
-# Export to XML format
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-xml results.xml
-```
-
-### HTML Export
-
-Export results to HTML format for web-based reporting:
-
-```bash
-# Export to HTML format
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-html results.html
-```
-
-### Markdown Export
-
-Export results to Markdown format for documentation:
-
-```bash
-# Export to Markdown format
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-markdown results.md
-```
-
-Notes:
-
-- JSON and text reports are always written to `--output-dir`.
-- Export flags create additional artifacts in the same output directory.
-
-### Export Format Comparison
-
-| Format | Use Case | Notes |
-|--------|----------|-------|
-| **JSON** | Programmatic analysis | Generated automatically in the output directory |
-| **CSV** | Spreadsheet analysis | Simple tabular summary |
-| **XML** | Enterprise integration | Structured, verbose |
-| **HTML** | Web reporting | Human-readable |
-| **Markdown** | Documentation | Works well in repos and wikis |
-
-## Famous Open Source MCP Server Fuzz Results
-
-For detailed fuzzing results and security analysis of popular open source MCP servers, see the [Fuzz Results](../testing/fuzz-results.md) documentation.
-
-This section provides testing results for various MCP server implementations, including vulnerability assessments and security recommendations.
-
-## API Reference
-
-## Package Layout and Fuzz Engine
-
-The codebase is organized around a modular fuzz engine with clear boundaries between generation (mutators), orchestration (executors), and execution (runtime):
-
-```
-mcp_fuzzer/
-  fuzz_engine/
-    mutators/
-      tool_mutator.py       # Generates fuzzed tool arguments
-      protocol_mutator.py   # Generates fuzzed protocol envelopes
-      batch_mutator.py      # Generates JSON-RPC batch requests
-      strategies/
-        schema_parser.py    # JSON Schema parser for test data generation
-        strategy_manager.py # Realistic/aggressive strategy selection
-        realistic/
-          tool_strategy.py
-          protocol_type_strategy.py
-        aggressive/
-          tool_strategy.py
-          protocol_type_strategy.py
-    executor/
-      tool_executor.py      # Orchestrates tool fuzzing (uses AsyncFuzzExecutor)
-      protocol_executor.py  # Orchestrates protocol-type fuzzing + invariants
-      batch_executor.py     # Orchestrates batch fuzzing
-      invariants.py         # Property-based invariants and checks
-    runtime/
-      manager.py           # Async ProcessManager (start/stop, signals)
-      watchdog.py          # ProcessWatchdog (hang detection)
-      lifecycle.py         # Async process start/stop lifecycle helpers
-      monitor.py           # Process inspection and monitoring helpers
-      signals.py           # Signal-dispatch strategies for termination
-      config.py            # Watchdog/runtime configuration
-  transport/
-    interfaces/driver.py   # TransportDriver interface
-    drivers/http_driver.py # JSON over HTTP
-    drivers/sse_driver.py  # Server-Sent Events
-    drivers/stdio_driver.py # STDIO transport
-    drivers/stream_http_driver.py # Streamable HTTP (JSON + SSE, session headers)
-    catalog/builder.py     # build_driver(...)
-  reports/
-    reporter/              # Aggregates results + DI plumbing
-    formatters/            # Console/JSON/Text/HTML/etc. formatters
-    output/                # Standardized output protocol + manager
-    safety_reporter.py     # Safety-specific report
-  safety_system/
-    safety.py              # SafetyFilter and SafetyProvider protocol
-    blocking/             # PATH shim command blocker + shims
-      command_blocker.py
-      shims/
-    detection/            # DangerDetector patterns and helpers
-      detector.py
-      patterns.py
-    filesystem/           # Filesystem sandbox + path sanitizer
-      sandbox.py
-      sanitizer.py
-  cli/
-    parser.py, entrypoint.py, validators.py, config_merge.py
-  client/
-    main.py               # MCPFuzzerClient orchestrator
-```
-
-## Schema Parser
-
-The schema parser module (`mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser`) provides comprehensive support for parsing JSON Schema definitions and generating appropriate test data based on schema specifications.
-
-### Features
-
-- **Basic Types**: Handles string, number, integer, boolean, array, object, and null types
-- **String Constraints**: Supports minLength, maxLength, pattern, and format validations
-- **Number/Integer Constraints**: Handles minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf
-- **Array Constraints**: Supports minItems, maxItems, uniqueItems
-- **Object Constraints**: Handles required properties, minProperties, additionalProperties (false blocks extra properties)
-- **Schema Combinations**: Processes oneOf, anyOf, allOf schema combinations with proper constraint merging
-- **Enums and Constants**: Supports enum values and const keyword (both in realistic and aggressive modes)
-- **Fuzzing Phases**: Supports both "realistic" (valid) and "aggressive" (edge cases) modes
-
-### Example Usage
-
-```python
-from mcp_fuzzer.fuzz_engine.mutators.strategies.schema_parser import (
-    make_fuzz_strategy_from_jsonschema
-)
-
-# Define a JSON schema
-schema = {
-    "type": "object",
-    "properties": {
-        "name": {"type": "string", "minLength": 3, "maxLength": 50},
-        "age": {"type": "integer", "minimum": 18, "maximum": 120},
-        "email": {"type": "string", "format": "email"}
-    },
-    "required": ["name", "age"]
-}
-
-# Generate realistic data
-realistic_data = make_fuzz_strategy_from_jsonschema(schema, phase="realistic")
-
-# Generate aggressive data for security testing
-aggressive_data = make_fuzz_strategy_from_jsonschema(schema, phase="aggressive")
-```
-
-## Invariants System
-
-The invariants module (`mcp_fuzzer.fuzz_engine.executor.invariants`) provides property-based testing capabilities to verify response validity, error type correctness, and prevention of unintended crashes or unexpected states during fuzzing.
-
-### Features
-
-- **Response Validity**: Ensures responses follow JSON-RPC 2.0 specification
-- **Error Type Correctness**: Verifies error responses have correct structure and codes
-- **Schema Conformity**: Validates responses against JSON schema definitions
-- **Batch Verification**: Applies invariant checks to batches of responses
-- **State Consistency**: Ensures server state remains consistent during fuzzing
-
-### Example Usage
-
-```python
-from mcp_fuzzer.fuzz_engine.executor.invariants import (
-    verify_response_invariants,
-    InvariantViolation
-)
-
-# Verify a response against invariants
-try:
-    verify_response_invariants(
-        response={"jsonrpc": "2.0", "id": 1, "result": "success"},
-        expected_error_codes=[400, 404, 500],
-        schema={"type": "object", "properties": {"result": {"type": "string"}}}
-    )
-    # Response is valid
-except InvariantViolation as e:
-    # Invariant violation detected
-    print(f"Violation: {e}")
-```
-
-- Mutators: Generate inputs for tools and protocol types in two phases:
-  - realistic (valid/spec-conformant), aggressive (malformed/attack vectors).
-- Executors: Run mutators, send envelopes via a transport, and record results.
-- Runtime: Manages subprocess lifecycles with a watchdog for hang/timeout handling.
-- Transport: Pluggable I/O. Use `--protocol http|sse|stdio|streamablehttp`.
-
-### Fuzz Engine lifecycle (high level)
-
-- Client builds a `TransportDriver` via the factory.
-- For tools: `ToolExecutor` orchestrates `ToolMutator` to generate args, integrates with safety system, and executes via transport.
-- For protocol: `ProtocolExecutor` orchestrates `ProtocolMutator` to generate JSON-RPC envelopes, validates invariants, and sends raw via transport.
-- All executors use `AsyncFuzzExecutor` for concurrent execution with bounded concurrency.
-- Runtime ensures external processes (when used) are supervised and terminated safely.
-
-See [Fuzz Engine Architecture](../architecture/fuzz-engine.md) for detailed information about the modular design.
-
-## Runtime
-
-The runtime layer provides robust, asynchronous subprocess lifecycle management for transports and target servers under test.
-
-- Components:
-  - `ProcessManager` (async): start/stop processes, send signals, await exit, collect stats; integrates with the watchdog.
-  - `ProcessWatchdog`: monitors registered PIDs for hangs/inactivity and terminates them based on policy.
-  - All operations are now fully asynchronous using native asyncio.
-
-- Behavior and guarantees:
-
-  - Fully async API; blocking calls (spawn, wait, kill) run in thread executors.
-  - Process-group signaling on POSIX to prevent orphan children.
-  - Safe stop flow: TERM (grace window) → KILL on timeout if needed.
-  - Watchdog uses the shared registry; call `start()`/`stop()` explicitly (or via context manager) and unregisters completed/hung processes after a scan.
-
-- Typical usage:
-
-  - Transports that spawn servers should use `ProcessManager.start_process(...)` and register activity callbacks.
-  - For externally spawned subprocesses (e.g., `asyncio.create_subprocess_exec`), register with the watchdog to enable hang detection and timeouts.
-
-### Transport Protocol Interface
-
-The core interface for transport protocols:
-
-```python
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, AsyncIterator
-
-class TransportDriver(ABC):
-    """Abstract base class for transport protocols."""
-
-    @abstractmethod
-    async def send_request(self, method: str, params: Optional[Dict[str, Any]] = None) -> Any:
-        """Send a JSON-RPC request to the server."""
-        pass
-
-    @abstractmethod
-    async def send_raw(self, payload: Dict[str, Any]) -> Any:
-        """Send raw payload to the server."""
-        pass
-
-    @abstractmethod
-    async def send_notification(self, method: str, params: Optional[Dict[str, Any]] = None) -> None:
-        """Send a JSON-RPC notification to the server."""
-        pass
-
-    async def connect(self) -> None:
-        """Connect to the transport (optional override)."""
-        pass
-
-    async def disconnect(self) -> None:
-        """Disconnect from the transport (optional override)."""
-        pass
-
-    async def stream_request(self, payload: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:
-        """Stream a request and yield response chunks."""
-        pass
-
-    @abstractmethod
-    async def _stream_request(self, payload: Dict[str, Any]) -> AsyncIterator[Dict[str, Any]]:
-        """Transport-specific streaming implementation."""
-        pass
-```
-
-### Fuzzer Client
-
-The main client for orchestrating fuzzing operations:
-
-```python
-from mcp_fuzzer.client import MCPFuzzerClient
-from mcp_fuzzer.safety_system.safety import SafetyFilter
-
-class MCPFuzzerClient:
-    """Unified client for MCP fuzzing operations."""
-
-    def __init__(
-        self,
-        transport: TransportDriver,
-        safety_system: Optional[SafetyFilter] = None,
-    ):
-        self.transport = transport
-        self.safety_system = safety_system or SafetyFilter()
-
-    async def fuzz_tools(self, runs: int = 10, phase: str = "aggressive"):
-        """Fuzz tools with specified number of runs and phase."""
-        # Implementation details mirror mcp_fuzzer.client.base.MCPFuzzerClient
-
-    async def fuzz_protocol(
-        self, runs_per_type: int = 5, protocol_type: Optional[str] = None, phase: str = "aggressive"
-    ):
-        """Fuzz protocol types with specified parameters."""
-        # Implementation details...
-```
-
-### Safety System
-
-Core safety system for protecting against dangerous operations:
-
-```python
-from mcp_fuzzer.safety_system.safety import SafetyFilter
-
-safety = SafetyFilter()
-safety.set_fs_root("/tmp/mcp_sandbox")
-
-tool_args = {"url": "https://example.com", "output_path": "/etc/passwd"}
-sanitized = safety.sanitize_tool_arguments("web_tool", tool_args)
-# Proceed with sanitized arguments (filesystem paths are rewritten if sandboxed)
-transport.call_tool("web_tool", sanitized)
-```
-
-`SafetyFilter` provides optional filesystem path sanitization when a sandbox
-root is set and exposes `DangerDetector` helpers for custom blocking. The
-default implementation does not block URL/script/command payloads. For
-system-level protection call
-`mcp_fuzzer.safety_system.blocking.start_system_blocking()` to install PATH
-shims that intercept browser launches.
-
-## Fuzzing Strategies
-
-### Realistic Strategies
-
-Generate realistic, valid data for tool testing:
-
-```python
-class RealisticToolStrategy:
-    """Generates realistic, valid data for tool testing."""
-
-    def generate_string(self) -> str:
-        """Generate realistic string values."""
-        return draw(st.text(min_size=1, max_size=100))
-
-    def generate_number(self) -> Union[int, float]:
-        """Generate realistic numeric values."""
-        return draw(st.one_of(st.integers(), st.floats()))
-
-    def generate_boolean(self) -> bool:
-        """Generate boolean values."""
-        return draw(st.booleans())
-```
-
-### Aggressive Strategies
-
-Generate malicious/malformed data for security testing:
-
-```python
-class AggressiveToolStrategy:
-    """Generates malicious/malformed data for security testing."""
-
-    def generate_sql_injection(self) -> str:
-        """Generate SQL injection attempts."""
-        return draw(st.sampled_from([
-            "' OR 1=1; --",
-            "'; DROP TABLE users; --",
-            "' UNION SELECT * FROM users --"
-        ]))
-
-    def generate_xss(self) -> str:
-        """Generate XSS attack attempts."""
-        return draw(st.sampled_from([
-            "<script>alert('xss')</script>",
-            "javascript:alert('xss')",
-            "<img src=x onerror=alert('xss')>"
-        ]))
-```
-
-## Output Format
-
-### Report Snapshot (JSON)
-
-```json
-{
-  "metadata": {
-    "session_id": "550e8400-e29b-41d4-a716-446655440000",
-    "mode": "tools",
-    "protocol": "stdio",
-    "endpoint": "python server.py",
-    "runs": 10,
-    "runs_per_type": null,
-    "fuzzer_version": "1.0.0",
-    "start_time": "2025-01-01T00:00:00Z",
-    "end_time": "2025-01-01T00:00:10Z"
-  },
-  "tool_results": {
-    "example_tool": [
-      {"run": 1, "success": true, "args": {"param": "value"}},
-      {"run": 2, "success": false, "exception": "Invalid argument"}
-    ]
-  },
-  "protocol_results": {
-    "InitializeRequest": [
-      {"success": true, "result": {"response": {"result": {}}}}
-    ]
-  },
-  "summary": {
-    "tools": {"total_tools": 1, "total_runs": 2, "success_rate": 50.0},
-    "protocols": {"total_protocol_types": 1, "total_runs": 1, "success_rate": 100.0}
-  },
-  "spec_summary": {},
-  "safety": {},
-  "runtime": {}
-}
-```
-
-## Safety System Reference
-
-The safety system focuses on containment and preventing external references during fuzzing.
-
-- Argument-level hooks (`mcp_fuzzer.safety_system.safety.SafetyFilter`):
-  - Default implementation passes URL/script/command payloads through for fuzzing.
-  - Filesystem paths are sanitized when a sandbox root is set (`--fs-root`).
-  - `set_fs_root(path)` initializes the sandbox for path sanitization.
-
-- System-level blocking (`mcp_fuzzer.safety_system.blocking.command_blocker.SystemCommandBlocker`):
-  - Creates PATH shims for `xdg-open`, `open`, `start`, and common browsers to prevent app launches.
-  - Enabled with `--enable-safety-system`; helper functions live in `mcp_fuzzer.safety_system.blocking`.
-
-- Policy utilities (`mcp_fuzzer.safety_system.policy`):
-  - `is_host_allowed(url, allowed_hosts=None, deny_network_by_default=None)`
-  - `resolve_redirect_safely(base_url, location, ...)` (same-origin + allow-list)
-  - `sanitize_subprocess_env(env)` strips proxy env vars before spawning subprocesses
-  - `sanitize_headers(headers)` removes sensitive outbound headers by default
-
-- **Safety Options (CLI Flags)**:
-  - `--no-network`: Disallow non-local hosts.
-  - `--allow-host HOST`: Add to allow-list (bare hostname/IP, no scheme/port). Repeatable.
-
-- **Network and Proxy Policies**:
-  - HTTP transports are created with environment proxies disabled (`trust_env=False`), so environment proxy variables are ignored.
-  - Only same-origin 307 and 308 redirects are automatically followed, and only after checking the host allow-list policy via `is_host_allowed`.
-
-## Performance Tuning
-
-### Timeout Configuration
-
-```bash
-# Increase timeouts for slow servers
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --timeout 120.0 --tool-timeout 60.0
-
-# Set different timeouts for different transports
-export MCP_FUZZER_HTTP_TIMEOUT=60.0
-export MCP_FUZZER_SSE_TIMEOUT=90.0
-export MCP_FUZZER_STDIO_TIMEOUT=30.0
-```
-
-### Concurrency Settings
-
-```bash
-# High-volume testing
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 100
-
-# Multiple concurrent instances
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 50 &
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8001 --runs 50 &
-wait
-```
-
-## Debugging Reference
-
-### Log Levels
-
-| Level | Description | Use Case |
-|-------|-------------|----------|
-| `CRITICAL` | Critical errors only | Production monitoring |
-| `ERROR` | Error conditions | Error tracking |
-| `WARNING` | Warning messages | Issue identification |
-| `INFO` | General information | Normal operation |
-| `DEBUG` | Detailed debugging | Development/debugging |
-
-### Verbose Output
-
-```bash
-# Enable verbose logging
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --verbose
-
-# Set specific log level
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --log-level DEBUG
-
-# Combine options
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --verbose --log-level DEBUG
-```
-
-### Error Handling
-
-```bash
-# Handle timeouts gracefully
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --timeout 60.0
-
-# Retry with safety on interrupt
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --retry-with-safety-on-interrupt
-
-# Custom tool timeout
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-timeout 30.0
-```
-
-## Configuration Files
-
-### Authentication Configuration
-
-```json
-{
-  "providers": {
-    "openai_api": {
-      "type": "api_key",
-      "api_key": "sk-your-openai-api-key",
-      "header_name": "Authorization"
-    },
-    "github_api": {
-      "type": "api_key",
-      "api_key": "ghp-your-github-token",
-      "header_name": "Authorization"
-    },
-    "basic_auth": {
-      "type": "basic",
-      "username": "user",
-      "password": "password"
-    }
-  },
-  "tool_mapping": {
-    "openai_chat": "openai_api",
-    "github_search": "github_api",
-    "secure_tool": "basic_auth"
-  }
-}
-```
-
-This reference covers all the major aspects of MCP Server Fuzzer. For more detailed information about specific components, see the [Architecture](../architecture/architecture.md) and [Examples](../getting-started/examples.md) documentation.
+For config precedence, environment variables, protocol type values, and
+authentication provider JSON, use [configuration](../configuration/configuration.md).

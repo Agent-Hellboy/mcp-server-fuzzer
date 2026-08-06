@@ -4,8 +4,41 @@
 from __future__ import annotations
 
 import argparse
+from typing import Any
 
 from rich.console import Console
+
+
+_SENSITIVE_KEY_MARKERS = (
+    "api_key",
+    "authorization",
+    "client_secret",
+    "cookie",
+    "password",
+    "private_key",
+    "refresh_token",
+    "secret",
+    "token",
+)
+
+
+def _is_sensitive_key(key: object) -> bool:
+    normalized = str(key).lower().replace("-", "_")
+    return any(marker in normalized for marker in _SENSITIVE_KEY_MARKERS)
+
+
+def _redact_sensitive_values(value: Any, key: object | None = None) -> Any:
+    """Return a display-safe copy of a JSON-like configuration value."""
+    if key is not None and _is_sensitive_key(key):
+        return "[REDACTED]"
+    if isinstance(value, dict):
+        return {
+            item_key: _redact_sensitive_values(item_value, item_key)
+            for item_key, item_value in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_sensitive_values(item) for item in value]
+    return value
 
 
 def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> None:
@@ -30,7 +63,9 @@ def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> 
             from ..config import config_mediator
 
             raw_config = config_mediator.load_file(args.config)
-            config_json = json.dumps(raw_config, indent=2, sort_keys=True)
+            config_json = json.dumps(
+                _redact_sensitive_values(raw_config), indent=2, sort_keys=True
+            )
             console.print(f"[dim]{config_json}[/dim]")
             console.print()
         except Exception as e:
@@ -47,7 +82,9 @@ def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> 
 
             with open(args.auth_config, "r") as f:
                 auth_config = json.load(f)
-            auth_json = json.dumps(auth_config, indent=2, sort_keys=True)
+            auth_json = json.dumps(
+                _redact_sensitive_values(auth_config), indent=2, sort_keys=True
+            )
             console.print(f"[dim]{auth_json}[/dim]")
             console.print()
         except Exception as e:

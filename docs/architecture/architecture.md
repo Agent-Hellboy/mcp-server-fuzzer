@@ -602,30 +602,9 @@ Processes can register activity callbacks that return timestamps indicating when
 
 ### AsyncFuzzExecutor
 
-The `AsyncFuzzExecutor` provides controlled concurrency and robust error handling for fuzzing operations:
-
-**Concurrency Control:**
-
-- **Bounded Concurrency**: Uses semaphore to limit concurrent operations
-- **Task Tracking**: Maintains set of running tasks for proper shutdown
-- **Batch Operations**: Execute multiple operations concurrently with result collection
-
-**Error Handling:**
-
-- **Automatic Error Collection**: Automatically collects and categorizes errors from batch operations
-- **Thread Pool Support**: Handles both async and sync operations via thread pool
-- **Hypothesis Integration**: Wraps Hypothesis strategies to prevent asyncio deadlocks
-- **Graceful Failure**: Operations can fail without stopping the entire batch
-
-**Configuration Options:**
-
-- `max_concurrency`: Maximum number of concurrent operations (default: 5)
-
-**Usage Patterns:**
-
-- **Batch Operations**: Execute multiple operations concurrently with bounded concurrency and automatic error collection
-- **Mixed Operations**: Handle both async and sync operations in the same batch
-- **Hypothesis Strategies**: Run Hypothesis strategies safely in thread pool
+The fuzzing engine uses `AsyncFuzzExecutor` for bounded async/sync operation
+concurrency. See the [canonical async-executor architecture page](async-executor.md)
+for the contract and examples.
 
 ## Execution Flow
 

@@ -143,6 +143,14 @@ def test_parser_prog_is_mcp_fuzzer():
     assert parser.prog == "mcp-fuzzer"
 
 
+def test_parser_help_positions_cli_as_security_assessment():
+    parser = create_argument_parser()
+    assert "security assessment" in parser.description
+    help_text = parser.format_help()
+    assert "--security-audit" in help_text
+    assert "--enable-safety-system" in help_text
+
+
 @pytest.mark.parametrize("protocol_type", FUZZABLE_PROTOCOL_TYPES)
 def test_every_fuzzable_protocol_type_has_both_phase_strategies(protocol_type):
     for phase in ("realistic", "aggressive"):
@@ -283,6 +291,42 @@ def test_startup_info_lists_oauth_env_var(monkeypatch):
         print_startup_info(args, {})
         printed = " ".join(str(call) for call in instance.print.call_args_list)
         assert "MCP_OAUTH_TOKEN" in printed
+
+
+def test_startup_info_redacts_sensitive_config_values(tmp_path):
+    from mcp_fuzzer.cli.startup_info import print_startup_info
+
+    auth_config_path = tmp_path / "auth.json"
+    auth_config_path.write_text(
+        json.dumps(
+            {
+                "providers": {
+                    "machine": {
+                        "type": "oauth_client_credentials",
+                        "client_id": "research-client",
+                        "client_secret": "do-not-print",
+                    },
+                    "api": {
+                        "type": "api_key",
+                        "api_key": "do-not-print-either",
+                    },
+                },
+            }
+        )
+    )
+
+    args = argparse.Namespace(
+        config=None, auth_config=str(auth_config_path), auth_env=False
+    )
+    with patch("mcp_fuzzer.cli.startup_info.Console") as mock_console:
+        instance = MagicMock()
+        mock_console.return_value = instance
+        print_startup_info(args, {})
+
+    printed = " ".join(str(call) for call in instance.print.call_args_list)
+    assert "do-not-print" not in printed
+    assert "do-not-print-either" not in printed
+    assert "[REDACTED]" in printed
 
 
 def test_parser_accepts_https_protocol():
@@ -835,4 +879,3 @@ def test_fail_if_no_tools_flag_parses_and_merges():
         assert cfg.merged["fail_if_no_tools"] is True
     finally:
         config_mediator._config._config = snapshot
-
