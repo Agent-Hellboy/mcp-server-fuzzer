@@ -137,7 +137,7 @@ Notes:
 - With `--oauth`, if no client id is supplied the fuzzer attempts Dynamic Client
   Registration (RFC 7591) against the discovered authorization server, registering
   a public PKCE-only client with the exact loopback redirect URI.
-- See [Authentication](../getting-started/getting-started.md#authentication) for
+- See [authentication examples](../getting-started/examples.md#authentication-examples) for
   worked examples.
 
 ### Authentication Security Audit Options
@@ -167,8 +167,8 @@ Notes:
   optional in OAuth 2.0) and the consent-page heuristic is `low` ("verify
   manually"); enforceable defects (PKCE downgrade, open redirect, code replay,
   blind client trust, malicious DCR) are `high`.
-- See [Authentication Security Audit](../getting-started/getting-started.md#authentication-security-audit)
-  for worked examples.
+- See [security checks](../getting-started/getting-started.md#add-security-checks)
+  for the basic audit workflow.
 
 ### MCP Server Security Audit Options
 

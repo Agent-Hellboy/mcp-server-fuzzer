@@ -751,4 +751,4 @@ results = await protocol_executor.execute("InitializeRequest", runs=10)
 
 - [Architecture Overview](./architecture.md) - Overall system architecture
 - [Safety System](../components/safety.md) - Safety system integration
-- [Transport Layer](../transport/) - Transport integration
+- [Transport Layer](../transport/custom-transports.md) - Transport integration
