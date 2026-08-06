@@ -7,31 +7,7 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-
-- Reorganized the README and documentation around installation, supported MCP
-  versions, fuzzing workflows, findings, safety, runtime monitoring, and CI.
-- Added release, CI, Codecov, PyPI, Docker, Python, license, and MCP support
-  badges to the README.
-- Removed implementation-focused detail from the primary user guides while
-  keeping architecture and contributor references available separately.
-
-### Added
-
-- First-class runtime-probe CLI and config options for enabling
-  `mcpfz-probe`, selecting the backend/binary, setting workspace/tmp policy
-  roots, and allowlisting expected exec or network destinations. Environment
-  variables remain supported as fallbacks, and the runtime probe remains
-  disabled by default.
-- Runtime-probe capability preflight for `ebpf`/`auto`, warnings for non-stdio
-  transports, expanded runtime finding categories from `mcpfz-probe`, and OWASP
-  MCP Top 10 IDs/URLs on runtime findings.
-- Additional MCP server-audit checks for ANSI terminal escape sequences,
-  trigger/conversation-history conditioned tool metadata, divergent duplicate
-  tool definitions, and canonical tool-definition hashes plus OWASP MCP
-  IDs/URLs in evidence.
-
-## [0.5.0] - 2026-07-22
+## [0.5.0] - 2026-08-06
 
 ### Added
 
@@ -57,6 +33,27 @@ and this project follows [Semantic Versioning](https://semver.org/).
   evidence reported by `--security-audit`.
 - Documented `2026-07-28` as a supported protocol/schema version override in CLI
   help and configuration docs.
+- First-class runtime-probe CLI and config options for enabling `mcpfz-probe`,
+  selecting the backend/binary, setting workspace/tmp policy roots, and
+  allowlisting expected exec or network destinations. Environment variables
+  remain supported as fallbacks, and the runtime probe remains disabled by
+  default.
+- Runtime-probe capability preflight for `ebpf`/`auto`, warnings for non-stdio
+  transports, expanded runtime finding categories from `mcpfz-probe`, and OWASP
+  MCP Top 10 IDs/URLs on runtime findings.
+- Additional MCP server-audit checks for ANSI terminal escape sequences,
+  trigger/conversation-history conditioned tool metadata, divergent duplicate
+  tool definitions, and canonical tool-definition hashes plus OWASP MCP
+  IDs/URLs in evidence.
+
+### Documentation
+
+- Reorganized the README and documentation around installation, supported MCP
+  versions, fuzzing workflows, findings, safety, runtime monitoring, and CI.
+- Added release, CI, Codecov, PyPI, Docker, Python, license, and MCP support
+  badges to the README.
+- Removed implementation-focused detail from the primary user guides while
+  keeping architecture and contributor references available separately.
 
 ## [0.4.3] - 2026-07-05
 
