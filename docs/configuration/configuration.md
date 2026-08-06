@@ -85,6 +85,17 @@ allow_hosts:
   - "localhost"
   - "127.0.0.1"
 
+# Runtime probe monitoring (optional; off by default)
+runtime_probe: false
+runtime_probe_backend: "auto"  # auto | ebpf | fake
+runtime_probe_bin: "mcpfz-probe"
+runtime_probe_workspace: "."
+runtime_probe_tmpdir: "/tmp"
+runtime_probe_allow_exec:
+  - "/usr/bin/date"
+runtime_probe_allow_host:
+  - "api.example.com"
+
 # Runtime and watchdog settings
 max_concurrency: 5
 process_max_concurrency: 5
@@ -165,6 +176,14 @@ The following environment variables are currently read at startup:
 - `MCP_FUZZER_STDIO_TIMEOUT`
 - `MCP_FUZZER_ICON_THEME` (ascii | unicode | emoji; defaults to ascii)
 - `MCP_SPEC_SCHEMA_VERSION` (e.g., 2025-11-25 or 2026-07-28)
+- `MCP_FUZZER_RUNTIME_PROBE` (truthy value enables runtime monitoring)
+- `MCPFZ_PROBE_BIN`
+- `MCPFZ_PROBE_BACKEND` (ebpf | fake | auto)
+- `MCPFZ_PROBE_WORKSPACE`
+- `MCPFZ_PROBE_TMPDIR`
+- `MCPFZ_PROBE_RAW`
+- `MCPFZ_PROBE_ALLOW_EXEC` (comma-separated executable allowlist)
+- `MCPFZ_PROBE_ALLOW_HOST` (comma-separated host or host:port allowlist)
 
 ## Migration From Pre-Redesign Configs (<=3d61ee4)
 

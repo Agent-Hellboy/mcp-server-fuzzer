@@ -470,6 +470,62 @@ async def test_run_fuzz_app_sets_schema_env(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_run_fuzz_app_configures_runtime_probe(monkeypatch):
+    configured = []
+
+    class StubProbe:
+        def configure_from_mapping(self, config):
+            configured.append(config)
+
+    monkeypatch.setattr(bootstrap, "MCPFuzzerClient", StubClient)
+    monkeypatch.setattr(
+        bootstrap,
+        "build_driver_with_auth",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    monkeypatch.setattr("mcp_fuzzer.runtime_probe.PROBE", StubProbe())
+    settings = SessionSettings(
+        {
+            "protocol": "stdio",
+            "endpoint": "node app.js",
+            "mode": "tools",
+            "runtime_probe": True,
+            "runtime_probe_backend": "fake",
+            "spec_guard": False,
+        }
+    )
+
+    assert await fuzz_app.run_fuzz_app(settings) == 0
+    assert configured[0]["runtime_probe"] is True
+
+
+@pytest.mark.asyncio
+async def test_run_fuzz_app_ignores_runtime_probe_config_errors(monkeypatch, caplog):
+    class FailingProbe:
+        def configure_from_mapping(self, config):
+            raise RuntimeError("probe config failed")
+
+    monkeypatch.setattr(bootstrap, "MCPFuzzerClient", StubClient)
+    monkeypatch.setattr(
+        bootstrap,
+        "build_driver_with_auth",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    monkeypatch.setattr("mcp_fuzzer.runtime_probe.PROBE", FailingProbe())
+    settings = SessionSettings(
+        {
+            "protocol": "stdio",
+            "endpoint": "node app.js",
+            "mode": "tools",
+            "spec_guard": False,
+        }
+    )
+
+    assert await fuzz_app.run_fuzz_app(settings) == 0
+    assert "runtime probe configuration failed" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_run_fuzz_app_raises_mcp_error(monkeypatch):
     class ErrorClient(StubClient):
         async def fuzz_all_tools(self, *_args, **_kwargs):

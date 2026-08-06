@@ -186,6 +186,45 @@ def build_network_schema() -> dict[str, Any]:
     }
 
 
+def build_runtime_probe_schema() -> dict[str, Any]:
+    """Build schema for optional runtime-probe configuration."""
+    return {
+        "runtime_probe": {
+            "type": "boolean",
+            "description": "Enable optional mcpfz-probe runtime monitoring",
+        },
+        "runtime_probe_backend": {
+            "type": "string",
+            "enum": ["ebpf", "fake", "auto"],
+            "description": "Runtime probe backend to request",
+        },
+        "runtime_probe_bin": {
+            "type": "string",
+            "description": "Path to the mcpfz-probe sidecar binary",
+        },
+        "runtime_probe_workspace": {
+            "type": "string",
+            "description": "Workspace root allowed for runtime file writes",
+        },
+        "runtime_probe_tmpdir": {
+            "type": "string",
+            "description": "Temporary root allowed for runtime file writes",
+        },
+        "runtime_probe_allow_exec": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Executable paths allowed by the runtime probe policy",
+        },
+        "runtime_probe_allow_host": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "Hosts or host:port destinations allowed by runtime probe policy"
+            ),
+        },
+    }
+
+
 def build_auth_schema() -> dict[str, Any]:
     """Build schema for authentication configuration."""
     return {

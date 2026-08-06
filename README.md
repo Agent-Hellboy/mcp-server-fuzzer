@@ -162,8 +162,9 @@ More runnable example flows are documented in
 
 Pair the fuzzer with [**mcpfz-probe**](https://github.com/Agent-Hellboy/mcpfz-probe),
 a runtime sidecar that watches what a tool call actually does at the kernel level
-(process exec, network connect/send, file open/delete, chmod, ptrace) and reports
-anything suspicious as findings attributed to the exact tool call.
+(process exec/spawn, network connect/send/bind/listen, file
+open/create/delete/chmod/rename/link, ptrace) and reports anything suspicious as
+findings attributed to the exact tool call.
 
 Fetch the released Linux binary from mcpfz-probe and point the fuzzer at it:
 
@@ -175,19 +176,26 @@ chmod +x mcpfz-probe
 
 pip install "mcp-fuzzer[mcpfz-probe]"   # pulls in the Python monitor package
 
-export MCP_FUZZER_RUNTIME_PROBE=1
-export MCPFZ_PROBE_BIN="$PWD/mcpfz-probe"
-export MCPFZ_PROBE_BACKEND=ebpf          # Linux + root/CAP_BPF; use "fake" elsewhere
 sudo -E mcp-fuzzer --mode tools --protocol stdio \
-  --endpoint "python my_server.py" --runs 3 --max-concurrency 1
+  --endpoint "python my_server.py" --runs 3 --max-concurrency 1 \
+  --runtime-probe \
+  --runtime-probe-bin "$PWD/mcpfz-probe" \
+  --runtime-probe-backend ebpf
 ```
 
-Runtime findings (`runtime.exec`, `runtime.net_connect`, `runtime.sensitive_read`,
-`runtime.fs_write`, `runtime.fs_delete`, `runtime.fs_chmod`, `runtime.ptrace`) are
-merged into the normal report. The hooks are no-ops unless
-`MCP_FUZZER_RUNTIME_PROBE` is set, so default behavior is unchanged. See the
-[mcpfz-probe README](https://github.com/Agent-Hellboy/mcpfz-probe#readme) for the
-backend/build details.
+Runtime findings include `runtime.exec`, `runtime.process_spawn`,
+`runtime.net_connect`, `runtime.net_bind`, `runtime.net_listen`,
+`runtime.sensitive_read`, `runtime.fs_write`, `runtime.fs_delete`,
+`runtime.fs_chmod`, `runtime.fs_mkdir`, `runtime.fs_rename`,
+`runtime.fs_symlink`, `runtime.fs_link`, and `runtime.ptrace`; they are merged
+into the normal report. The hooks are no-ops unless `--runtime-probe` or
+`MCP_FUZZER_RUNTIME_PROBE` is set, so default behavior is unchanged. Use
+`--runtime-probe-allow-exec` and `--runtime-probe-allow-host` for expected helper
+processes or egress/listener destinations. Environment variables
+(`MCPFZ_PROBE_BIN`, `MCPFZ_PROBE_BACKEND`, `MCPFZ_PROBE_WORKSPACE`,
+`MCPFZ_PROBE_TMPDIR`) remain fallbacks when flags are omitted. See the
+[mcpfz-probe README](https://github.com/Agent-Hellboy/mcpfz-probe#readme) for
+backend/build details and binary verification.
 
 ## Documentation
 

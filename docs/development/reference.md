@@ -97,6 +97,13 @@ Notes:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--enable-safety-system` | Flag | False | Enable system-level safety features |
+| `--runtime-probe` / `--no-runtime-probe` | Flag | Env fallback | Enable optional mcpfz-probe runtime monitoring |
+| `--runtime-probe-backend` | Choice | `MCPFZ_PROBE_BACKEND` or ebpf | Runtime probe backend: `ebpf`, `fake`, or `auto` |
+| `--runtime-probe-bin` | Path | `MCPFZ_PROBE_BIN` or `mcpfz-probe` | Path to the runtime probe sidecar binary |
+| `--runtime-probe-workspace` | Path | `MCPFZ_PROBE_WORKSPACE` or cwd | Workspace root allowed for runtime file writes |
+| `--runtime-probe-tmpdir` | Path | `MCPFZ_PROBE_TMPDIR` or `/tmp` | Temporary root allowed for runtime file writes |
+| `--runtime-probe-allow-exec` | String | - | Executable path allowed without a `runtime.exec` finding (repeatable) |
+| `--runtime-probe-allow-host` | String | - | Host or host:port allowed without a `runtime.net_connect` finding (repeatable) |
 | `--no-safety` | Flag | False | Disable argument-level safety hooks |
 | `--fs-root` | Path | ~/.mcp_fuzzer | Restrict filesystem operations to specified directory |
 | `--retry-with-safety-on-interrupt` | Flag | False | Retry once with safety system enabled on Ctrl-C |
@@ -171,7 +178,7 @@ severity, target tool, and source citation metadata.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--security-audit` | Flag | False | Run MCP server security checks: tool/schema poisoning markers, hidden or encoded instructions, duplicate tool names, dangerous local-read plus network-egress capability combinations, cleartext remote transport, and fuzz-output oracles for command/path/SQL injection and output prompt injection |
+| `--security-audit` | Flag | False | Run MCP server security checks: tool/schema poisoning markers, hidden or encoded instructions, ANSI terminal escapes, trigger-conditioned behavior, duplicate/divergent tool definitions, dangerous local-read plus network-egress capability combinations, cleartext remote transport, and fuzz-output oracles for command/path/SQL injection and output prompt injection |
 
 Read-only checks inspect `tools/list` and endpoint configuration. Active oracle
 findings are only reported when normal fuzz runs already produced matching
@@ -185,9 +192,13 @@ Server audit categories currently include:
 - `schema_poisoning`: `inputSchema` strings contain prompt-injection or
   secret-access markers.
 - `hidden_instruction`: metadata or schema contains invisible Unicode controls,
-  hidden comments, fenced hidden instructions, or base64-encoded poisoning
-  payloads.
+  ANSI terminal escapes, hidden comments, fenced hidden instructions, or
+  base64-encoded poisoning payloads.
+- `tool_conditioning`: tool metadata conditions behavior on trigger phrases or
+  conversation history.
 - `tool_shadowing`: duplicate tool names are advertised by the same server.
+- `tool_definition_drift`: duplicate tool names have divergent canonical
+  definition hashes, which is a rug-pull/shadowing signal.
 - `dangerous_capability_combo`: the server advertises both local-read and
   network-egress style tools.
 - `insecure_transport`: a non-local HTTP endpoint is used instead of HTTPS.

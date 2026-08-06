@@ -428,10 +428,12 @@ mcp-fuzzer --mode tools --protocol streamablehttp \
 
 The audit inspects `tools/list` metadata and fuzz-run outputs for MCP-specific
 risks: tool and schema poisoning, hidden or encoded instructions, duplicate tool
-names, local-read plus network-egress capability combinations, cleartext remote
-transport, command/path/SQL injection evidence, and prompt-injection markers in
-tool output. Findings are written to `<output_dir>/findings.json` with a
-`check_id` and citation metadata.
+names, divergent duplicate definitions, trigger-phrase conditioned behavior,
+ANSI terminal escape sequences, local-read plus network-egress capability
+combinations, cleartext remote transport, command/path/SQL injection evidence,
+and prompt-injection markers in tool output. Findings are written to
+`<output_dir>/findings.json` with a `check_id`, canonical tool-definition hashes
+where applicable, OWASP MCP Top 10 IDs/URLs, and citation metadata.
 
 ## Safety System
 

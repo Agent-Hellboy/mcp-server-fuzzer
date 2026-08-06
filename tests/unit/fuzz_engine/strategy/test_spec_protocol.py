@@ -109,11 +109,11 @@ class TestSchemaPath:
             path = _schema_path("v1.0")
             assert "v1.0" in str(path)
 
-    def test_rc_version_uses_draft_schema_alias(self):
-        """Test RC version resolves through shared schema alias."""
+    def test_rc_version_prefers_dated_schema_when_available(self):
+        """Test RC version resolves to the concrete schema when bundled."""
         path = _schema_path("2026-07-28")
 
-        assert path.parts[-2:] == ("draft", "schema.json")
+        assert path.parts[-2:] == ("2026-07-28", "schema.json")
 
     def test_without_chosen_falls_back_to_schema_json(self, tmp_path):
         """Test fallback to schema.json when no version chosen."""

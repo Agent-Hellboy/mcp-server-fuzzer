@@ -121,6 +121,10 @@ blocking if you cancel an unsafe run.
 | `--export-safety-data [FILE]` | Save safety data as JSON, optionally to a custom filename. |
 | `--retry-with-safety-on-interrupt` | Re-run once with system blocking after Ctrl-C. |
 | `--no-network` / `--allow-host HOST` | Restrict outbound HTTP targets. |
+| `--runtime-probe` | Enable mcpfz-probe runtime monitoring for stdio server behavior. |
+| `--runtime-probe-backend ebpf|fake|auto` | Select the sidecar backend. |
+| `--runtime-probe-allow-exec PATH` | Allow an expected executable without a runtime finding. |
+| `--runtime-probe-allow-host HOST` | Allow an expected egress host or host:port without a runtime finding. |
 
 Example:
 

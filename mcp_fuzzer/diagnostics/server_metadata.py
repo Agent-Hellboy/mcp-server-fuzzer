@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import base64
 import binascii
+import hashlib
 from collections import Counter
 from typing import Any
 
@@ -54,7 +55,16 @@ _INVISIBLE_TEXT_PATTERNS = [
 ]
 
 _UNICODE_CONTROL_PATTERN = re.compile(
-    "[\u200b\u200c\u200d\u2060\ufeff\u202a-\u202e\u2066-\u2069]"
+    "[\u001b\u009b\u200b\u200c\u200d\u2060\ufeff\u202a-\u202e\u2066-\u2069]"
+)
+_ANSI_ESCAPE_PATTERN = re.compile(
+    r"(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]"
+)
+_TRIGGER_CONDITIONING_PATTERN = re.compile(
+    r"\b(trigger\s+(word|phrase)|when\s+the\s+user\s+says|"
+    r"if\s+the\s+user\s+(asks|mentions|requests)|conversation\s+history|"
+    r"previous\s+(message|conversation|turn))\b",
+    re.IGNORECASE,
 )
 _BASE64_CANDIDATE_PATTERN = re.compile(
     r"(?<![A-Za-z0-9+/=])(?:[A-Za-z0-9+/]{24,}={0,2})(?![A-Za-z0-9+/=])"
@@ -62,6 +72,9 @@ _BASE64_CANDIDATE_PATTERN = re.compile(
 _MAX_HIDDEN_CARRIER_TEXT_CHARS = 20_000
 _MAX_SCHEMA_TEXT_NODES = 10_000
 _MAX_SCHEMA_TEXT_DEPTH = 100
+_MAX_TOOL_HASH_NODES = 10_000
+_MAX_TOOL_HASH_DEPTH = 100
+_MAX_TOOL_HASH_STRING_CHARS = 8_192
 _MAX_BASE64_CANDIDATES = 32
 _MAX_BASE64_CANDIDATE_CHARS = 8_192
 
@@ -74,6 +87,54 @@ _NETWORK_EGRESS_PATTERN = re.compile(
     r"egress|socket|download|api_call)\b",
     re.IGNORECASE,
 )
+
+
+def _tool_definition_hash(tool: dict[str, Any]) -> str:
+    digest = hashlib.sha256()
+    stack: list[tuple[tuple[str, ...], Any, int]] = [((), tool, 0)]
+    visited_nodes = 0
+
+    def update(*parts: object) -> None:
+        digest.update("\t".join(str(part) for part in parts).encode("utf-8"))
+        digest.update(b"\n")
+
+    while stack:
+        if visited_nodes >= _MAX_TOOL_HASH_NODES:
+            update("<truncated>", len(stack))
+            break
+
+        path, obj, depth = stack.pop()
+        visited_nodes += 1
+        path_text = ".".join(path)
+        if depth > _MAX_TOOL_HASH_DEPTH:
+            update(path_text, "<max_depth>")
+            continue
+
+        if isinstance(obj, dict):
+            update(path_text, "dict", len(obj))
+            for key in sorted(obj.keys(), key=str, reverse=True):
+                if visited_nodes + len(stack) >= _MAX_TOOL_HASH_NODES:
+                    update(path_text, "<max_nodes>")
+                    break
+                key_text = str(key)
+                stack.append((path + (key_text,), obj[key], depth + 1))
+        elif isinstance(obj, list):
+            update(path_text, "list", len(obj))
+            for idx in range(len(obj) - 1, -1, -1):
+                if visited_nodes + len(stack) >= _MAX_TOOL_HASH_NODES:
+                    update(path_text, "<max_nodes>")
+                    break
+                stack.append((path + (str(idx),), obj[idx], depth + 1))
+        elif isinstance(obj, str):
+            update(path_text, "str", obj[:_MAX_TOOL_HASH_STRING_CHARS])
+        else:
+            update(
+                path_text,
+                type(obj).__name__,
+                repr(obj)[:_MAX_TOOL_HASH_STRING_CHARS],
+            )
+
+    return digest.hexdigest()
 
 
 def _tool_text(
@@ -183,7 +244,9 @@ def _decode_base64_candidate(candidate: str) -> str | None:
 def _scan_hidden_instruction_carriers(text: str) -> list[dict[str, Any]]:
     text = text[:_MAX_HIDDEN_CARRIER_TEXT_CHARS]
     hits: list[dict[str, Any]] = []
-    if _UNICODE_CONTROL_PATTERN.search(text):
+    if _ANSI_ESCAPE_PATTERN.search(text):
+        hits.append({"kind": "ansi_escape"})
+    elif _UNICODE_CONTROL_PATTERN.search(text):
         hits.append({"kind": "unicode_control"})
     for pattern in _INVISIBLE_TEXT_PATTERNS:
         if pattern.search(text):
@@ -214,6 +277,7 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
         return findings
 
     names: list[str] = []
+    definition_hashes_by_name: dict[str, set[str]] = {}
     local_read_tools: set[str] = set()
     network_egress_tools: set[str] = set()
 
@@ -223,8 +287,12 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
         name = tool.get("name")
         if isinstance(name, str) and name:
             names.append(name)
+            definition_hashes_by_name.setdefault(name, set()).add(
+                _tool_definition_hash(tool)
+            )
 
         visible = _tool_text(tool, max_chars=_MAX_HIDDEN_CARRIER_TEXT_CHARS)
+        tool_hash = _tool_definition_hash(tool)
         if _LOCAL_READ_PATTERN.search(visible):
             if name:
                 local_read_tools.add(str(name))
@@ -242,7 +310,10 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                     str(name),
                     "Tool name or description contains injection/poisoning "
                     "markers (hidden instructions or secret-path references).",
-                    evidence={"markers": poison_hits[:10]},
+                    evidence={
+                        "markers": poison_hits[:10],
+                        "tool_definition_hash": tool_hash,
+                    },
                 )
             )
         hidden_hits = _scan_hidden_instruction_carriers(visible)
@@ -256,7 +327,23 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                     "Tool metadata contains hidden or encoded instruction "
                     "carriers (invisible Unicode, hidden comments, or encoded "
                     "prompt-injection payloads).",
-                    evidence={"carriers": hidden_hits[:10]},
+                    evidence={
+                        "carriers": hidden_hits[:10],
+                        "tool_definition_hash": tool_hash,
+                    },
+                )
+            )
+        if _TRIGGER_CONDITIONING_PATTERN.search(visible) and name:
+            findings.append(
+                server_finding(
+                    "TC1",
+                    "tool_conditioning",
+                    "medium",
+                    str(name),
+                    "Tool metadata conditions behavior on trigger phrases or "
+                    "conversation history, which can hide context-dependent "
+                    "tool behavior from review.",
+                    evidence={"tool_definition_hash": tool_hash},
                 )
             )
 
@@ -275,7 +362,10 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                         str(name),
                         "Tool inputSchema text contains injection/poisoning "
                         "markers beyond the visible tool signature.",
-                        evidence={"markers": schema_hits[:10]},
+                        evidence={
+                            "markers": schema_hits[:10],
+                            "tool_definition_hash": tool_hash,
+                        },
                     )
                 )
             hidden_schema_hits = _scan_hidden_instruction_carriers(schema_text)
@@ -288,7 +378,10 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                         str(name),
                         "Tool inputSchema contains hidden or encoded instruction "
                         "carriers.",
-                        evidence={"carriers": hidden_schema_hits[:10]},
+                        evidence={
+                            "carriers": hidden_schema_hits[:10],
+                            "tool_definition_hash": tool_hash,
+                        },
                     )
                 )
 
@@ -306,6 +399,19 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                 evidence={"occurrences": name_counts[dupe]},
             )
         )
+        hashes = sorted(definition_hashes_by_name.get(dupe, set()))
+        if len(hashes) > 1:
+            findings.append(
+                server_finding(
+                    "TD1",
+                    "tool_definition_drift",
+                    "high",
+                    dupe,
+                    f"Duplicate tool name '{dupe}' has divergent definitions "
+                    "(possible in-session rug pull or shadowing).",
+                    evidence={"definition_hashes": hashes},
+                )
+            )
 
     if local_read_tools and network_egress_tools:
         findings.append(

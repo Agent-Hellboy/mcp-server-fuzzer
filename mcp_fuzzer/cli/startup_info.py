@@ -186,6 +186,47 @@ def print_startup_info(args: argparse.Namespace, config: dict | None = None) -> 
             display_name = param.replace("_", " ").title()
             config_table.add_row("Safety", display_name, str(args_dict[param]))
 
+    runtime_probe_config = None
+    if config is not None:
+        try:
+            from ..runtime_probe import RuntimeProbeConfig
+
+            runtime_probe_config, _ = RuntimeProbeConfig.from_mapping(
+                config
+            ).validated_for_host(protocol=config.get("protocol"))
+        except Exception:
+            runtime_probe_config = None
+    if runtime_probe_config is not None and runtime_probe_config.enabled:
+        config_table.add_row(
+            "Runtime Probe",
+            "Status",
+            f"enabled ({runtime_probe_config.resolved_backend})",
+        )
+        config_table.add_row("Runtime Probe", "Binary", runtime_probe_config.binary)
+        if runtime_probe_config.workspace is not None:
+            config_table.add_row(
+                "Runtime Probe",
+                "Workspace",
+                str(runtime_probe_config.workspace),
+            )
+        config_table.add_row(
+            "Runtime Probe",
+            "Tmpdir",
+            str(runtime_probe_config.tmpdir),
+        )
+        if runtime_probe_config.exec_allow:
+            config_table.add_row(
+                "Runtime Probe",
+                "Allowed Exec",
+                ", ".join(runtime_probe_config.exec_allow),
+            )
+        if runtime_probe_config.net_allow:
+            config_table.add_row(
+                "Runtime Probe",
+                "Allowed Hosts",
+                ", ".join(runtime_probe_config.net_allow),
+            )
+
     # Output Settings
     output_params = [
         "output_dir",

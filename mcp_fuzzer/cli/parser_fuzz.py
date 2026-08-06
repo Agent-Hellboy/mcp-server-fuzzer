@@ -131,6 +131,54 @@ def add_fuzz_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--runtime-probe",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Enable optional mcpfz-probe runtime monitoring for stdio server "
+            "process behavior."
+        ),
+    )
+    parser.add_argument(
+        "--runtime-probe-backend",
+        choices=["ebpf", "fake", "auto"],
+        default=None,
+        help=(
+            "Runtime probe backend to request (ebpf, fake, or auto). "
+            "Defaults to MCPFZ_PROBE_BACKEND or ebpf."
+        ),
+    )
+    parser.add_argument(
+        "--runtime-probe-bin",
+        default=None,
+        help="Path to the mcpfz-probe sidecar binary.",
+    )
+    parser.add_argument(
+        "--runtime-probe-workspace",
+        default=None,
+        help="Workspace root allowed for runtime file writes.",
+    )
+    parser.add_argument(
+        "--runtime-probe-tmpdir",
+        default=None,
+        help="Temporary directory root allowed for runtime file writes.",
+    )
+    parser.add_argument(
+        "--runtime-probe-allow-exec",
+        action="append",
+        default=None,
+        help="Executable path to allow without a runtime.exec finding.",
+    )
+    parser.add_argument(
+        "--runtime-probe-allow-host",
+        action="append",
+        default=None,
+        help=(
+            "Network host or host:port to allow without a runtime.net_connect "
+            "finding."
+        ),
+    )
+    parser.add_argument(
         "--spec-schema-version",
         help=(
             "Use a specific MCP schema version "

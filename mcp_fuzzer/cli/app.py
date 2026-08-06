@@ -22,6 +22,13 @@ async def run_fuzz_app(settings: SessionSettings) -> int:
             settings.spec_schema_version
         )
 
+    try:
+        from ..runtime_probe import PROBE
+
+        PROBE.configure_from_mapping(config)
+    except Exception as exc:
+        logging.warning("runtime probe configuration failed: %s", exc)
+
     logging.info(  # pragma: no cover
         "Client received config with export flags: "
         f"csv={config.get('export_csv', False)}, "
