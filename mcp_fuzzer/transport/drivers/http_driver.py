@@ -166,7 +166,9 @@ class HttpDriver(
             redirect_url = self._resolve_redirect_url(response)
             if redirect_url:
                 response = await client.post(
-                    redirect_url, json=payload, headers=safe_headers
+                    redirect_url,
+                    json=payload,
+                    headers=self._headers_for_redirect(redirect_url, safe_headers),
                 )
 
             # Use shared response handling

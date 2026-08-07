@@ -10,6 +10,7 @@ import logging
 import time
 from abc import ABC
 from typing import Any, TypedDict, Iterator, Literal
+from urllib.parse import urlparse
 import httpx
 
 try:
@@ -21,6 +22,81 @@ from ...exceptions import TransportError, NetworkError, PayloadValidationError
 from ... import spec_guard
 from ...safety_system import policy as safety_policy
 from .states import DriverState
+
+# Headers that carry credentials or session capabilities. They must never
+# travel to an origin the operator did not point the fuzzer at: the target
+# server is hostile by definition, and a 3xx with an off-origin Location is
+# the cheapest way for it to harvest the assessor's token.
+CREDENTIAL_HEADER_NAMES = frozenset(
+    {
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "x-api-key",
+        "api-key",
+        "x-auth-token",
+        "mcp-session-id",
+    }
+)
+
+# Default schemes/ports used to normalize an origin tuple.
+_DEFAULT_PORTS = {"http": 80, "https": 443, "ws": 80, "wss": 443}
+
+# Upper bound on how much of a server-supplied error body is copied into an
+# exception message. A hostile server can answer with a multi-gigabyte error
+# page; the message ends up in logs, reports, and exception chains.
+MAX_ERROR_BODY_CHARS = 2048
+
+
+# Decoding a hostile body fails in ways that are NOT json.JSONDecodeError:
+# an oversized integer literal raises ValueError, deep nesting raises
+# RecursionError, and invalid UTF-8 raises UnicodeDecodeError. Unhandled they
+# escape the transport as raw interpreter errors and abort the assessor's run.
+HOSTILE_JSON_ERRORS = (ValueError, RecursionError, UnicodeDecodeError)
+
+# Sentinel distinguishing "decoded to None" from "did not decode at all".
+_MISSING = object()
+
+
+def _safe_json_loads(text: str) -> Any:
+    """Parse ``text`` as JSON, returning ``_MISSING`` if it is not valid JSON.
+
+    Never raises: a hostile payload must not abort SSE line scanning, because
+    a later line may still carry the legitimate response.
+    """
+    try:
+        return json.loads(text)
+    except HOSTILE_JSON_ERRORS:
+        return _MISSING
+
+
+def request_origin(url: str) -> tuple[str, str, int | None]:
+    """Return the (scheme, host, port) origin tuple for ``url``."""
+    parsed = urlparse(url or "")
+    scheme = (parsed.scheme or "").lower()
+    try:
+        host = (parsed.hostname or "").lower()
+    except ValueError:
+        # Malformed authority (e.g. a bad IPv6 literal) - treat as its own
+        # origin so it can never compare equal to the configured target.
+        host = "\x00invalid"
+    port = None
+    try:
+        port = parsed.port
+    except ValueError:
+        port = -1
+    if port is None:
+        port = _DEFAULT_PORTS.get(scheme)
+    return (scheme, host, port)
+
+
+def is_same_origin(url_a: str, url_b: str) -> bool:
+    """Return True when both URLs share scheme, host, and effective port."""
+    origin_a = request_origin(url_a)
+    origin_b = request_origin(url_b)
+    if not origin_a[1] or not origin_b[1]:
+        return False
+    return origin_a == origin_b
 
 
 class JSONRPCRequest(TypedDict):
@@ -266,6 +342,48 @@ class HttpClientBehavior(DriverBaseBehavior):
             )
         return safe_headers
 
+    def _configured_auth_header_names(self) -> set[str]:
+        """Lower-cased names of every header this transport injects as auth."""
+        names: set[str] = {
+            str(k).lower() for k in (getattr(self, "auth_headers", None) or {})
+        }
+        provider = getattr(self, "auth_header_provider", None)
+        if provider is not None:
+            try:
+                provided = provider() or {}
+            except Exception:  # pragma: no cover - provider is user code
+                provided = {}
+            names |= {
+                str(k).lower() for k, v in provided.items() if v is not None
+            }
+        return names
+
+    def _headers_for_redirect(
+        self, redirect_url: str, headers: dict[str, str]
+    ) -> dict[str, str]:
+        """Strip credentials before replaying a request at a redirect target.
+
+        A redirect ``Location`` is chosen by the (hostile) server. Replaying the
+        original headers at a different origin hands the operator's bearer token
+        or session id to whoever the server names, so drop every credential-ish
+        header whenever the origin changes.
+        """
+        base_url = getattr(self, "url", "") or ""
+        if is_same_origin(base_url, redirect_url):
+            return headers
+
+        denied = CREDENTIAL_HEADER_NAMES | self._configured_auth_header_names()
+        stripped = {k: v for k, v in headers.items() if k.lower() not in denied}
+        dropped = sorted(set(headers) - set(stripped))
+        if dropped:
+            self._logger.warning(
+                "Cross-origin redirect from %s to %s: withholding %s",
+                base_url,
+                redirect_url,
+                ", ".join(dropped),
+            )
+        return stripped
+
     def _create_http_client(self, timeout: float) -> httpx.AsyncClient:
         """Create configured HTTP client.
 
@@ -281,6 +399,27 @@ class HttpClientBehavior(DriverBaseBehavior):
             trust_env=False,
         )
 
+    @staticmethod
+    def _error_body_excerpt(response: httpx.Response) -> str:
+        """Return a bounded, always-safe excerpt of an error response body.
+
+        ``response.text`` raises ``httpx.ResponseNotRead`` on a streaming
+        response (every SSE / streamable-HTTP error path) and is unbounded in
+        size on a buffered one. Both are attacker-triggerable, so read
+        defensively and truncate.
+        """
+        try:
+            body = response.text
+        except Exception:
+            # Streaming response whose body was never buffered, or a decoding
+            # failure on hostile bytes. The status code is the useful part.
+            return "<body unavailable>"
+        if not isinstance(body, str):  # pragma: no cover - defensive
+            return "<body unavailable>"
+        if len(body) > MAX_ERROR_BODY_CHARS:
+            return f"{body[:MAX_ERROR_BODY_CHARS]}... [truncated {len(body)} chars]"
+        return body
+
     def _handle_http_response_error(self, response: httpx.Response) -> None:
         """Handle HTTP response errors with consistent logging.
 
@@ -294,7 +433,7 @@ class HttpClientBehavior(DriverBaseBehavior):
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code
-            error_msg = f"HTTP {status_code}: {e.response.text}"
+            error_msg = f"HTTP {status_code}: {self._error_body_excerpt(e.response)}"
             log = (
                 self._logger.warning
                 if status_code in {401, 403}
@@ -318,31 +457,49 @@ class HttpClientBehavior(DriverBaseBehavior):
         Raises:
             TransportError: If parsing fails
         """
+        decoded = _MISSING
         try:
-            data = response.json()
-            return self._extract_result_from_response(data)
+            decoded = response.json()
         except json.JSONDecodeError:
-            if not fallback_to_sse:
-                raise TransportError("Response is not valid JSON")
+            pass
+        except HOSTILE_JSON_ERRORS as exc:
+            # Oversized integers, JSON bombs, and invalid UTF-8 raise plain
+            # ValueError / RecursionError / UnicodeDecodeError, none of which
+            # are JSONDecodeError. Left unhandled they escape the transport as
+            # raw interpreter errors instead of a classified transport failure.
+            raise TransportError(
+                "Response body could not be decoded as JSON",
+                context={"reason": type(exc).__name__, "detail": str(exc)[:200]},
+            ) from exc
 
-            # Try SSE format parsing
-            self._logger.debug("Response is not JSON, trying to parse as SSE")
-            for line in response.text.splitlines():
-                if line.startswith("data:"):
-                    try:
-                        data = json.loads(line[len("data:") :].strip())
-                        return self._extract_result_from_response(data)
-                    except json.JSONDecodeError:
-                        self._logger.error("Failed to parse SSE data line as JSON")
-                        continue
-                elif line.strip():  # Non-empty non-data line
-                    try:
-                        data = json.loads(line)
-                        return self._extract_result_from_response(data)
-                    except json.JSONDecodeError:
-                        continue
+        if decoded is not _MISSING:
+            return self._extract_result_from_response(decoded)
 
-            raise TransportError("No valid JSON data found in response")
+        if not fallback_to_sse:
+            raise TransportError("Response is not valid JSON")
+
+        # Try SSE format parsing
+        self._logger.debug("Response is not JSON, trying to parse as SSE")
+        try:
+            body = response.text
+        except Exception as exc:
+            raise TransportError(
+                "Response body could not be read",
+                context={"reason": type(exc).__name__},
+            ) from exc
+
+        for line in body.splitlines():
+            if line.startswith("data:"):
+                candidate = line[len("data:") :].strip()
+            elif line.strip():  # Non-empty non-data line
+                candidate = line
+            else:
+                continue
+            parsed = _safe_json_loads(candidate)
+            if parsed is not _MISSING:
+                return self._extract_result_from_response(parsed)
+
+        raise TransportError("No valid JSON data found in response")
 
 
 class ResponseParserBehavior(DriverBaseBehavior):

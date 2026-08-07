@@ -13,6 +13,40 @@ from .post_run import PostRunPresenter
 from .session_settings import SessionSettings
 
 
+def _warn_if_spec_schema_unavailable(requested: str) -> None:
+    """Warn when spec validation was requested but no schema can back it.
+
+    The MCP schemas live in the ``schemas/mcp-spec`` git submodule, which is
+    absent from an installed package. Without it every spec check silently
+    passes, so an assessor would believe they validated against a spec
+    version that was never loaded.
+    """
+    try:
+        from ..spec_guard.spec_version import supported_protocol_versions
+
+        available = supported_protocol_versions()
+    except Exception as exc:  # pragma: no cover - defensive
+        logging.warning("Could not determine supported spec versions: %s", exc)
+        return
+
+    if not available:
+        logging.warning(
+            "Spec schema version %s was requested but no MCP schemas are "
+            "available, so spec validation will not run. Set "
+            "MCP_SPEC_SCHEMA_ROOT to a checkout of the MCP schema directory, "
+            "or run from a repository with the schemas/mcp-spec submodule "
+            "initialised.",
+            requested,
+        )
+    elif requested not in available:
+        logging.warning(
+            "Spec schema version %s is not among the available versions (%s); "
+            "spec validation for it will not run.",
+            requested,
+            ", ".join(available),
+        )
+
+
 async def run_fuzz_app(settings: SessionSettings) -> int:
     """Run the fuzzing workflow using merged session settings."""
     config = settings.config
@@ -21,6 +55,7 @@ async def run_fuzz_app(settings: SessionSettings) -> int:
         os.environ["MCP_SPEC_SCHEMA_VERSION"] = str(
             settings.spec_schema_version
         )
+        _warn_if_spec_schema_unavailable(str(settings.spec_schema_version))
 
     try:
         from ..runtime_probe import PROBE

@@ -390,7 +390,10 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 response = await self._post_with_retries(
-                    client, redirect_url, payload, safe_headers
+                    client,
+                    redirect_url,
+                    payload,
+                    self._headers_for_redirect(redirect_url, safe_headers),
                 )
                 self._maybe_extract_session_headers(response)
             self._handle_http_response_error(response)
@@ -537,7 +540,10 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                 # Follow at most one redirect to avoid unbounded chains.
                 self._logger.debug("Following redirect to %s", redirect_url)
                 response = await self._post_with_retries(
-                    client, redirect_url, payload, safe_headers
+                    client,
+                    redirect_url,
+                    payload,
+                    self._headers_for_redirect(redirect_url, safe_headers),
                 )
                 self.last_auth_challenge = self._build_auth_discovery_hints(response)
 
@@ -617,7 +623,10 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             if redirect_url:
                 # Follow at most one redirect to avoid unbounded chains.
                 response = await self._post_with_retries(
-                    client, redirect_url, payload, safe_headers
+                    client,
+                    redirect_url,
+                    payload,
+                    self._headers_for_redirect(redirect_url, safe_headers),
                 )
                 self.last_auth_challenge = self._build_auth_discovery_hints(response)
             self._handle_http_response_error(response)
@@ -682,7 +691,12 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                     # Follow at most one redirect to avoid unbounded chains.
                     await response.aclose()
                     async with client.stream(
-                        "POST", redirect_url, json=payload, headers=safe_headers
+                        "POST",
+                        redirect_url,
+                        json=payload,
+                        headers=self._headers_for_redirect(
+                            redirect_url, safe_headers
+                        ),
                     ) as redirected:
                         async for item in self._yield_streamed_lines(redirected):
                             yield item
@@ -797,7 +811,11 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                     if redirect_url:
                         await response.aclose()
                         async with client.stream(
-                            "GET", redirect_url, headers=safe_headers
+                            "GET",
+                            redirect_url,
+                            headers=self._headers_for_redirect(
+                                redirect_url, safe_headers
+                            ),
                         ) as redirected:
                             self.last_auth_challenge = (
                                 self._build_auth_discovery_hints(redirected)
@@ -840,7 +858,12 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 try:
-                    response = await client.delete(redirect_url, headers=safe_headers)
+                    response = await client.delete(
+                        redirect_url,
+                        headers=self._headers_for_redirect(
+                            redirect_url, safe_headers
+                        ),
+                    )
                 except httpx.HTTPError as exc:
                     raise TransportError(
                         f"Stream DELETE failed: {exc}",
@@ -865,7 +888,9 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
             redirect_url = self._resolve_redirect(response)
             if redirect_url:
                 response = await self._get_with_retries(
-                    client, redirect_url, safe_headers
+                    client,
+                    redirect_url,
+                    self._headers_for_redirect(redirect_url, safe_headers),
                 )
             endpoint_url = str(getattr(response, "url", None) or self.url)
             protected_urls = build_protected_resource_metadata_urls(endpoint_url)
