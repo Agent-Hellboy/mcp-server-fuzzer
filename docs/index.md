@@ -1,53 +1,91 @@
-# MCP Server Fuzzer
+# MCP server security assessment with evidence
 
-MCP Server Fuzzer is a command-line security and robustness tester for live [Model Context Protocol](https://modelcontextprotocol.io/) servers.
+MCP Server Fuzzer is a black-box assessment client for security researchers,
+auditors, and engineers validating an authorized
+[Model Context Protocol](https://modelcontextprotocol.io/) server.
 
-It supports tool, protocol, resource, and prompt testing over HTTP, HTTPS, SSE, Streamable HTTP, and stdio. Results are written as structured findings so local investigations and CI jobs can use the same output.
+It discovers the target's exposed surface, exercises tools and protocol
+messages, runs focused MCP security checks, and preserves the observations
+needed for a second analyst to reproduce the result.
 
-## Start here
+## Start with the question you need to answer
 
-1. [Install and run your first fuzz session](getting-started/getting-started.md)
-2. [Try transport, authentication, and audit examples](getting-started/examples.md)
-3. [Configure a repeatable run](configuration/configuration.md)
-4. [Understand safety controls and isolation](components/safety.md)
-5. [Use the CLI reference](development/reference.md)
+| Assessment question | Use | Evidence to review |
+| --- | --- | --- |
+| What does the server expose? | `--mode tools`, `resources`, or `prompts` | Discovery metadata and negotiated protocol version |
+| Does input handling match the advertised schema? | `--phase realistic` then `--phase aggressive` | Requests, responses, rejection/acceptance outcome, timing |
+| Are protocol boundaries robust? | `--mode protocol`, optionally `--stateful` | Per-message outcomes and spec-guard results |
+| Does the advertised security boundary hold? | `--security-audit` and `--auth-audit` | Check IDs, evidence, source references, and auth metadata |
+| What does a local server do on the host? | `stdio` plus safety controls and optional `--runtime-probe` | Process, network, filesystem, credential, and privilege observations |
+| Can a pipeline detect an unusable target? | `--fail-if-no-tools` | Non-zero exit for no tools, auth failure, or unreachable target |
 
-## Supported MCP versions
+The fuzzer reports observations and useful reproductions. It does not certify a
+server, prove exploitability in every deployment, or replace manual review of
+authorization, business impact, and deployment context.
 
-The default protocol version is 2025-11-25. Schema-driven testing supports:
+## The assessment loop
 
-| Version | Support |
-| --- | --- |
-| 2024-11-05 | Schema-driven fuzzing and protocol checks |
-| 2025-03-26 | Schema-driven fuzzing and Streamable HTTP behavior |
-| 2025-06-18 | Schema-driven fuzzing and protocol checks |
-| 2025-11-25 | Default version, OAuth 2.1 audit path, and current stable workflows |
-| 2026-07-28 | Stateless Streamable HTTP and draft-schema compatibility path |
+```mermaid
+flowchart LR
+    S[Scope and authorize] --> I[Install and isolate]
+    I --> D[Discover capabilities]
+    D --> B[Baseline with realistic inputs]
+    B --> X[Exercise protocol and schemas]
+    X --> Q[Run focused security checks]
+    Q --> T[Triage evidence]
+    T --> H[Hand off or automate]
+```
 
-Select a version with --spec-schema-version or spec_schema_version. The server's negotiated protocol version is recorded in the run metadata.
+Every stage has a task-focused guide:
 
-## What the fuzzer reports
+1. [Choose an assessment path](getting-started/index.md)
+2. [Run a first assessment](getting-started/getting-started.md)
+3. [Follow the audit workflow](getting-started/audit-workflow.md)
+4. [Use focused recipes and local fixtures](getting-started/examples.md)
+5. [Interpret and preserve evidence](getting-started/results.md)
 
-Reports can include:
+## What the assessment can cover
 
-- Reliability: crashes, hangs, timeouts, internal errors, error leakage, oversized responses, and performance outliers.
-- Input handling: malformed-input acceptance, injection reflection, nondeterminism, and schema violations.
-- MCP security: tool and schema poisoning markers, hidden instructions, ANSI/control content, tool shadowing, dangerous capability combinations, cleartext remote transport, and OAuth metadata issues.
-- Runtime behavior: optional process execution, process spawning, network activity, credential reads, filesystem mutation, privilege changes, and ptrace observations for stdio targets.
+- Tool arguments, result content, and schema constraints.
+- Protocol requests, notifications, stateful sequences, resources, prompts,
+  and deterministic spec checks.
+- HTTP, HTTPS, SSE, Streamable HTTP, and stdio transports.
+- API-key, basic, bearer-token, custom-header, and OAuth client-credentials
+  authentication paths, plus MCP OAuth audit checks where supported.
+- Tool/schema poisoning markers, hidden or encoded instructions, ANSI/control
+  content, duplicate or drifting definitions, dangerous capability combinations,
+  cleartext remote transport, and evidence-backed injection oracles.
+- Optional host-level observations for local stdio processes through
+  [mcpfz-probe](https://github.com/Agent-Hellboy/mcpfz-probe).
 
-Findings include structured evidence and relevant OWASP MCP Top 10 links where a mapping is available.
+For the exact flags and current defaults, use the
+[CLI reference](development/reference.md). For protocol-version selection, see
+[configuration](configuration/configuration.md).
 
-## Safety model
+## Safety boundary
 
-Normal fuzzing does not require the optional runtime monitor. For local stdio targets, combine --enable-safety-system with --fs-root and use --no-network when the server should remain local. Runtime monitoring is opt-in and fail-open; a probe error cannot fail a normal fuzz run.
+Only test systems you are authorized to assess. Use dedicated credentials,
+bounded timeouts, low initial run counts, and a disposable target. For local
+stdio targets, combine `--enable-safety-system` with `--fs-root` and usually
+`--no-network`. These controls reduce accidental impact but are not an OS
+sandbox or a replacement for a container/VM.
+
+## Security context
+
+Use this tool alongside the official
+[MCP Security Best Practices](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices),
+[MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization),
+and [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/). The project
+links applicable sources in finding evidence; a mapping is context for analyst
+triage, not a severity decision by itself.
 
 ## Project resources
 
+- [Maintained local example servers](getting-started/examples.md)
+- [Configuration](configuration/configuration.md)
+- [Safety and isolation](components/safety.md)
+- [Security evidence in CI](security-ci.md)
+- [Standardized output](development/standardized-output.md)
+- [Contributing](development/contributing.md)
 - [GitHub repository](https://github.com/Agent-Hellboy/mcp-server-fuzzer)
 - [PyPI package](https://pypi.org/project/mcp-fuzzer/)
-- [Docker image](https://hub.docker.com/r/princekrroshan01/mcp-fuzzer)
-- [mcpfz-probe runtime monitor](https://github.com/Agent-Hellboy/mcpfz-probe)
-- [Contributing guide](development/contributing.md)
-- [Security CI guidance](SECURITY_CI.md)
-
-The architecture section is maintained for contributors and maintainers; users can start with the task-focused guides above.

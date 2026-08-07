@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ...types import extract_tool_runs
-from .common import SupportsToDict, normalize_report_data
+from .common import SupportsToDict, redact_report_data
 
 
 def _csv_cell(value: Any) -> str:
@@ -26,7 +26,8 @@ class CSVFormatter:
     ):
         import csv
 
-        data = normalize_report_data(report_data)
+        # The "Arguments" column writes each run's raw ``args``.
+        data = redact_report_data(report_data)
         with open(filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(

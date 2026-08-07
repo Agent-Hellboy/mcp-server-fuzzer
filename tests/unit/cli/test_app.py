@@ -548,3 +548,38 @@ async def test_run_fuzz_app_raises_mcp_error(monkeypatch):
 
     with pytest.raises(MCPError):
         await fuzz_app.run_fuzz_app(settings)
+
+
+def test_warns_when_no_spec_schemas_are_available(caplog):
+    """A PyPI install has no schemas; spec validation must not fail silently."""
+    with patch(
+        "mcp_fuzzer.spec_guard.spec_version.supported_protocol_versions",
+        return_value=(),
+    ):
+        with caplog.at_level("WARNING"):
+            fuzz_app._warn_if_spec_schema_unavailable("2025-06-18")
+
+    assert "no MCP schemas are available" in caplog.text
+    assert "2025-06-18" in caplog.text
+
+
+def test_warns_when_requested_spec_version_is_not_available(caplog):
+    with patch(
+        "mcp_fuzzer.spec_guard.spec_version.supported_protocol_versions",
+        return_value=("2025-06-18",),
+    ):
+        with caplog.at_level("WARNING"):
+            fuzz_app._warn_if_spec_schema_unavailable("1999-01-01")
+
+    assert "not among the available versions" in caplog.text
+
+
+def test_no_warning_when_requested_spec_version_is_available(caplog):
+    with patch(
+        "mcp_fuzzer.spec_guard.spec_version.supported_protocol_versions",
+        return_value=("2025-06-18", "2025-11-25"),
+    ):
+        with caplog.at_level("WARNING"):
+            fuzz_app._warn_if_spec_schema_unavailable("2025-06-18")
+
+    assert "spec validation" not in caplog.text

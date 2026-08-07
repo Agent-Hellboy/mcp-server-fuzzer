@@ -228,8 +228,8 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--client-id", default="mcp-fuzzer")
-    parser.add_argument("--client-secret", default="mcp-fuzzer-secret")
-    parser.add_argument("--access-token", default="mcp-fuzzer-access-token")
+    parser.add_argument("--client-secret", default="fixture-only-client-secret")
+    parser.add_argument("--access-token", default="fixture-only-access-token")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 

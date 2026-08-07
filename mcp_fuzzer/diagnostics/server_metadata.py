@@ -285,14 +285,12 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
         if not isinstance(tool, dict):
             continue
         name = tool.get("name")
+        tool_hash = _tool_definition_hash(tool)
         if isinstance(name, str) and name:
             names.append(name)
-            definition_hashes_by_name.setdefault(name, set()).add(
-                _tool_definition_hash(tool)
-            )
+            definition_hashes_by_name.setdefault(name, set()).add(tool_hash)
 
         visible = _tool_text(tool, max_chars=_MAX_HIDDEN_CARRIER_TEXT_CHARS)
-        tool_hash = _tool_definition_hash(tool)
         if _LOCAL_READ_PATTERN.search(visible):
             if name:
                 local_read_tools.add(str(name))

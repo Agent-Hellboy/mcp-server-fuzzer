@@ -1,59 +1,92 @@
-# Safety and Isolation
+# Contain the target
 
-MCP Server Fuzzer can test aggressive inputs while limiting what a local target can do on the host. These controls are opt-in except for argument-level handling.
+Security assessment inputs can trigger real server behavior. Treat the fuzzer's
+controls as layers that reduce accidental impact while you provide the actual
+isolation boundary with a disposable process, container, VM, network segment,
+or test account.
+
+```mermaid
+flowchart TD
+    A[Authorized target] --> B{Transport}
+    B -->|Remote| R[Dedicated identity + HTTPS + bounded scope]
+    B -->|stdio| L[Disposable process/container]
+    L --> F[--fs-root path boundary]
+    L --> N[--no-network + allowlist]
+    L --> C[--enable-safety-system]
+    L --> P[Optional --runtime-probe]
+    R --> O[Restricted reports]
+    F --> O
+    N --> O
+    C --> O
+    P --> O
+```
 
 ## Recommended local setup
 
-Use a dedicated sandbox and deny external network access when testing an untrusted stdio server:
+Use a fresh sandbox for an untrusted or side-effectful stdio target:
 
 ```bash
+mkdir -p fuzz-sandbox
 mcp-fuzzer \
   --mode all \
   --protocol stdio \
   --endpoint "python my_server.py" \
+  --phase aggressive \
   --enable-safety-system \
   --fs-root "$PWD/fuzz-sandbox" \
   --no-network \
-  --runs 10 \
-  --output-dir reports
+  --runs 5 \
+  --output-dir reports/isolated
 ```
 
-Create a fresh sandbox per session and remove it after reviewing the results. A sandbox is a test boundary, not a replacement for a container or VM.
+Use a container or VM as well when the server code is not trusted. Delete or
+reset the sandbox only after preserving the evidence required by the
+assessment.
 
-## Controls
+## Controls and their limits
 
-| Control | Purpose |
-| --- | --- |
-| --enable-safety-system | Blocks selected desktop launchers and browser commands through temporary command shims. |
-| --fs-root PATH | Rewrites filesystem paths used in fuzz inputs into a dedicated root. |
-| --no-network | Restricts outbound network access to local hosts. |
-| --allow-host HOST | Adds an explicitly approved host when --no-network is enabled. |
-| --safety-report | Prints blocked-operation information at the end of a run. |
-| --export-safety-data FILE | Saves safety information as JSON. |
-| --runtime-probe | Enables optional OS-level observations for stdio targets. |
+| Control | What it does | What it does not guarantee |
+| --- | --- | --- |
+| `--enable-safety-system` | Places temporary command shims on the child process `PATH` to block selected external app/browser launches. | It is not a general syscall sandbox or complete command policy. |
+| `--fs-root PATH` | Constrains fuzzer-generated filesystem paths to the configured root. | It cannot contain arbitrary host behavior outside the fuzzer's path handling. |
+| `--no-network` | Restricts fuzzer transport access to local hosts unless hosts are explicitly allowed. | It is not a network namespace and may not contain every child-process network path. |
+| `--allow-host HOST` | Adds a required host when `--no-network` is active; repeatable. | It is not permission to test an unapproved destination. |
+| `--no-safety` | Disables argument-level safety filtering. | It should not be used as a convenience switch on an unisolated target. |
+| `--runtime-probe` | Enables optional host observations for a local stdio process. | It does not monitor remote HTTP/SSE/Streamable HTTP servers. |
 
-Argument-level safety is enabled by default. Use --no-safety only when the test environment is already isolated and you understand the consequences.
+Argument-level safety is enabled by default. `--enable-safety-system` is
+separate and must be requested for system-level command blocking.
 
-## Runtime monitoring
+## Runtime observation
 
-The optional mcpfz-probe sidecar observes process, network, credential, filesystem, privilege, and ptrace activity for stdio server calls. It is disabled by default, requires separate installation, and fails open if it cannot start.
+The optional [mcpfz-probe](https://github.com/Agent-Hellboy/mcpfz-probe)
+sidecar can report process execution, network connections, credential reads,
+filesystem changes, privilege changes, and ptrace activity for stdio targets.
+It is disabled by default and fails open if it cannot start or observe an event.
 
-Use --runtime-probe-backend fake for portable tests or auto to select eBPF when the host supports it. eBPF is intended for an isolated Linux runner. It does not scope remote HTTP, HTTPS, SSE, or Streamable HTTP servers.
+Use `--runtime-probe-backend fake` for portable fixture tests or `auto` to make
+a capability-aware choice. The `ebpf` backend requires an isolated Linux runner
+and appropriate privileges. Configure workspace/tmp roots and allowlists for
+expected executables and hosts; unexpected events are observations for review,
+not automatic proof of malicious intent.
 
-See the [runtime monitoring setup](../getting-started/getting-started.md#enable-runtime-monitoring) and the [mcpfz-probe project](https://github.com/Agent-Hellboy/mcpfz-probe) for installation and checksum verification.
+## Network and credentials
 
-## Interpreting safety results
+- Prefer HTTPS for authorized remote assessments.
+- Use dedicated credentials with the narrowest useful scope and expiry.
+- Keep `Authorization`, cookies, OAuth secrets, and private headers out of
+  public configuration and report artifacts.
+- Use `--no-network` for local targets unless a test explicitly needs an
+  approved destination.
+- Treat OAuth metadata and redirect probes as part of the target's security
+  boundary; use intrusive flags only with written authorization.
 
-A blocked operation means the fuzzer's boundary intercepted an attempted action. A runtime finding means the sidecar observed behavior. Both are evidence for investigation; neither alone establishes intent or exploitability.
+## Interpreting safety evidence
 
-Review:
+A blocked operation means a fuzzer boundary intercepted an attempted action. A
+runtime finding means the sidecar observed behavior. Compare both against the
+tool's stated purpose, target revision, test credentials, and authorization
+scope. Neither alone establishes exploitability or business impact.
 
-- the tool name and run identifier;
-- the target path, command, or host;
-- whether the action was expected for that tool;
-- the server's stderr and reproduction data;
-- the matching OWASP MCP Top 10 link when present.
-
-## CI guidance
-
-For CI, run the target in a disposable job or container, set bounded timeouts, and upload only redacted reports. See [Security Testing in CI](../SECURITY_CI.md).
+See [Interpret evidence and findings](../getting-started/results.md) for
+triage and [evidence collection in CI](../security-ci.md) for artifact handling.

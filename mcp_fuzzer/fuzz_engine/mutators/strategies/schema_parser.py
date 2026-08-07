@@ -20,21 +20,56 @@ realistic mode generates valid data conforming to the schema, while aggressive
 mode intentionally generates edge cases and invalid data to test error handling.
 """
 
-import random as _stdlib_random
+import json as _json
+import math
 import string
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from ..rng_context import get_fuzz_rng, lazy_rng
+from ..rng_context import lazy_rng
+from .interesting_values import (
+    BOUNDARY_INTS_MEDIUM,
+    SPECIAL_FLOATS,
+    UNICODE_TRICKS,
+    get_off_by_one_int,
+    get_payload_within_length,
+    get_realistic_boundary_int,
+    get_realistic_boundary_string,
+)
 
 random = lazy_rng
 
 # Maximum depth for recursive parsing
 MAX_RECURSION_DEPTH = 5
 
+# Attack categories usable directly as get_payload_within_length() keys
+_LENGTH_AWARE_PAYLOADS = ("sql", "xss", "path")
+_AGGRESSIVE_STRING_STRATEGIES = [*_LENGTH_AWARE_PAYLOADS, "unicode", "mixed"]
+_AGGRESSIVE_NUMBER_STRATEGIES = ["off_by_one", "special", "boundary"]
+_MIXED_ALPHABET = string.ascii_letters + string.digits + "!@#$%"
 
-def _get_rng() -> _stdlib_random.Random:
-    return get_fuzz_rng()
+# Sample pools for the "format" keyword handlers
+_EMAIL_DOMAINS = ["example.com", "test.org", "mail.net", "domain.io"]
+_URI_SCHEMES = ["http", "https"]
+_URI_DOMAINS = ["example.com", "test.org", "api.domain.io"]
+_URI_PATHS = ["", "/api", "/v1/resources", "/users/123", "/a" * 10]
+_HOSTNAMES = [
+    "example.com",
+    "test.org",
+    "localhost",
+    "api.example.com",
+    "subdomain.test.org",
+]
+_INT_OVERFLOW_VALUES = [2147483648, -2147483649, 9223372036854775808]
+
+# Simple regex patterns we can satisfy directly: pattern -> (alphabet, max length)
+_ALPHANUMERIC = string.ascii_letters + string.digits
+_PATTERN_ALPHABETS = {
+    "^[a-zA-Z0-9]+$": (_ALPHANUMERIC, 20),
+    "^[0-9]+$": (string.digits, 10),
+    "^[a-zA-Z]+$": (string.ascii_letters, 20),
+}
 
 
 def _merge_allOf(schemas: list[dict[str, Any]]) -> dict[str, Any]:
@@ -226,8 +261,7 @@ def make_fuzz_strategy_from_jsonschema(
 
     # Handle const values
     if "const" in schema:
-        const_val = schema["const"]
-        return const_val
+        return schema["const"]
 
     # Handle different types
     if schema_type == "object" or "properties" in schema:
@@ -360,8 +394,6 @@ def _handle_array_type(
         # Handle uniqueItems constraint
         if unique_items:
             # For simple types, ensure uniqueness
-            import json as _json
-
             attempts = 0
             is_unique = False
             while attempts < 10:
@@ -391,12 +423,6 @@ def _handle_array_type(
 
 def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
     """Handle string type schema."""
-    from .interesting_values import (
-        get_realistic_boundary_string,
-        get_payload_within_length,
-        UNICODE_TRICKS,
-    )
-
     # Handle string constraints with conservative defaults
     min_length = max(0, int(schema.get("minLength", 0)))
     max_length = int(schema.get("maxLength", 50))  # Conservative default (was 100)
@@ -435,24 +461,19 @@ def _handle_string_type(schema: dict[str, Any], phase: str) -> str:
         return get_realistic_boundary_string(min_length, max_length)
     else:
         # In aggressive mode, use constraint-aware attack payloads
-        strategies = ["sql", "xss", "path", "unicode", "mixed"]
-        strategy = random.choice(strategies)
+        strategy = random.choice(_AGGRESSIVE_STRING_STRATEGIES)
 
-        if strategy == "sql":
-            payload = get_payload_within_length(max_length, "sql")
-        elif strategy == "xss":
-            payload = get_payload_within_length(max_length, "xss")
-        elif strategy == "path":
-            payload = get_payload_within_length(max_length, "path")
+        if strategy in _LENGTH_AWARE_PAYLOADS:
+            payload = get_payload_within_length(max_length, strategy)
         elif strategy == "unicode":
             # Embed unicode trick in normal-looking string
-            base = "test" + random.choice(UNICODE_TRICKS) + "value"
-            payload = base
+            payload = "test" + random.choice(UNICODE_TRICKS) + "value"
         else:
             # Mixed special characters
-            chars = string.ascii_letters + string.digits + "!@#$%"
             length = random.randint(min_length, min(max_length, 30))
-            payload = "".join(random.choice(chars) for _ in range(length))
+            payload = "".join(
+                random.choice(_MIXED_ALPHABET) for _ in range(length)
+            )
 
         return _enforce_length(payload)
 
@@ -469,25 +490,19 @@ def _handle_string_format(format_type: str, phase: str) -> str:
 
     elif format_type == "uuid":
         # UUID format
-        import uuid
-
         return str(uuid.uuid4())
 
     elif format_type == "email":
         # Email format
-        domains = ["example.com", "test.org", "mail.net", "domain.io"]
         username = "".join(random.choices(string.ascii_lowercase, k=12))
-        domain = random.choice(domains)
+        domain = random.choice(_EMAIL_DOMAINS)
         return f"{username}@{domain}"
 
     elif format_type == "uri":
         # URI format
-        schemes = ["http", "https"]
-        domains = ["example.com", "test.org", "api.domain.io"]
-        paths = ["", "/api", "/v1/resources", "/users/123", "/a" * 10]
-        scheme = random.choice(schemes)
-        domain = random.choice(domains)
-        path = random.choice(paths)
+        scheme = random.choice(_URI_SCHEMES)
+        domain = random.choice(_URI_DOMAINS)
+        path = random.choice(_URI_PATHS)
         return f"{scheme}://{domain}{path}"
     elif format_type == "time":
         # RFC 3339 time format (HH:MM:SS)
@@ -497,29 +512,15 @@ def _handle_string_format(format_type: str, phase: str) -> str:
         return f"{hour:02d}:{minute:02d}:{second:02d}"
     elif format_type == "ipv4":
         # IPv4 format
-        def _ipv4() -> str:
-            return ".".join(str(random.randint(0, 255)) for _ in range(4))
-
-        return _ipv4()
+        return ".".join(str(random.randint(0, 255)) for _ in range(4))
 
     elif format_type == "ipv6":
         # IPv6 format
-        def _ipv6() -> str:
-            groups = [f"{random.randint(0, 0xFFFF):x}" for _ in range(8)]
-            return ":".join(groups)
-
-        return _ipv6()
+        return ":".join(f"{random.randint(0, 0xFFFF):x}" for _ in range(8))
 
     elif format_type == "hostname":
         # Hostname format (RFC 1123)
-        domains = [
-            "example.com",
-            "test.org",
-            "localhost",
-            "api.example.com",
-            "subdomain.test.org",
-        ]
-        return random.choice(domains)
+        return random.choice(_HOSTNAMES)
 
     # Default: treat as regular string
     return _handle_string_type({"type": "string"}, phase)
@@ -532,41 +533,14 @@ def _generate_string_from_pattern(
     Generate a string that matches the given regex pattern.
     This is a simplified implementation for common patterns.
     """
-    # Handle some common patterns
-    if pattern == "^[a-zA-Z0-9]+$":
-        # Alphanumeric
-        length = random.randint(min_length, min(max_length, 20))
-        return "".join(
-            random.choice(string.ascii_letters + string.digits)
-            for _ in range(length)
-        )
-
-    elif pattern == "^[0-9]+$":
-        # Digits only
-        length = random.randint(min_length, min(max_length, 10))
-        return "".join(random.choice(string.digits) for _ in range(length))
-
-    elif pattern == "^[a-zA-Z]+$":
-        # Letters only
-        length = random.randint(min_length, min(max_length, 20))
-        return "".join(random.choice(string.ascii_letters) for _ in range(length))
-
-    # For more complex patterns, we would need a more sophisticated approach
-    # This is just a fallback
-    length = random.randint(min_length, min(max_length, 20))
-    return "".join(
-        random.choice(string.ascii_letters + string.digits) for _ in range(length)
-    )
+    # Handle some common patterns; anything else falls back to alphanumeric.
+    alphabet, cap = _PATTERN_ALPHABETS.get(pattern, (_ALPHANUMERIC, 20))
+    length = random.randint(min_length, min(max_length, cap))
+    return "".join(random.choice(alphabet) for _ in range(length))
 
 
 def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
     """Handle integer type schema."""
-    from .interesting_values import (
-        BOUNDARY_INTS_MEDIUM,
-        get_off_by_one_int,
-        get_realistic_boundary_int,
-    )
-
     # Handle integer constraints with conservative defaults (was +/-1M)
     minimum = schema.get("minimum", -1000)
     maximum = schema.get("maximum", 1000)
@@ -625,8 +599,7 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
                 value = get_off_by_one_int(maximum=maximum)
         elif strategy == "overflow":
             # Integer overflow values
-            overflow_values = [2147483648, -2147483649, 9223372036854775808]
-            value = random.choice(overflow_values)
+            value = random.choice(_INT_OVERFLOW_VALUES)
         else:
             # Boundary values within range
             boundary_values = [minimum, maximum, 0, -1, 1] + BOUNDARY_INTS_MEDIUM
@@ -652,8 +625,6 @@ def _handle_integer_type(schema: dict[str, Any], phase: str) -> int:
 
 def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
     """Handle number type schema."""
-    from .interesting_values import SPECIAL_FLOATS
-
     # Handle number constraints with conservative defaults (was +/-1M)
     minimum = schema.get("minimum", -1000.0)
     maximum = schema.get("maximum", 1000.0)
@@ -691,8 +662,6 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
                 m = float(multiple_of)
                 if m > 0:
                     # Compute index range of valid multiples
-                    import math
-
                     k_start = math.ceil(minimum / m)
                     k_end = math.floor(maximum / m)
                     if k_start <= k_end:
@@ -705,8 +674,7 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
         return float(value)
     else:
         # In aggressive mode, prioritize off-by-one and special values
-        strategies = ["off_by_one", "special", "boundary"]
-        strategy = random.choice(strategies)
+        strategy = random.choice(_AGGRESSIVE_NUMBER_STRATEGIES)
 
         if strategy == "off_by_one":
             # Off-by-one violation
@@ -724,17 +692,15 @@ def _handle_number_type(schema: dict[str, Any], phase: str) -> float:
             boundaries = [minimum, maximum, 0.0, -0.0, 1.0, -1.0]
             valid = [v for v in boundaries if minimum <= v <= maximum]
             value = (
-            random.choice(valid)
-            if valid
-            else random.uniform(minimum, maximum)
-        )
+                random.choice(valid)
+                if valid
+                else random.uniform(minimum, maximum)
+            )
 
         if multiple_of:
             try:
                 m = float(multiple_of)
                 if m > 0:
-                    import math
-
                     k = round(value / m)
                     candidate = k * m
                     if minimum <= candidate <= maximum:

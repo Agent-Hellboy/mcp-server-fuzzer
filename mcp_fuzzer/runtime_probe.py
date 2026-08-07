@@ -48,6 +48,8 @@ _RUNTIME_OWASP_MCP_CATEGORY_IDS = {
     "runtime.fs_link": "MCP02:2025",
     "runtime.ptrace": "MCP05:2025",
 }
+# Target name used for runtime activity seen outside any tool-call window.
+_AMBIENT_TARGET = "<ambient>"
 _OWASP_MCP_URLS = {
     "MCP02:2025": (
         "https://owasp.org/www-project-mcp-top-10/2025/"
@@ -284,9 +286,7 @@ class _RuntimeProbe:
             return
         run = self._run_counter.get(tool_name, 0)
         self._run_counter[tool_name] = run + 1
-        findings = [self._to_finding(d, tool_name, run) for d in drafts]
-        with self._lock:
-            self._findings.extend(findings)
+        self._record_drafts(drafts, tool_name, run)
 
     def drain_findings(self) -> list[Any]:
         """Return accumulated per-call findings plus any ambient runtime findings."""
@@ -319,10 +319,15 @@ class _RuntimeProbe:
             drafts = evaluate_events(ambient, self._policy)
         except Exception:
             return
-        findings = [self._to_finding(d, "<ambient>", None) for d in drafts]
-        if findings:
-            with self._lock:
-                self._findings.extend(findings)
+        self._record_drafts(drafts, _AMBIENT_TARGET, None)
+
+    def _record_drafts(self, drafts: list[Any], target: str, run: int | None) -> None:
+        """Convert probe drafts into findings and queue them for draining."""
+        findings = [self._to_finding(draft, target, run) for draft in drafts]
+        if not findings:
+            return
+        with self._lock:
+            self._findings.extend(findings)
 
     @staticmethod
     def _to_finding(draft: Any, target: str, run: int | None) -> Any:

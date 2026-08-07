@@ -76,7 +76,7 @@ def _run_input(kind: str, run: dict[str, Any]) -> Any:
     return run.get("args") if kind == "tool" else run.get("fuzz_data")
 
 
-def _response_text(run: dict[str, Any]) -> str:
+def response_text(run: dict[str, Any]) -> str:
     """Best-effort serialization of a run's response payload for scanning."""
     parts: list[str] = []
     result = run.get("result")
@@ -211,7 +211,7 @@ def classify_fuzz_runs(
                 )
             )
 
-        text = _response_text(run)
+        text = response_text(run)
         for pattern in _LEAK_PATTERNS:
             if pattern.search(text):
                 findings.append(

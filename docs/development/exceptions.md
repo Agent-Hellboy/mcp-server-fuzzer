@@ -1,12 +1,12 @@
-# Exception Handling
+# Exception handling
 
-MCP Fuzzer provides a comprehensive exception hierarchy to help diagnose and handle errors that may occur during fuzzing operations. This document outlines the different exception types and provides guidance on how to handle them.
+MCP Server Fuzzer provides an exception hierarchy to help diagnose and handle errors that may occur during fuzzing operations. This document outlines the different exception types and provides guidance on how to handle them.
 
-## Exception Hierarchy
+## Exception hierarchy
 
-All exceptions in MCP Fuzzer inherit from the base `MCPError` class, which itself inherits from Python's built-in `Exception` class.
+All exceptions in MCP Server Fuzzer inherit from the base `MCPError` class, which itself inherits from Python's built-in `Exception` class.
 
-```
+```text
 Exception
 └── MCPError
     ├── TransportError
@@ -47,9 +47,9 @@ Exception
         └── ExecutorError
 ```
 
-## Exception Categories
+## Exception categories
 
-### Transport-related Exceptions
+### Transport-related exceptions
 
 - **TransportError**: Base class for errors related to transport communication
   - **ConnectionError**: Raised when a connection to the server cannot be established
@@ -59,54 +59,54 @@ Exception
   - **PayloadValidationError**: Raised when a JSON-RPC payload is invalid
   - **TransportRegistrationError**: Raised when transport registration/selection fails
 
-### Authentication Exceptions
+### Authentication exceptions
 
 - **AuthError**: Base class for authentication subsystem errors
   - **AuthConfigError**: Raised for invalid authentication configuration
   - **AuthProviderError**: Raised when an auth provider definition is invalid
 
-### Timeout-related Exceptions
+### Timeout-related exceptions
 
 - **MCPTimeoutError**: Base class for timeout errors
   - **ProcessTimeoutError**: Raised when a subprocess execution times out
   - **RequestTimeoutError**: Raised when a network request times out
 
-### Safety-related Exceptions
+### Safety-related exceptions
 
 - **SafetyViolationError**: Base class for safety policy violations
   - **NetworkPolicyViolation**: Raised when a network policy is violated
   - **SystemCommandViolation**: Raised when a system command violates safety rules
   - **FileSystemViolation**: Raised when a file system operation violates safety rules
 
-### Server-related Exceptions
+### Server-related exceptions
 
 - **ServerError**: Base class for server-side errors
   - **ServerUnavailableError**: Raised when the server is unavailable
   - **ProtocolError**: Raised when the server protocol is incompatible
 
-### Configuration-related Exceptions
+### Configuration-related exceptions
 
 - **ConfigurationError**: Base class for configuration errors
   - **ConfigFileError**: Raised for errors related to configuration files
   - **ValidationError**: Raised when configuration validation fails
 
-### Fuzzing-related Exceptions
+### Fuzzing-related exceptions
 
 - **FuzzingError**: Base class for errors during fuzzing operations
   - **StrategyError**: Raised when a fuzzing strategy encounters an error
   - **ExecutorError**: Raised when the async executor encounters an error
 
-### CLI Exceptions
+### CLI exceptions
 
 - **CLIError**: Base class for CLI errors
   - **ArgumentValidationError**: Raised when CLI arguments are invalid
 
-### Reporting Exceptions
+### Reporting exceptions
 
 - **ReportError**: Base class for reporting/output errors
   - **ReportValidationError**: Raised when report/output validation fails
 
-### Runtime Exceptions
+### Runtime exceptions
 
 - **RuntimeSubsystemError**: Base class for runtime management errors
   - **ProcessStartError**: Failed to start a managed process
@@ -115,16 +115,16 @@ Exception
   - **ProcessRegistrationError**: Failed to register/unregister a process
   - **WatchdogStartError**: Failed to start the watchdog
 
-## Handling Exceptions
+## Handling exceptions
 
-### Best Practices
+### Best practices
 
 1. **Catch Specific Exceptions**: Always catch the most specific exception type that applies to your situation
 2. **Log Exception Details**: Include exception details in logs for easier debugging
 3. **Graceful Degradation**: When possible, handle exceptions gracefully and continue operation
 4. **User Feedback**: Provide clear, actionable feedback to users when errors occur
 
-### Example: Transport Error Handling
+### Example: transport error handling
 
 ```python
 import logging
@@ -144,7 +144,7 @@ except AuthenticationError as e:
     # Handle authentication failure
 ```
 
-### Example: Safety Violation Handling
+### Example: safety violation handling
 
 ```python
 import logging
@@ -161,7 +161,7 @@ except SystemCommandViolation as e:
     # Handle system command violation
 ```
 
-## Adding Custom Exceptions
+## Adding custom exceptions
 
 You can extend the exception hierarchy by creating your own exception classes:
 
@@ -173,8 +173,8 @@ class CustomError(MCPError):
     pass
 ```
 
-## Exception Propagation
+## Exception propagation
 
-MCP Fuzzer is designed to propagate exceptions up the call stack until they are handled. This allows you to catch exceptions at the appropriate level of abstraction.
+MCP Server Fuzzer propagates exceptions up the call stack until they are handled. This allows you to catch exceptions at the appropriate level of abstraction.
 
 For example, a `NetworkPolicyViolation` raised by the safety system will propagate up through the transport layer, the fuzzer, and eventually to your application code, where you can handle it appropriately.

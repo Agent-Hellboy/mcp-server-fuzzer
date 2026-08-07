@@ -355,6 +355,46 @@ async def test_fuzz_all_tools_timeout_protection():
 
 
 @pytest.mark.asyncio
+async def test_fuzz_all_tools_records_tools_skipped_by_budget():
+    """An exhausted time budget must name the untested tools, not drop them."""
+    client, _ = _make_client()
+    client._get_tools_from_server = AsyncMock(
+        return_value=[{"name": "tool1"}, {"name": "tool2"}, {"name": "tool3"}]
+    )
+
+    async def slow_fuzz(*args, **kwargs):
+        await asyncio.sleep(0.05)
+        return [{"success": True}]
+
+    client._fuzz_single_tool_with_timeout = slow_fuzz
+
+    with patch(
+        "mcp_fuzzer.client.tool_client_fuzzing.DEFAULT_MAX_TOTAL_FUZZING_TIME",
+        0.01,
+    ):
+        results = await client.fuzz_all_tools(runs_per_tool=1)
+
+    # The first tool runs before the budget is checked again; the rest are
+    # recorded as untested rather than silently vanishing from the results.
+    assert "tool1" in results
+    assert client.skipped_tools == ["tool2", "tool3"]
+
+
+@pytest.mark.asyncio
+async def test_fuzz_all_tools_records_no_skips_when_budget_holds():
+    client, _ = _make_client()
+    client._get_tools_from_server = AsyncMock(return_value=[{"name": "tool1"}])
+    client._fuzz_single_tool_with_timeout = AsyncMock(
+        return_value=[{"success": True}]
+    )
+
+    results = await client.fuzz_all_tools(runs_per_tool=1)
+
+    assert "tool1" in results
+    assert client.skipped_tools == []
+
+
+@pytest.mark.asyncio
 async def test_fuzz_with_timeout_exception():
     client, _ = _make_client()
     tool = {"name": "failing_tool"}
@@ -490,26 +530,6 @@ async def test_fuzz_tool_with_safety_disabled():
     assert len(results) == 1
     assert results[0]["safety_blocked"] is False
     assert results[0]["safety_sanitized"] is False
-
-
-def test_print_phase_report_no_reporter():
-    client, _ = _make_client()
-    # Should not raise
-    client._print_phase_report("test_tool", "realistic", [])
-
-
-def test_print_phase_report_with_reporter():
-    client, _ = _make_client()
-    from mcp_fuzzer.reports import FuzzerReporter
-
-    mock_reporter = MagicMock(spec=FuzzerReporter)
-    mock_reporter.console = MagicMock()
-    client.reporter = mock_reporter
-
-    results = [{"success": True}, {"success": False}]
-    client._print_phase_report("test_tool", "realistic", results)
-
-    mock_reporter.console.print.assert_called()
 
 
 @pytest.mark.asyncio

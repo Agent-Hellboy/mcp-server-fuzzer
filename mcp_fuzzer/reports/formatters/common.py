@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Literal, Protocol
+from typing import Any, Iterable, Iterator, Literal, Mapping, Protocol
 
 from ...evidence_fields import (
     ACCEPTED_MALFORMED,
@@ -13,6 +13,8 @@ from ...evidence_fields import (
     SERVER_ERROR,
     SUCCESS,
 )
+from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
+from ...redaction import redact, redact_url
 from ..outcome_buckets import summarize_tool_outcomes
 
 
@@ -30,6 +32,70 @@ def normalize_report_data(
     if hasattr(report, "to_dict"):
         return report.to_dict()  # type: ignore[return-value]
     return report
+
+
+# Sections whose values are raw per-run payloads (``args``/``result``) that a
+# target can reflect credentials into. Their top-level keys are tool names and
+# protocol type names, which are never treated as sensitive.
+_RUN_SECTIONS = ("tool_results", "protocol_results")
+
+# Sections redacted whole: every key inside them is a real payload key.
+_PAYLOAD_SECTIONS = ("runtime",)
+
+
+def _redact_safety_section(safety: dict[str, Any]) -> dict[str, Any]:
+    """Redact blocked-operation payloads inside a safety section.
+
+    Only the ``blocked_operations`` lists are walked: the sibling summaries are
+    keyed by tool name, which must not be mistaken for a credential key.
+    """
+    redacted = dict(safety)
+    for name, section in safety.items():
+        if isinstance(section, dict) and "blocked_operations" in section:
+            updated = dict(section)
+            updated["blocked_operations"] = redact(section["blocked_operations"])
+            redacted[name] = updated
+    return redacted
+
+
+def redact_report_data(
+    report: dict[str, Any] | SupportsToDict,
+) -> dict[str, Any]:
+    """Normalize report data and strip credentials from its values.
+
+    Only values change. Field names, tool names, protocol type names and the
+    overall document shape are preserved exactly, so an exporter renders the
+    same structure whether or not anything was redacted.
+    """
+    data = normalize_report_data(report)
+    if not isinstance(data, dict):
+        return data
+
+    redacted = dict(data)
+
+    metadata = redacted.get("metadata")
+    if isinstance(metadata, dict) and "endpoint" in metadata:
+        metadata = dict(metadata)
+        metadata["endpoint"] = redact_url(metadata["endpoint"])
+        redacted["metadata"] = metadata
+
+    for section in _RUN_SECTIONS:
+        entries = redacted.get(section)
+        if isinstance(entries, dict):
+            redacted[section] = {
+                name: redact(entry) for name, entry in entries.items()
+            }
+
+    for section in _PAYLOAD_SECTIONS:
+        entry = redacted.get(section)
+        if isinstance(entry, (dict, list)):
+            redacted[section] = redact(entry)
+
+    safety = redacted.get("safety")
+    if isinstance(safety, dict):
+        redacted["safety"] = _redact_safety_section(safety)
+
+    return redacted
 
 
 def calculate_tool_success_rate(
@@ -191,6 +257,44 @@ def collect_and_summarize_protocol_items(
     return items, summarize_protocol_items(items)
 
 
+# Protocol request types that carry per-item (named) results, in report order.
+_ITEM_SUMMARY_SOURCES: tuple[tuple[str, LabelPrefix], ...] = (
+    (READ_RESOURCE_REQUEST, "resource"),
+    (GET_PROMPT_REQUEST, "prompt"),
+)
+
+
+def protocol_item_summaries(
+    protocol_results: Mapping[str, Any],
+) -> list[tuple[LabelPrefix, list[dict[str, Any]], dict[str, dict[str, Any]]]]:
+    """Return ``(prefix, raw_results, summary)`` for each per-item request type.
+
+    Emitted in report order (resources, then prompts) so every exporter renders
+    the same sections from a single traversal of the protocol results.
+    """
+    summaries = []
+    for request_type, prefix in _ITEM_SUMMARY_SOURCES:
+        raw = protocol_results.get(request_type, [])
+        _, summary = collect_and_summarize_protocol_items(raw, prefix)
+        summaries.append((prefix, raw, summary))
+    return summaries
+
+
+def iter_protocol_type_stats(
+    protocol_results: Mapping[str, list[dict[str, Any]]]
+) -> Iterator[tuple[str, int, int, float]]:
+    """Yield ``(protocol_type, total_runs, errors, success_rate)`` per type."""
+    for protocol_type, results in protocol_results.items():
+        total_runs = len(results)
+        errors = sum(1 for r in results if result_has_failure(r))
+        yield (
+            protocol_type,
+            total_runs,
+            errors,
+            calculate_protocol_success_rate(total_runs, errors),
+        )
+
+
 __all__ = [
     "LABEL_PREFIXES",
     "LabelPrefix",
@@ -199,7 +303,10 @@ __all__ = [
     "calculate_tool_success_rate",
     "collect_and_summarize_protocol_items",
     "collect_labeled_protocol_items",
+    "iter_protocol_type_stats",
     "normalize_report_data",
+    "protocol_item_summaries",
+    "redact_report_data",
     "result_has_failure",
     "summarize_protocol_items",
     "summarize_tool_outcomes",

@@ -5,15 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from ..exceptions import AuthConfigError, AuthProviderError
-from .loaders import load_auth_from_dict
+from .loaders import build_provider, is_known_provider_type, load_auth_from_dict
 from .manager import AuthManager
-from .providers import (
-    create_api_key_auth,
-    create_basic_auth,
-    create_custom_header_auth,
-    create_oauth_auth,
-    create_oauth_client_credentials_auth,
-)
 
 
 def _provider_entry_to_dict(entry: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -38,44 +31,12 @@ def _add_provider(
     auth_manager: AuthManager, name: str, provider_config: dict[str, Any]
 ):
     provider_type = provider_config.get("type")
+    if not is_known_provider_type(provider_type):
+        raise AuthProviderError(
+            f"Unknown provider type: '{provider_type}' for '{name}'"
+        )
     try:
-        if provider_type == "api_key":
-            auth_manager.add_auth_provider(
-                name,
-                create_api_key_auth(
-                    provider_config["api_key"],
-                    provider_config.get("header_name", "Authorization"),
-                    provider_config.get("prefix", "Bearer"),
-                ),
-            )
-        elif provider_type == "basic":
-            auth_manager.add_auth_provider(
-                name,
-                create_basic_auth(
-                    provider_config["username"], provider_config["password"]
-                ),
-            )
-        elif provider_type == "oauth":
-            auth_manager.add_auth_provider(
-                name,
-                create_oauth_auth(
-                    provider_config["token"],
-                    provider_config.get("token_type", "Bearer"),
-                ),
-            )
-        elif provider_type == "oauth_client_credentials":
-            auth_manager.add_auth_provider(
-                name,
-                create_oauth_client_credentials_auth(
-                    provider_config["token_url"],
-                    provider_config["client_id"],
-                    provider_config["client_secret"],
-                    provider_config.get("scope"),
-                    provider_config.get("token_type", "Bearer"),
-                    float(provider_config.get("timeout", 10.0)),
-                ),
-            )
-        elif provider_type == "custom":
+        if provider_type == "custom":
             headers = provider_config.get("headers")
             if not headers:
                 raise AuthProviderError(
@@ -87,16 +48,9 @@ def _add_provider(
                     f"Provider '{name}' custom headers must be a dict, "
                     f"got {type(headers).__name__}"
                 )
-            auth_manager.add_auth_provider(
-                name,
-                create_custom_header_auth(
-                    {str(k): str(v) for k, v in headers.items()}
-                ),
-            )
-        else:
-            raise AuthProviderError(
-                f"Unknown provider type: '{provider_type}' for '{name}'"
-            )
+        auth_manager.add_auth_provider(
+            name, build_provider(provider_type, provider_config)
+        )
     except (AuthProviderError, AuthConfigError):
         raise
     except (KeyError, ValueError, TypeError) as exc:

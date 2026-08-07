@@ -116,37 +116,25 @@ class StatefulCommand:
         context.protocol_results.update(await pipeline.fuzz_stateful())
 
 
+# Commands run for each mode, in order. Every mode except "tools" also appends
+# StatefulCommand when the run is configured as stateful.
+_MODE_COMMANDS: dict[str, tuple[type, ...]] = {
+    "all": (ToolsCommand, SpecGuardCommand, ProtocolCommand),
+    "tools": (ToolsCommand,),
+    "protocol": (SpecGuardCommand, ProtocolCommand),
+    "resources": (SpecGuardCommand, ResourcesCommand),
+    "prompts": (SpecGuardCommand, PromptsCommand),
+}
+
+
 def build_run_plan(mode: str, config: dict[str, Any]) -> RunPlan:
-    steps: list[RunCommand] = []
-    supported_modes = {"all", "protocol", "resources", "prompts", "tools"}
-    if mode not in supported_modes:
+    commands = _MODE_COMMANDS.get(mode)
+    if commands is None:
         raise ValueError(f"Unsupported mode: {mode}")
 
-    if mode == "all":
-        steps.append(ToolsCommand())
-        steps.append(SpecGuardCommand())
-        steps.append(ProtocolCommand())
-        if config.get("stateful", False):
-            steps.append(StatefulCommand())
-        return RunPlan(steps)
-
-    if mode in {"protocol", "resources", "prompts"}:
-        steps.append(SpecGuardCommand())
-
-    if mode == "tools":
-        steps.append(ToolsCommand())
-    elif mode == "protocol":
-        steps.append(ProtocolCommand())
-        if config.get("stateful", False):
-            steps.append(StatefulCommand())
-    elif mode == "resources":
-        steps.append(ResourcesCommand())
-        if config.get("stateful", False):
-            steps.append(StatefulCommand())
-    elif mode == "prompts":
-        steps.append(PromptsCommand())
-        if config.get("stateful", False):
-            steps.append(StatefulCommand())
+    steps: list[RunCommand] = [command() for command in commands]
+    if mode != "tools" and config.get("stateful", False):
+        steps.append(StatefulCommand())
 
     return RunPlan(steps)
 

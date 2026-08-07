@@ -13,11 +13,11 @@ from typing import Any
 from importlib.metadata import PackageNotFoundError, version
 
 from ..exceptions import ValidationError
+from ..redaction import redact, redact_url
 from .models import ReportSnapshot
 from ..types import extract_tool_runs
 from .formatters.common import (
-    calculate_protocol_success_rate,
-    result_has_failure,
+    iter_protocol_type_stats,
     summarize_tool_outcomes,
     summarize_tool_runs,
     tool_run_has_exception,
@@ -82,7 +82,7 @@ class OutputProtocol:
         data = {
             "mode": mode,
             "protocol": protocol,
-            "endpoint": endpoint,
+            "endpoint": redact_url(endpoint),
             "total_tools": len(tool_results),
             "total_protocol_types": len(protocol_results),
             "tools_tested": self._format_tool_results(tool_results),
@@ -130,13 +130,17 @@ class OutputProtocol:
         warnings: list[dict[str, Any]] | None = None,
         execution_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create error report output."""
+        """Create error report output.
+
+        Error entries embed the failing run's ``arguments``/``details``, so the
+        lists are redacted before they become part of the saved document.
+        """
         data = {
             "total_errors": len(errors),
             "total_warnings": len(warnings) if warnings else 0,
-            "errors": errors,
-            "warnings": warnings or [],
-            "execution_context": execution_context or {},
+            "errors": redact(errors),
+            "warnings": redact(warnings or []),
+            "execution_context": redact(execution_context or {}),
         }
         metadata = {
             "error_severity": self._calculate_error_severity(errors),
@@ -154,7 +158,8 @@ class OutputProtocol:
         data = {
             "safety_system_active": safety_data.get("active", False),
             "total_operations_blocked": len(blocked_operations),
-            "blocked_operations": blocked_operations,
+            # Each blocked operation carries the arguments of the blocked call.
+            "blocked_operations": redact(blocked_operations),
             "risk_assessment": risk_assessment,
             "safety_statistics": safety_data.get("statistics", {}),
         }
@@ -277,7 +282,7 @@ class OutputProtocol:
                                 else "Unknown"
                             ),
                             "message": str(r.get("exception", "")),
-                            "arguments": r.get("args", {}),
+                            "arguments": redact(r.get("args", {})),
                         }
                         for r in runs
                         if tool_run_has_exception(r)
@@ -291,16 +296,14 @@ class OutputProtocol:
     ) -> list[dict[str, Any]]:
         """Format protocol results for output."""
         formatted = []
-        for protocol_type, results in protocol_results.items():
-            total_runs = len(results)
-            errors = sum(1 for r in results if result_has_failure(r))
-            successes = max(total_runs - errors, 0)
-            success_rate = calculate_protocol_success_rate(total_runs, errors)
+        for protocol_type, total_runs, errors, success_rate in (
+            iter_protocol_type_stats(protocol_results)
+        ):
             formatted.append(
                 {
                     "type": protocol_type,
                     "runs": total_runs,
-                    "successful": successes,
+                    "successful": max(total_runs - errors, 0),
                     "errors": errors,
                     "success_rate": success_rate,
                 }

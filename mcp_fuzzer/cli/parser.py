@@ -15,30 +15,32 @@ from .parser_transport import add_transport_arguments
 def create_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mcp-fuzzer",
-        description="MCP Fuzzer - Comprehensive fuzzing for MCP servers",
+        description=(
+            "MCP Fuzzer - Evidence-producing security assessment for MCP servers"
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             """
 Examples:
-  # Fuzz tools only
+  # Establish a reproducible tool baseline
   mcp-fuzzer --mode tools --protocol http \
-    --endpoint http://localhost:8000/mcp/ --runs 10
+    --endpoint http://localhost:8000/mcp/ --phase realistic --runs 10 --seed 42
 
   # Fuzz protocol types only
   mcp-fuzzer --mode protocol --protocol http \
     --endpoint http://localhost:8000/mcp/ --runs-per-type 5
 
-  # Fuzz tools + protocol (default)
-  mcp-fuzzer --mode all --protocol http \
-    --endpoint http://localhost:8000/mcp/ --runs 10 --runs-per-type 5
+  # Run tool metadata and output security checks
+  mcp-fuzzer --mode tools --phase aggressive --security-audit \
+    --protocol http --endpoint http://localhost:8000/mcp/ --runs 10
 
-  # Fuzz specific protocol type
-  mcp-fuzzer --mode protocol --protocol-type InitializeRequest \
-    --protocol http --endpoint http://localhost:8000/mcp/
+  # Contain a local stdio target
+  mcp-fuzzer --mode all --protocol stdio --endpoint "python my_server.py" \
+    --enable-safety-system --fs-root ./fuzz-sandbox --no-network
 
-  # Fuzz a single tool
+  # Focus one tool and keep the run reproducible
   mcp-fuzzer --mode tools --tool analyze_repository --protocol http \
-    --endpoint http://localhost:8000/mcp/ --runs 10
+    --endpoint http://localhost:8000/mcp/ --runs 10 --seed 42
 
   # Fuzz with verbose output
   mcp-fuzzer --mode all --protocol http \

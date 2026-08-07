@@ -101,24 +101,6 @@ class HttpDriver(
         else:
             self.process_manager = process_manager
 
-    def _prepare_headers_with_auth(self, headers: dict[str, str]) -> dict[str, str]:
-        """Prepare headers with optional safety sanitization and auth headers."""
-        if self.safety_enabled:
-            safe_headers = self._prepare_safe_headers(headers)
-        else:
-            safe_headers = headers.copy()
-        # Add auth headers after sanitization (they are user-configured and safe)
-        safe_headers.update(self.auth_headers)
-        if self.auth_header_provider is not None:
-            safe_headers.update(
-                {
-                    k: v
-                    for k, v in self.auth_header_provider().items()
-                    if v is not None
-                }
-            )
-        return safe_headers
-
     def _prepare_headers(self, *, method: str | None = None) -> dict[str, str]:
         """Prepare HTTP headers for MCP requests.
 
@@ -160,6 +142,44 @@ class HttpDriver(
             logging.warning("Refusing redirect that violates policy from %s", self.url)
         return resolved
 
+    async def _post_payload(
+        self, payload: dict[str, Any], method: str | None, *, parse_response: bool
+    ) -> Any:
+        """POST a payload, follow one policy-checked redirect, and parse the reply.
+
+        Shared by send_request/send_raw/send_notification, which differ only in
+        how the payload is built and whether a response body is expected.
+        """
+        await self._update_activity()
+
+        # Use shared network functionality
+        if self.safety_enabled:
+            self._validate_network_request(self.url)
+        safe_headers = self._prepare_headers_with_auth(
+            self._prepare_headers(method=method)
+        )
+
+        async with self._create_http_client(self.timeout) as client:
+            response = await client.post(self.url, json=payload, headers=safe_headers)
+
+            # Handle redirects
+            redirect_url = self._resolve_redirect_url(response)
+            if redirect_url:
+                response = await client.post(
+                    redirect_url,
+                    json=payload,
+                    headers=self._headers_for_redirect(redirect_url, safe_headers),
+                )
+
+            # Use shared response handling
+            self._handle_http_response_error(response)
+            if not parse_response:
+                return None
+            result = self._parse_http_response_json(response)
+            if is_initialize_method(method):
+                self._maybe_extract_protocol_version_from_result(result)
+            return result
+
     async def send_request(
         self, method: str, params: dict[str, Any | None] | None = None
     ) -> Any:
@@ -184,31 +204,7 @@ class HttpDriver(
         self._validate_jsonrpc_payload(payload, strict=True)
         self._validate_payload_serializable(payload)
 
-        await self._update_activity()
-
-        # Use shared network functionality
-        if self.safety_enabled:
-            self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(
-            self._prepare_headers(method=method)
-        )
-
-        async with self._create_http_client(self.timeout) as client:
-            response = await client.post(self.url, json=payload, headers=safe_headers)
-
-            # Handle redirects
-            redirect_url = self._resolve_redirect_url(response)
-            if redirect_url:
-                response = await client.post(
-                    redirect_url, json=payload, headers=safe_headers
-                )
-
-            # Use shared response handling
-            self._handle_http_response_error(response)
-            result = self._parse_http_response_json(response)
-            if is_initialize_method(method):
-                self._maybe_extract_protocol_version_from_result(result)
-            return result
+        return await self._post_payload(payload, method, parse_response=True)
 
     async def send_raw(self, payload: dict[str, Any]) -> Any:
         """Send raw payload and return the response.
@@ -234,32 +230,9 @@ class HttpDriver(
             )
             # Continue for fuzzing purposes, but log the issue
 
-        await self._update_activity()
-
-        # Use shared network functionality
-        if self.safety_enabled:
-            self._validate_network_request(self.url)
-        method = payload_method(payload)
-        safe_headers = self._prepare_headers_with_auth(
-            self._prepare_headers(method=method)
+        return await self._post_payload(
+            payload, payload_method(payload), parse_response=True
         )
-
-        async with self._create_http_client(self.timeout) as client:
-            response = await client.post(self.url, json=payload, headers=safe_headers)
-
-            # Handle redirects
-            redirect_url = self._resolve_redirect_url(response)
-            if redirect_url:
-                response = await client.post(
-                    redirect_url, json=payload, headers=safe_headers
-                )
-
-            # Use shared response handling
-            self._handle_http_response_error(response)
-            result = self._parse_http_response_json(response)
-            if is_initialize_method(method):
-                self._maybe_extract_protocol_version_from_result(result)
-            return result
 
     async def send_notification(
         self, method: str, params: dict[str, Any | None] | None = None
@@ -281,27 +254,8 @@ class HttpDriver(
         self._validate_jsonrpc_payload(payload, strict=True)
         self._validate_payload_serializable(payload)
 
-        await self._update_activity()
-
-        # Use shared network functionality
-        if self.safety_enabled:
-            self._validate_network_request(self.url)
-        safe_headers = self._prepare_headers_with_auth(
-            self._prepare_headers(method=method)
-        )
-
-        async with self._create_http_client(self.timeout) as client:
-            response = await client.post(self.url, json=payload, headers=safe_headers)
-
-            # Handle redirects
-            redirect_url = self._resolve_redirect_url(response)
-            if redirect_url:
-                response = await client.post(
-                    redirect_url, json=payload, headers=safe_headers
-                )
-
-            # Use shared response handling (notifications don't expect response data)
-            self._handle_http_response_error(response)
+        # Notifications don't expect response data
+        await self._post_payload(payload, method, parse_response=False)
 
     async def get_process_stats(self) -> dict[str, Any]:
         """Get statistics about any managed processes."""
@@ -344,7 +298,10 @@ class HttpDriver(
             if redirect_url:
                 await response.aclose()  # Close the first response
                 response = await client.post(
-                    redirect_url, json=payload, headers=safe_headers, stream=True
+                    redirect_url,
+                    json=payload,
+                    headers=self._headers_for_redirect(redirect_url, safe_headers),
+                    stream=True,
                 )
 
             try:
@@ -381,9 +338,3 @@ class HttpDriver(
                 await self.process_manager.shutdown()
         except Exception as e:
             logging.warning(f"Error shutting down HTTP transport process manager: {e}")
-
-    def __del__(self):
-        """Cleanup when the object is destroyed."""
-        # Don't try to call async methods in destructor
-        # The object will be cleaned up by Python's garbage collector
-        pass

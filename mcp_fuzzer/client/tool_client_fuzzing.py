@@ -156,12 +156,25 @@ class ToolClientFuzzingMixin:
         start_time = asyncio.get_event_loop().time()
         max_total_time = DEFAULT_MAX_TOTAL_FUZZING_TIME
 
+        # Coverage is truncated, not failed, when the budget runs out. Record
+        # exactly which tools went untested so a partial run is never mistaken
+        # for a clean sweep.
+        self.skipped_tools: list[str] = []
+
         for i, tool in enumerate(tools):
             elapsed = asyncio.get_event_loop().time() - start_time
             if elapsed > max_total_time:
+                self.skipped_tools = [
+                    str(t.get("name", "unknown")) for t in tools[i:]
+                ]
                 self._logger.warning(
-                    "Fuzzing session taking too long (%.1fs), stopping early",
+                    "Fuzzing budget of %.1fs exhausted after %.1fs; "
+                    "%d of %d tools left untested: %s",
+                    max_total_time,
                     elapsed,
+                    len(self.skipped_tools),
+                    len(tools),
+                    ", ".join(self.skipped_tools),
                 )
                 break
 
@@ -198,22 +211,6 @@ class ToolClientFuzzingMixin:
             )
 
         return all_results
-
-    def _print_phase_report(
-        self, tool_name: str, phase: str, results: list[dict[str, Any]]
-    ):
-        from ..reports import FuzzerReporter
-
-        if not hasattr(self, "reporter") or not isinstance(
-            self.reporter, FuzzerReporter
-        ):
-            return
-
-        successful = len([r for r in results if r.get("success", False)])
-        total = len(results)
-        self.reporter.console.print(
-            f"  {phase.title()} phase: {successful}/{total} successful"
-        )
 
     async def _run_tool_phase(
         self,
@@ -318,7 +315,6 @@ class ToolClientFuzzingMixin:
                     tool_name,
                     phase_results["error"],
                 )
-                return phase_results
 
             return phase_results
 

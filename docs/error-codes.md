@@ -1,6 +1,6 @@
-# MCP Fuzzer Error Codes
+# Error codes
 
-The MCP Fuzzer surfaces every user-facing failure through numbered error codes.
+MCP Server Fuzzer surfaces every user-facing failure through numbered error codes.
 Each code follows the `CCTTT` format:
 
 - `CC` (two digits) identifies the category (e.g., `10` for Transport, `20` for Auth)

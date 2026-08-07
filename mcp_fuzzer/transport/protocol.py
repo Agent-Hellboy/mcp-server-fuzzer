@@ -11,14 +11,17 @@ import re
 from typing import Any, Mapping
 
 from ..config import (
+    DEFAULT_PROTOCOL_VERSION,
     MCP_METHOD_HEADER,
     MCP_NAME_HEADER,
     MCP_PROTOCOL_VERSION_HEADER,
 )
 from .methods import is_initialize_method
 
+# DEFAULT_PROTOCOL_VERSION is imported (not redefined) from mcp_fuzzer.config and
+# re-exported here: the stdio and streamable-HTTP drivers import it from opposite
+# sides, and two literals would let them disagree in the same initialize payload.
 SPEC_VERSION_ENV = "MCP_SPEC_SCHEMA_VERSION"
-DEFAULT_PROTOCOL_VERSION = "2025-11-25"
 STREAMABLE_HTTP_MIN_PROTOCOL_VERSION = "2025-03-26"
 STATELESS_PROTOCOL_VERSION = "2026-07-28"
 CLIENT_INFO_META_KEY = "io.modelcontextprotocol/clientInfo"

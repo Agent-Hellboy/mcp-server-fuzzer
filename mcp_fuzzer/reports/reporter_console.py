@@ -10,20 +10,22 @@ if TYPE_CHECKING:
     from .reporter import FuzzerReporter
 
 
-def print_tool_summary(reporter: FuzzerReporter, results: dict[str, Any]) -> None:
-    reporter.console_formatter.print_tool_summary(results)
+def _collect_tool_results(reporter: FuzzerReporter, results: dict[str, Any]) -> None:
     for tool_name, tool_results in results.items():
         runs, _ = extract_tool_runs(tool_results)
         reporter.add_tool_results(tool_name, runs)
+
+
+def print_tool_summary(reporter: FuzzerReporter, results: dict[str, Any]) -> None:
+    reporter.console_formatter.print_tool_summary(results)
+    _collect_tool_results(reporter, results)
 
 
 def print_tool_execution_summary(
     reporter: FuzzerReporter, results: dict[str, Any]
 ) -> None:
     reporter.console_formatter.print_tool_execution_summary(results)
-    for tool_name, tool_results in results.items():
-        runs, _ = extract_tool_runs(tool_results)
-        reporter.add_tool_results(tool_name, runs)
+    _collect_tool_results(reporter, results)
 
 
 def print_protocol_summary(

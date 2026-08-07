@@ -1,499 +1,194 @@
-# Examples
+# Audit recipes and maintained fixtures
 
-This page provides working examples and configurations for common use cases with MCP Server Fuzzer.
+These recipes are deliberately small. Copy one, change the target and output
+directory, and keep each assessment question in its own report directory.
+The repository's maintained local MCP fixtures live under
+[`examples/`](https://github.com/Agent-Hellboy/mcp-server-fuzzer/tree/main/examples)
+and are useful for validating transports, authentication, stdio containment,
+and report handling. They are test fixtures, not security certifications or
+compatibility guarantees.
 
-## Basic Examples
-
-### HTTP Transport Examples
-
-#### Basic Tool Fuzzing
-
-```bash
-# Fuzz tools on HTTP server
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
-
-# With verbose output
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --verbose
-
-# With custom timeout
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --timeout 60.0
-```
-
-#### Single Tool Fuzzing
+## Recipe: remote baseline
 
 ```bash
-# Fuzz only a specific tool
-mcp-fuzzer --mode tools --tool analyze_repository --protocol http --endpoint http://localhost:8000 --runs 20
-
-# Fuzz a specific tool with both phases
-mcp-fuzzer --mode tools --tool generate_terraform --phase both --protocol http --endpoint http://localhost:8000 --runs 15
+mcp-fuzzer \
+  --mode tools \
+  --protocol streamablehttp \
+  --endpoint https://target.example/mcp \
+  --phase realistic \
+  --runs 10 \
+  --seed 42 \
+  --output-dir reports/baseline
 ```
 
-#### Protocol Fuzzing
+Use `--protocol https` for a conventional HTTPS endpoint and `--protocol sse`
+for an SSE endpoint. Confirm the endpoint and transport with the server owner.
+
+## Recipe: tool and schema security review
 
 ```bash
-# Fuzz InitializeRequest protocol type
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5
-
-# Fuzz a different protocol type
-mcp-fuzzer --mode protocol --protocol-type ProgressNotification --protocol http --endpoint http://localhost:8000
-
-# With verbose output
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 5 --verbose
+mcp-fuzzer \
+  --mode tools \
+  --protocol https \
+  --endpoint https://target.example/mcp \
+  --phase aggressive \
+  --security-audit \
+  --runs 20 \
+  --seed 42 \
+  --output-dir reports/security
 ```
 
-#### Spec Guard Modes
+The audit inspects tool names, descriptions, annotations, schemas, duplicate
+definitions, transport configuration, and selected output oracles. Treat
+metadata signals as analyst leads: read the exact evidence and verify whether a
+client or model would actually consume the content in a dangerous way.
+
+## Recipe: protocol and state behavior
 
 ```bash
-# Run deterministic resource checks
-mcp-fuzzer --mode resources --protocol http --endpoint http://localhost:8000 \
-  --spec-resource-uri file:///tmp/resource.txt
+# Structured protocol behavior
+mcp-fuzzer \
+  --mode protocol \
+  --protocol streamablehttp \
+  --endpoint https://target.example/mcp \
+  --protocol-phase realistic \
+  --runs-per-type 5 \
+  --output-dir reports/protocol
 
-# Run deterministic prompt checks
-mcp-fuzzer --mode prompts --protocol http --endpoint http://localhost:8000 \
-  --spec-prompt-name summarize \
-  --spec-prompt-args '{"text":"hello"}'
-
-# Run tools + protocol fuzzing with spec checks
-mcp-fuzzer --mode all --phase both --protocol http --endpoint http://localhost:8000
+# A focused message type
+mcp-fuzzer \
+  --mode protocol \
+  --protocol-type CallToolRequest \
+  --protocol streamablehttp \
+  --endpoint https://target.example/mcp \
+  --protocol-phase aggressive \
+  --runs-per-type 10 \
+  --output-dir reports/call-tool
 ```
 
-### SSE Transport Examples
+Add `--stateful` only when the target's behavior depends on sequences. Use
+`--spec-schema-version` when comparing a server against a specific MCP schema.
 
-#### Tool Fuzzing with SSE
+## Recipe: authentication boundary
+
+For a read-only OAuth assessment:
 
 ```bash
-# Basic SSE tool fuzzing
-mcp-fuzzer --mode tools --protocol sse --endpoint http://localhost:8000/sse --runs 15
-
-# With realistic data only
-mcp-fuzzer --mode tools --phase realistic --protocol sse --endpoint http://localhost:8000/sse --runs 10
-
-# With aggressive data for security testing
-mcp-fuzzer --mode tools --phase aggressive --protocol sse --endpoint http://localhost:8000/sse --runs 20
+mcp-fuzzer \
+  --mode tools \
+  --protocol https \
+  --endpoint https://target.example/mcp \
+  --auth-audit \
+  --security-audit \
+  --runs 10 \
+  --output-dir reports/auth
 ```
 
-#### Protocol Fuzzing with SSE
-
-```bash
-# SSE protocol fuzzing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol sse --endpoint http://localhost:8000/sse --runs-per-type 8
-
-# Fuzz specific protocol type with SSE
-mcp-fuzzer --mode protocol --protocol-type CreateMessageRequest --protocol sse --endpoint http://localhost:8000/sse
-```
-
-### Stdio Transport Examples
-
-#### Local Process Fuzzing
-
-```bash
-# Fuzz Python script
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10
-
-# Fuzz Node.js server
-mcp-fuzzer --mode tools --protocol stdio --endpoint "node server.js" --runs 10
-
-# Fuzz binary executable
-mcp-fuzzer --mode tools --protocol stdio --endpoint "./bin/mcp-server" --runs 10
-```
-
-#### Stdio with Safety System
-
-```bash
-# Enable safety system for stdio
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10 --enable-safety-system
-
-# With filesystem sandboxing
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10 --enable-safety-system --fs-root /tmp/safe_dir
-
-# Retry with safety on interrupt
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10 --retry-with-safety-on-interrupt
-```
-
-## Authentication Examples
-
-### API Key Authentication
-
-#### Configuration File Approach
-
-Create `auth_config.json`:
+For authenticated tool calls, prefer a restricted config file or environment
+variables over putting secrets directly in shell history. Example auth files
+must use placeholders:
 
 ```json
 {
   "providers": {
-    "openai_api": {
+    "assessment": {
       "type": "api_key",
-      "api_key": "sk-your-openai-api-key",
-      "header_name": "Authorization"
-    },
-    "github_api": {
-      "type": "api_key",
-      "api_key": "ghp-your-github-token",
-      "header_name": "Authorization"
+      "api_key": "REPLACE_WITH_A_TEST_KEY",
+      "header_name": "Authorization",
+      "prefix": "Bearer"
     }
   },
-  "tool_mapping": {
-    "openai_chat": "openai_api",
-    "github_search": "github_api"
-  }
+  "default_provider": "assessment"
 }
 ```
 
-Use with fuzzer:
-
 ```bash
-mcp-fuzzer --mode tools --protocol http --auth-config auth_config.json --endpoint http://localhost:8000
+mcp-fuzzer \
+  --mode tools \
+  --protocol https \
+  --endpoint https://target.example/mcp \
+  --auth-config ./auth_config.json \
+  --runs 10 \
+  --output-dir reports/authenticated
 ```
 
-#### Environment Variables Approach
+Use `--auth-audit-intrusive` only when dynamic client registration and redirect
+validation are explicitly in scope. Keep intrusive results separate from the
+read-only baseline.
+
+## Recipe: local stdio containment
 
 ```bash
-export MCP_API_KEY="sk-your-api-key"
-export MCP_HEADER_NAME="Authorization"
-
-mcp-fuzzer --mode tools --protocol http --auth-env --endpoint http://localhost:8000
-```
-
-### Basic Authentication
-
-```bash
-export MCP_USERNAME="user"
-export MCP_PASSWORD="password"
-
-mcp-fuzzer --mode tools --protocol http --auth-env --endpoint http://localhost:8000
-```
-
-## Safety System Examples
-
-### Basic Safety Configuration
-
-```bash
-# Enable safety system
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --enable-safety-system
-
-# Set custom filesystem root
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --fs-root /tmp/mcp_fuzzer_safe
-
-# Disable argument-level safety (not recommended)
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --no-safety
-
-```
-
-### Advanced Safety Configuration
-
-```bash
-# Retry with safety on interrupt
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --retry-with-safety-on-interrupt
-
-# Combined safety options
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" \
+mkdir -p fuzz-sandbox
+mcp-fuzzer \
+  --mode all \
+  --protocol stdio \
+  --endpoint "python my_server.py" \
+  --phase aggressive \
   --enable-safety-system \
-  --fs-root /tmp/safe_dir \
-  --retry-with-safety-on-interrupt
+  --fs-root "$PWD/fuzz-sandbox" \
+  --no-network \
+  --runs 5 \
+  --security-audit \
+  --output-dir reports/stdio
 ```
 
-## Fuzzing Strategy Examples
+`--fs-root` and the safety system are fuzzer controls, not a full operating
+system sandbox. Use a container or VM for untrusted server code.
 
-### Two-Phase Fuzzing
+## Recipe: runtime observation
 
-#### Tool Fuzzing with Both Phases
+Runtime observation is for authorized local stdio targets when host behavior is
+part of the question:
 
 ```bash
-# Run both realistic and aggressive phases
-mcp-fuzzer --mode tools --phase both --protocol http --endpoint http://localhost:8000 --runs 15
-
-# Realistic phase only (valid data)
-mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint http://localhost:8000 --runs 10
-
-# Aggressive phase only (malicious data)
-mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 20
+mcp-fuzzer \
+  --mode tools \
+  --protocol stdio \
+  --endpoint "python my_server.py" \
+  --runtime-probe \
+  --runtime-probe-backend auto \
+  --runtime-probe-bin /path/to/mcpfz-probe \
+  --runtime-probe-workspace "$PWD/fuzz-sandbox" \
+  --runtime-probe-tmpdir /tmp \
+  --runtime-probe-allow-exec /usr/bin/date \
+  --runtime-probe-allow-host api.example.com \
+  --runs 3 \
+  --output-dir reports/runtime
 ```
 
-#### Protocol Fuzzing Phases
+The sidecar can provide evidence about process execution, network connections,
+credential reads, filesystem changes, privilege changes, and ptrace activity.
+Review the [runtime monitor setup](getting-started.md#optional-observe-a-local-process)
+and [mcpfz-probe documentation](https://github.com/Agent-Hellboy/mcpfz-probe)
+for host prerequisites.
+
+## Recipe: maintain a reproducible run
+
+Use a fixed seed, a versioned config, a dedicated output directory, and an
+explicit schema version:
 
 ```bash
-# Realistic protocol testing (default)
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase realistic --protocol http --endpoint http://localhost:8000 --runs-per-type 8
-
-# Aggressive protocol testing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
+mcp-fuzzer \
+  --config assessment.yaml \
+  --spec-schema-version 2025-11-25 \
+  --seed 42 \
+  --output-dir reports/2025-11-25-seed-42
 ```
 
-## Configuration Examples
+Save the command line, config hash, target revision, and tool version with the
+assessment record. A seed improves reproduction; it does not guarantee that a
+remote target or stateful server is deterministic.
 
-### Environment Variables Configuration
+## Maintained local fixtures
 
-```bash
-# Core configuration
-export MCP_FUZZER_TIMEOUT=60.0
-export MCP_FUZZER_LOG_LEVEL=DEBUG
-export MCP_FUZZER_SAFETY_ENABLED=true
+From a source checkout, see [`examples/README.md`](https://github.com/Agent-Hellboy/mcp-server-fuzzer/blob/main/examples/README.md)
+for commands for:
 
-# Transport-specific configuration
-export MCP_FUZZER_HTTP_TIMEOUT=60.0
-export MCP_FUZZER_SSE_TIMEOUT=60.0
-export MCP_FUZZER_STDIO_TIMEOUT=60.0
+- the Python HTTP fixture with public and protected tools;
+- the Streamable HTTP fixture;
+- Go and TypeScript stdio fixtures;
+- authentication configuration and transport checks.
 
-# Safety configuration
-export MCP_FUZZER_FS_ROOT=~/.mcp_fuzzer
-
-# Run fuzzer
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000
-```
-
-## Testing Examples
-
-### Local Development Testing
-
-```bash
-# Test local HTTP server
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --verbose
-
-# Test local stdio server with safety
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --runs 10 --enable-safety-system
-
-# Test both modes on local server
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 15
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 8
-```
-
-### Production-Like Environment Testing
-
-```bash
-# Test with realistic data only
-mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api.example.com --runs 10
-
-# Test protocol compliance
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase realistic --protocol http --endpoint https://api.example.com --runs-per-type 5
-
-# Test with authentication
-mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint https://api.example.com --auth-config auth.json
-```
-
-### Security Testing
-
-```bash
-# Aggressive fuzzing for security testing
-mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 25
-
-# Protocol security testing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 15
-
-# Combined security testing
-mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 20
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol-phase aggressive --protocol http --endpoint http://localhost:8000 --runs-per-type 10
-```
-
-## Reporting Examples
-
-### Basic Reporting
-
-```bash
-# Generate reports in default 'reports' directory
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10
-
-# Specify custom output directory
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --output-dir "my_reports"
-
-# Generate comprehensive safety report
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --safety-report
-```
-
-### Advanced Reporting
-
-```bash
-# Export safety data to JSON with custom filename
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 --export-safety-data "safety_data.json"
-
-# Combine all reporting features
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 10 \
-    --safety-report \
-    --export-safety-data \
-    --output-dir "detailed_reports"
-```
-
-### Generated Report Files
-
-Each fuzzing session creates `session_id`-based reports plus standardized outputs:
-
-```text
-detailed_reports/
-|-- fuzzing_report_550e8400-e29b-41d4-a716-446655440000.json    # Complete structured report
-|-- fuzzing_report_550e8400-e29b-41d4-a716-446655440000.txt     # Human-readable summary
-|-- safety_report_550e8400-e29b-41d4-a716-446655440000.json     # Safety system data (if enabled)
-|-- sessions/
-|   |-- 550e8400-e29b-41d4-a716-446655440000/
-|   |   |-- 20240101_000000_fuzzing_results.json
-|   |   |-- 20240101_000001_error_report.json     # When --output-types includes error_report
-|   |   |-- 20240101_000002_safety_summary.json   # When safety reporting is enabled
-```
-
-### Report Content Examples
-
-#### JSON Report Structure
-```json
-{
-  "metadata": {
-    "session_id": "550e8400-e29b-41d4-a716-446655440000",
-    "start_time": "2025-08-12T14:30:00.123456",
-    "mode": "tools",
-    "protocol": "stdio",
-    "endpoint": "python my_server.py",
-    "runs": 10,
-    "fuzzer_version": "1.0.0",
-    "end_time": "2025-08-12T14:30:15.654321"
-  },
-  "tool_results": {
-    "test_tool": [
-      {"run": 1, "success": true, "args": {...}},
-      {"run": 2, "success": false, "exception": "Invalid argument"}
-    ]
-  },
-  "summary": {
-    "tools": {
-      "total_tools": 1,
-      "total_runs": 10,
-      "success_rate": 80.0
-    }
-  }
-}
-```
-
-#### Text Report Example
-```text
-================================================================================
-MCP FUZZER REPORT
-================================================================================
-
-FUZZING SESSION METADATA
-----------------------------------------
-session_id: 550e8400-e29b-41d4-a716-446655440000
-start_time: 2025-08-12T14:30:00.123456
-mode: tools
-protocol: stdio
-endpoint: python my_server.py
-runs: 10
-
-SUMMARY STATISTICS
-----------------------------------------
-Tools Tested: 1
-Total Tool Runs: 10
-Tools with Errors: 0
-Tools with Exceptions: 2
-Tool Success Rate: 80.0%
-```
-
-## Debugging Examples
-
-### Verbose Output
-
-```bash
-# Enable verbose logging
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --verbose
-
-# Set specific log level
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --log-level DEBUG
-
-# Combine verbose and log level
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --verbose --log-level DEBUG
-```
-
-### Error Handling
-
-```bash
-# Test with increased timeout for slow servers
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --timeout 120.0
-
-# Test with retry mechanism
-mcp-fuzzer --mode tools --protocol stdio --endpoint "python my_server.py" --retry-with-safety-on-interrupt
-
-# Test with custom tool timeout
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --tool-timeout 60.0
-```
-
-## Output Examples
-
-### Tool Fuzzer Output
-
-```
-+------------------------------------------------------------------------------+
-|                              Tool Fuzzer Results                               |
-+------------------------------------------------------------------------------+
-| Tool Name        | Success Rate | Exception Count | Example Exceptions        |
-+------------------------------------------------------------------------------+
-| get_weather      | 85.0%        | 3               | Invalid city name        |
-| search_web       | 92.0%        | 1               | Network timeout          |
-| calculate_math   | 100.0%       | 0               | None                     |
-+------------------------------------------------------------------------------+
-| Overall          | 92.3%        | 4               | 3 tools tested           |
-+------------------------------------------------------------------------------+
-```
-
-### Protocol Fuzzer Output
-
-```
-+------------------------------------------------------------------------------+
-|                           Protocol Fuzzer Results                              |
-+------------------------------------------------------------------------------+
-| Protocol Type        | Total Runs | Successful | Exceptions | Success Rate |
-+------------------------------------------------------------------------------+
-| InitializeRequest    | 5          | 5          | 0          | 100.0%       |
-| ProgressNotification | 5          | 4          | 1          | 80.0%        |
-| CancelledNotification | 5          | 5          | 0          | 100.0%       |
-+------------------------------------------------------------------------------+
-| Overall              | 15         | 14         | 1          | 93.3%        |
-+------------------------------------------------------------------------------+
-```
-
-## Enhanced Reporting Examples
-
-### Comprehensive Safety Reporting
-
-```bash
-# Generate comprehensive safety report
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --safety-report
-
-# Export safety data to JSON
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 --export-safety-data
-
-# Combine safety reporting with custom output directory
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 20 \
-    --safety-report \
-    --export-safety-data \
-    --output-dir "detailed_safety_reports"
-```
-
-## Performance Examples
-
-### High-Volume Testing
-
-```bash
-# High-volume tool fuzzing
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 100
-
-# High-volume protocol fuzzing
-mcp-fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000 --runs-per-type 50
-
-# Concurrent testing with multiple endpoints
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 50 &
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8001 --runs 50 &
-wait
-```
-
-### Load Testing
-
-```bash
-# Load test with realistic data
-mcp-fuzzer --mode tools --phase realistic --protocol http --endpoint http://localhost:8000 --runs 200
-
-# Load test with aggressive data
-mcp-fuzzer --mode tools --phase aggressive --protocol http --endpoint http://localhost:8000 --runs 200
-
-# Monitor performance
-mcp-fuzzer --mode tools --protocol http --endpoint http://localhost:8000 --runs 100 --log-level INFO
-```
-
-## Summary
-
-These examples cover the most common use cases and should help you get started with MCP Server Fuzzer. For more advanced configurations and customizations, refer to the [Reference](../development/reference.md) and [Architecture](../architecture/architecture.md) documentation.
+Use these fixtures to verify that a local installation, auth mapping, safety
+boundary, and report parser work before testing an authorized target.

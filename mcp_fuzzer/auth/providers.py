@@ -7,6 +7,19 @@ from typing import Any
 import httpx
 
 
+def token_expiry_from_ttl(expires_in: Any) -> float:
+    """Absolute expiry for an ``expires_in`` TTL, minus a refresh safety skew.
+
+    Non-numeric/absent TTLs fall back to one hour.
+    """
+    try:
+        ttl = float(expires_in)
+    except (TypeError, ValueError):
+        ttl = 3600.0
+    skew = min(60.0, max(ttl * 0.1, 1.0))
+    return time.time() + max(ttl - skew, 1.0)
+
+
 class AuthProvider(ABC):
     @abstractmethod
     def get_auth_headers(self) -> dict[str, str]:
@@ -143,13 +156,7 @@ class OAuthClientCredentialsAuth(AuthProvider):
                     "OAuth client credentials response missing access_token"
                 )
 
-            expires_in = payload.get("expires_in")
-            try:
-                ttl = float(expires_in)
-            except (TypeError, ValueError):
-                ttl = 3600.0
-            skew = min(60.0, max(ttl * 0.1, 1.0))
-            self._expires_at = time.time() + max(ttl - skew, 1.0)
+            self._expires_at = token_expiry_from_ttl(payload.get("expires_in"))
             self._access_token = access_token
             return access_token
 

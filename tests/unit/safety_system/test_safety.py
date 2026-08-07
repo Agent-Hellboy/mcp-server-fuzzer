@@ -99,6 +99,37 @@ def test_contains_dangerous_command_dangerous_patterns(safety_filter):
         assert result, f"Command should be detected as dangerous: {command}"
 
 
+def test_contains_dangerous_script_edge_cases(safety_filter):
+    """Test contains_dangerous_script with edge cases."""
+    assert not safety_filter.contains_dangerous_script(None)
+    assert not safety_filter.contains_dangerous_script("")
+    assert not safety_filter.contains_dangerous_script("   ")
+    assert not safety_filter.contains_dangerous_script("just a sentence")
+
+
+def test_contains_dangerous_script_dangerous_patterns(safety_filter):
+    """Test contains_dangerous_script with script-injection patterns.
+
+    This query API is deliberately NOT wired into sanitize_tool_arguments:
+    script payloads in tool arguments are the fuzzer's own attack inputs and
+    must reach the server unmodified. It exists for callers embedding the
+    safety system, so it still needs coverage.
+    """
+    dangerous_scripts = [
+        "<script>alert(1)</script>",
+        "javascript:alert(1)",
+        "<img src=x onerror=alert(1)>",
+        "eval(atob('x'))",
+        "document.cookie",
+        "window.location='http://evil.example'",
+    ]
+
+    for script in dangerous_scripts:
+        assert safety_filter.contains_dangerous_script(
+            script
+        ), f"Script should be detected as dangerous: {script}"
+
+
 def test_sanitize_string_argument_suspicious_detection(safety_filter):
     """Test _sanitize_string_argument allows fuzzing inputs to pass through."""
     # Test with suspicious argument names - these are fuzzing inputs and should

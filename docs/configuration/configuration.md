@@ -1,307 +1,209 @@
-# Configuration Guide
+# Configure a repeatable assessment
 
-This guide covers repeatable MCP Server Fuzzer runs using YAML files, environment variables, and CLI arguments.
+Use configuration when a target, test matrix, and evidence policy need to be
+repeated. Keep the target-specific file private when it contains endpoint
+details or authentication references; do not commit secrets.
 
-## Configuration Methods
+## Configuration precedence
 
-MCP Server Fuzzer supports multiple configuration methods in order of precedence:
+Values are applied in this order:
 
-1. **Command-line arguments** (highest precedence)
-2. **Configuration files** (YAML)
-3. **Environment variables** (lowest precedence)
+1. CLI arguments, highest precedence.
+2. The selected YAML configuration file.
+3. Environment variables and project defaults.
 
-Use config files when you want repeatable runs or want to avoid long CLI invocations.
+Use `--config path/to/assessment.yaml` for an explicit file. Without `--config`,
+the loader can discover the repository's standard `mcp-fuzzer.yml` or
+`mcp-fuzzer.yaml` locations. Use `--validate-config FILE` to check that a YAML
+file is readable and has a mapping at its top level.
 
-## Supported MCP versions
+## A security-assessment profile
 
-The default is `2025-11-25`. Schema-driven testing supports `2024-11-05`,
-`2025-03-26`, `2025-06-18`, `2025-11-25`, and `2026-07-28`.
-Set `spec_schema_version` in YAML, `MCP_SPEC_SCHEMA_VERSION` in the environment,
-or `--spec-schema-version` on the command line. Command-line values take
-precedence.
-
-## Configuration Files
-
-### YAML Configuration
-
-Create a `mcp-fuzzer.yaml` or `mcp-fuzzer.yml` file:
+This is a starting profile for an authorized remote target. Adjust the mode,
+transport, endpoint, credentials, and run counts to the engagement:
 
 ```yaml
-# Core fuzzing settings
-# mode: Fuzzing target
-#   - tools: Fuzz tool calls and arguments
-#   - protocol: Fuzz protocol message shapes
-#   - resources: Run deterministic resource spec checks
-#   - prompts: Run deterministic prompt spec checks
-#   - all: Run tools + protocol fuzzing with spec checks
 mode: tools
-phase: aggressive
-# protocol_phase applies to protocol/resources/prompts/stateful fuzzing
+protocol: streamablehttp
+endpoint: "https://target.example/mcp"
+phase: realistic
 protocol_phase: realistic
-protocol: http
-endpoint: "http://localhost:8000/mcp/"
 runs: 10
 runs_per_type: 5
-# protocol_type: Protocol message schema to fuzz in protocol mode.
-# See EXECUTABLE_PROTOCOL_TYPES in
-# mcp_fuzzer/protocol_registry.py for the canonical list.
-protocol_type: "InitializeRequest"
-
-# Stateful + corpus controls
-stateful: false
-stateful_runs: 5
-corpus_enabled: true
-havoc_mode: false
-
-# Spec guard configuration
-# spec_guard: Enable deterministic MCP spec checks for protocol/resources/prompts
-# spec_resource_uri: Resource URI used for resources checks (file:// or http(s)://)
-# spec_prompt_name: Prompt name used for prompts/completions checks
-# spec_prompt_args: JSON object string of prompt arguments
-spec_guard: true
-spec_resource_uri: "file:///tmp/resource.txt"
-spec_prompt_name: "example_prompt"
-spec_prompt_args: '{"name":"value"}'
-# Optional: override the MCP protocol/schema version used for this server
+seed: 42
 spec_schema_version: "2025-11-25"
 
-# Timeouts and logging
+# Security checks run after the selected fuzzing work.
+security_audit: true
+auth_audit: true
+auth_audit_intrusive: false
+fail_if_no_tools: true
+
 timeout: 30.0
 tool_timeout: 10.0
-log_level: "INFO"
-
-# Transport retry policy (optional)
-# transport_retries: Total attempts for transport requests (1 disables retries)
-# transport_retry_delay: Base delay between retries (seconds)
-# transport_retry_backoff: Backoff multiplier
-# transport_retry_max_delay: Maximum delay between retries (seconds)
-# transport_retry_jitter: Jitter factor for retry delay
 transport_retries: 1
-transport_retry_delay: 0.5
-transport_retry_backoff: 2.0
-transport_retry_max_delay: 5.0
-transport_retry_jitter: 0.1
+log_level: INFO
 
-# Safety and filesystem constraints
-safety_enabled: true
-enable_safety_system: false
-fs_root: "~/.mcp_fuzzer"
+output:
+  directory: reports/baseline
+  format: json
+  types:
+    - fuzzing_results
+    - error_report
+    - safety_summary
+```
 
-# Network restrictions
-no_network: false
-allow_hosts:
-  - "localhost"
-  - "127.0.0.1"
+Use a second file or CLI overrides for aggressive probing:
 
-# Runtime probe monitoring (optional; off by default)
+```bash
+mcp-fuzzer \
+  --config assessment.yaml \
+  --phase aggressive \
+  --runs 20 \
+  --seed 42 \
+  --output-dir reports/aggressive
+```
+
+The accepted `output.format`, `output.schema`, `output.compress`, and
+`output-session-id` settings are not all applied by the current standardized
+writer. See [standardized output](../development/standardized-output.md) for
+the implemented contract.
+
+## Choose the assessment surface
+
+| Key/flag | Use |
+| --- | --- |
+| `mode: tools` / `--mode tools` | Tool arguments and result behavior |
+| `mode: protocol` / `--mode protocol` | Protocol message shapes and outcomes |
+| `mode: resources` or `prompts` | Deterministic resource/prompt checks |
+| `mode: all` | Tools plus protocol work and selected spec checks |
+| `phase: realistic` | Establish normal behavior with valid-shaped values |
+| `phase: aggressive` | Exercise malformed, boundary, and attack-oriented values |
+| `phase: both` | Run both tool phases |
+| `protocol_type` / `--protocol-type` | Focus protocol mode on one message type |
+| `stateful: true` / `--stateful` | Exercise learned stateful protocol sequences |
+| `spec_guard: true` | Run deterministic protocol/resource/prompt checks |
+| `spec_schema_version` | Select a specific MCP schema/version path |
+| `seed` / `--seed` | Improve reproduction of generated payloads |
+
+## Protocol and schema version
+
+The default schema version is `2025-11-25`. The repository currently includes
+schema-driven paths for `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25`,
+and `2026-07-28`. Select the version that matches the target or the comparison
+you are performing; record it with the assessment.
+
+## Contain local stdio targets
+
+For local processes, use a disposable root and deny non-local network access:
+
+```yaml
+protocol: stdio
+endpoint: "python my_server.py"
+enable_safety_system: true
+fs_root: "./fuzz-sandbox"
+no_network: true
+allow_hosts: []
 runtime_probe: false
-runtime_probe_backend: "auto"  # auto | ebpf | fake
-runtime_probe_bin: "mcpfz-probe"
-runtime_probe_workspace: "."
+```
+
+The fuzzer's controls are not a full operating-system sandbox. Use a container
+or VM for untrusted code. See [contain the target](../components/safety.md).
+
+For optional runtime observation:
+
+```yaml
+runtime_probe: true
+runtime_probe_backend: auto
+runtime_probe_bin: "/path/to/mcpfz-probe"
+runtime_probe_workspace: "./fuzz-sandbox"
 runtime_probe_tmpdir: "/tmp"
 runtime_probe_allow_exec:
   - "/usr/bin/date"
 runtime_probe_allow_host:
   - "api.example.com"
-
-# Runtime and watchdog settings
-max_concurrency: 5
-process_max_concurrency: 5
-process_retry_count: 1
-process_retry_delay: 1.0
-watchdog_check_interval: 1.0
-watchdog_process_timeout: 30.0
-watchdog_extra_buffer: 5.0
-watchdog_max_hang_time: 60.0
-
-# Reporting
-output:
-  directory: "reports"
-  format: "json"
-  types:
-    - "fuzzing_results"
-    - "safety_summary"
-  compress: false
 ```
 
-### Using Configuration Files
+Runtime observation applies to stdio processes, is disabled by default, and
+fails open if the sidecar cannot start or observe an event.
 
-```bash
-# Use default config discovery
-mcp-fuzzer
+## Authentication without leaking secrets
 
-# Use an explicit config file
-mcp-fuzzer --config /path/to/config.yaml
-```
-
-## Protocol Type Values
-
-Use `protocol_type` in `mode: protocol` to select a specific MCP message schema
-to fuzz (for example, when you want to simulate a single request/notification
-shape rather than full protocol behavior). The canonical list lives in
-`mcp_fuzzer/protocol_registry.py` under `EXECUTABLE_PROTOCOL_TYPES`.
-
-Accepted values (requests/notifications sent by the client):
-
-- `InitializeRequest`: Client initialization request.
-- `InitializedNotification`: Initialization complete notification.
-- `ListToolsRequest`: List available tools request.
-- `CallToolRequest`: Call a tool request.
-- `ListResourcesRequest`: List available resources request.
-- `ReadResourceRequest`: Read a resource by URI request.
-- `ListPromptsRequest`: List available prompts request.
-- `GetPromptRequest`: Get a prompt by name request.
-- `ListRootsRequest`: List roots request.
-- `SetLevelRequest`: Set server logging level request.
-- `CompleteRequest`: Completion request.
-- `ListResourceTemplatesRequest`: List resource templates request.
-- `ElicitRequest`: Elicitation request.
-- `PingRequest`: Ping request.
-- `SubscribeRequest`: Subscribe to resource updates request.
-- `UnsubscribeRequest`: Unsubscribe from resource updates request.
-- `CreateMessageRequest`: Sampling create message request.
-- `ListTasksRequest`: List tasks request.
-- `GetTaskRequest`: Get task request.
-- `GetTaskPayloadRequest`: Get task payload request.
-- `CancelTaskRequest`: Cancel task request.
-- `ProgressNotification`: Progress notification message.
-- `CancelledNotification`: Cancellation notification message.
-- `GenericJSONRPCRequest`: Arbitrary JSON-RPC method payload.
-
-Result schemas are validated via spec guard but are not valid `protocol_type`
-values.
-
-## Environment Variables
-
-The following environment variables are currently read at startup:
-
-- `MCP_FUZZER_TIMEOUT`
-- `MCP_FUZZER_LOG_LEVEL`
-- `MCP_FUZZER_SAFETY_ENABLED`
-- `MCP_FUZZER_FS_ROOT`
-- `MCP_FUZZER_HTTP_TIMEOUT`
-- `MCP_FUZZER_SSE_TIMEOUT`
-- `MCP_FUZZER_STDIO_TIMEOUT`
-- `MCP_FUZZER_ICON_THEME` (ascii | unicode | emoji; defaults to ascii)
-- `MCP_SPEC_SCHEMA_VERSION` (e.g., 2025-11-25 or 2026-07-28)
-- `MCP_FUZZER_RUNTIME_PROBE` (truthy value enables runtime monitoring)
-- `MCPFZ_PROBE_BIN`
-- `MCPFZ_PROBE_BACKEND` (ebpf | fake | auto)
-- `MCPFZ_PROBE_WORKSPACE`
-- `MCPFZ_PROBE_TMPDIR`
-- `MCPFZ_PROBE_RAW`
-- `MCPFZ_PROBE_ALLOW_EXEC` (comma-separated executable allowlist)
-- `MCPFZ_PROBE_ALLOW_HOST` (comma-separated host or host:port allowlist)
-
-## Migration From Pre-Redesign Configs (<=3d61ee4)
-
-The configuration schema is now flat. Ensure these keys are at the top level:
-`mode`, `protocol`, `endpoint`, `runs`, `phase`, `output`, `protocol_type`,
-`spec_guard`, `spec_resource_uri`, `spec_prompt_name`, and `spec_prompt_args`.
-The legacy `output_dir` key is still accepted but deprecated; prefer
-`output.directory`.
-
-Legacy (pre-redesign) configs:
-
-```yaml
-# output_dir (legacy)
-output_dir: "reports"
-```
-
-Current configs:
-
-```yaml
-mode: "tools"
-protocol: "http"
-endpoint: "http://localhost:8000"
-runs: 10
-phase: "aggressive"
-protocol_type: "InitializeRequest"
-spec_guard: true
-spec_resource_uri: "file:///tmp/resource.txt"
-spec_prompt_name: "example_prompt"
-spec_prompt_args: '{"query":"probe"}'
-output:
-  directory: "reports"
-```
-
-Authentication-related environment variables are documented in the getting-started guide and are used when `--auth-env` is set.
-
-## Export Formats
-
-The CLI can export standardized reports via:
-
-- `--export-csv` (CSV)
-- `--export-xml` (XML)
-- `--export-html` (HTML)
-- `--export-markdown` (Markdown)
-
-These flags can also be placed directly in config files under their flag names,
-for example:
-
-```yaml
-export_csv: "reports/results.csv"
-export_html: "reports/results.html"
-```
-
-Standardized output files are currently emitted as JSON regardless of
-`output.format`; other values are reserved for future formats. Only
-`fuzzing_results`, `safety_summary`, and `error_report` are emitted today;
-`performance_metrics` and `configuration_dump` are reserved.
-
-## Authentication Configuration
-
-Authentication can be configured in two ways:
-
-- `--auth-config`: Path to a JSON file defining providers and tool mappings.
-- `--auth-env`: Read authentication settings from environment variables.
-
-Example `--auth-config` JSON:
+Use `--auth-config` for a JSON provider file or `--auth-env` for environment
+variables. Prefer dedicated, short-lived assessment identities.
 
 ```json
 {
   "providers": {
-    "api_key_provider": {
-      "type": "api_key",
-      "api_key": "secret123",
-      "header_name": "Authorization"
-    },
-    "machine_provider": {
+    "assessment": {
       "type": "oauth_client_credentials",
       "token_url": "https://auth.example.com/oauth/token",
-      "client_id": "mcp-fuzzer",
-      "client_secret": "secret123",
+      "client_id": "ASSESSMENT_CLIENT_ID",
+      "client_secret": "REPLACE_WITH_SECRET",
       "scope": "tools.read"
     }
   },
+  "default_provider": "assessment",
   "tool_mapping": {
-    "example_tool": "api_key_provider",
-    "machine_tool": "machine_provider"
+    "example_tool": "assessment"
   }
 }
 ```
 
-When `--auth-env` is used, set the appropriate variables (such as
-`MCP_API_KEY`, `MCP_HEADER_NAME`, `MCP_USERNAME`, `MCP_PASSWORD`,
-`MCP_OAUTH_TOKEN_URL`, `MCP_OAUTH_CLIENT_ID`, and
-`MCP_OAUTH_CLIENT_SECRET`) before running the fuzzer. Set optional
-`MCP_OAUTH_SCOPE` when the token endpoint requires a client-credentials scope.
-OAuth client credentials auth uses HTTP Basic client authentication against the
-configured token endpoint and sends the resulting bearer token as an
-`Authorization` header.
-
-## Custom Transports
-
-Custom transports can be registered via configuration using the `custom_transports` section:
-
-```yaml
-custom_transports:
-  mytransport:
-    module: "my_package.my_transport"
-    class: "MyTransport"
-    description: "My custom transport"
+```bash
+mcp-fuzzer \
+  --config assessment.yaml \
+  --auth-config ./private/auth_config.json \
+  --auth-audit \
+  --output-dir reports/authenticated
 ```
 
-Use the transport by setting `protocol: mytransport` in the same config file.
+The startup display masks sensitive configuration values, but target responses
+and generated reports are not automatically safe to publish. Do not put real
+tokens or client secrets in YAML, examples, shell history, or source control.
 
-## Notes
+Supported environment variables include:
+
+| Variable | Purpose |
+| --- | --- |
+| `MCP_API_KEY`, `MCP_HEADER_NAME`, `MCP_PREFIX` | API-key provider and header behavior |
+| `MCP_USERNAME`, `MCP_PASSWORD` | Basic authentication |
+| `MCP_OAUTH_TOKEN` | Existing bearer token |
+| `MCP_OAUTH_TOKEN_URL`, `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET`, `MCP_OAUTH_SCOPE` | Client-credentials flow |
+| `MCP_CUSTOM_HEADERS` | JSON object of custom headers |
+| `MCP_TOOL_AUTH_MAPPING`, `MCP_DEFAULT_AUTH_PROVIDER` | Auth selection by tool/default |
+| `MCP_SPEC_SCHEMA_VERSION` | MCP schema/version selection |
+| `MCPFZ_PROBE_*` | Optional runtime-probe settings |
+
+Use `--oauth` when the fuzzer should perform the MCP OAuth flow. Choose
+`--oauth-grant authorization_code` for a user-delegated PKCE flow or
+`client_credentials` for a machine identity. Use `--oauth-no-token-cache` when
+the engagement does not permit local token caching.
+
+## Output and retention
+
+```yaml
+output:
+  directory: reports/assessment
+  format: json
+  types:
+    - fuzzing_results
+    - safety_summary
+```
+
+The CLI also supports `--export-csv`, `--export-xml`, `--export-html`, and
+`--export-markdown` for additional views. Treat every export as sensitive until
+reviewed; use restricted storage and an explicit retention policy.
+
+## Validate and debug
+
+```bash
+mcp-fuzzer --validate-config assessment.yaml
+mcp-fuzzer --check-env
+mcp-fuzzer --config assessment.yaml --log-level DEBUG
+```
+
+`--validate-config` checks YAML loading and top-level shape; it is not a full
+security review of the target or an authorization check. Use the
+[CLI reference](../development/reference.md) for all flags and
+[network policy](network-policy.md) for the implementation-facing host policy.

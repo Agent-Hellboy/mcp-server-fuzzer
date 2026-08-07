@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...types import extract_tool_runs
-from .common import normalize_report_data
+from .common import redact_report_data
 
 
 class XMLFormatter:
@@ -19,7 +19,8 @@ class XMLFormatter:
         from xml.dom import minidom
         from xml.etree.ElementTree import Element, SubElement, tostring
 
-        data = normalize_report_data(report_data)
+        # Whole run payloads are emitted as fields, so redact before writing.
+        data = redact_report_data(report_data)
         root = Element("mcp-fuzzer-report")
 
         def add_fields(parent: Element, mapping: dict[str, Any]):

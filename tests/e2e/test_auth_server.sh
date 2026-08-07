@@ -45,8 +45,8 @@ echo "Starting authenticated MCP server on ${BASE_URL}"
     --host "$HOST" \
     --port "$PORT" \
     --client-id "mcp-fuzzer" \
-    --client-secret "mcp-fuzzer-secret" \
-    --access-token "mcp-fuzzer-access-token" \
+    --client-secret "fixture-only-client-secret" \
+    --access-token "fixture-only-access-token" \
     >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
@@ -105,7 +105,7 @@ cat >"$AUTH_CONFIG" <<EOF
       "type": "oauth_client_credentials",
       "token_url": "${BASE_URL}/oauth/token",
       "client_id": "mcp-fuzzer",
-      "client_secret": "mcp-fuzzer-secret",
+      "client_secret": "fixture-only-client-secret",
       "scope": "tools.read"
     }
   },

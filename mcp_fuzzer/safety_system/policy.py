@@ -57,6 +57,24 @@ def _normalize_host(host: str | None) -> str:
     return normalized.strip().lower().rstrip(".")
 
 
+def _normalized_host_set(hosts: Iterable[str]) -> frozenset[str]:
+    """Normalize an iterable of hosts, dropping any that normalize to empty."""
+    return frozenset(
+        normalized for h in hosts if h and (normalized := _normalize_host(h))
+    )
+
+
+# Normalized forms of the module-level policy constants. Both sit on a
+# per-request path -- is_host_allowed and sanitize_headers run for every
+# outbound request from every driver -- and neither constant is mutated or
+# patched anywhere, so they are computed once at import instead of on each
+# call. An explicit allowlist/denylist argument is still normalized per call.
+_DEFAULT_ALLOWED_HOSTS = _normalized_host_set(SAFETY_LOCAL_HOSTS)
+_DEFAULT_HEADER_DENY_LOWER = frozenset(h.lower() for h in SAFETY_HEADER_DENYLIST)
+_DEFAULT_PROXY_ENV_DENY = frozenset(SAFETY_PROXY_ENV_DENYLIST)
+_DEFAULT_PROXY_ENV_DENY_LOWER = frozenset(k.lower() for k in _DEFAULT_PROXY_ENV_DENY)
+
+
 def configure_network_policy(
     deny_network_by_default: bool | None = None,
     extra_allowed_hosts: Iterable[str] | None = None,
@@ -107,14 +125,13 @@ def is_host_allowed(
 
     host = _normalize_host(raw_host)
 
-    # Collect and normalize all allowed hosts
-    allowed_set = {
-        normalized
-        for h in (allowed_hosts or SAFETY_LOCAL_HOSTS)
-        if h
-        for normalized in [_normalize_host(h)]
-        if normalized
-    }
+    # Collect and normalize all allowed hosts. The default list is pre-normalized;
+    # an explicit (truthy) allowed_hosts is normalized here, matching the previous
+    # `allowed_hosts or SAFETY_LOCAL_HOSTS` fallback semantics exactly.
+    if allowed_hosts:
+        allowed_set = _normalized_host_set(allowed_hosts)
+    else:
+        allowed_set = _DEFAULT_ALLOWED_HOSTS
 
     if _POLICY_EXTRA_ALLOWED_HOSTS:
         allowed_set |= _POLICY_EXTRA_ALLOWED_HOSTS
@@ -153,8 +170,12 @@ def sanitize_subprocess_env(
     Removes proxy-related environment variables to avoid accidental egress via proxies.
     """
     env = dict(source_env or os.environ)
-    deny = set(proxy_denylist or SAFETY_PROXY_ENV_DENYLIST)
-    deny_lower = {k.lower() for k in deny}
+    if proxy_denylist:
+        deny = set(proxy_denylist)
+        deny_lower = {k.lower() for k in deny}
+    else:
+        deny = _DEFAULT_PROXY_ENV_DENY
+        deny_lower = _DEFAULT_PROXY_ENV_DENY_LOWER
     for key in list(env.keys()):
         if key in deny or key.lower() in deny_lower:
             env.pop(key, None)
@@ -164,7 +185,7 @@ def sanitize_subprocess_env(
 def sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
     """Return a copy of headers with denied keys removed (case-insensitive)."""
     cleaned: dict[str, str] = {}
-    deny_lower = {h.lower() for h in SAFETY_HEADER_DENYLIST}
+    deny_lower = _DEFAULT_HEADER_DENY_LOWER
     for key, value in headers.items():
         if key.lower() in deny_lower:
             continue

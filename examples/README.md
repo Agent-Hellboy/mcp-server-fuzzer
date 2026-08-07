@@ -1,283 +1,222 @@
-# MCP Server Fuzzer Examples
+# Assessment fixtures
 
-This directory contains runnable examples to try the MCP fuzzer against simple local servers and custom transport implementations.
+Small, self-contained MCP servers and configuration files for validating a
+local installation before you point the fuzzer at a real target. Use them to
+confirm that transports connect, authentication mapping works, safety controls
+engage, and report artifacts parse.
 
-## Basic Test Server Examples
+These fixtures are deliberately insecure so the fuzzer has something to find.
+They are not security certifications and not compatibility claims. Every
+credential here is a throwaway literal; never reuse one outside these files.
 
-Run the basic test server
--------------------------
+The commands below assume `mcp-fuzzer` is on your `PATH`. From a git checkout,
+substitute `python -m mcp_fuzzer`.
 
-The server uses the official Python MCP SDK and listens on
-http://localhost:8000/mcp/ with three tools:
+## Python HTTP fixture
 
-- public `test_tool`
-- public `echo_tool`
-- protected `secure_tool` (requires Authorization: Bearer secret123)
+`test_server.py` — a FastMCP server exposing three tools (`test_tool`,
+`echo_tool`, `secure_tool`), one resource template (`test://items/{item_id}`),
+and two prompts (`hello_prompt`, `summarise_prompt`). `secure_tool` requires a
+bearer token; the other tools are public. `echo_tool` reflects its input
+verbatim and `test_tool` accepts out-of-range values, so the fuzzer reliably
+reports findings against it.
 
-Install the SDK dependencies and start the server:
-
-```
-pip install "mcp[cli]" uvicorn
-python3 examples/test_server.py
-```
-
-You should see log lines like:
-
-```
-INFO:__main__:Starting MCP test server on 0.0.0.0:8000
-INFO:     Uvicorn running on http://0.0.0.0:8000
+```bash
+python -m pip install "mcp[cli]" uvicorn
+python examples/test_server.py
 ```
 
-Fuzz the server (no auth)
-------------------------
+It listens on `http://127.0.0.1:8000/mcp/`. The required token is
+`fixture-only-token`, overridable with the `REQUIRED_TOKEN` environment
+variable.
 
-Call the fuzzer in tools mode:
+Run a baseline in another shell:
 
-```
-python3 -m mcp_fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 3 --timeout 5
-```
-
-This will fuzz all tools. Public tools succeed; `secure_tool` may return Unauthorized unless you provide auth headers.
-
-Fuzz the protected tool with auth (config file)
-----------------------------------------------
-
-Use the provided `examples/auth_config.json` which maps `secure_tool` to an API key provider using the token `secret123`.
-
-```
-python3 -m mcp_fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 2 --timeout 5 --auth-config examples/auth_config.json
+```bash
+mcp-fuzzer \
+  --mode tools \
+  --protocol http \
+  --endpoint http://127.0.0.1:8000/mcp/ \
+  --phase realistic \
+  --runs 3 \
+  --seed 42 \
+  --output-dir reports/example-http
 ```
 
-Fuzz the protected tool with auth (environment)
------------------------------------------------
+Expect three tools discovered and a non-empty `findings.json`. `test_tool` and
+`echo_tool` produce `accepted_malformed` findings because the fixture echoes
+schema-invalid input back without error, and `echo_tool` also produces
+`injection_reflection` because it returns an unsanitized `<script>` payload.
+`secure_tool` fails every run with `Server error: {'code': -32001, 'message':
+'Unauthorized'}` — that is correct, since this run sends no credential.
 
-Set environment variables and run the fuzzer:
+Now supply the token so `secure_tool` is actually reached:
 
-```
-export MCP_API_KEY=secret123
-export MCP_TOOL_AUTH_MAPPING='{"secure_tool":"api_key"}'
-python3 -m mcp_fuzzer --mode tools --protocol http --endpoint http://localhost:8000/mcp/ --runs 2 --timeout 5 --auth-env
-```
-
-Fuzz protocol types
--------------------
-
-To fuzz protocol types instead of tools:
-
-```
-python3 -m mcp_fuzzer --mode protocol --protocol-type InitializeRequest --protocol http --endpoint http://localhost:8000/mcp/ --runs-per-type 2 --timeout 5
-```
-
-Notes
------
-
-- The example server is intentionally minimal, stateless, and built with the official Python MCP SDK.
-- `secure_tool` requires `Authorization: Bearer secret123`. Use config file or env auth to hit it successfully.
-- Stop the server with Ctrl+C.
-
-Streamable HTTP example (no SDK checkout required)
--------------------------------------------------
-
-Install dependencies (one-time):
-
-```
-pip install mcp uvicorn anyio starlette
+```bash
+mcp-fuzzer \
+  --mode tools \
+  --protocol http \
+  --endpoint http://127.0.0.1:8000/mcp/ \
+  --auth-config examples/auth_config.json \
+  --runs 2 \
+  --output-dir reports/example-auth
 ```
 
-Start the example StreamableHTTP server on port 3000:
+`auth_config.json` maps `secure_tool` to an `api_key` provider. The
+`Unauthorized` exceptions disappear and `secure_tool` starts returning findings
+of its own, which confirms per-tool auth mapping is working.
 
+The same fixture also serves the non-tool modes:
+
+```bash
+mcp-fuzzer --mode resources --protocol http --endpoint http://127.0.0.1:8000/mcp/ --runs 2
+mcp-fuzzer --mode prompts   --protocol http --endpoint http://127.0.0.1:8000/mcp/ --runs 2
+mcp-fuzzer --mode protocol  --protocol http --endpoint http://127.0.0.1:8000/mcp/ --runs-per-type 2
 ```
-python3 examples/streamable_http_server.py --host 127.0.0.1 --port 3000
+
+## OAuth client-credentials fixture
+
+`auth_test_server.py` — the same tool surface behind a machine-to-machine token
+endpoint. It serves `POST /oauth/token`, mounts MCP at `/mcp`, and exposes
+`/health` and `/metrics` so you can verify the fuzzer really authenticated.
+
+```bash
+python -m pip install "mcp[cli]" uvicorn starlette anyio
+python examples/auth_test_server.py --host 127.0.0.1 --port 8765
 ```
 
-Then fuzz it with the StreamableHTTP transport:
+This fixture does not publish RFC 9728 or RFC 8414 discovery metadata, so the
+`--oauth` discovery flow does not apply to it. Drive it with an
+`oauth_client_credentials` provider instead:
 
+```json
+{
+  "default_provider": "machine",
+  "providers": {
+    "machine": {
+      "type": "oauth_client_credentials",
+      "token_url": "http://127.0.0.1:8765/oauth/token",
+      "client_id": "mcp-fuzzer",
+      "client_secret": "fixture-only-client-secret",
+      "scope": "tools.read"
+    }
+  },
+  "tool_mapping": { "secure_tool": "machine" }
+}
 ```
-python3 -m mcp_fuzzer --mode tools --protocol streamablehttp --endpoint http://127.0.0.1:3000/mcp --runs 3 --timeout 10 --verbose
+
+```bash
+mcp-fuzzer \
+  --mode tools \
+  --protocol http \
+  --endpoint http://127.0.0.1:8765/mcp/ \
+  --auth-config /path/to/that/config.json \
+  --runs 2 \
+  --output-dir reports/example-oauth
 ```
 
-Official SDK stdio examples
----------------------------
+Then check `curl -s http://127.0.0.1:8765/metrics`. A successful run reports at
+least one `token_requests` and a non-zero `authorized_tool_calls`, proving the
+token was fetched once and reused. `tests/e2e/test_auth_server.sh` runs exactly
+this sequence and asserts those metrics.
 
-This directory also includes stdio servers built with the official Go and
-TypeScript MCP SDKs.
+## Streamable HTTP fixture
 
-Build and fuzz the Go SDK server:
+`streamable_http_server.py` — a lowlevel MCP server on the Streamable HTTP
+transport, for confirming session handling and the `streamablehttp` driver.
 
+```bash
+python -m pip install mcp uvicorn anyio starlette
+python examples/streamable_http_server.py --host 127.0.0.1 --port 3000
 ```
+
+It also accepts `--json-response` and `--log-level`.
+
+```bash
+mcp-fuzzer \
+  --mode tools \
+  --protocol streamablehttp \
+  --endpoint http://127.0.0.1:3000/mcp \
+  --phase realistic \
+  --runs 3 \
+  --output-dir reports/example-streamable
+```
+
+## Official SDK stdio fixtures
+
+`go_stdio_server/` and `typescript-stdio-server/` are built on the official Go
+and TypeScript MCP SDKs. Both expose `echo_tool`, `add_numbers`, and
+`normalize_text`. Use them to exercise process startup, cleanup, timeouts, and
+the stdio safety boundary against implementations the project does not control.
+
+Go:
+
+```bash
 cd examples/go_stdio_server
 go mod download
 go build -o /tmp/mcp-fuzzer-go-stdio-server .
 cd ../..
-python3 -m mcp_fuzzer --mode tools --protocol stdio --endpoint /tmp/mcp-fuzzer-go-stdio-server --runs 2 --timeout 30
+mcp-fuzzer \
+  --mode tools \
+  --protocol stdio \
+  --endpoint /tmp/mcp-fuzzer-go-stdio-server \
+  --enable-safety-system \
+  --fs-root "$PWD/fuzz-sandbox" \
+  --no-network \
+  --runs 2 \
+  --output-dir reports/example-go-stdio
 ```
 
-Build and fuzz the TypeScript SDK server:
+TypeScript:
 
-```
+```bash
 cd examples/typescript-stdio-server
 npm ci
 npm run build
 cd ../..
-python3 -m mcp_fuzzer --mode tools --protocol stdio --endpoint "node examples/typescript-stdio-server/dist/server.js" --runs 2 --timeout 30
+mcp-fuzzer \
+  --mode tools \
+  --protocol stdio \
+  --endpoint "node examples/typescript-stdio-server/dist/server.js" \
+  --enable-safety-system \
+  --fs-root "$PWD/fuzz-sandbox" \
+  --no-network \
+  --runs 2 \
+  --output-dir reports/example-typescript-stdio
 ```
 
-Both servers expose `echo_tool`, `add_numbers`, and `normalize_text`.
+Expect three tools discovered, the child process reaped at the end of the run,
+and `fuzz-sandbox/` created as the only writable root. `--enable-safety-system`
+puts blocking stubs for external launchers on `PATH` for the duration of the
+run.
 
-## Custom Transport Examples
+## Configuration files
 
-### Overview
+`config/` holds configuration you can pass with `--config`:
 
-Custom transports allow you to extend MCP Server Fuzzer to work with MCP servers that use proprietary protocols, specialized communication patterns, or integration requirements not covered by the built-in transports (HTTP, SSE, STDIO, StreamableHTTP).
+- `mcp-fuzzer.yaml` and `mcp-fuzzer.yml` — a standard run configuration in both
+  file extensions the loader accepts.
+- `custom-transport-config.yaml` — wiring for a registered custom transport.
 
-### Files in This Directory
-
-- `custom_websocket_transport.py` - Complete WebSocket transport implementation
-- `config/custom-transport-config.yaml` - Configuration example showing how to set up custom transports
-
-### Quick Start
-
-#### 1. Implement Your Transport
-
-Create a transport class that inherits from `TransportDriver`:
-
-```python
-from mcp_fuzzer.transport import TransportDriver
-
-class MyCustomTransport(TransportDriver):
-    def __init__(self, endpoint: str, **kwargs):
-        # Initialize your transport
-        pass
-
-    async def send_request(self, method: str, params=None):
-        # Implement JSON-RPC request sending
-        pass
-
-    async def send_raw(self, payload):
-        # Implement raw payload sending
-        pass
-
-    async def send_notification(self, method: str, params=None):
-        # Implement notification sending
-        pass
-
-    async def _stream_request(self, payload):
-        # Implement streaming (yield responses)
-        pass
-```
-
-#### 2. Register Your Transport
-
-```python
-from mcp_fuzzer.transport import register_custom_driver
-
-register_custom_driver(
-    name="mytransport",
-    transport_class=MyCustomTransport,
-    description="My custom transport"
-)
-```
-
-#### 3. Use Your Transport
-
-```python
-from mcp_fuzzer.transport import build_driver
-
-transport = build_driver("mytransport://endpoint")
-```
-
-### WebSocket Transport Example
-
-The `custom_websocket_transport.py` file contains a complete WebSocket transport implementation that demonstrates:
-
-- Connection management.
-- JSON-RPC request/response handling.
-- Error handling and timeouts.
-- Streaming support.
-- Configuration schema definition.
-- Registration with MCP Fuzzer.
-
-#### Running the WebSocket Example
+Check any of them without running a fuzz session:
 
 ```bash
-# Install dependencies
-pip install websockets
-
-# Register in your app's process (import triggers registration) then use it
-from examples import custom_websocket_transport  # noqa: F401 – ensures registration
-from mcp_fuzzer.transport import build_driver
-transport = build_driver("websocket://localhost:8080/mcp")
+mcp-fuzzer --validate-config examples/config/mcp-fuzzer.yaml
 ```
 
-### Configuration
+All three validate cleanly as shipped.
 
-See `config/custom-transport-config.yaml` for an example of how to configure custom transports in your MCP Fuzzer configuration files.
+## Custom transport
 
-### Best Practices
+`custom_websocket_transport.py` implements a WebSocket transport against the
+project's transport interface. It is a reference for
+`mcp_fuzzer.transport.register_custom_driver`, not a runnable fixture, and it
+requires the `websockets` package. See
+[custom transports](../docs/transport/custom-transports.md).
 
-1. **Inherit from TransportDriver**: Ensure all abstract methods are implemented
-2. **Handle Connections Properly**: Implement connect/disconnect for resource management
-3. **Use Timeouts**: Always implement appropriate timeouts
-4. **Validate Input**: Check method names, parameters, and payloads
-5. **Log Operations**: Use logging for debugging and monitoring
-6. **Handle Errors**: Provide meaningful error messages
-7. **Document Configuration**: Clearly document any configuration options
+## Next steps
 
-### Integration with MCP Fuzzer
-
-Custom transports integrate seamlessly with the MCP Fuzzer framework:
-
-- **CLI Support**: Use custom transports with command-line interface
-- **Configuration Files**: Configure custom transports via YAML
-- **Programmatic API**: Create and use custom transports in Python code
-- **Safety System**: Custom transports respect MCP Fuzzer's safety policies
-- **Logging**: Integrated with MCP Fuzzer's logging system
-
-### Testing Custom Transports
-
-Test your custom transport thoroughly:
-
-```python
-import pytest
-from mcp_fuzzer.transport import build_driver
-
-def test_custom_transport():
-    transport = build_driver("mytransport://test")
-    # Test your transport implementation
-```
-
-### Troubleshooting
-
-#### Common Issues
-
-1. **Import Errors**: Ensure your transport module is on the Python path.
-2. **Registration Failures**: Verify your class inherits from `TransportDriver`.
-3. **Connection Issues**: Check endpoints and network connectivity.
-4. **Configuration Errors**: Validate YAML configuration syntax
-
-#### Debug Logging
-
-Enable debug logging to troubleshoot issues (avoid hardcoding secrets; prefer environment variables):
-
-```bash
-export MCP_FUZZER_LOG_LEVEL=DEBUG
-```
-
-### Contributing Custom Transports
-
-When contributing custom transport implementations:
-
-1. Follow the established patterns in the codebase
-2. Include comprehensive tests
-3. Provide clear documentation
-4. Handle edge cases and errors gracefully
-5. Ensure compatibility with the safety system
-
-### Support
-
-For questions about custom transports:
-
-1. Check the main documentation at `docs/custom-transports.md`
-2. Review the WebSocket example for implementation patterns
-3. Test with the provided configuration examples
-4. Check logs with debug level for detailed information
+For recipes against an authorized target rather than a fixture, see the
+[documentation examples](../docs/getting-started/examples.md). For how to read
+what these runs produce, see
+[understand run results](../docs/getting-started/results.md).

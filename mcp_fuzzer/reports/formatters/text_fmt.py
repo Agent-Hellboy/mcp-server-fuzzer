@@ -7,7 +7,7 @@ from typing import Any
 from ...types import extract_tool_runs
 from .common import (
     calculate_protocol_success_rate,
-    normalize_report_data,
+    redact_report_data,
     summarize_tool_outcomes,
     summarize_tool_runs,
 )
@@ -31,7 +31,7 @@ class TextFormatter:
         report_data: dict[str, Any] | Any,
         filename: str,
     ):
-        data = normalize_report_data(report_data)
+        data = redact_report_data(report_data)
         mode = str((data.get("metadata") or {}).get("mode", "all"))
         with open(filename, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")

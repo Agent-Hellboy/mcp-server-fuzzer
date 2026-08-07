@@ -33,6 +33,11 @@ examples/typescript-stdio-server/dist/
 *REDESIGN*.md
 *FLOW.md
 *USAGE.md
+# The scratch-note patterns above are for working files, but they also match
+# published pages (*FLOW.md swallowed docs/getting-started/audit-workflow.md,
+# which left the deployed site with broken links). Never let them cover docs/;
+# individual docs pages can still be ignored explicitly further down.
+!docs/**/*.md
 *.so
 notes.md
 /reports/

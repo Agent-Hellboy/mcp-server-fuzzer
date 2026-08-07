@@ -1,6 +1,9 @@
 # MCP Server Fuzzer
 
-CLI security and robustness testing for [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers.
+Black-box security assessment for live
+[Model Context Protocol](https://modelcontextprotocol.io/) servers. It drives an
+authorized target over its real transport, sends realistic and malformed input,
+classifies the responses, and writes findings and reproduction data to disk.
 
 [![CI](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/tests.yml/badge.svg)](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/tests.yml)
 [![Lint](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml/badge.svg)](https://github.com/Agent-Hellboy/mcp-server-fuzzer/actions/workflows/lint.yml)
@@ -12,21 +15,33 @@ CLI security and robustness testing for [Model Context Protocol (MCP)](https://m
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776ab)](https://www.python.org/downloads/)
 
-**[Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/)** | **[Getting started](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/getting-started/)** | **[CLI reference](https://agent-hellboy.github.io/mcp-server-fuzzer/development/reference/)** | **[Releases](https://github.com/Agent-Hellboy/mcp-server-fuzzer/releases)**
+**[Documentation](https://agent-hellboy.github.io/mcp-server-fuzzer/)** |
+**[Assessment workflow](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/audit-workflow/)** |
+**[CLI reference](https://agent-hellboy.github.io/mcp-server-fuzzer/development/reference/)** |
+**[Releases](https://github.com/Agent-Hellboy/mcp-server-fuzzer/releases)**
 
-## What it tests
+## Authorization
 
-MCP Server Fuzzer exercises live servers through:
+Use this tool only against MCP servers you own or are explicitly authorized to
+test. It sends attack-pattern input, can start local processes, and with
+`--auth-audit-intrusive` will register OAuth clients on the target's
+authorization server. The built-in safety controls reduce accidental impact;
+they are not a substitute for a container, a VM, or an engagement-specific
+network boundary.
 
-- Tool argument generation and mutation, including realistic and aggressive inputs.
-- Protocol request fuzzing and schema-aware checks.
-- Resources and prompts workflows.
-- HTTP, HTTPS, SSE, Streamable HTTP, and stdio transports.
-- Authentication and OAuth metadata checks for authorized remote testing.
-- Tool metadata and schema security checks, including hidden instructions, tool shadowing, unsafe capability combinations, and output injection indicators.
-- Optional runtime monitoring for stdio servers through [mcpfz-probe](https://github.com/Agent-Hellboy/mcpfz-probe).
+## What it does
 
-The default protocol version is 2025-11-25. Schema-driven testing supports 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25, and 2026-07-28; select a target version with --spec-schema-version.
+The fuzzer connects over stdio, HTTP, SSE, or Streamable HTTP and answers a
+fixed set of assessment questions:
+
+- What tools, resources, prompts, and protocol methods does the server expose?
+- Does it reject malformed and out-of-contract input, or accept it?
+- Do tool descriptions or schemas carry poisoning markers, hidden instructions,
+  duplicate definitions, or dangerous capability combinations?
+- Does an advertised OAuth boundary publish unsafe metadata or serve tools
+  without the expected authentication?
+- What does a local stdio server execute, read, write, or connect to while the
+  test runs?
 
 ## Install
 
@@ -34,36 +49,41 @@ Requires Python 3.10 or newer.
 
 ```bash
 python -m pip install mcp-fuzzer
+mcp-fuzzer --version
 ```
 
-For optional runtime monitoring:
+Optional runtime observation of local stdio processes:
 
 ```bash
 python -m pip install "mcp-fuzzer[mcpfz-probe]"
 ```
 
-Docker images are published to [princekrroshan01/mcp-fuzzer](https://hub.docker.com/r/princekrroshan01/mcp-fuzzer):
+Docker image
+([princekrroshan01/mcp-fuzzer](https://hub.docker.com/r/princekrroshan01/mcp-fuzzer)):
 
 ```bash
 docker pull princekrroshan01/mcp-fuzzer:latest
 docker run --rm princekrroshan01/mcp-fuzzer:latest --help
 ```
 
-## Quick start
+## Run an assessment
 
-Run a local or remote MCP server, then point the fuzzer at its endpoint:
+Against a remote HTTP or Streamable HTTP target:
 
 ```bash
 mcp-fuzzer \
   --mode tools \
   --protocol streamablehttp \
-  --endpoint http://localhost:8000/mcp \
+  --endpoint https://target.example.com/mcp \
+  --phase realistic \
   --runs 10 \
   --security-audit \
-  --output-dir reports
+  --seed 42 \
+  --output-dir reports/baseline
 ```
 
-For a local stdio server:
+Against a local stdio target, confine file operations and deny non-local
+network access:
 
 ```bash
 mcp-fuzzer \
@@ -72,59 +92,134 @@ mcp-fuzzer \
   --endpoint "python my_server.py" \
   --enable-safety-system \
   --fs-root "$PWD/fuzz-sandbox" \
-  --output-dir reports
+  --no-network \
+  --runs 5 \
+  --seed 42 \
+  --output-dir reports/baseline
 ```
 
-Only test servers and endpoints you are authorized to assess. Use low run counts first, configure timeouts, and isolate local servers with --fs-root, --no-network, or a container.
+To try the tool without a target, use the bundled fixtures in
+[`examples/`](examples/).
 
-## Findings and reports
+Start with low run counts, bounded timeouts, dedicated credentials, and an
+isolated target. The
+[assessment workflow](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/audit-workflow/)
+describes what to record at each stage.
 
-Completed sessions write reports to the selected output directory:
+## What it produces
 
-- findings.json: normalized security and reliability findings with evidence, severity, target, run, and source links.
-- run_summary.json: machine-readable completion status and session counts.
-- crashes/: crash reproductions and related server output when available.
-- Optional CSV, XML, HTML, and Markdown exports from the --export-* options.
+Every session writes to `--output-dir` (default `reports/`):
 
-Findings can include crashes, hangs, malformed-input acceptance, internal errors, error leakage, oversized responses, authentication exposure, injection reflection, nondeterminism, performance outliers, tool poisoning, and runtime observations such as process execution, network activity, credential reads, filesystem mutation, or ptrace.
+| Artifact | Contents |
+| --- | --- |
+| `findings.json` | Every finding, with `category`, `severity`, `kind`, `target`, `run`, `detail`, and an `evidence` object |
+| `run_summary.json` | Mode, status, tool discovery result, per-tool run counts and outcome buckets, finding totals by category |
+| `sessions/<session-id>/<timestamp>_fuzzing_results.json` | Per-run request and response records for the session |
+| `crashes/` | One JSON repro per run that terminated the server process, containing the input and crash context. Written only when a run crashes the target |
 
-Security findings include links to the relevant [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/) category where applicable. The fuzzer reports evidence; it does not prove exploitability in every environment.
+Severities are `critical`, `high`, `medium`, `low`, and `info`. Fuzz
+classifications include `accepted_malformed`, `injection_reflection`, `crash`,
+`hang`, `error_leakage`, `internal_error`, `non_determinism`, `memory_growth`,
+`oversized_response`, and `performance_outlier`.
 
-## Security audits
+A finding from `--security-audit` carries a stable check ID and maps to
+published sources:
 
-Add --security-audit to inspect tool descriptions and schemas and to evaluate security-relevant fuzz output. Add --auth-audit for OAuth metadata and authorization checks. Intrusive authorization probes require --auth-audit-intrusive and explicit authorization.
-
-For CI, use --fail-if-no-tools, store findings.json as an artifact, and gate the job on the finding policy appropriate for your project.
-
-## Runtime monitoring
-
-Runtime monitoring is opt-in and fail-open. It applies to stdio server processes and uses the external mcpfz-probe sidecar; it is disabled by default and never required for normal fuzzing.
-
-```bash
-mcp-fuzzer \
-  --mode tools \
-  --protocol stdio \
-  --endpoint "python my_server.py" \
-  --runtime-probe \
-  --runtime-probe-backend auto \
-  --runtime-probe-bin /path/to/mcpfz-probe \
-  --runs 3 \
-  --output-dir reports
+```json
+{
+  "category": "tool_poisoning",
+  "severity": "high",
+  "kind": "tool",
+  "target": "read_notes",
+  "detail": "Tool name or description contains injection/poisoning markers (hidden instructions or secret-path references).",
+  "evidence": {
+    "check_id": "TP1",
+    "paper_arxiv_id": "2503.23278",
+    "owasp_mcp_top_10": "MCP03:2025",
+    "markers": ["ignore\\s+(all\\s+)?previous\\s+instructions?", "id_rsa"],
+    "tool_definition_hash": "18cd91e6…"
+  }
+}
 ```
 
-Use the fake backend for portable development and tests. The ebpf backend is Linux-specific and may require the capabilities documented by [mcpfz-probe](https://github.com/Agent-Hellboy/mcpfz-probe). Use allowlists for expected helper executables and hosts. Never use runtime monitoring against a server or host you do not control.
+`--export-csv`, `--export-xml`, `--export-html`, and `--export-markdown` write
+additional per-run tables into the same directory. These exports carry a
+metadata block (session ID, mode, protocol, endpoint, timestamps) and per-run
+pass/fail rows. They do not carry severities or findings, and only the CSV
+export includes the arguments that produced each run. Treat `findings.json` as
+the authoritative output.
+
+Exit codes: `0` success, `1` validation or execution failure, `2` no tools
+discovered with `--fail-if-no-tools`, `130` interrupted.
+
+## What it does not do
+
+- It does not read your source. This is a black-box client, not a SAST tool.
+- It does not prove exploitability. `accepted_malformed` means the server
+  returned a non-error response to schema-invalid or attack-pattern input. That
+  is a contract observation and a lead, not a demonstrated vulnerability.
+- It does not record the seed in any output file. `--seed` makes payload
+  generation reproducible, but you must record the value yourself alongside the
+  report for a run to be replayable.
+- It does not record the endpoint or protocol in `run_summary.json`. That
+  metadata appears only in the CSV, XML, HTML, and Markdown exports.
+- It does not assign CVEs, CVSS scores, or remediation guidance, and it is not
+  a certification.
+- It does not test authorization logic between users or tenants. The auth
+  checks cover metadata, the authorization endpoint, and unauthenticated tool
+  exposure.
+- It only reaches what the server advertises through `tools/list`,
+  `resources/list`, and `prompts/list`. Undiscoverable surface is not tested.
+- Schema-driven fuzzing via `--spec-schema-version` reads MCP schemas from the
+  `schemas/mcp-spec` submodule, which is not shipped in the PyPI package. From a
+  released install, point `MCP_SPEC_SCHEMA_ROOT` at a schema directory or work
+  from a git checkout.
+
+## Audit surfaces
+
+`--security-audit` runs tool and schema checks plus active output oracles
+against the same run's results: poisoning markers, hidden or encoded
+instructions, tool shadowing, dangerous capability combinations, cleartext
+transport, and command, path, SQL, and prompt-injection oracles.
+
+`--auth-audit` runs read-only OAuth checks against an HTTP or SSE endpoint:
+metadata review, authorization-endpoint probes, and unauthenticated tool
+exposure where authentication is advertised. Add `--auth-audit-intrusive` only
+when your authorization explicitly covers dynamic client registration and
+redirect handling.
+
+`--runtime-probe` observes process, filesystem, network, credential, privilege,
+and ptrace activity for a local stdio target. The `mcpfz-probe` sidecar is
+optional, disabled by default, and fails open if it cannot observe the target.
+
+## Handling evidence
+
+Reports embed generated arguments, server responses, paths, and runtime
+observations. Values under credential-named keys (`token`, `secret`,
+`authorization`, `api_key`, and similar) are redacted in console output and in
+written artifacts, and credentials embedded in URLs are stripped. Redaction is
+key-driven, so a secret echoed inside a response body under an unrelated key is
+not caught. Review and redact artifacts before sharing them, and store them
+under the same restrictions as the engagement's other evidence. See
+[understand run results](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/results/).
 
 ## Documentation
 
-- [Getting started](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/getting-started/)
-- [Examples](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/examples/)
-- [Configuration](https://agent-hellboy.github.io/mcp-server-fuzzer/configuration/configuration/)
-- [Safety and isolation](https://agent-hellboy.github.io/mcp-server-fuzzer/components/safety/)
-- [Security CI guidance](https://agent-hellboy.github.io/mcp-server-fuzzer/security-ci/)
+- [Choose an assessment path](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/)
+- [Run the assessment workflow](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/audit-workflow/)
+- [Focused audit recipes](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/examples/)
+- [Interpret evidence and findings](https://agent-hellboy.github.io/mcp-server-fuzzer/getting-started/results/)
+- [Configure repeatable assessments](https://agent-hellboy.github.io/mcp-server-fuzzer/configuration/configuration/)
+- [Contain local targets](https://agent-hellboy.github.io/mcp-server-fuzzer/components/safety/)
+- [Collect evidence in CI](https://agent-hellboy.github.io/mcp-server-fuzzer/security-ci/)
 - [CLI reference](https://agent-hellboy.github.io/mcp-server-fuzzer/development/reference/)
-- [Contributing](https://agent-hellboy.github.io/mcp-server-fuzzer/development/contributing/)
 
-Architecture pages remain available for contributors who need implementation context.
+## References
+
+The checks in this project complement, and do not replace, the
+[MCP Security Best Practices](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices),
+the [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization),
+and the [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/).
 
 ## License
 

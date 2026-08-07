@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from ..types import extract_tool_runs
+from .classify import response_text
 from .model import Finding
 from .server import server_finding
 
@@ -44,22 +45,6 @@ def _serialize_input(run: dict[str, Any]) -> str:
         return str(args)
 
 
-def _response_text(run: dict[str, Any]) -> str:
-    parts: list[str] = []
-    result = run.get("result")
-    if result is not None:
-        try:
-            parts.append(json.dumps(result, default=str))
-        except (TypeError, ValueError):
-            parts.append(str(result))
-    if run.get("exception"):
-        parts.append(str(run.get("exception")))
-    crash = run.get("crash")
-    if isinstance(crash, dict) and crash.get("stderr_tail"):
-        parts.append("\n".join(str(line) for line in crash["stderr_tail"]))
-    return "\n".join(parts)
-
-
 def audit_tool_run_oracles(
     tool_results: dict[str, Any] | None,
 ) -> list[Finding]:
@@ -75,7 +60,7 @@ def audit_tool_run_oracles(
                 continue
             run_no = index + 1
             input_text = _serialize_input(run).lower()
-            output_text = _response_text(run)
+            output_text = response_text(run)
 
             if any(m in input_text for m in _COMMAND_INPUT_MARKERS):
                 if _COMMAND_OUTPUT.search(output_text):

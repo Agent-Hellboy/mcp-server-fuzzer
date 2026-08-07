@@ -354,3 +354,42 @@ def test_print_startup_info_auth_providers_and_config_rows(monkeypatch, tmp_path
 
     assert any("Provider: default" in row and "Type: api-key" in row for row in rows)
     assert any("Schema Version" in row and "2025-11-25" in row for row in rows)
+
+
+def test_print_startup_info_redacts_credentials_in_endpoint(monkeypatch):
+    """The config table must not echo userinfo or a token from the endpoint."""
+    calls = []
+    monkeypatch.setattr(startup_info, "Console", _dummy_console_factory(calls))
+    monkeypatch.setattr(
+        "mcp_fuzzer.cli.runtime.argv_builder.prepare_inner_argv",
+        lambda args: ["mcp-fuzzer"],
+    )
+
+    args = Namespace(
+        config=None,
+        auth_config=None,
+        auth_env=False,
+        mode="tools",
+        endpoint="https://svc:hunter2@target.example/mcp?access_token=eyJsecret",
+    )
+
+    startup_info.print_startup_info(
+        args, config={"endpoint": "https://svc:hunter2@target.example/mcp"}
+    )
+
+    from rich.table import Table
+
+    rendered = []
+    for call_args, _kwargs in calls:
+        for arg in call_args:
+            if isinstance(arg, Table):
+                for column in getattr(arg, "columns", []):
+                    rendered.extend(str(cell) for cell in column.cells)
+            else:
+                rendered.append(str(arg))
+    blob = " ".join(rendered)
+
+    assert "hunter2" not in blob
+    assert "eyJsecret" not in blob
+    # The target must still be identifiable for the operator.
+    assert "target.example" in blob

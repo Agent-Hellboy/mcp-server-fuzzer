@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from ..redaction import redact_url
+
 
 @dataclass(frozen=True)
 class RunRecord:
@@ -117,12 +119,14 @@ class FuzzingMetadata:
         return f"PT{seconds}S"
 
     def to_dict(self) -> dict[str, Any]:
+        # The endpoint reaches every export; strip any credentials it carries
+        # (``user:pass@host`` or ``?access_token=``) before it is serialized.
         data = {
             "session_id": self.session_id,
             "start_time": self.start_time.isoformat(),
             "mode": self.mode,
             "protocol": self.protocol,
-            "endpoint": self.endpoint,
+            "endpoint": redact_url(self.endpoint),
             "runs": self.runs,
             "runs_per_type": self.runs_per_type,
             "fuzzer_version": self.fuzzer_version,

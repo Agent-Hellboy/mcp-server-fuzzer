@@ -19,6 +19,7 @@ from typing import Any
 import httpx
 
 from ...exceptions import AuthProviderError
+from ..providers import token_expiry_from_ttl
 from .authorization_code import (
     LoopbackRedirectServer,
     build_authorization_url,
@@ -86,16 +87,10 @@ class OAuthToken:
 
     @classmethod
     def from_response(cls, payload: dict[str, Any]) -> "OAuthToken":
-        expires_in = payload.get("expires_in")
-        try:
-            ttl = float(expires_in)
-        except (TypeError, ValueError):
-            ttl = 3600.0
-        skew = min(60.0, max(ttl * 0.1, 1.0))
         return cls(
             access_token=str(payload["access_token"]),
             token_type=str(payload.get("token_type") or "Bearer"),
-            expires_at=time.time() + max(ttl - skew, 1.0),
+            expires_at=token_expiry_from_ttl(payload.get("expires_in")),
             refresh_token=payload.get("refresh_token"),
             scope=payload.get("scope"),
             raw=payload,

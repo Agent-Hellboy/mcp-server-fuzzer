@@ -7,6 +7,91 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-07
+
+### Security
+
+- Credentials are no longer forwarded to redirect targets chosen by the server
+  under test. Both HTTP drivers followed a `Location` header gated only by the
+  network host policy, which permits any host unless `--no-network` is set, so a
+  single 3xx handed the operator's bearer token, session id, or cookies to an
+  attacker-named origin — in cleartext when the redirect also downgraded the
+  scheme. Credential headers are now withheld whenever the redirect changes
+  origin, across all nine redirect paths including the streaming one.
+  Same-origin redirects continue to authenticate.
+- Credentials are redacted from written artifacts. The report pipeline never
+  called the redactor that already existed for startup output, so the target
+  endpoint, raw run arguments, blocked-operation arguments, error-report
+  arguments, crash-repro inputs, and finding evidence were all written to disk
+  verbatim. Redaction now runs on every export path through the shared
+  `mcp_fuzzer.redaction` module. `redact_url` strips userinfo and sensitive
+  query parameters while leaving the target identifiable.
+- Hostile response bodies are classified as transport errors instead of
+  aborting the run. Oversized integer literals, deeply nested payloads, and
+  invalid UTF-8 raise `ValueError`, `RecursionError`, and `UnicodeDecodeError`
+  rather than `JSONDecodeError`, and previously escaped the transport as raw
+  interpreter errors.
+- Startup output redacts credentials embedded in the endpoint, and key matching
+  now normalizes away non-alphanumeric characters so camelCase secrets such as
+  `apiKey` are covered.
+
+### Fixed
+
+- MCP spec schemas are packaged inside `mcp_fuzzer`, so spec validation works
+  from an installed wheel. The schema root previously resolved to the
+  `schemas/mcp-spec` git submodule at the repository root, which never shipped;
+  `supported_protocol_versions()` returned empty and every spec check silently
+  passed while the CLI still displayed the requested protocol version as
+  active. This makes the 0.5.0 note about bundled dated schemas true for
+  installs, not only for repository checkouts. Resolution order is
+  `MCP_SPEC_SCHEMA_ROOT`, then packaged schemas, then the submodule; existing
+  environment overrides are unchanged.
+- The duplicate schema resolver in `fuzz_engine` routes through the same code
+  path. Its unversioned load, used before a protocol version is negotiated,
+  silently degraded to nothing in an installed package.
+- The wheel no longer installs `tests`, `explore`, and `registry-targets` as
+  top-level packages.
+- Reports record the version of the code that produced them
+  (`mcp_fuzzer.version.VERSION`) instead of installed distribution metadata,
+  which could disagree with `--version`.
+- A run that exhausts its total time budget now names the tools left untested
+  rather than dropping them silently, so a partial sweep is not mistaken for a
+  complete one.
+- Requesting a spec schema version that is unavailable warns instead of
+  validating nothing.
+- The audit workflow page is tracked. A `*FLOW.md` scratch-note pattern in
+  `.gitignore` matched `docs/getting-started/audit-workflow.md`, so the page
+  built locally but was absent from the deployed site, leaving broken links in
+  the navigation, the README, and four documentation pages.
+
+### Changed
+
+- Consolidated duplicated logic across the CLI startup output, authentication
+  provider loading, transport drivers, report formatters, and spec guard into
+  table-driven helpers, and removed dead code.
+- Host and header policy sets are computed once at import rather than rebuilt
+  on every outbound request, and per-call constants in the mutation strategies
+  are hoisted out of the hot path.
+- `DEFAULT_PROTOCOL_VERSION` is defined once, so the stdio and streamable HTTP
+  drivers cannot desynchronize.
+- Startup output uses the plain-ASCII icon default and lighter table borders
+  instead of hardcoded emoji.
+- Added homoglyph payloads for allowlist and identity-filter bypass testing.
+
+### Documentation
+
+- Corrected the `run_summary.json` example, which did not match the real output
+  shape, and the fuzzing strategy status table, which listed four shipped
+  features as not started.
+- Documented that findings are emitted to `findings.json` rather than to the
+  HTML, Markdown, CSV, XML, or text exports, that the run seed is not recorded
+  in any artifact, and that findings do not fail a build on their own.
+
+### Removed
+
+- Orphaned README images that lost their last reference when the README moved
+  to hosted documentation.
+
 ## [0.5.0] - 2026-08-06
 
 ### Added

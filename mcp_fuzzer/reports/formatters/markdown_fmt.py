@@ -6,12 +6,10 @@ from typing import Any
 
 from ...types import extract_tool_runs
 from .common import (
-    calculate_protocol_success_rate,
-    collect_and_summarize_protocol_items,
-    normalize_report_data,
-    result_has_failure,
+    iter_protocol_type_stats,
+    protocol_item_summaries,
+    redact_report_data,
 )
-from ...protocol_registry import GET_PROMPT_REQUEST, READ_RESOURCE_REQUEST
 from ...icons import CHECK, CROSS
 
 
@@ -28,109 +26,88 @@ class MarkdownFormatter:
         report_data: dict[str, Any] | Any,
         filename: str,
     ):
-        data = normalize_report_data(report_data)
+        data = redact_report_data(report_data)
         mode = str((data.get("metadata") or {}).get("mode", "all"))
-        md_content = "# MCP Fuzzer Report\n\n"
+        parts: list[str] = ["# MCP Fuzzer Report\n\n"]
 
         if "metadata" in data:
-            md_content += "## Metadata\n\n"
+            parts.append("## Metadata\n\n")
             for key, value in data["metadata"].items():
-                md_content += f"- **{key}**: {value}\n"
-            md_content += "\n"
+                parts.append(f"- **{key}**: {value}\n")
+            parts.append("\n")
 
         if "spec_summary" in data and mode not in {"tools"}:
             spec_summary = data.get("spec_summary") or {}
             totals = spec_summary.get("totals", {})
             if totals.get("total", 0) > 0:
-                md_content += "## Spec Guard Summary\n\n"
-                md_content += (
+                parts.append("## Spec Guard Summary\n\n")
+                parts.append(
                     f"- **Total Checks**: {totals.get('total', 0)}\n"
                     f"- **Failed**: {totals.get('failed', 0)}\n"
                     f"- **Warned**: {totals.get('warned', 0)}\n"
                     f"- **Passed**: {totals.get('passed', 0)}\n\n"
                 )
-                md_content += "| Spec ID | Failed | Warned | Passed | Total |\n"
-                md_content += "|--------|--------|--------|--------|-------|\n"
+                parts.append("| Spec ID | Failed | Warned | Passed | Total |\n")
+                parts.append("|--------|--------|--------|--------|-------|\n")
                 for spec_id, details in (spec_summary.get("by_spec_id") or {}).items():
                     spec_id_escaped = spec_id.replace("|", "\\|")
-                    md_content += (
+                    parts.append(
                         f"| {spec_id_escaped} | {details.get('failed', 0)} | "
                         f"{details.get('warned', 0)} | {details.get('passed', 0)} | "
                         f"{details.get('total', 0)} |\n"
                     )
-                md_content += "\n"
+                parts.append("\n")
 
         if "tool_results" in data:
-            md_content += "## Tool Results\n\n"
+            parts.append("## Tool Results\n\n")
 
             for tool_name, results in data["tool_results"].items():
                 runs, _ = extract_tool_runs(results)
-                md_content += f"### {tool_name}\n\n"
-                md_content += "| Run | Success | Exception |\n"
-                md_content += "|-----|---------|-----------|\n"
+                parts.append(f"### {tool_name}\n\n")
+                parts.append("| Run | Success | Exception |\n")
+                parts.append("|-----|---------|-----------|\n")
 
                 for i, result in enumerate(runs):
                     success = CHECK if result.get("success") else CROSS
                     exception = self._escape_cell(str(result.get("exception", "")))
-                    md_content += f"| {i + 1} | {success} | {exception} |\n"
+                    parts.append(f"| {i + 1} | {success} | {exception} |\n")
 
-                md_content += "\n"
+                parts.append("\n")
 
         if "protocol_results" in data and mode not in {"tools"}:
             protocol_results = data["protocol_results"]
-            md_content += "## Protocol Results\n\n"
-            md_content += (
+            parts.append("## Protocol Results\n\n")
+            parts.append(
                 "| Protocol Type | Total Runs | Errors | Success Rate |\n"
                 "|---------------|------------|--------|--------------|\n"
             )
-            for protocol_type, results in protocol_results.items():
+            for protocol_type, total_runs, errors, success_rate in (
+                iter_protocol_type_stats(protocol_results)
+            ):
                 protocol_label = self._escape_cell(str(protocol_type))
-                total_runs = len(results)
-                errors = sum(1 for r in results if result_has_failure(r))
-                success_rate = calculate_protocol_success_rate(total_runs, errors)
-                md_content += (
+                parts.append(
                     f"| {protocol_label} | {total_runs} | {errors} | "
                     f"{success_rate:.1f}% |\n"
                 )
-            md_content += "\n"
+            parts.append("\n")
 
-            _, resource_items = collect_and_summarize_protocol_items(
-                protocol_results.get(READ_RESOURCE_REQUEST, []), "resource"
-            )
-            if resource_items:
-                md_content += "## Resource Item Summary\n\n"
-                md_content += (
-                    "| Resource | Total Runs | Errors | Success Rate |\n"
-                    "|----------|------------|--------|--------------|\n"
+            for prefix, _raw, items in protocol_item_summaries(protocol_results):
+                if not items:
+                    continue
+                label = prefix.capitalize()
+                parts.append(f"## {label} Item Summary\n\n")
+                parts.append(
+                    f"| {label} | Total Runs | Errors | Success Rate |\n"
+                    f"|{'-' * (len(label) + 2)}|------------|--------|"
+                    "--------------|\n"
                 )
-                for name, stats in resource_items.items():
+                for name, stats in items.items():
                     escaped_name = self._escape_cell(str(name))
-                    resource_runs = stats["total_runs"]
-                    resource_errors = stats["errors"]
-                    md_content += (
-                        f"| {escaped_name} | {resource_runs} | {resource_errors} | "
-                        f"{stats['success_rate']:.1f}% |\n"
+                    parts.append(
+                        f"| {escaped_name} | {stats['total_runs']} | "
+                        f"{stats['errors']} | {stats['success_rate']:.1f}% |\n"
                     )
-                md_content += "\n"
-
-            _, prompt_items = collect_and_summarize_protocol_items(
-                protocol_results.get(GET_PROMPT_REQUEST, []), "prompt"
-            )
-            if prompt_items:
-                md_content += "## Prompt Item Summary\n\n"
-                md_content += (
-                    "| Prompt | Total Runs | Errors | Success Rate |\n"
-                    "|--------|------------|--------|--------------|\n"
-                )
-                for name, stats in prompt_items.items():
-                    escaped_name = self._escape_cell(str(name))
-                    prompt_runs = stats["total_runs"]
-                    prompt_errors = stats["errors"]
-                    md_content += (
-                        f"| {escaped_name} | {prompt_runs} | {prompt_errors} | "
-                        f"{stats['success_rate']:.1f}% |\n"
-                    )
-                md_content += "\n"
+                parts.append("\n")
 
         with open(filename, "w") as f:
-            f.write(md_content)
+            f.write("".join(parts))

@@ -2,8 +2,18 @@
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
-exclude = ["servers*", "examples*"]
+include = ["mcp_fuzzer*"]
+exclude = ["servers*", "examples*", "tests*", "explore*", "docs*"]
+
+[tool.setuptools.package-data]
+mcp_fuzzer = [
+    "schemas/mcp-spec/LICENSE",
+    "schemas/mcp-spec/schema/*/schema.json",
+]
 
 [project]
 name = "mcp-fuzzer"
