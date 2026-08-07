@@ -298,7 +298,10 @@ class HttpDriver(
             if redirect_url:
                 await response.aclose()  # Close the first response
                 response = await client.post(
-                    redirect_url, json=payload, headers=safe_headers, stream=True
+                    redirect_url,
+                    json=payload,
+                    headers=self._headers_for_redirect(redirect_url, safe_headers),
+                    stream=True,
                 )
 
             try:

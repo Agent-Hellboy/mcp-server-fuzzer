@@ -44,10 +44,22 @@ from ..safety_system.safety import CombinedSafetyProvider
 
 from importlib.metadata import version, PackageNotFoundError
 
+from ..version import VERSION as _CODE_VERSION
+
 _AUTO_FILTER = object()
 
 
 def _resolve_fuzzer_version() -> str:
+    """Version of the code that produced this report.
+
+    ``mcp_fuzzer.version.VERSION`` is the single source of truth: it ships with
+    the module actually executing, so a report can never claim a version other
+    than the one that generated it. Installed distribution metadata is only a
+    fallback for exotic installs that somehow lack the attribute, since that
+    metadata goes stale whenever the working tree is ahead of the last install.
+    """
+    if isinstance(_CODE_VERSION, str) and _CODE_VERSION.strip():
+        return _CODE_VERSION.strip()
     try:
         return version("mcp-fuzzer")
     except PackageNotFoundError:

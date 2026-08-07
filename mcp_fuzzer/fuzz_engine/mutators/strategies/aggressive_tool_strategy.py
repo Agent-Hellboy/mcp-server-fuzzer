@@ -69,6 +69,25 @@ _TEXT_KEY_HINTS: list[tuple[tuple[str, ...], Any]] = [
     (("cmd", "command", "exec", "shell"), lambda _n: random.choice(COMMAND_INJECTION)),
 ]
 
+# Field-name hints for the schema-aware semantic pass (_pick_semantic_string).
+# Deliberately NOT the same table as _TEXT_KEY_HINTS: this pass runs against a
+# typed schema property, so it prefers length-aware pickers ("path" draws a
+# payload that fits rather than any traversal string) and carries an extra
+# identifier hint. Merging the two would change which payloads are emitted.
+_SEMANTIC_KEY_HINTS: list[tuple[tuple[str, ...], Any]] = [
+    (("uri", "url", "href"), lambda _n: random.choice(SSRF_PAYLOADS)),
+    (("path", "file", "dir", "folder"),
+     lambda n: get_payload_within_length(n, "path")),
+    (("query", "search", "filter", "sql"),
+     lambda n: get_payload_within_length(n, "sql")),
+    (("html", "content", "body", "text"),
+     lambda n: get_payload_within_length(n, "xss")),
+    (("cmd", "command", "exec", "shell"), lambda _n: random.choice(COMMAND_INJECTION)),
+    # Use a unicode trick on identifiers instead of garbage.
+    (("id", "name", "key", "cursor"),
+     lambda n: inject_unicode_trick("test_id", n)),
+]
+
 # Strategies that just pick from a fixed payload pool, no length awareness.
 _POOL_STRATEGIES: dict[str, list[str]] = {
     "sql_injection": SQL_INJECTION,
@@ -424,35 +443,12 @@ def _pick_semantic_string(name: str, max_length: int | None = None) -> str:
 
     lowered = name.lower()
 
-    if any(token in lowered for token in ("uri", "url", "href")):
-        payload = random.choice(SSRF_PAYLOADS)
-        return _clamp_string(payload, 0, max_len)
-
-    if any(token in lowered for token in ("path", "file", "dir", "folder")):
-        payload = get_payload_within_length(max_len, "path")
-        return _clamp_string(payload, 0, max_len)
-
-    if any(token in lowered for token in ("query", "search", "filter", "sql")):
-        payload = get_payload_within_length(max_len, "sql")
-        return _clamp_string(payload, 0, max_len)
-
-    if any(token in lowered for token in ("html", "content", "body", "text")):
-        payload = get_payload_within_length(max_len, "xss")
-        return _clamp_string(payload, 0, max_len)
-
-    if any(token in lowered for token in ("cmd", "command", "exec", "shell")):
-        payload = random.choice(COMMAND_INJECTION)
-        return _clamp_string(payload, 0, max_len)
-
-    if any(token in lowered for token in ("id", "name", "key", "cursor")):
-        # Use unicode trick or type confusion instead of garbage
-        base = "test_id"
-        payload = inject_unicode_trick(base, max_len)
-        return _clamp_string(payload, 0, max_len)
+    for tokens, pick in _SEMANTIC_KEY_HINTS:
+        if any(token in lowered for token in tokens):
+            return _clamp_string(pick(max_len), 0, max_len)
 
     # Default: SQL injection payload (most common vulnerability)
-    payload = get_payload_within_length(max_len, "sql")
-    return _clamp_string(payload, 0, max_len)
+    return _clamp_string(get_payload_within_length(max_len, "sql"), 0, max_len)
 
 
 def _pick_semantic_number(name: str, spec: dict[str, Any]) -> int | float:

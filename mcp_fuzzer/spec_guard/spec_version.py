@@ -56,12 +56,46 @@ def maybe_update_spec_version_from_result(result: object) -> str | None:
 # --- supported versions (data-driven discovery) -----------------------------
 
 
+def _has_any_schema(root: Path) -> bool:
+    """True when *root* looks like a populated MCP schema directory."""
+    try:
+        if not root.is_dir():
+            return False
+    except OSError:
+        return False
+    return any(root.glob("*/schema.json"))
+
+
+def _packaged_schema_root() -> Path:
+    """Schema directory shipped inside the installed ``mcp_fuzzer`` package."""
+    package_root = Path(__file__).resolve().parents[1]
+    return package_root / "schemas" / "mcp-spec" / "schema"
+
+
+def _repo_schema_root() -> Path:
+    """Schema directory from the ``schemas/mcp-spec`` git submodule (dev only)."""
+    repo_root = Path(__file__).resolve().parents[2]
+    return repo_root / "schemas" / "mcp-spec" / "schema"
+
+
 def _schema_root() -> Path:
+    """Resolve the MCP schema directory for this install.
+
+    Order of preference:
+    1. ``MCP_SPEC_SCHEMA_ROOT`` when set (always wins, even if empty).
+    2. Schemas packaged inside ``mcp_fuzzer`` — the normal installed case.
+    3. The ``schemas/mcp-spec`` git submodule, for a source checkout.
+    """
     env_root = os.getenv("MCP_SPEC_SCHEMA_ROOT")
     if env_root:
         return Path(env_root)
-    repo_root = Path(__file__).resolve().parents[2]
-    return repo_root / "schemas" / "mcp-spec" / "schema"
+    packaged = _packaged_schema_root()
+    if _has_any_schema(packaged):
+        return packaged
+    repo = _repo_schema_root()
+    if _has_any_schema(repo):
+        return repo
+    return packaged
 
 
 @lru_cache(maxsize=1)

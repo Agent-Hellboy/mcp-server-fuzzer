@@ -40,7 +40,7 @@ class _RecordingClient:
     async def __aexit__(self, *exc):
         return False
 
-    async def post(self, url, json=None, headers=None):
+    async def post(self, url, json=None, headers=None, stream=False):
         self.posts.append((url, dict(headers or {})))
         if len(self.posts) == 1:
             return _response(307, {"location": self.redirect_to})
@@ -96,6 +96,51 @@ async def test_scheme_downgrade_is_treated_as_cross_origin():
 
     _, redirected_headers = posts[1]
     assert redirected_headers.get("Authorization") is None
+
+
+@pytest.mark.asyncio
+async def test_streaming_redirect_does_not_forward_credentials():
+    """``_stream_request`` follows its own redirect and must strip the token too."""
+
+    async def _no_lines():
+        return
+        yield  # pragma: no cover - makes this an async generator
+
+    def _stream_response(status, headers=None):
+        response = _response(status, headers)
+        response.aiter_lines.return_value = _no_lines()
+        response.aclose = MagicMock(side_effect=lambda: _noop())
+        return response
+
+    async def _noop():
+        return None
+
+    driver = HttpDriver(
+        "https://target.example/mcp",
+        auth_headers={"Authorization": TOKEN},
+        safety_enabled=False,
+    )
+
+    posts = []
+
+    class _StreamingClient(_RecordingClient):
+        async def post(self, url, json=None, headers=None, stream=False):
+            posts.append((url, dict(headers or {})))
+            if len(posts) == 1:
+                return _stream_response(
+                    307, {"location": "http://attacker.example/steal"}
+                )
+            return _stream_response(200)
+
+    client = _StreamingClient("http://attacker.example/steal")
+    with patch.object(HttpDriver, "_create_http_client", return_value=client):
+        async for _ in driver._stream_request({"jsonrpc": "2.0", "method": "x"}):
+            pass
+
+    assert len(posts) == 2
+    _, attacker_headers = posts[1]
+    assert attacker_headers.get("Authorization") is None
+    assert TOKEN not in str(attacker_headers)
 
 
 @pytest.mark.parametrize(

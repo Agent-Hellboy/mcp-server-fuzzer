@@ -58,23 +58,18 @@ MALICIOUS_NUMBERS = [
     -999999999,
 ]
 
-def _repo_root() -> Path:
-    current = Path(__file__).resolve()
-    for parent in current.parents:
-        if (
-            (parent / "pyproject.toml").exists()
-            or (parent / ".git").exists()
-            or (parent / "setup.cfg").exists()
-        ):
-            return parent
-    return current.parents[4] if len(current.parents) > 4 else current.parent
-
-
 def _schema_root() -> Path:
-    env_root = os.getenv("MCP_SPEC_SCHEMA_ROOT")
-    if env_root:
-        return Path(env_root)
-    return _repo_root() / "schemas" / "mcp-spec" / "schema"
+    """Resolve the MCP schema directory.
+
+    Delegates to ``spec_guard`` so there is one resolution order for the whole
+    codebase: ``MCP_SPEC_SCHEMA_ROOT`` -> schemas packaged inside ``mcp_fuzzer``
+    -> the ``schemas/mcp-spec`` submodule. A private copy here used to resolve
+    relative to the repository root, which does not exist in an installed
+    package, so the unversioned schema load silently degraded to nothing.
+    """
+    from ....spec_guard.spec_version import _schema_root as _resolve
+
+    return _resolve()
 
 
 def _latest_schema_version(root: Path) -> str | None:

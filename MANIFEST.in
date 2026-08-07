@@ -1,0 +1,19 @@
+include LICENSE
+include README.md
+include CHANGELOG.md
+
+# Vendored MCP spec JSON Schemas — spec_guard no-ops without these.
+include mcp_fuzzer/schemas/mcp-spec/LICENSE
+recursive-include mcp_fuzzer/schemas/mcp-spec/schema *.json
+
+# Keep the 52MB spec submodule and dev-only trees out of the sdist.
+prune schemas
+prune explore
+prune tests
+prune docs
+prune examples
+prune servers
+prune registry-targets
+
+global-exclude *.py[cod]
+global-exclude __pycache__
