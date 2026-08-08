@@ -492,7 +492,7 @@ The reporting system provides centralized output management and result reporting
 - **JSON/Text**: Machine-readable structured data plus readable summaries for doc handoffs
 - **CSV/XML**: Spreadsheet- and enterprise-friendly formats for data analysis
 - **HTML/Markdown**: Presentation-ready exports for reports and runbooks
-- **Standardized Output Protocol**: Currently persisted as JSON files regardless of `--output-format`; other values are reserved for future protocol encodings
+- **Standardized Output Protocol**: Persisted as JSON files; alternative encodings are configured under the nested `output.format` config key and reserved for future protocol encodings
 
 **Report Types:**
 

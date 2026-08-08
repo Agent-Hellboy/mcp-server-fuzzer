@@ -12,8 +12,52 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - Added `tool_name_squatting` metadata findings for edit-distance and Unicode
   confusable imitations of common tool names.
 - Added opt-in `--security-audit-intrusive` Origin validation for HTTP/SSE
-  targets, reporting successful foreign-Origin requests that were not rejected
-  with HTTP 403.
+  targets. Only a successful (2xx) foreign-Origin response is reported as
+  `missing_origin_validation`; a probe refused with HTTP 401 is reported as the
+  new `origin_validation_inconclusive` finding instead of being treated as
+  clean.
+
+### Changed
+
+- The intrusive Origin probe now replays the run's configured transport
+  authentication, so a server that authenticates before it evaluates `Origin`
+  is still measured on its Origin handling rather than silently passing.
+- The intrusive Origin probe follows same-host redirects and judges the
+  response that actually serves the MCP request. A redirect is no longer
+  treated as Origin acceptance, so `/mcp` → `/mcp/` and HTTP → HTTPS
+  canonicalization no longer produce a false finding.
+- The intrusive Origin probe uses a `server/discover` `POST` for stateless MCP
+  revisions even when `--protocol sse` is selected, because `2026-07-28`
+  removed the GET stream endpoint. Legacy SSE revisions still use `GET`.
+- Origin finding text is scoped to the negotiated MCP revision: HTTP 403 is
+  only cited as mandatory for `2025-11-25` and later.
+
+### Fixed
+
+- Unicode-confusable tool-name detection no longer misses two whole classes of
+  imitation. The Greek confusable map used upper-case keys that could never
+  match after case folding, and the comparison used an NFKC-normalized spelling
+  that folded full-width characters into their ASCII equivalents before they
+  could be flagged.
+
+### Removed
+
+- Removed 13 CLI flags that were nonfunctional or fully covered by another
+  flag, taking the parser from 82 options to 69.
+  - `--process-max-concurrency`, `--process-retry-count`, and
+    `--process-retry-delay` were parsed and displayed but never consumed by the
+    process runtime. Use `--max-concurrency`.
+  - `--output-format`, `--output-schema`, `--output-compress`, and
+    `--output-session-id` never reached the reporter, which reads these from
+    the nested `output:` section of a config file. That config path is
+    unchanged; only the inert CLI flags are gone.
+  - `--export-safety-data` was parsed and rebuilt for retries but never
+    executed; `--safety-report` already writes `safety_report_<session>.json`.
+  - `--verbose` is replaced by `--log-level INFO`. (The separate
+    `mcp_fuzzer.client.healthcheck` CLI keeps its own `--verbose`/`--json`.)
+  - `--transport-retry-delay`, `--transport-retry-backoff`,
+    `--transport-retry-max-delay`, and `--transport-retry-jitter` moved to
+    config-file-only keys. `--transport-retries` remains on the CLI.
 
 ## [0.6.0] - 2026-08-07
 

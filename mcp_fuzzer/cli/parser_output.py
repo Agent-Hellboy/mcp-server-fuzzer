@@ -6,8 +6,6 @@ import argparse
 
 
 def add_output_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-
     parser.add_argument(
         "--enable-aiomonitor",
         action="store_true",
@@ -21,8 +19,8 @@ def add_output_arguments(parser: argparse.ArgumentParser) -> None:
         "--log-level",
         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
         help=(
-            "Set log verbosity level. Overrides --verbose when provided. "
-            "Defaults to WARNING unless --verbose is set (then INFO)."
+            "Set log verbosity level (default: WARNING). Use INFO or DEBUG for "
+            "progress and diagnostic detail."
         ),
     )
 
@@ -98,36 +96,10 @@ def add_output_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
     parser.add_argument(
-        "--process-max-concurrency",
-        type=int,
-        default=5,
-        help="Maximum concurrent process operations (default: 5)",
-    )
-    parser.add_argument(
         "--max-concurrency",
         type=int,
         default=5,
         help="Maximum concurrent client operations (default: 5)",
-    )
-    parser.add_argument(
-        "--process-retry-count",
-        type=int,
-        default=1,
-        help="Number of retries for failed operations (default: 1)",
-    )
-
-    parser.add_argument(
-        "--process-retry-delay",
-        type=float,
-        default=1.0,
-        help="Delay between retries (seconds, default: 1.0)",
-    )
-
-    parser.add_argument(
-        "--output-format",
-        choices=["json", "yaml", "csv", "xml"],
-        default="json",
-        help="Output format for standardized reports (default: json)",
     )
 
     parser.add_argument(
@@ -141,22 +113,4 @@ def add_output_arguments(parser: argparse.ArgumentParser) -> None:
             "configuration_dump",
         ],
         help="Specific output types to generate (default: all)",
-    )
-
-    parser.add_argument(
-        "--output-schema",
-        metavar="SCHEMA_FILE",
-        help="Path to custom output schema file",
-    )
-
-    parser.add_argument(
-        "--output-compress",
-        action="store_true",
-        help="Compress output files",
-    )
-
-    parser.add_argument(
-        "--output-session-id",
-        metavar="SESSION_ID",
-        help="Custom session ID for output files",
     )

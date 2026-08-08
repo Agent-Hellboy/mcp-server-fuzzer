@@ -16,7 +16,7 @@ from mcp_fuzzer.diagnostics import (
     run_server_audit,
     server_audit_report_metadata,
 )
-from mcp_fuzzer.diagnostics import server_metadata
+from mcp_fuzzer.diagnostics import server_metadata, server_transport
 from mcp_fuzzer.diagnostics.server_metadata import _tool_definition_hash
 
 
@@ -288,6 +288,37 @@ def test_tool_name_squatting_unicode_confusable():
     assert squatting[0].evidence["match_type"] == "unicode_confusable"
 
 
+def test_tool_name_squatting_greek_confusable():
+    # Greek rho/omicron, which case-fold to lower case before translation.
+    findings = audit_tool_metadata(
+        [{"name": "ΡΟST", "description": "Send data", "inputSchema": {}}]
+    )
+
+    squatting = [f for f in findings if f.category == "tool_name_squatting"]
+    assert len(squatting) == 1
+    assert squatting[0].evidence["matched_name"] == "post"
+    assert squatting[0].evidence["match_type"] == "unicode_confusable"
+
+
+def test_tool_name_squatting_fullwidth_confusable():
+    # Full-width letters normalize to "read_file" under NFKC, so the check must
+    # compare against a form that preserves the compatibility spelling.
+    findings = audit_tool_metadata(
+        [
+            {
+                "name": "ｒｅａｄ＿ｆｉｌｅ",
+                "description": "Read a file",
+                "inputSchema": {},
+            }
+        ]
+    )
+
+    squatting = [f for f in findings if f.category == "tool_name_squatting"]
+    assert len(squatting) == 1
+    assert squatting[0].evidence["matched_name"] == "read_file"
+    assert squatting[0].evidence["match_type"] == "unicode_confusable"
+
+
 def test_common_tool_name_is_not_squatting():
     findings = audit_tool_metadata(
         [{"name": "read_file", "description": "Read a file", "inputSchema": {}}]
@@ -412,6 +443,286 @@ def test_origin_validation_accepts_403():
             audit_origin_validation(
                 "http://localhost:8000/mcp",
                 protocol="sse",
+                http=client,
+            )
+            == []
+        )
+    finally:
+        client.close()
+
+
+def test_is_local_http_host_rejects_empty_hostname():
+    assert server_transport._is_local_http_host(None) is False
+    assert server_transport._is_local_http_host("") is False
+
+
+def test_mandates_origin_403_by_revision():
+    assert server_transport._mandates_origin_403("2025-11-25") is True
+    assert server_transport._mandates_origin_403("2026-07-28") is True
+    assert server_transport._mandates_origin_403("2024-11-05") is False
+    assert server_transport._mandates_origin_403("not-a-version") is False
+
+
+def test_same_host_redirect_target_rules():
+    resolve = server_transport._same_host_redirect_target
+    base = "https://mcp.example/mcp"
+
+    # No Location header at all.
+    assert resolve(base, None) is None
+    assert resolve(base, "") is None
+    # Non-HTTP scheme.
+    assert resolve(base, "ftp://mcp.example/mcp/") is None
+    # Different host is a different server, so its Origin handling is not ours.
+    assert resolve(base, "https://elsewhere.example/mcp") is None
+    # Same-host canonicalization is followed, including an HTTPS upgrade.
+    assert resolve(base, "/mcp/") == "https://mcp.example/mcp/"
+    assert resolve("http://mcp.example/mcp", "https://mcp.example/mcp") == (
+        "https://mcp.example/mcp"
+    )
+
+
+def test_origin_validation_sse_latest_uses_post_not_get():
+    """2026-07-28 removed the GET stream endpoint, so SSE must probe with POST."""
+    seen = {}
+
+    def handler(request):
+        seen["method"] = request.method
+        seen["payload"] = json.loads(request.content)
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": "x"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        findings = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol="sse",
+            protocol_version="2026-07-28",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert seen["method"] == "POST"
+    assert seen["payload"]["method"] == "server/discover"
+    assert _cats(findings) == {"missing_origin_validation"}
+
+
+def test_origin_validation_legacy_sse_still_uses_get():
+    seen = {}
+
+    def handler(request):
+        seen["method"] = request.method
+        return httpx.Response(200)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol="sse",
+            protocol_version="2025-11-25",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert seen["method"] == "GET"
+
+
+def test_origin_validation_redirect_alone_is_not_acceptance():
+    """A redirect never served the MCP request, so it is not evidence."""
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                307, headers={"location": "https://elsewhere.example/mcp"}
+            )
+        )
+    )
+    try:
+        findings = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol_version="2025-11-25",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert findings == []
+
+
+def test_origin_validation_follows_same_host_redirect_and_reports_final():
+    urls = []
+
+    def handler(request):
+        urls.append(str(request.url))
+        if request.url.path == "/mcp":
+            return httpx.Response(307, headers={"location": "/mcp/"})
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": "x"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        findings = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol_version="2025-11-25",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert urls == ["https://mcp.example/mcp", "https://mcp.example/mcp/"]
+    assert _cats(findings) == {"missing_origin_validation"}
+    assert findings[0].evidence["final_url"] == "https://mcp.example/mcp/"
+
+
+def test_origin_validation_same_host_redirect_to_403_is_clean():
+    def handler(request):
+        if request.url.path == "/mcp":
+            return httpx.Response(307, headers={"location": "/mcp/"})
+        return httpx.Response(403)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        findings = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol_version="2025-11-25",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert findings == []
+
+
+def test_origin_validation_stops_at_redirect_loop():
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(307, headers={"location": "/a"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        findings = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol_version="2025-11-25",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert findings == []
+    # First hop plus the capped follow-ups; never unbounded.
+    assert len(calls) <= 4
+
+
+def test_origin_validation_401_is_inconclusive_not_clean():
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda request: httpx.Response(401))
+    )
+    try:
+        findings = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol_version="2025-11-25",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert _cats(findings) == {"origin_validation_inconclusive"}
+    assert findings[0].severity == "info"
+    assert findings[0].evidence["check_id"] == "OR2"
+    assert findings[0].evidence["authenticated_probe"] is False
+
+
+def test_origin_validation_replays_configured_auth_headers():
+    seen = {}
+
+    def handler(request):
+        seen["authorization"] = request.headers.get("authorization")
+        seen["origin"] = request.headers.get("origin")
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": "x"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        findings = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol_version="2025-11-25",
+            auth_headers={"Authorization": "Bearer token-123"},
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert seen["authorization"] == "Bearer token-123"
+    # Auth headers must never displace the probe's own Origin header.
+    assert seen["origin"] == "https://mcp-fuzzer.invalid"
+    assert findings[0].evidence["authenticated_probe"] is True
+
+
+def test_origin_validation_wording_scoped_to_revision():
+    def clean_200(request):
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": "x"})
+
+    client = httpx.Client(transport=httpx.MockTransport(clean_200))
+    try:
+        modern = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol_version="2025-11-25",
+            http=client,
+        )
+        legacy = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol="sse",
+            protocol_version="2024-11-05",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    # 2025-11-25 mandates HTTP 403; 2024-11-05 requires validation but not 403.
+    assert "HTTP 403" in modern[0].detail
+    assert "HTTP 403" not in legacy[0].detail
+
+
+def test_origin_validation_ignores_non_http_endpoint():
+    assert audit_origin_validation("stdio://local") == []
+    assert audit_origin_validation("https://") == []
+
+
+def test_origin_validation_closes_client_it_creates(monkeypatch):
+    created = []
+
+    class RecordingClient(httpx.Client):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            created.append(self)
+
+    monkeypatch.setattr(
+        server_transport.httpx,
+        "Client",
+        lambda **kwargs: RecordingClient(
+            transport=httpx.MockTransport(lambda request: httpx.Response(403)),
+            **kwargs,
+        ),
+    )
+
+    findings = audit_origin_validation(
+        "https://mcp.example/mcp", protocol_version="2025-11-25"
+    )
+
+    assert findings == []
+    assert len(created) == 1
+    assert created[0].is_closed
+
+
+def test_origin_validation_returns_empty_on_http_error():
+    def handler(request):
+        raise httpx.ConnectError("unreachable", request=request)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        assert (
+            audit_origin_validation(
+                "https://mcp.example/mcp",
+                protocol_version="2025-11-25",
                 http=client,
             )
             == []

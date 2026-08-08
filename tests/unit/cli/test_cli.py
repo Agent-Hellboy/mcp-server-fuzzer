@@ -43,7 +43,6 @@ def _base_args(**overrides):
         transport_retry_backoff=2.0,
         transport_retry_max_delay=5.0,
         transport_retry_jitter=0.1,
-        verbose=False,
         runs=10,
         runs_per_type=5,
         protocol_type=None,
@@ -76,14 +75,8 @@ def _base_args(**overrides):
         watchdog_process_timeout=30.0,
         watchdog_extra_buffer=5.0,
         watchdog_max_hang_time=60.0,
-        process_max_concurrency=5,
-        process_retry_count=1,
-        process_retry_delay=1.0,
-        output_format="json",
+        max_concurrency=5,
         output_types=None,
-        output_schema=None,
-        output_compress=False,
-        output_session_id=None,
         enable_aiomonitor=False,
         auth_config=None,
         auth_env=False,
@@ -201,12 +194,16 @@ def test_version_flag_exits_and_prints(capsys):
 def test_setup_logging_levels():
     import logging
 
-    args = argparse.Namespace(verbose=True, log_level=None)
+    args = argparse.Namespace(log_level=None)
     setup_logging(args)
+    assert logging.getLogger().level == logging.WARNING
+
+    args2 = argparse.Namespace(log_level="INFO")
+    setup_logging(args2)
     assert logging.getLogger().level == logging.INFO
 
-    args2 = argparse.Namespace(verbose=False, log_level="DEBUG")
-    setup_logging(args2)
+    args3 = argparse.Namespace(log_level="DEBUG")
+    setup_logging(args3)
     assert logging.getLogger().level == logging.DEBUG
 
 
@@ -488,12 +485,9 @@ def test_handle_check_env_invalid_level(monkeypatch):
 def test_prepare_inner_argv_roundtrip():
     args = _base_args(
         output_types=["fuzzing_results"],
-        output_session_id="abc",
         enable_aiomonitor=True,
-        output_compress=True,
         no_network=True,
         allow_hosts=["a", "b"],
-        export_safety_data="",
         spec_prompt_name="example_prompt",
         spec_prompt_args='{"query": "probe"}',
         runtime_probe=True,
@@ -506,8 +500,8 @@ def test_prepare_inner_argv_roundtrip():
     )
     argv = prepare_inner_argv(args)
     assert "--mode" in argv and "--endpoint" in argv
-    assert "abc" in argv
-    assert "--export-safety-data" in argv
+    assert "--output-types" in argv and "fuzzing_results" in argv
+    assert "--enable-aiomonitor" in argv
     assert "--spec-prompt-name" in argv
     assert "--spec-prompt-args" in argv
     assert "--runtime-probe" in argv

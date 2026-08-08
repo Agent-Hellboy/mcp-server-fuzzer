@@ -199,16 +199,6 @@ def add_fuzz_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
-        "--export-safety-data",
-        metavar="FILENAME",
-        nargs="?",
-        const="",
-        help=(
-            "Export safety data to JSON file. If no filename provided, "
-            "uses timestamped filename. Use with --safety-report for best results."
-        ),
-    )
-    parser.add_argument(
         "--seed",
         type=int,
         default=None,

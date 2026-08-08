@@ -34,6 +34,7 @@ SERVER_AUDIT_FLAW_CATEGORIES = frozenset(
         "dangerous_capability_combo",
         "insecure_transport",
         "missing_origin_validation",
+        "origin_validation_inconclusive",
         "command_injection",
         "path_traversal",
         "sql_injection",

@@ -129,7 +129,7 @@ Keep audit targets isolated so a cleanup failure cannot affect unrelated work.
 
 ### Resource usage is high
 
-- Lower `--process-max-concurrency` and `--max-concurrency`.
+- Lower `--max-concurrency`.
 - Increase `--watchdog-check-interval` if supervision is too chatty.
 - Keep fuzz run counts bounded while reproducing a finding.
 

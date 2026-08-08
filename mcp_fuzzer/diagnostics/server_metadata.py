@@ -123,14 +123,16 @@ _CONFUSABLES = str.maketrans(
         "с": "c",
         "х": "x",
         "у": "y",
-        "Α": "A",  # Greek
-        "Β": "B",
-        "Ε": "E",
-        "Ι": "I",
-        "Ο": "O",
-        "Ρ": "P",
-        "Χ": "X",
-        "Υ": "Y",
+        # Greek. Keys must be lower-case: ``_name_skeleton`` case-folds before
+        # it translates, so upper-case keys would never match.
+        "α": "a",
+        "β": "b",
+        "ε": "e",
+        "ι": "i",
+        "ο": "o",
+        "ρ": "p",
+        "χ": "x",
+        "υ": "y",
     }
 )
 
@@ -138,6 +140,16 @@ _CONFUSABLES = str.maketrans(
 def _name_skeleton(name: str) -> str:
     """Normalize common Unicode lookalikes before comparing tool names."""
     return unicodedata.normalize("NFKC", name).casefold().translate(_CONFUSABLES)
+
+
+def _spelling_form(name: str) -> str:
+    """Case-fold a name while preserving compatibility-character evidence.
+
+    NFC is deliberate: NFKC would fold full-width and other compatibility
+    forms into their ASCII equivalents, hiding exactly the confusable
+    spellings this comparison exists to detect.
+    """
+    return unicodedata.normalize("NFC", name).casefold()
 
 
 def _levenshtein_distance(left: str, right: str) -> int:
@@ -162,9 +174,9 @@ def _levenshtein_distance(left: str, right: str) -> int:
 def _tool_name_squatting_match(name: str) -> dict[str, Any] | None:
     """Return evidence when a name closely imitates a common tool name."""
     skeleton = _name_skeleton(name)
-    folded = unicodedata.normalize("NFKC", name).casefold()
+    spelling = _spelling_form(name)
     for known_name in _COMMON_TOOL_NAMES:
-        if skeleton == known_name and folded != known_name:
+        if skeleton == known_name and spelling != known_name:
             return {
                 "matched_name": known_name,
                 "match_type": "unicode_confusable",

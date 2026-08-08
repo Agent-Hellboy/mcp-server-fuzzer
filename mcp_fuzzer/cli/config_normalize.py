@@ -9,7 +9,12 @@ from ..config import config_mediator
 
 
 def apply_nested_config_to_args(args: argparse.Namespace, defaults_parser) -> None:
-    """Map nested ``output`` and ``auth`` sections onto argparse fields."""
+    """Map the nested ``output`` config section onto argparse fields.
+
+    Only the keys the run actually consumes are mapped. ``format``,
+    ``compress``, and ``schema`` stay nested-only: the reporter reads them
+    straight off the config provider, so there is no CLI field to seed.
+    """
     output_section = config_mediator.get("output")
     if isinstance(output_section, dict):
         _apply_if_default(
@@ -18,18 +23,6 @@ def apply_nested_config_to_args(args: argparse.Namespace, defaults_parser) -> No
             "output_dir",
             output_section.get("directory"),
         )
-        _apply_if_default(
-            args,
-            defaults_parser,
-            "output_format",
-            output_section.get("format"),
-        )
-        _apply_if_default(
-            args,
-            defaults_parser,
-            "output_compress",
-            output_section.get("compress"),
-        )
         if output_section.get("types") is not None:
             _apply_if_default(
                 args,
@@ -37,12 +30,6 @@ def apply_nested_config_to_args(args: argparse.Namespace, defaults_parser) -> No
                 "output_types",
                 output_section.get("types"),
             )
-        _apply_if_default(
-            args,
-            defaults_parser,
-            "output_schema",
-            output_section.get("schema"),
-        )
 
 
 def _apply_if_default(

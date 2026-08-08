@@ -184,8 +184,11 @@ against the same run's results: poisoning markers, hidden or encoded
 instructions, tool shadowing, typosquatted names, dangerous capability
 combinations, cleartext transport, and command, path, SQL, and prompt-injection
 oracles. Add `--security-audit-intrusive` to probe whether an HTTP/SSE target
-rejects a foreign `Origin` with HTTP 403, as required by the MCP transport
-specification.
+rejects a foreign `Origin`. Every MCP revision requires servers to validate
+`Origin`; revisions from `2025-11-25` onward additionally mandate HTTP 403 for
+an invalid one, so the finding wording is scoped to the negotiated revision.
+The probe replays configured transport authentication, and a probe still
+refused with HTTP 401 is reported as inconclusive rather than clean.
 
 `--auth-audit` runs read-only OAuth checks against an HTTP or SSE endpoint:
 metadata review, authorization-endpoint probes, and unauthenticated tool

@@ -34,6 +34,27 @@ def _oauth_provider(config: dict[str, Any]) -> Any | None:
     return providers.get("mcp_oauth")
 
 
+def _transport_auth_headers(config: dict[str, Any]) -> dict[str, str]:
+    """Return the transport auth headers the normal session would send.
+
+    The Origin probe replays them so a server that authenticates before it
+    evaluates Origin is still measured on its Origin handling.
+    """
+    auth_manager = config.get("auth_manager")
+    if auth_manager is None:
+        return {}
+    getter = getattr(auth_manager, "get_default_auth_headers", None)
+    if not callable(getter):
+        return {}
+    try:
+        headers = getter()
+    except Exception:  # pragma: no cover - provider errors are best-effort
+        return {}
+    if not isinstance(headers, dict):
+        return {}
+    return {str(k): str(v) for k, v in headers.items()}
+
+
 def _oauth_client_id(config: dict[str, Any]) -> str | None:
     provider = _oauth_provider(config)
     if provider is None:
@@ -191,6 +212,7 @@ async def run_server_audit_phase(
                     protocol=str(config.get("protocol") or "streamablehttp"),
                     protocol_version=protocol_version,
                     timeout=float(config.get("timeout", 30.0)),
+                    auth_headers=_transport_auth_headers(config),
                 )
             )
         return findings, True

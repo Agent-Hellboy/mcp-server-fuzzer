@@ -35,21 +35,21 @@ _RETRY_BOUND_RULES: tuple[_NumericRule, ...] = (
         (int, float),
         0,
         False,
-        "--transport-retry-delay must be >= 0",
+        "transport_retry_delay must be >= 0",
     ),
     (
         "transport_retry_backoff",
         (int, float),
         1,
         False,
-        "--transport-retry-backoff must be >= 1",
+        "transport_retry_backoff must be >= 1",
     ),
     (
         "transport_retry_max_delay",
         (int, float),
         0,
         False,
-        "--transport-retry-max-delay must be >= 0",
+        "transport_retry_max_delay must be >= 0",
     ),
 )
 
@@ -59,7 +59,7 @@ _JITTER_BOUND_RULES: tuple[_NumericRule, ...] = (
         (int, float),
         0,
         False,
-        "--transport-retry-jitter must be >= 0",
+        "transport_retry_jitter must be >= 0",
     ),
 )
 
@@ -155,7 +155,7 @@ class ValidationManager:
         delay = getattr(args, "transport_retry_delay", None)
         if max_delay is not None and delay is not None and max_delay < delay:
             raise ArgumentValidationError(
-                "--transport-retry-max-delay must be >= --transport-retry-delay"
+                "transport_retry_max_delay must be >= transport_retry_delay"
             )
 
         _check_numeric_bounds(args, _JITTER_BOUND_RULES)

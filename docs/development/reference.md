@@ -44,10 +44,11 @@ aggressive, protocol, auth, and runtime evidence.
 | `--timeout SECONDS` | `30.0` | General request timeout. |
 | `--tool-timeout SECONDS` | unset | Per-tool timeout overriding `--timeout`. |
 | `--transport-retries N` | `1` | Total transport attempts; `1` disables retrying. |
-| `--transport-retry-delay SECONDS` | `0.5` | Initial retry delay. |
-| `--transport-retry-backoff MULTIPLIER` | `2.0` | Retry delay multiplier. |
-| `--transport-retry-max-delay SECONDS` | `5.0` | Retry delay ceiling. |
-| `--transport-retry-jitter FACTOR` | `0.1` | Retry delay jitter. |
+
+The retry delay curve (`transport_retry_delay`, `transport_retry_backoff`,
+`transport_retry_max_delay`, `transport_retry_jitter`) is set in a config file
+rather than on the command line; see
+[configuration](../configuration/configuration.md).
 
 Generic `http`/`https` resolution depends on the selected MCP schema path. Use
 `streamablehttp` when the target explicitly exposes that transport and record
@@ -85,10 +86,21 @@ combinations, cleartext remote transport, and evidence-backed command/path/SQL
 or output-injection behavior. It also flags names that closely imitate common
 tool names.
 
-`--security-audit-intrusive` adds a foreign-Origin HTTP/SSE request. A
-successful or redirecting response is reported as `missing_origin_validation`;
-401/403 and unrelated protocol or routing errors are treated as inconclusive.
-Use it only against a target and network boundary covered by the engagement.
+`--security-audit-intrusive` adds a foreign-Origin HTTP/SSE request. Legacy SSE
+revisions are probed with `GET`; `2026-07-28` removed the GET stream endpoint,
+so stateless revisions are probed with a `server/discover` `POST`. Configured
+transport authentication is replayed so a server that authenticates before it
+evaluates `Origin` still reaches the check.
+
+Only a successful (2xx) response is reported as `missing_origin_validation`.
+Same-host redirects are followed first, because `/mcp` → `/mcp/` and
+HTTP → HTTPS canonicalization can precede the Origin check; a redirect is never
+itself treated as acceptance. HTTP 403 is the spec-mandated rejection, HTTP 401
+is reported as `origin_validation_inconclusive`, and unrelated protocol or
+routing errors produce no finding. Every revision requires `Origin` validation,
+but only `2025-11-25` and later mandate HTTP 403, so the finding text is scoped
+to the negotiated revision. Use this only against a target and network boundary
+covered by the engagement.
 
 `--auth-audit` is read-only by default. The intrusive variant may create OAuth
 registration state and exercise redirect handling; keep it separate from a
@@ -121,8 +133,7 @@ Authentication provider examples and secret-handling guidance live in
 | `--no-safety` | off | Disable argument-level safety filtering; not recommended on an unisolated target. |
 | `--no-network` | off | Disallow non-local fuzzer network access. |
 | `--allow-host HOST` | none | Add an approved host while `--no-network` is active; repeatable. |
-| `--safety-report` | off | Print the blocked-operation summary. |
-| `--export-safety-data [FILE]` | timestamped | Save safety data as JSON. |
+| `--safety-report` | off | Print the blocked-operation summary and write `safety_report_<session>.json`. |
 | `--retry-with-safety-on-interrupt` | off | Retry once with safety enabled after Ctrl-C. |
 
 These are controls for the assessment client, not a complete OS sandbox. Use a
@@ -148,16 +159,11 @@ it cannot observe an event. It does not monitor remote transports.
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--output-dir DIRECTORY` | `reports` | Directory for reports and exports. |
-| `--output-format {json,yaml,csv,xml}` | `json` | Accepted standardized-output format; current writer emits JSON. |
 | `--output-types TYPE [TYPE ...]` | all applicable | Space-separated standardized output types. |
-| `--output-schema FILE` | none | Accepted custom schema path; not currently applied by the writer. |
-| `--output-compress` | off | Accepted flag; not currently applied by the standardized writer. |
-| `--output-session-id ID` | generated | Accepted override; not currently applied by the standardized writer. |
 | `--export-csv FILE` | none | Additional CSV export. |
 | `--export-xml FILE` | none | Additional XML export. |
 | `--export-html FILE` | none | Additional HTML export. |
 | `--export-markdown FILE` | none | Additional Markdown export. |
-| `--verbose` | off | Use INFO-level default logging. |
 | `--log-level LEVEL` | WARNING | `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`. |
 | `--enable-aiomonitor` | off | Enable async debugging on the configured monitor port. |
 | `--validate-config FILE` | none | Read and shape-check YAML, then exit. |
@@ -174,10 +180,7 @@ processing artifact contents. Reports can contain target data and secrets.
 | `--watchdog-process-timeout SECONDS` | `30.0` | Stale-process threshold. |
 | `--watchdog-extra-buffer SECONDS` | `5.0` | Grace period before termination. |
 | `--watchdog-max-hang-time SECONDS` | `60.0` | Force-kill ceiling. |
-| `--process-max-concurrency N` | `5` | Concurrent process operations. |
 | `--max-concurrency N` | `5` | Concurrent client operations. |
-| `--process-retry-count N` | `1` | Process-operation retries. |
-| `--process-retry-delay SECONDS` | `1.0` | Delay between process retries. |
 
 Tune these only after a baseline. High concurrency and retries can change the
 target's behavior and make evidence harder to interpret.
