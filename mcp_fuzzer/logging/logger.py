@@ -22,7 +22,7 @@ def setup_logging(args: argparse.Namespace) -> None:
             )
         level = getattr(logging, level_name)
     else:
-        level = logging.INFO if getattr(args, "verbose", False) else logging.WARNING
+        level = logging.WARNING
 
     logging.basicConfig(
         level=level,

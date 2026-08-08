@@ -16,7 +16,7 @@ services:
       - ${CONFIG_PATH:-./examples/config}:/config:ro
     environment:
       # Pass through any MCP_SPEC_SCHEMA_VERSION if set
-      - MCP_SPEC_SCHEMA_VERSION=${MCP_SPEC_SCHEMA_VERSION:-2025-06-18}
+      - MCP_SPEC_SCHEMA_VERSION=${MCP_SPEC_SCHEMA_VERSION:-2025-11-25}
     # For HTTP/SSE servers, use bridge network with host access
     # On Linux, you can use 'network_mode: host' instead
     # For macOS/Windows, use extra_hosts to access host.docker.internal

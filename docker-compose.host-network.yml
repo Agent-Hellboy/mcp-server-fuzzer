@@ -15,7 +15,7 @@ services:
       - ${SERVER_PATH:-./servers}:/servers:ro
       - ${CONFIG_PATH:-./examples/config}:/config:ro
     environment:
-      - MCP_SPEC_SCHEMA_VERSION=${MCP_SPEC_SCHEMA_VERSION:-2025-06-18}
+      - MCP_SPEC_SCHEMA_VERSION=${MCP_SPEC_SCHEMA_VERSION:-2025-11-25}
     # Linux: Use host network for direct access to localhost
     network_mode: host
     entrypoint: ["mcp-fuzzer"]

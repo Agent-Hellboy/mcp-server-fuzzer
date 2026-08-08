@@ -54,25 +54,14 @@ def prepare_inner_argv(args: Any) -> list[str]:
     _add_value("--output-dir", _get_attr("output_dir", None))
     _add_value("--log-level", _get_attr("log_level", None))
 
-    export_safety_data = _get_attr("export_safety_data", None)
-    if export_safety_data is not None:
-        argv.append("--export-safety-data")
-        if export_safety_data:
-            argv.append(str(export_safety_data))
-
     _add_value("--export-csv", _get_attr("export_csv", None))
     _add_value("--export-xml", _get_attr("export_xml", None))
     _add_value("--export-html", _get_attr("export_html", None))
     _add_value("--export-markdown", _get_attr("export_markdown", None))
 
-    _add_value("--output-format", _get_attr("output_format", None))
     _add_list("--output-types", _get_attr("output_types", None))
-    _add_value("--output-schema", _get_attr("output_schema", None))
-    _add_value("--output-session-id", _get_attr("output_session_id", None))
 
-    _add_bool("--verbose", "verbose")
     _add_bool("--enable-aiomonitor", "enable_aiomonitor")
-    _add_bool("--output-compress", "output_compress")
     _add_bool("--enable-safety-system", "enable_safety_system")
     runtime_probe = _get_attr("runtime_probe", None)
     if runtime_probe is True:

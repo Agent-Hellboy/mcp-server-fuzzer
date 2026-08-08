@@ -28,10 +28,12 @@ def test_apply_nested_output_section_fields():
     )
     apply_nested_config_to_args(args, parser)
     assert args.output_dir == "/tmp/reports"
-    assert args.output_format == "markdown"
-    assert args.output_compress is True
     assert args.output_types == ["json", "csv"]
-    assert args.output_schema == "v1"
+    # format/compress/schema stay nested-only: the reporter reads them from the
+    # config provider, so there is no CLI field to seed.
+    assert not hasattr(args, "output_format")
+    assert not hasattr(args, "output_compress")
+    assert not hasattr(args, "output_schema")
 
 
 def test_apply_nested_output_does_not_override_explicit_cli_value():
@@ -52,9 +54,9 @@ def test_apply_nested_output_does_not_override_explicit_cli_value():
 
 
 def test_apply_if_default_handles_suppress_default():
-    config_mediator.update({"output": {"schema": "custom"}})
+    config_mediator.update({"output": {"types": ["fuzzing_results"]}})
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output-schema", default=argparse.SUPPRESS)
+    parser.add_argument("--output-types", default=argparse.SUPPRESS)
     args = parser.parse_args([])
     apply_nested_config_to_args(args, parser)
-    assert args.output_schema == "custom"
+    assert args.output_types == ["fuzzing_results"]

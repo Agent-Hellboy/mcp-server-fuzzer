@@ -42,9 +42,9 @@ Examples:
   mcp-fuzzer --mode tools --tool analyze_repository --protocol http \
     --endpoint http://localhost:8000/mcp/ --runs 10 --seed 42
 
-  # Fuzz with verbose output
+  # Fuzz with diagnostic logging
   mcp-fuzzer --mode all --protocol http \
-    --endpoint http://localhost:8000/mcp/ --verbose
+    --endpoint http://localhost:8000/mcp/ --log-level INFO
             """
         ),
     )

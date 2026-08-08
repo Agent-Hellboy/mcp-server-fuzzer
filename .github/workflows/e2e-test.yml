@@ -100,6 +100,24 @@ jobs:
         chmod +x tests/e2e/test_auth_server.sh
         ./tests/e2e/test_auth_server.sh
 
+    - name: Run security audit e2e test
+      env:
+        MCP_FUZZER_TIMEOUT: '30'
+        MCP_FUZZER_FS_ROOT: '/tmp/mcp_fuzzer_sandbox'
+      run: |
+        echo "Running security audit e2e test (read-only and intrusive Origin probe)"
+        mkdir -p /tmp/mcp_fuzzer_sandbox
+        chmod +x tests/e2e/test_security_audit.sh
+        ./tests/e2e/test_security_audit.sh
+
+    - name: Run streamable HTTP example e2e test
+      env:
+        MCP_FUZZER_TIMEOUT: '30'
+      run: |
+        echo "Running bundled Streamable HTTP example e2e test"
+        chmod +x tests/e2e/test_streamable_http_example.sh
+        ./tests/e2e/test_streamable_http_example.sh
+
     - name: Run official SDK stdio server e2e test
       env:
         MCP_FUZZER_TIMEOUT: '30'

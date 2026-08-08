@@ -45,6 +45,7 @@ from ...types import (
     RETRY_DELAY,
 )
 from ...exceptions import TransportError
+from ...version import VERSION
 from ...safety_system.policy import resolve_redirect_safely
 from ...spec_guard.spec_version import maybe_update_spec_version
 from ..methods import (
@@ -177,7 +178,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
 
     @staticmethod
     def _client_info() -> dict[str, str]:
-        return {"name": "mcp-fuzzer", "version": "0.1"}
+        return {"name": "mcp-fuzzer", "version": VERSION}
 
     def _active_protocol_version(self) -> str:
         return self.protocol_version or DEFAULT_PROTOCOL_VERSION
@@ -653,7 +654,7 @@ class StreamHttpDriver(TransportDriver, HttpClientBehavior, ResponseParserBehavi
                         },
                     },
                 },
-                "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},
+                "clientInfo": self._client_info(),
             },
         }
         # A failure here propagates and leaves _initialized False.

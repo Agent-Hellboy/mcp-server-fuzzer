@@ -66,7 +66,7 @@ mcp-fuzzer --help
 This repo vendors the MCP spec as a git submodule at `schemas/mcp-spec`. The
 spec guard schema validator (`mcp_fuzzer/spec_guard/schema_validator.py`) reads
 schemas from `schemas/mcp-spec/schema/{version}/schema.json`, and the current
-default version is `2025-06-18`. CI already initializes submodules (see
+default version is `2025-11-25`. CI already initializes submodules (see
 `e2e-test.yml` with `submodules: recursive`).
 
 To bump the spec version:

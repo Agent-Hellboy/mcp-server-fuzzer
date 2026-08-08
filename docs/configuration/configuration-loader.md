@@ -57,8 +57,9 @@ The main YAML sections are:
 - `safety` settings for local host, header, proxy, and environment handling;
 - `custom_transports` for maintainer-owned transport extensions.
 
-CLI-shaped keys such as `security_audit`, `auth_audit`, `fail_if_no_tools`, and
-runtime-probe settings can also be passed through the merged configuration.
+CLI-shaped keys such as `security_audit`, `security_audit_intrusive`,
+`auth_audit`, `fail_if_no_tools`, and runtime-probe settings can also be passed
+through the merged configuration.
 Use the CLI reference for the exact flag spelling.
 
 ## Validation behavior

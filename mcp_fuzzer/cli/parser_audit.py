@@ -119,3 +119,11 @@ def add_audit_arguments(parser: argparse.ArgumentParser) -> None:
             "output prompt injection)."
         ),
     )
+    parser.add_argument(
+        "--security-audit-intrusive",
+        action="store_true",
+        help=(
+            "Add the active foreign-Origin DNS-rebinding probe to the security "
+            "audit. Only use against servers you are authorized to test."
+        ),
+    )

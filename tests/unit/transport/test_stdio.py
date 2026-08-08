@@ -1236,3 +1236,14 @@ class TestStdioDriverExtended:
     
         with pytest.raises(ProcessSignalError):
             await transport.send_timeout_signal("timeout")
+
+
+def test_stdio_initialize_advertises_real_package_version():
+    """stdio's initialize must carry the real version, not a placeholder."""
+    import inspect
+
+    from mcp_fuzzer.transport.drivers import stdio_driver
+
+    source = inspect.getsource(stdio_driver)
+    assert '"version": "0.1"' not in source
+    assert '"clientInfo": {"name": "mcp-fuzzer", "version": VERSION}' in source

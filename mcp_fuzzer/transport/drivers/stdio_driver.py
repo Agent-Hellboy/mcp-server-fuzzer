@@ -32,6 +32,7 @@ else:
     WatchdogConfig = Any
 from ...safety_system.policy import sanitize_subprocess_env
 from ...config import DEFAULT_PROTOCOL_VERSION, PROCESS_WAIT_TIMEOUT
+from ...version import VERSION
 from ..controller.process_supervisor import ProcessSupervisor
 from ..methods import (
     INITIALIZE,
@@ -567,7 +568,7 @@ class StdioDriver(TransportDriver):
                     "roots": {"listChanged": True},
                     "sampling": {},
                 },
-                "clientInfo": {"name": "mcp-fuzzer", "version": "0.1"},
+                "clientInfo": {"name": "mcp-fuzzer", "version": VERSION},
             },
         )
         await self.send_notification(NOTIFY_INITIALIZED, {})

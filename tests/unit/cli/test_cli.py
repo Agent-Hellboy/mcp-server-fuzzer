@@ -43,7 +43,6 @@ def _base_args(**overrides):
         transport_retry_backoff=2.0,
         transport_retry_max_delay=5.0,
         transport_retry_jitter=0.1,
-        verbose=False,
         runs=10,
         runs_per_type=5,
         protocol_type=None,
@@ -76,14 +75,8 @@ def _base_args(**overrides):
         watchdog_process_timeout=30.0,
         watchdog_extra_buffer=5.0,
         watchdog_max_hang_time=60.0,
-        process_max_concurrency=5,
-        process_retry_count=1,
-        process_retry_delay=1.0,
-        output_format="json",
+        max_concurrency=5,
         output_types=None,
-        output_schema=None,
-        output_compress=False,
-        output_session_id=None,
         enable_aiomonitor=False,
         auth_config=None,
         auth_env=False,
@@ -117,6 +110,24 @@ def test_create_argument_parser_and_defaults():
     assert args.protocol == "http"
     assert args.timeout == 30.0
     assert args.runtime_probe is None
+
+
+def test_create_argument_parser_security_audit_intrusive_flag():
+    parser = create_argument_parser()
+    args = parser.parse_args(
+        [
+            "--mode",
+            "tools",
+            "--protocol",
+            "http",
+            "--endpoint",
+            "http://localhost:8000",
+            "--security-audit",
+            "--security-audit-intrusive",
+        ]
+    )
+    assert args.security_audit is True
+    assert args.security_audit_intrusive is True
 
 
 def test_create_argument_parser_runtime_probe_flags():
@@ -183,12 +194,16 @@ def test_version_flag_exits_and_prints(capsys):
 def test_setup_logging_levels():
     import logging
 
-    args = argparse.Namespace(verbose=True, log_level=None)
+    args = argparse.Namespace(log_level=None)
     setup_logging(args)
+    assert logging.getLogger().level == logging.WARNING
+
+    args2 = argparse.Namespace(log_level="INFO")
+    setup_logging(args2)
     assert logging.getLogger().level == logging.INFO
 
-    args2 = argparse.Namespace(verbose=False, log_level="DEBUG")
-    setup_logging(args2)
+    args3 = argparse.Namespace(log_level="DEBUG")
+    setup_logging(args3)
     assert logging.getLogger().level == logging.DEBUG
 
 
@@ -339,6 +354,24 @@ def test_validate_arguments_intrusive_with_auth_audit_ok():
     validator.validate_arguments(args)
 
 
+def test_validate_arguments_intrusive_requires_security_audit():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tools",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=10,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+        security_audit=False,
+        security_audit_intrusive=True,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
+
+
 def test_validate_arguments_protocol_mode_allows_missing_protocol_type():
     validator = ValidationManager()
     args = argparse.Namespace(
@@ -396,12 +429,14 @@ def test_print_startup_info_ignores_runtime_probe_config_errors(monkeypatch):
 
 
 def test_build_cli_config_merges_and_returns_cli_config():
-    args = _base_args()
+    args = _base_args(security_audit=True, security_audit_intrusive=True)
     cli_config = build_cli_config(args)
     assert isinstance(cli_config, CliConfig)
     assert cli_config.merged["endpoint"] == "http://localhost"
     assert cli_config.merged["safety_enabled"] is True
     assert cli_config.merged["runtime_probe"] is None
+    assert cli_config.merged["security_audit"] is True
+    assert cli_config.merged["security_audit_intrusive"] is True
 
 
 def test_build_cli_config_merges_runtime_probe_flags():
@@ -450,12 +485,9 @@ def test_handle_check_env_invalid_level(monkeypatch):
 def test_prepare_inner_argv_roundtrip():
     args = _base_args(
         output_types=["fuzzing_results"],
-        output_session_id="abc",
         enable_aiomonitor=True,
-        output_compress=True,
         no_network=True,
         allow_hosts=["a", "b"],
-        export_safety_data="",
         spec_prompt_name="example_prompt",
         spec_prompt_args='{"query": "probe"}',
         runtime_probe=True,
@@ -468,8 +500,8 @@ def test_prepare_inner_argv_roundtrip():
     )
     argv = prepare_inner_argv(args)
     assert "--mode" in argv and "--endpoint" in argv
-    assert "abc" in argv
-    assert "--export-safety-data" in argv
+    assert "--output-types" in argv and "fuzzing_results" in argv
+    assert "--enable-aiomonitor" in argv
     assert "--spec-prompt-name" in argv
     assert "--spec-prompt-args" in argv
     assert "--runtime-probe" in argv

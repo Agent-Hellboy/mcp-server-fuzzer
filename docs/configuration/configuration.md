@@ -35,6 +35,7 @@ spec_schema_version: "2025-11-25"
 
 # Security checks run after the selected fuzzing work.
 security_audit: true
+security_audit_intrusive: false
 auth_audit: true
 auth_audit_intrusive: false
 fail_if_no_tools: true
@@ -64,10 +65,12 @@ mcp-fuzzer \
   --output-dir reports/aggressive
 ```
 
-The accepted `output.format`, `output.schema`, `output.compress`, and
-`output-session-id` settings are not all applied by the current standardized
-writer. See [standardized output](../development/standardized-output.md) for
-the implemented contract.
+Report format, compression, and a custom schema path are configured only under
+the nested `output:` section of a config file (`format`, `compress`, `schema`);
+there are no CLI flags for them. The standardized writer currently emits JSON
+and generates its own session ID. See
+[standardized output](../development/standardized-output.md) for the
+implemented contract.
 
 ## Choose the assessment surface
 

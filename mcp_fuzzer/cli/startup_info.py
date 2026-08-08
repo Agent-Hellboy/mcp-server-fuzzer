@@ -96,7 +96,7 @@ _REPORTING_GROUPS = (
             "export_xml",
             "export_html",
             "export_markdown",
-            "output_format",
+            "output_types",
         ),
     ),
     _ArgGroup(
@@ -106,15 +106,12 @@ _REPORTING_GROUPS = (
             "watchdog_process_timeout",
             "watchdog_extra_buffer",
             "watchdog_max_hang_time",
-            "process_max_concurrency",
-            "process_retry_count",
-            "process_retry_delay",
+            "max_concurrency",
         ),
     ),
     _ArgGroup(
         "Advanced",
         (
-            "verbose",
             "log_level",
             "enable_aiomonitor",
             "retry_with_safety_on_interrupt",

@@ -373,6 +373,103 @@ async def test_run_server_audit_phase_runs_checks():
     mock_audit.assert_called_once()
 
 
+@pytest.mark.asyncio
+async def test_run_server_audit_phase_runs_intrusive_origin_probe():
+    finding = _server_finding()
+    origin_finding = Finding(
+        category="missing_origin_validation",
+        severity="high",
+        kind="tool",
+        target="mcp_endpoint",
+        run=None,
+        detail="foreign origin accepted",
+        evidence={"check_id": "OR1"},
+    )
+    transport = MagicMock()
+
+    with (
+        patch.object(phases, "JsonRpcAdapter") as mock_adapter_cls,
+        patch.object(phases, "run_server_audit", return_value=[finding]),
+        patch.object(
+            phases, "audit_origin_validation", return_value=[origin_finding]
+        ) as mock_origin,
+    ):
+        mock_adapter_cls.return_value.get_tools = AsyncMock(
+            return_value=[{"name": "helper"}]
+        )
+
+        findings, ran = await phases.run_server_audit_phase(
+            {
+                "security_audit": True,
+                "security_audit_intrusive": True,
+                "endpoint": "https://mcp.example/mcp",
+                "protocol": "streamablehttp",
+                "spec_schema_version": "2026-07-28",
+                "timeout": 5,
+            },
+            transport,
+            None,
+        )
+
+    assert ran is True
+    assert findings == [finding, origin_finding]
+    mock_origin.assert_called_once_with(
+        "https://mcp.example/mcp",
+        protocol="streamablehttp",
+        protocol_version="2026-07-28",
+        timeout=5.0,
+        auth_headers={},
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_server_audit_phase_forwards_transport_auth_to_origin_probe():
+    """A server that authenticates before checking Origin must still be probed."""
+    auth_manager = MagicMock()
+    auth_manager.get_default_auth_headers.return_value = {
+        "Authorization": "Bearer token-123"
+    }
+
+    with (
+        patch.object(phases, "JsonRpcAdapter") as mock_adapter_cls,
+        patch.object(phases, "run_server_audit", return_value=[]),
+        patch.object(
+            phases, "audit_origin_validation", return_value=[]
+        ) as mock_origin,
+    ):
+        mock_adapter_cls.return_value.get_tools = AsyncMock(return_value=[])
+
+        await phases.run_server_audit_phase(
+            {
+                "security_audit": True,
+                "security_audit_intrusive": True,
+                "endpoint": "https://mcp.example/mcp",
+                "auth_manager": auth_manager,
+            },
+            MagicMock(),
+            None,
+        )
+
+    assert mock_origin.call_args.kwargs["auth_headers"] == {
+        "Authorization": "Bearer token-123"
+    }
+
+
+def test_transport_auth_headers_handles_missing_and_broken_providers():
+    assert phases._transport_auth_headers({}) == {}
+
+    without_getter = MagicMock(spec=[])
+    assert phases._transport_auth_headers({"auth_manager": without_getter}) == {}
+
+    raising = MagicMock()
+    raising.get_default_auth_headers.side_effect = RuntimeError("boom")
+    assert phases._transport_auth_headers({"auth_manager": raising}) == {}
+
+    non_dict = MagicMock()
+    non_dict.get_default_auth_headers.return_value = ["not", "a", "dict"]
+    assert phases._transport_auth_headers({"auth_manager": non_dict}) == {}
+
+
 def test_log_oauth_audit_results_reports_findings(caplog):
     with caplog.at_level(logging.WARNING):
         phases.log_oauth_audit_results([_auth_finding()], enabled=True, ran=True)

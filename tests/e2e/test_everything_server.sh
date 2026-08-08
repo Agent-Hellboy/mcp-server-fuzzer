@@ -107,7 +107,7 @@ python3 -m mcp_fuzzer \
     --mode all \
     --protocol-phase realistic \
     --runs 5 \
-    --verbose \
+    --log-level INFO \
     --enable-safety-system \
     --spec-schema-version "$SCHEMA_VERSION" \
     "$@" \

@@ -48,6 +48,34 @@ The e2e tests automatically:
 - **Environment**: Local Python SDK server; skips when optional `mcp`,
   `uvicorn`, or `starlette` dependencies are missing
 
+### `test_security_audit.sh`
+
+- **Server**: Bundled Streamable HTTP example server
+- **Test Type**: `--security-audit`, then `--security-audit-intrusive`
+- **Expected**: The read-only audit runs and stays inside the declared finding
+  vocabulary; the intrusive run sends the foreign `Origin` probe and records
+  either `missing_origin_validation` or `origin_validation_inconclusive` with
+  the expected probe origin
+- **Duration**: ~20 seconds
+- **Environment**: Local Python SDK server; skips when optional `mcp`,
+  `uvicorn`, or `starlette` dependencies are missing
+- **Authorization**: The target is a local example server owned by this repo,
+  so the intrusive probe is in scope. Do not point this script at a third-party
+  target.
+
+## Known coverage gaps
+
+These are intentionally not covered end to end today:
+
+- **MCP `2026-07-28`**: no released SDK server implements it yet (both the
+  TypeScript and Python SDKs top out at `2025-11-25`), so an end-to-end run
+  against a real server negotiates down. The stateless request shape is covered
+  by unit tests instead.
+- **`--protocol sse`**: no SSE server fixture.
+- **`--mode resources` / `--mode prompts`**: only `tools` and `all` are run.
+- **`--auth-audit`**, **`--runtime-probe`**, **`--stateful`**, **`--havoc`**:
+  unit-tested only.
+
 ## Usage
 
 ### Run Individual Tests

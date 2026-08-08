@@ -72,10 +72,10 @@ Observers can consume manager events such as `started`, `stopped`, `signal`,
 | `max_hang_time` | `60.0` | Maximum allowed hang time. |
 | `auto_kill` | `True` | Whether stale processes are terminated automatically. |
 
-The CLI exposes these settings as `--watchdog-*`, `--process-max-concurrency`,
-and `--process-retry-*` options. See the [CLI reference](../development/reference.md)
-for defaults and the [process management guide](process-management-guide.md)
-for operational choices.
+The CLI exposes these settings as `--watchdog-*` options. See the
+[CLI reference](../development/reference.md) for defaults and the
+[process management guide](process-management-guide.md) for operational
+choices.
 
 ## Safety and platform behavior
 
