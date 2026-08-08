@@ -1224,3 +1224,16 @@ async def test_terminate_session_wraps_http_errors(monkeypatch):
 
     with pytest.raises(TransportError):
         await driver.terminate_session()
+
+
+def test_client_info_advertises_real_package_version():
+    """The client must identify itself to servers with its actual version.
+
+    A hardcoded placeholder misidentifies mcp-fuzzer to every target it
+    touches, and lands in the audit evidence the operator hands over.
+    """
+    from mcp_fuzzer.version import VERSION
+
+    info = StreamHttpDriver._client_info()
+    assert info == {"name": "mcp-fuzzer", "version": VERSION}
+    assert info["version"] != "0.1"

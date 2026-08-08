@@ -36,6 +36,7 @@ from .spec_checks import (
 )
 from ..spec_guard.tool_schema import _build_tool_arguments, _tool_task_support
 from ..transport.protocol import is_stateless_protocol_version
+from ..version import VERSION
 
 _TOOLS_SPEC = TOOLS_SPEC
 _SCHEMA_SPEC = SCHEMA_SPEC
@@ -160,7 +161,7 @@ async def _initialize_legacy_server(
             {
                 "protocolVersion": protocol_version,
                 "capabilities": _client_capabilities(),
-                "clientInfo": {"name": "mcp-fuzzer", "version": "0.1.0"},
+                "clientInfo": {"name": "mcp-fuzzer", "version": VERSION},
             },
         )
         if not isinstance(result, dict):

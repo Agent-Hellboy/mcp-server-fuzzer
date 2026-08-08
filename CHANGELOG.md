@@ -34,6 +34,11 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The client now identifies itself to servers with its real package version.
+  Both transport drivers and the spec-guard runner hardcoded
+  `clientInfo.version` as `0.1`/`0.1.0`, so every `initialize` and every
+  stateless per-request `_meta` misreported the tool version, including in
+  exported audit evidence.
 - Unicode-confusable tool-name detection no longer misses two whole classes of
   imitation. The Greek confusable map used upper-case keys that could never
   match after case folding, and the comparison used an NFKC-normalized spelling
