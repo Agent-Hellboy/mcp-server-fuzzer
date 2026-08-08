@@ -111,8 +111,14 @@ Interpret outcomes carefully:
 `--security-audit` combines read-only inspection of advertised tool/schema
 content with selected evidence-backed output oracles. It can report signals
 for poisoning, hidden instructions, ANSI/control content, duplicate or drifting
-definitions, dangerous capability combinations, insecure remote transport, and
-command/path/SQL/output-injection evidence from the same fuzz run.
+definitions, typosquatted names, dangerous capability combinations, insecure
+remote transport, and command/path/SQL/output-injection evidence from the same
+fuzz run.
+
+Add `--security-audit-intrusive` when an authorized HTTP/SSE probe is in scope.
+It sends a foreign `Origin` and reports successful or redirecting responses as
+`missing_origin_validation`; use a separate assessment phase if the target
+owner treats this extra request as intrusive.
 
 `--auth-audit` reviews published OAuth metadata, authorization behavior, and
 unauthenticated tool exposure when authentication is advertised. The default

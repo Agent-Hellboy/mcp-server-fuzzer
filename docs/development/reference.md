@@ -72,6 +72,7 @@ guard but are not `--protocol-type` values.
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--security-audit` | off | Inspect tool/schema metadata and correlate selected security oracles with fuzz evidence. |
+| `--security-audit-intrusive` | off | Add the foreign-Origin DNS-rebinding probe; requires `--security-audit` and explicit authorization. |
 | `--auth-audit` | off | Run read-only OAuth metadata, authorization behavior, and unauthenticated-tool checks where supported. |
 | `--auth-audit-intrusive` | off | Add dynamic-registration and redirect probes; only use with explicit authorization. |
 | `--fail-if-no-tools` | off, auto in CI/Docker | Exit non-zero when no usable tools are discovered. |
@@ -81,7 +82,13 @@ guard but are not `--protocol-type` values.
 encoded instructions, ANSI/control content, trigger-conditioned metadata,
 duplicate or drifting definitions, dangerous local-read/network-egress
 combinations, cleartext remote transport, and evidence-backed command/path/SQL
-or output-injection behavior.
+or output-injection behavior. It also flags names that closely imitate common
+tool names.
+
+`--security-audit-intrusive` adds a foreign-Origin HTTP/SSE request. A
+successful or redirecting response is reported as `missing_origin_validation`;
+401/403 and unrelated protocol or routing errors are treated as inconclusive.
+Use it only against a target and network boundary covered by the engagement.
 
 `--auth-audit` is read-only by default. The intrusive variant may create OAuth
 registration state and exercise redirect handling; keep it separate from a

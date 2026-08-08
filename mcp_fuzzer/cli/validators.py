@@ -132,6 +132,13 @@ class ValidationManager:
                 "--auth-audit-intrusive requires --auth-audit"
             )
 
+        if getattr(args, "security_audit_intrusive", False) and not getattr(
+            args, "security_audit", False
+        ):
+            raise ArgumentValidationError(
+                "--security-audit-intrusive requires --security-audit"
+            )
+
         if args.mode == "tools" and getattr(args, "tool", None):
             if not args.tool.strip():
                 raise ArgumentValidationError("--tool cannot be empty")

@@ -51,7 +51,7 @@ from .server import (
 )
 from .server_metadata import audit_tool_metadata
 from .server_oracles import audit_tool_run_oracles
-from .server_transport import audit_insecure_transport
+from .server_transport import audit_insecure_transport, audit_origin_validation
 __all__ = [
     # model + classification
     "Finding",
@@ -87,6 +87,7 @@ __all__ = [
     "SERVER_AUDIT_FLAW_CATEGORIES",
     "TOOL_POISONING_PAPER_ARXIV_ID",
     "audit_insecure_transport",
+    "audit_origin_validation",
     "audit_tool_metadata",
     "audit_tool_run_oracles",
     "is_server_audit_finding",

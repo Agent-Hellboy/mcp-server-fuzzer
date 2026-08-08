@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-import re
 import base64
 import binascii
 import hashlib
+import re
+import unicodedata
 from collections import Counter
 from typing import Any
 
 from .model import Finding
 from .server import (
     CAPABILITY_COMBO_PAPER_ARXIV_ID,
+    TRANSPORT_PAPER_ARXIV_ID,
     server_finding,
 )
 
@@ -87,6 +89,95 @@ _NETWORK_EGRESS_PATTERN = re.compile(
     r"egress|socket|download|api_call)\b",
     re.IGNORECASE,
 )
+
+_COMMON_TOOL_NAMES = frozenset(
+    {
+        "read_file",
+        "write_file",
+        "delete_file",
+        "list_files",
+        "run_command",
+        "execute_command",
+        "search",
+        "fetch",
+        "get",
+        "post",
+        "shell",
+        "filesystem",
+        "sql_query",
+        "web_search",
+        "browser_search",
+        "github_search",
+        "github_get_file",
+        "github_create_issue",
+        "github_list_repositories",
+    }
+)
+_CONFUSABLES = str.maketrans(
+    {
+        "а": "a",  # Cyrillic
+        "е": "e",
+        "і": "i",
+        "о": "o",
+        "р": "p",
+        "с": "c",
+        "х": "x",
+        "у": "y",
+        "Α": "A",  # Greek
+        "Β": "B",
+        "Ε": "E",
+        "Ι": "I",
+        "Ο": "O",
+        "Ρ": "P",
+        "Χ": "X",
+        "Υ": "Y",
+    }
+)
+
+
+def _name_skeleton(name: str) -> str:
+    """Normalize common Unicode lookalikes before comparing tool names."""
+    return unicodedata.normalize("NFKC", name).casefold().translate(_CONFUSABLES)
+
+
+def _levenshtein_distance(left: str, right: str) -> int:
+    """Return edit distance without importing a fuzzy-matching dependency."""
+    if len(left) > len(right):
+        left, right = right, left
+    previous = list(range(len(left) + 1))
+    for right_index, right_char in enumerate(right, start=1):
+        current = [right_index]
+        for left_index, left_char in enumerate(left, start=1):
+            current.append(
+                min(
+                    current[-1] + 1,
+                    previous[left_index] + 1,
+                    previous[left_index - 1] + (left_char != right_char),
+                )
+            )
+        previous = current
+    return previous[-1]
+
+
+def _tool_name_squatting_match(name: str) -> dict[str, Any] | None:
+    """Return evidence when a name closely imitates a common tool name."""
+    skeleton = _name_skeleton(name)
+    folded = unicodedata.normalize("NFKC", name).casefold()
+    for known_name in _COMMON_TOOL_NAMES:
+        if skeleton == known_name and folded != known_name:
+            return {
+                "matched_name": known_name,
+                "match_type": "unicode_confusable",
+            }
+        distance = _levenshtein_distance(skeleton, known_name)
+        threshold = 1 if max(len(skeleton), len(known_name)) < 6 else 2
+        if distance <= threshold and skeleton != known_name:
+            return {
+                "matched_name": known_name,
+                "match_type": "edit_distance",
+                "edit_distance": distance,
+            }
+    return None
 
 
 def _tool_definition_hash(tool: dict[str, Any]) -> str:
@@ -314,6 +405,24 @@ def audit_tool_metadata(tools: list[dict[str, Any]]) -> list[Finding]:
                     },
                 )
             )
+        if isinstance(name, str) and name:
+            squatting = _tool_name_squatting_match(name)
+            if squatting:
+                findings.append(
+                    server_finding(
+                        "NS1",
+                        "tool_name_squatting",
+                        "low",
+                        name,
+                        "Tool name closely imitates a common tool name; "
+                        "review it for typosquatting or shadow-tool risk.",
+                        arxiv_id=TRANSPORT_PAPER_ARXIV_ID,
+                        evidence={
+                            **squatting,
+                            "tool_definition_hash": tool_hash,
+                        },
+                    )
+                )
         hidden_hits = _scan_hidden_instruction_carriers(visible)
         if hidden_hits and name:
             findings.append(

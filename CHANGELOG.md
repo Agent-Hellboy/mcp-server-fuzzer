@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Added `tool_name_squatting` metadata findings for edit-distance and Unicode
+  confusable imitations of common tool names.
+- Added opt-in `--security-audit-intrusive` Origin validation for HTTP/SSE
+  targets, reporting successful foreign-Origin requests that were not rejected
+  with HTTP 403.
+
 ## [0.6.0] - 2026-08-07
 
 ### Security
@@ -96,7 +104,7 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- MCP `2026-07-28` release-candidate support behind the existing
+- MCP `2026-07-28` released-version support behind the existing
   `--spec-schema-version` / `spec_schema_version` / `MCP_SPEC_SCHEMA_VERSION`
   configuration path:
   - `2026-07-28` resolves to the concrete vendored schema when present, with a

@@ -3,7 +3,12 @@
 
 from __future__ import annotations
 
+import json
+
+import httpx
+
 from mcp_fuzzer.diagnostics import (
+    audit_origin_validation,
     audit_insecure_transport,
     audit_tool_metadata,
     audit_tool_run_oracles,
@@ -259,6 +264,37 @@ def test_tool_shadowing_duplicate_names():
     assert _cats(findings) == {"tool_shadowing"}
 
 
+def test_tool_name_squatting_edit_distance():
+    findings = audit_tool_metadata(
+        [{"name": "read_flie", "description": "Read a file", "inputSchema": {}}]
+    )
+
+    squatting = [f for f in findings if f.category == "tool_name_squatting"]
+    assert len(squatting) == 1
+    assert squatting[0].evidence["check_id"] == "NS1"
+    assert squatting[0].evidence["matched_name"] == "read_file"
+    assert squatting[0].evidence["match_type"] == "edit_distance"
+    assert squatting[0].evidence["paper_arxiv_id"] == "2508.13220"
+
+
+def test_tool_name_squatting_unicode_confusable():
+    # The second character is Cyrillic small letter e, not Latin e.
+    findings = audit_tool_metadata(
+        [{"name": "r\u0435ad_file", "description": "Read a file", "inputSchema": {}}]
+    )
+
+    squatting = [f for f in findings if f.category == "tool_name_squatting"]
+    assert len(squatting) == 1
+    assert squatting[0].evidence["match_type"] == "unicode_confusable"
+
+
+def test_common_tool_name_is_not_squatting():
+    findings = audit_tool_metadata(
+        [{"name": "read_file", "description": "Read a file", "inputSchema": {}}]
+    )
+    assert "tool_name_squatting" not in _cats(findings)
+
+
 def test_tool_definition_drift_duplicate_name_different_definition():
     tools = [
         {"name": "dup", "description": "read data", "inputSchema": {}},
@@ -308,6 +344,80 @@ def test_insecure_transport_local_http_clean():
     assert audit_insecure_transport("http://127.0.0.2:8000/mcp") == []
     assert audit_insecure_transport("http://[::1]:8000/mcp") == []
     assert audit_insecure_transport("http://host.docker.internal:8000/mcp") == []
+
+
+def test_origin_validation_flags_successful_foreign_origin():
+    seen = {}
+
+    def handler(request):
+        seen["origin"] = request.headers["origin"]
+        seen["method"] = request.method
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": "x"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        findings = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol="streamablehttp",
+            protocol_version="2025-11-25",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert _cats(findings) == {"missing_origin_validation"}
+    assert findings[0].evidence["check_id"] == "OR1"
+    assert findings[0].evidence["response_status"] == 200
+    assert seen == {"origin": "https://mcp-fuzzer.invalid", "method": "POST"}
+
+
+def test_origin_validation_latest_uses_stateless_request_shape():
+    seen = {}
+
+    def handler(request):
+        seen["headers"] = dict(request.headers)
+        seen["payload"] = json.loads(request.content)
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": "x"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        findings = audit_origin_validation(
+            "https://mcp.example/mcp",
+            protocol_version="2026-07-28",
+            http=client,
+        )
+    finally:
+        client.close()
+
+    assert _cats(findings) == {"missing_origin_validation"}
+    assert seen["headers"]["origin"] == "https://mcp-fuzzer.invalid"
+    assert seen["headers"]["mcp-protocol-version"] == "2026-07-28"
+    assert seen["headers"]["mcp-method"] == "server/discover"
+    assert seen["payload"]["method"] == "server/discover"
+    assert (
+        seen["payload"]["params"]["_meta"]
+        ["io.modelcontextprotocol/protocolVersion"]
+        == "2026-07-28"
+    )
+
+
+def test_origin_validation_accepts_403():
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(403, request=request)
+        )
+    )
+    try:
+        assert (
+            audit_origin_validation(
+                "http://localhost:8000/mcp",
+                protocol="sse",
+                http=client,
+            )
+            == []
+        )
+    finally:
+        client.close()
 
 
 def test_command_injection_oracle():

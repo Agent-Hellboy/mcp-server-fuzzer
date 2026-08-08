@@ -85,6 +85,27 @@ To rebuild the graph after large changes:
 /graphify mcp_fuzzer tests --update
 ```
 
+## MCP Protocol Version Awareness
+
+Protocol behavior is version-sensitive. As of 2026-08-08, the released latest
+MCP revision is `2026-07-28`; `2025-11-25` is the immediately prior revision.
+Treat `2026-07-28` as a released version, not an RC or draft.
+
+When changing protocol, transport, spec-guard, authentication, or security-audit
+behavior:
+
+- Check the official MCP revision/changelog before assuming the latest behavior.
+- Keep the selected `spec_schema_version`/`MCP_SPEC_SCHEMA_VERSION` flowing into
+  every version-sensitive request and probe; do not hardcode an older revision.
+- Preserve legacy behavior for `2025-11-25` and earlier supported revisions while
+  covering the latest stateless request shape, routing headers, per-request
+  metadata, cache metadata, and authentication rules where applicable.
+- Add or update tests for both `2025-11-25` and `2026-07-28` whenever a change
+  crosses a protocol boundary.
+- Remove stale release-candidate terminology when a dated revision is released,
+  and keep schema discovery/path fallback logic compatible with both concrete
+  dated directories and a temporary draft directory.
+
 ## Pull Requests
 
 Open PRs against `main` on `https://github.com/Agent-Hellboy/mcp-server-fuzzer`.

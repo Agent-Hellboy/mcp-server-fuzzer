@@ -10,7 +10,7 @@ classifies the responses, and writes findings and reproduction data to disk.
 [![Codecov](https://codecov.io/gh/Agent-Hellboy/mcp-server-fuzzer/graph/badge.svg?token=HZKC5V28LS)](https://codecov.io/gh/Agent-Hellboy/mcp-server-fuzzer)
 [![PyPI version](https://img.shields.io/pypi/v/mcp-fuzzer.svg)](https://pypi.org/project/mcp-fuzzer/)
 [![PyPI downloads](https://static.pepy.tech/badge/mcp-fuzzer)](https://pepy.tech/projects/mcp-fuzzer)
-[![MCP versions](https://img.shields.io/badge/MCP-2024--11--05%20%7C%202025--03--26%20%7C%202025--06--18%20%7C%202025--11--25%20%7C%202026--07--28-0f766e)](https://modelcontextprotocol.io/specification/2025-11-25/)
+[![MCP versions](https://img.shields.io/badge/MCP-2024--11--05%20%7C%202025--03--26%20%7C%202025--06--18%20%7C%202025--11--25%20%7C%202026--07--28-0f766e)](https://modelcontextprotocol.io/specification/2026-07-28/)
 [![Docker pulls](https://img.shields.io/docker/pulls/princekrroshan01/mcp-fuzzer)](https://hub.docker.com/r/princekrroshan01/mcp-fuzzer)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776ab)](https://www.python.org/downloads/)
@@ -27,7 +27,8 @@ test. It sends attack-pattern input, can start local processes, and with
 `--auth-audit-intrusive` will register OAuth clients on the target's
 authorization server. The built-in safety controls reduce accidental impact;
 they are not a substitute for a container, a VM, or an engagement-specific
-network boundary.
+network boundary. `--security-audit-intrusive` sends a foreign-Origin probe to
+test DNS-rebinding defenses and requires the same explicit authorization.
 
 ## What it does
 
@@ -37,7 +38,8 @@ fixed set of assessment questions:
 - What tools, resources, prompts, and protocol methods does the server expose?
 - Does it reject malformed and out-of-contract input, or accept it?
 - Do tool descriptions or schemas carry poisoning markers, hidden instructions,
-  duplicate definitions, or dangerous capability combinations?
+  duplicate definitions, typosquatted names, or dangerous capability
+  combinations?
 - Does an advertised OAuth boundary publish unsafe metadata or serve tools
   without the expected authentication?
 - What does a local stdio server execute, read, write, or connect to while the
@@ -179,8 +181,11 @@ discovered with `--fail-if-no-tools`, `130` interrupted.
 
 `--security-audit` runs tool and schema checks plus active output oracles
 against the same run's results: poisoning markers, hidden or encoded
-instructions, tool shadowing, dangerous capability combinations, cleartext
-transport, and command, path, SQL, and prompt-injection oracles.
+instructions, tool shadowing, typosquatted names, dangerous capability
+combinations, cleartext transport, and command, path, SQL, and prompt-injection
+oracles. Add `--security-audit-intrusive` to probe whether an HTTP/SSE target
+rejects a foreign `Origin` with HTTP 403, as required by the MCP transport
+specification.
 
 `--auth-audit` runs read-only OAuth checks against an HTTP or SSE endpoint:
 metadata review, authorization-endpoint probes, and unauthenticated tool

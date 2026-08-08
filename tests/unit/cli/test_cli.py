@@ -119,6 +119,24 @@ def test_create_argument_parser_and_defaults():
     assert args.runtime_probe is None
 
 
+def test_create_argument_parser_security_audit_intrusive_flag():
+    parser = create_argument_parser()
+    args = parser.parse_args(
+        [
+            "--mode",
+            "tools",
+            "--protocol",
+            "http",
+            "--endpoint",
+            "http://localhost:8000",
+            "--security-audit",
+            "--security-audit-intrusive",
+        ]
+    )
+    assert args.security_audit is True
+    assert args.security_audit_intrusive is True
+
+
 def test_create_argument_parser_runtime_probe_flags():
     parser = create_argument_parser()
     args = parser.parse_args(
@@ -339,6 +357,24 @@ def test_validate_arguments_intrusive_with_auth_audit_ok():
     validator.validate_arguments(args)
 
 
+def test_validate_arguments_intrusive_requires_security_audit():
+    validator = ValidationManager()
+    args = argparse.Namespace(
+        mode="tools",
+        protocol_type=None,
+        runs=1,
+        runs_per_type=1,
+        timeout=10,
+        endpoint="http://x",
+        check_env=False,
+        validate_config=None,
+        security_audit=False,
+        security_audit_intrusive=True,
+    )
+    with pytest.raises(ArgumentValidationError):
+        validator.validate_arguments(args)
+
+
 def test_validate_arguments_protocol_mode_allows_missing_protocol_type():
     validator = ValidationManager()
     args = argparse.Namespace(
@@ -396,12 +432,14 @@ def test_print_startup_info_ignores_runtime_probe_config_errors(monkeypatch):
 
 
 def test_build_cli_config_merges_and_returns_cli_config():
-    args = _base_args()
+    args = _base_args(security_audit=True, security_audit_intrusive=True)
     cli_config = build_cli_config(args)
     assert isinstance(cli_config, CliConfig)
     assert cli_config.merged["endpoint"] == "http://localhost"
     assert cli_config.merged["safety_enabled"] is True
     assert cli_config.merged["runtime_probe"] is None
+    assert cli_config.merged["security_audit"] is True
+    assert cli_config.merged["security_audit_intrusive"] is True
 
 
 def test_build_cli_config_merges_runtime_probe_flags():

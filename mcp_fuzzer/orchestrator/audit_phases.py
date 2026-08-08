@@ -14,12 +14,14 @@ from ..diagnostics import (
     is_server_audit_finding,
     probe_advertised_auth_open_tools,
     probe_auth_bypass,
+    audit_origin_validation,
     run_server_audit,
     secured_tool_names,
     server_audit_paper_evidence,
 )
 from ..transport.bootstrap import build_driver_with_auth
 from ..transport.interfaces import JsonRpcAdapter
+from ..transport.protocol import current_protocol_version
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +161,7 @@ async def run_server_audit_phase(
     transport: Any,
     tool_results: dict[str, Any] | None,
 ) -> tuple[list[Any], bool]:
-    """Run tool-metadata and active-oracle server checks from the 0.4.0 roadmap."""
+    """Run the configured tool-metadata and active-oracle server checks."""
     if not config.get("security_audit"):
         return [], False
     try:
@@ -176,6 +178,21 @@ async def run_server_audit_phase(
             endpoint=str(config.get("endpoint") or ""),
             tool_results=tool_results,
         )
+        if config.get("security_audit_intrusive") and not config.get(
+            "no_network"
+        ):
+            protocol_version = str(
+                config.get("spec_schema_version") or current_protocol_version()
+            )
+            findings.extend(
+                await asyncio.to_thread(
+                    audit_origin_validation,
+                    str(config.get("endpoint") or ""),
+                    protocol=str(config.get("protocol") or "streamablehttp"),
+                    protocol_version=protocol_version,
+                    timeout=float(config.get("timeout", 30.0)),
+                )
+            )
         return findings, True
     except Exception as exc:  # pragma: no cover - probe is best-effort
         logging.warning("Server audit skipped after an error: %s", exc)

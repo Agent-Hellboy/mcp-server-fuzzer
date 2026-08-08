@@ -85,6 +85,7 @@ _TRANSFERABLE_CONFIG_KEYS = (
     "auth_audit",
     "auth_audit_intrusive",
     "security_audit",
+    "security_audit_intrusive",
 )
 
 _ARGS_KEY_OVERRIDES = {
@@ -219,6 +220,9 @@ def build_cli_config(args: argparse.Namespace) -> CliConfig:
         "auth_audit": getattr(args, "auth_audit", False),
         "auth_audit_intrusive": getattr(args, "auth_audit_intrusive", False),
         "security_audit": getattr(args, "security_audit", False),
+        "security_audit_intrusive": getattr(
+            args, "security_audit_intrusive", False
+        ),
         "auth_manager": auth_manager,
     }
 

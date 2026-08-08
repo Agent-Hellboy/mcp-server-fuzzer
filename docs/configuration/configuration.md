@@ -35,6 +35,7 @@ spec_schema_version: "2025-11-25"
 
 # Security checks run after the selected fuzzing work.
 security_audit: true
+security_audit_intrusive: false
 auth_audit: true
 auth_audit_intrusive: false
 fail_if_no_tools: true

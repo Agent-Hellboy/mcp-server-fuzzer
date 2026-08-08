@@ -17,8 +17,8 @@ from pathlib import Path
 
 _SPEC_VERSION_ENV = "MCP_SPEC_SCHEMA_VERSION"
 _SPEC_VERSION_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-RC_PROTOCOL_VERSION = "2026-07-28"
-RC_SCHEMA_DIR = "draft"
+LATEST_PROTOCOL_VERSION = "2026-07-28"
+DRAFT_SCHEMA_DIR = "draft"
 
 
 # --- current version (runtime tracking) -------------------------------------
@@ -115,8 +115,8 @@ def supported_protocol_versions() -> tuple[str, ...]:
                 schema_file = child / "schema.json"
                 if schema_file.exists():
                     discovered.append(child.name)
-        if (root / RC_SCHEMA_DIR / "schema.json").exists():
-            discovered.append(RC_PROTOCOL_VERSION)
+        if (root / DRAFT_SCHEMA_DIR / "schema.json").exists():
+            discovered.append(LATEST_PROTOCOL_VERSION)
     combined = sorted(set(discovered) | set(extras), reverse=True)
     return tuple(combined)
 
@@ -138,9 +138,9 @@ def schema_path_for_version(version: str) -> Path:
     env_path = os.getenv("MCP_SPEC_SCHEMA_PATH")
     if env_path:
         return Path(env_path)
-    if version == RC_PROTOCOL_VERSION:
+    if version == LATEST_PROTOCOL_VERSION:
         release_schema = _schema_root() / version / "schema.json"
         if release_schema.exists():
             return release_schema
-        return _schema_root() / RC_SCHEMA_DIR / "schema.json"
+        return _schema_root() / DRAFT_SCHEMA_DIR / "schema.json"
     return _schema_root() / version / "schema.json"
