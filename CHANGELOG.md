@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-08
+
 ### Added
 
 - Added `tool_name_squatting` metadata findings for edit-distance and Unicode
